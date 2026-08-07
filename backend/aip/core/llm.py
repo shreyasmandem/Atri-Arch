@@ -314,10 +314,10 @@ def _coerce_keys(payload: Any, expected: list[str]) -> Any:
     out = dict(payload)
     lowered = {k.lower(): k for k in payload}
 
-    for field in expected:
-        if field in out:
+    for name in expected:
+        if name in out:
             continue
-        target = field.lower()
+        target = name.lower()
         match = next(
             (
                 original
@@ -328,7 +328,7 @@ def _coerce_keys(payload: Any, expected: list[str]) -> Any:
             None,
         )
         if match is not None:
-            out[field] = out.pop(match)
+            out[name] = out.pop(match)
 
     # A common synonym the schema will never guess at from the field name alone.
     if "rationale" in expected and "rationale" not in out:
