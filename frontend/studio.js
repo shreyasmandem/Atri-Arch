@@ -1,56 +1,37 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   Studio — the mandala at work.
+   Studio
 
-   Two things carry the world here rather than in CSS:
-
-   1. The pada grid is struck out in SVG at 9x9, and rooms light the padas
-      they actually occupy, in the pigment of their compass quarter. It is a
-      diagram of the building on the diagram the building is judged against.
-
-   2. The committee seats itself in order as the pipeline streams. Each
-      critic's glyph fills when its verdict lands. Nothing is faked: a critic
-      only lights when the server has actually reported its score.
+   Three phases, one URL: compose -> running -> review. Every result surface
+   the engine can produce is reachable here, because a committee that reports
+   twenty-five findings and shows you none of them is not explainable, it is
+   just quiet.
    ═══════════════════════════════════════════════════════════════════════ */
 
 const API = (() => {
-  const override = new URLSearchParams(location.search).get("api");
-  if (override) return override.replace(/\/$/, "");
-  // Served from the API itself in production; localhost during development.
-  if (location.port && location.port !== "8000") return "http://127.0.0.1:8000/api/v1";
+  const o = new URLSearchParams(location.search).get("api");
+  if (o) return o.replace(/\/$/, "");
   return `${location.origin}/api/v1`;
 })();
 
 const $ = (id) => document.getElementById(id);
-const el = (tag, cls, text) => {
-  const node = document.createElement(tag);
-  if (cls) node.className = cls;
-  if (text != null) node.textContent = text;
-  return node;
-};
+const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
+const frag = () => document.createDocumentFragment();
 
-/* Compass quarter → pigment. The mapping the whole product reasons in. */
-const QUARTER_PIGMENT = {
+/* Compass quarter -> pigment. The mapping the whole product reasons in. */
+const PIG = {
   N: "indigo", NNE: "indigo", NE: "indigo", ENE: "indigo",
   E: "orpiment", ESE: "orpiment",
   SE: "hingula", SSE: "hingula", S: "hingula",
   SSW: "ochre", SW: "ochre", WSW: "ochre", W: "ochre",
-  WNW: "orpiment", NW: "orpiment", NNW: "orpiment",
-  CENTRE: "chalk",
+  WNW: "orpiment", NW: "orpiment", NNW: "orpiment", CENTRE: "chalk",
 };
+const HEX = { indigo: "#7FA3D4", hingula: "#E4694C", ochre: "#DFA85C", orpiment: "#F0D165", chalk: "#9C9078" };
 
-const PIGMENT_HEX = {
-  indigo: "#6E93C8", hingula: "#E0664B", ochre: "#D9A45C",
-  orpiment: "#EFCE63", chalk: "#A2957C",
-};
-
-/* Which pigment a critic belongs to, by what it does. */
-const CRITIC_PIGMENT = {
-  "critic.compliance": "hingula", "critic.daylight": "indigo",
-  "critic.ventilation": "indigo", "critic.privacy": "indigo",
-  "critic.circulation": "indigo", "critic.accessibility": "indigo",
-  "critic.spatial": "indigo", "critic.structure": "ochre",
-  "critic.vastu": "orpiment", "critic.cost": "ochre",
-  "critic.coherence": "orpiment", "critic.brief": "orpiment",
+const CRITIC_PIG = {
+  "critic.compliance": "hingula", "critic.daylight": "indigo", "critic.ventilation": "indigo",
+  "critic.privacy": "indigo", "critic.circulation": "indigo", "critic.accessibility": "indigo",
+  "critic.spatial": "indigo", "critic.structure": "ochre", "critic.vastu": "orpiment",
+  "critic.cost": "ochre", "critic.coherence": "orpiment", "critic.brief": "orpiment",
   "critic.livability": "orpiment",
 };
 
@@ -62,788 +43,968 @@ const STANCES = [
   ["Orthodox", "orthodox", "The classical texts win every conflict, at any cost."],
 ];
 
-const state = {
-  planId: null, plan: null, consensus: null, vastu: null, cost: null,
-  interior: null, drawings: [], activeDrawing: null, view: "drawings",
-  committee: [], projectId: null, sessionId: null, running: false,
+const S = {
+  committee: [], phase: "compose", view: "drawings",
+  planIds: [], activeId: null, winnerId: null,
+  consensus: null, explanation: "", recommendations: [],
+  projectId: null, sessionId: null, briefSent: null,
+  plans: {},          // id -> { plan, vastu, cost, interior, analysis, drawing }
+  sheet: "plan_level_0",
 };
 
-/* ═══ THE PADA GRID ══════════════════════════════════════════════════ */
+const inr = (n) => n >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr`
+  : n >= 1e5 ? `₹${(n / 1e5).toFixed(2)} L`
+  : `₹${Math.round(n || 0).toLocaleString("en-IN")}`;
 
-function strikeGrid() {
-  const svg = $("pada-grid");
-  const N = 9, S = 900 / N;
-  const parts = [];
+const cap = (s) => String(s).replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
-  // The 81 padas.
-  for (let r = 0; r < N; r++) {
-    for (let c = 0; c < N; c++) {
-      parts.push(
-        `<rect class="pada" data-r="${r}" data-c="${c}" x="${c * S}" y="${r * S}" ` +
-        `width="${S}" height="${S}" fill="transparent" stroke="#33291D" stroke-width="1"/>`
-      );
-    }
-  }
-  // The Brahmasthan, struck heavier — the centre 3x3.
-  parts.push(
-    `<rect x="${3 * S}" y="${3 * S}" width="${3 * S}" height="${3 * S}" ` +
-    `fill="none" stroke="#4A3B29" stroke-width="2"/>`
-  );
-  // The two diagonals of the mandala.
-  parts.push(
-    `<path d="M0 0 L900 900 M900 0 L0 900" stroke="#33291D" stroke-width="1" opacity=".5"/>`
-  );
-  svg.innerHTML = parts.join("");
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(t._t); t._t = setTimeout(() => { t.hidden = true; }, 8000);
 }
 
-/** Light the padas each room occupies, in its quarter's pigment. */
-function lightPadas(plan) {
-  const svg = $("pada-grid");
+function phase(p) { S.phase = p; document.body.dataset.phase = p; }
+
+/* ═══ MANDALA ════════════════════════════════════════════════════════ */
+
+function strike(svg) {
+  const N = 9, U = 900 / N, out = [];
+  for (let r = 0; r < N; r++)
+    for (let c = 0; c < N; c++)
+      out.push(`<rect class="pada" data-r="${r}" data-c="${c}" x="${c * U}" y="${r * U}" width="${U}" height="${U}" fill="transparent" stroke="#2E2517" stroke-width="1"/>`);
+  out.push(`<path d="M0 0L900 900M900 0L0 900" stroke="#2E2517" stroke-width="1" opacity=".45"/>`);
+  out.push(`<rect x="${3 * U}" y="${3 * U}" width="${3 * U}" height="${3 * U}" fill="none" stroke="#453724" stroke-width="2"/>`);
+  svg.innerHTML = out.join("");
+}
+
+/** Project the plan onto the 9x9 field and light each room's padas. */
+function lightPadas(svg, plan) {
+  if (!svg || !plan?.levels?.length) return { occupied: 0, sectors: [] };
   svg.querySelectorAll(".pada").forEach((p) => {
-    p.setAttribute("fill", "transparent");
-    p.removeAttribute("data-lit");
+    p.setAttribute("fill", "transparent"); p.setAttribute("stroke", "#2E2517"); p.removeAttribute("data-lit");
   });
-  if (!plan || !plan.levels || !plan.levels.length) return;
 
   const rooms = plan.levels[0].rooms || [];
-  if (!rooms.length) return;
+  if (!rooms.length) return { occupied: 0, sectors: [] };
 
-  // Normalise the plan's footprint onto the 9x9 field.
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const room of rooms) {
-    for (const [x, y] of room.polygon || []) {
-      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-    }
+  let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
+  for (const rm of rooms) for (const [x, y] of rm.polygon || []) {
+    mnX = Math.min(mnX, x); mxX = Math.max(mxX, x); mnY = Math.min(mnY, y); mxY = Math.max(mxY, y);
   }
-  const w = maxX - minX, h = maxY - minY;
-  if (!(w > 0 && h > 0)) return;
+  const w = mxX - mnX, h = mxY - mnY;
+  if (!(w > 0 && h > 0)) return { occupied: 0, sectors: [] };
 
-  const summary = new Map((plan.room_summary || []).map((r) => [r.id, r.direction]));
+  const dirOf = new Map((plan.room_summary || []).map((r) => [r.id, r.direction]));
+  const sectors = [];
 
-  for (const room of rooms) {
-    const xs = (room.polygon || []).map((p) => p[0]);
-    const ys = (room.polygon || []).map((p) => p[1]);
+  for (const rm of rooms) {
+    const xs = (rm.polygon || []).map((p) => p[0]);
+    const ys = (rm.polygon || []).map((p) => p[1]);
     if (!xs.length) continue;
+    const dir = dirOf.get(rm.id) || "CENTRE";
+    const pig = PIG[dir] || "chalk";
+    sectors.push({ name: rm.name || cap(rm.type), dir, pig, area: rm.area });
 
-    const c0 = Math.floor(((Math.min(...xs) - minX) / w) * 9);
-    const c1 = Math.ceil(((Math.max(...xs) - minX) / w) * 9);
-    // Plan +Y is north; SVG +Y is down. Flip so north sits at the top.
-    const r0 = Math.floor(((maxY - Math.max(...ys)) / h) * 9);
-    const r1 = Math.ceil(((maxY - Math.min(...ys)) / h) * 9);
+    const c0 = Math.floor(((Math.min(...xs) - mnX) / w) * 9);
+    const c1 = Math.ceil(((Math.max(...xs) - mnX) / w) * 9);
+    const r0 = Math.floor(((mxY - Math.max(...ys)) / h) * 9);   // +Y is north; SVG +Y is down
+    const r1 = Math.ceil(((mxY - Math.min(...ys)) / h) * 9);
 
-    const pigment = PIGMENT_HEX[QUARTER_PIGMENT[summary.get(room.id)] || "chalk"];
-
-    for (let r = Math.max(0, r0); r < Math.min(9, r1); r++) {
+    for (let r = Math.max(0, r0); r < Math.min(9, r1); r++)
       for (let c = Math.max(0, c0); c < Math.min(9, c1); c++) {
-        const pada = svg.querySelector(`.pada[data-r="${r}"][data-c="${c}"]`);
-        if (pada) {
-          pada.setAttribute("fill", pigment);
-          pada.setAttribute("fill-opacity", "0.14");
-          pada.setAttribute("data-lit", "1");
-        }
+        const p = svg.querySelector(`.pada[data-r="${r}"][data-c="${c}"]`);
+        if (p) { p.setAttribute("fill", HEX[pig]); p.setAttribute("fill-opacity", ".16"); p.setAttribute("data-lit", "1"); }
       }
-    }
   }
 
-  markBrahmasthan(svg);
-}
-
-/**
- * The centre 3x3 is the Brahmasthan, which the corpus requires to stay unbuilt.
- *
- * Lighting it in the same wash as every other pada would flatten the diagram
- * into a coloured rectangle and hide the one rule the whole world is built
- * around. So the centre is scored separately: clear padas are struck open in
- * chalk, occupied ones flare in hingula. The violation is the moment the
- * mandala exists to show.
- */
-function markBrahmasthan(svg) {
+  // The Brahmasthan is scored separately - a uniform wash over the centre
+  // would hide the one rule the whole diagram exists to enforce.
   let occupied = 0;
-  for (let r = 3; r < 6; r++) {
-    for (let c = 3; c < 6; c++) {
-      const pada = svg.querySelector(`.pada[data-r="${r}"][data-c="${c}"]`);
-      if (!pada) continue;
-      if (pada.getAttribute("data-lit")) {
-        occupied += 1;
-        pada.setAttribute("fill", PIGMENT_HEX.hingula);
-        pada.setAttribute("fill-opacity", "0.3");
-        pada.setAttribute("stroke", PIGMENT_HEX.hingula);
-      } else {
-        pada.setAttribute("fill", "transparent");
-        pada.setAttribute("stroke", "#A2957C");
-      }
-    }
+  for (let r = 3; r < 6; r++) for (let c = 3; c < 6; c++) {
+    const p = svg.querySelector(`.pada[data-r="${r}"][data-c="${c}"]`);
+    if (!p) continue;
+    if (p.getAttribute("data-lit")) {
+      occupied++;
+      p.setAttribute("fill", HEX.hingula); p.setAttribute("fill-opacity", ".34"); p.setAttribute("stroke", HEX.hingula);
+    } else { p.setAttribute("stroke", "#9C9078"); }
   }
-
-  const note = $("brahmasthan-note");
-  if (!note) return;
-  if (occupied) {
-    note.hidden = false;
-    note.dataset.tone = "breach";
-    note.textContent =
-      `Brahmasthan built over — ${occupied} of 9 central padas are occupied.`;
-  } else {
-    note.hidden = false;
-    note.dataset.tone = "clear";
-    note.textContent = "Brahmasthan clear.";
-  }
-}
-
-/* ═══ COMMITTEE ══════════════════════════════════════════════════════ */
-
-function seatCommittee(charter) {
-  const list = $("committee");
-  list.innerHTML = "";
-  state.committee = charter;
-
-  for (const critic of charter) {
-    const li = el("li", "critic");
-    li.dataset.critic = critic.id;
-    li.dataset.pigment = CRITIC_PIGMENT[critic.id] || "chalk";
-    li.title = critic.charter || "";
-
-    li.append(
-      el("span", "critic__glyph"),
-      el("span", "critic__name", critic.name),
-      el("span", "critic__kind", critic.analytical ? "computed" : "judged"),
-      el("span", "critic__score", "—"),
-    );
-    const bar = el("span", "critic__bar");
-    bar.append(el("i"));
-    li.append(bar);
-    list.append(li);
-  }
-}
-
-function reportScores(scores) {
-  for (const [axis, score] of Object.entries(scores || {})) {
-    const critic = state.committee.find((c) => c.axis === axis);
-    if (!critic) continue;
-    const row = document.querySelector(`.critic[data-critic="${critic.id}"]`);
-    if (!row) continue;
-    row.classList.add("is-seated");
-    row.classList.toggle("is-flagged", score < 0.55);
-    row.querySelector(".critic__score").textContent = score.toFixed(2);
-    row.querySelector(".critic__bar i").style.transform = `scaleX(${score})`;
-  }
-}
-
-/* ═══ LOG ════════════════════════════════════════════════════════════ */
-
-function logStage(event) {
-  const log = $("stage-log");
-  const line = el("p");
-  const cls = event.status === "skipped" ? "lg-skip" : event.status === "failed" ? "lg-warn" : "";
-  if (cls) line.className = cls;
-  line.append(el("b", null, `${event.stage} `), document.createTextNode(event.message));
-  log.append(line);
-  log.scrollTop = log.scrollHeight;
-}
-
-function toast(message) {
-  const node = $("toast");
-  node.textContent = message;
-  node.hidden = false;
-  clearTimeout(node._t);
-  node._t = setTimeout(() => { node.hidden = true; }, 7000);
-}
-
-/* ═══ FORM ═══════════════════════════════════════════════════════════ */
-
-function readBrief() {
-  const form = $("brief");
-  const data = new FormData(form);
-  const num = (k) => Number(data.get(k) || 0);
-  return {
-    project_name: "Studio scheme",
-    plot_width: num("plot_width"),
-    plot_depth: num("plot_depth"),
-    locality: String(data.get("locality") || ""),
-    road_direction: String(data.get("road_direction") || "N"),
-    levels: num("levels") || 1,
-    bedrooms: num("bedrooms"),
-    bathrooms: num("bathrooms"),
-    styles: [String(data.get("styles") || "contemporary")],
-    budget: num("budget"),
-    currency: "INR",
-    vastu: STANCES[num("vastu_slider")][1],
-    occupant_adults: num("occupant_adults"),
-    occupant_children: num("occupant_children"),
-    occupant_elders: num("occupant_elders"),
-  };
-}
-
-$("stance").addEventListener("input", (e) => {
-  const [name, , note] = STANCES[Number(e.target.value)];
-  $("stance-name").textContent = name;
-  $("stance-note").textContent = note;
-});
-
-/* ═══ PIPELINE ═══════════════════════════════════════════════════════ */
-
-$("brief").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (state.running) return;
-
-  state.running = true;
-  document.body.dataset.state = "running";
-  $("cast").disabled = true;
-  $("cast").querySelector(".cast__label").textContent = "The committee is sitting…";
-  $("stage-log").innerHTML = "";
-  $("rationale").hidden = true;
-  document.querySelectorAll(".critic").forEach((c) => {
-    c.classList.remove("is-seated", "is-flagged");
-    c.querySelector(".critic__score").textContent = "—";
-    c.querySelector(".critic__bar i").style.transform = "scaleX(0)";
-  });
-
-  try {
-    await runPipeline(readBrief());
-  } catch (err) {
-    toast(`The engine could not complete this design: ${err.message}`);
-    logStage({ stage: "error", status: "failed", message: err.message });
-  } finally {
-    state.running = false;
-    document.body.dataset.state = "done";
-    $("cast").disabled = false;
-    $("cast").querySelector(".cast__label").textContent = "Convene the committee";
-  }
-});
-
-async function runPipeline(simple) {
-  const response = await fetch(`${API}/design/stream`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ simple, candidates: 3, include_generative_critics: true }),
-  });
-  if (!response.ok) {
-    throw new Error(`${response.status} ${(await response.text()).slice(0, 180)}`);
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    // SSE frames are separated by a blank line.
-    let split;
-    while ((split = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, split);
-      buffer = buffer.slice(split + 2);
-      handleFrame(frame);
-    }
-  }
-}
-
-function handleFrame(frame) {
-  let name = "message", payload = "";
-  for (const line of frame.split("\n")) {
-    if (line.startsWith("event:")) name = line.slice(6).trim();
-    else if (line.startsWith("data:")) payload += line.slice(5).trim();
-  }
-  if (!payload) return;
-
-  let data;
-  try { data = JSON.parse(payload); } catch { return; }
-
-  if (name === "progress") {
-    logStage(data);
-    if (data.detail && data.detail.scores) reportScores(data.detail.scores);
-  } else if (name === "result") {
-    applyResult(data);
-  } else if (name === "error") {
-    toast(data.message || "The engine reported an error.");
-  }
-}
-
-function applyResult(data) {
-  state.planId = data.winner_plan_id;
-  state.plan = data.plan;
-  state.consensus = data.consensus;
-  state.vastu = data.vastu;
-  state.cost = data.cost;
-  state.projectId = data.project_id;
-
-  const ranking = (data.consensus && data.consensus.ranking) || [];
-  if (ranking.length) reportScores(ranking[0].axis_scores);
-
-  lightPadas(data.plan);
-  buildSheetRail();
-  renderVerdict();
-  renderRationale(data);
-
-  $("ledger-cost").textContent = (data.model_cost_usd || 0).toFixed(2);
-  if (data.degraded) toast(data.degraded_reason || "Some critics ran in degraded mode.");
-
-  showView(state.view);
-}
-
-/* ═══ DRAWINGS ═══════════════════════════════════════════════════════ */
-
-function buildSheetRail() {
-  const rail = $("sheet-rail");
-  rail.innerHTML = "";
-  const levels = (state.plan && state.plan.levels) || [];
-
-  const sheets = [
-    ...levels.map((lv) => ({ key: `plan_level_${lv.index}`, label: lv.index === 0 ? "Ground plan" : `Level ${lv.index}` })),
-    { key: "elevation_N", label: "North elev" },
-    { key: "elevation_E", label: "East elev" },
-    { key: "elevation_S", label: "South elev" },
-    { key: "elevation_W", label: "West elev" },
-    { key: "section_aa", label: "Section A–A" },
-    { key: "section_bb", label: "Section B–B" },
-    { key: "roof_plan", label: "Roof" },
-    { key: "site_plan", label: "Site" },
-  ];
-  state.drawings = sheets;
-
-  for (const sheet of sheets) {
-    const button = el("button", null, sheet.label);
-    button.type = "button";
-    button.setAttribute("role", "tab");
-    button.setAttribute("aria-selected", "false");
-    button.addEventListener("click", () => loadDrawing(sheet));
-    rail.append(button);
-  }
-  rail.hidden = false;
-  loadDrawing(sheets[0]);
-}
-
-async function loadDrawing(sheet) {
-  if (!state.planId) return;
-  state.activeDrawing = sheet.key;
-
-  $("sheet-rail").querySelectorAll("button").forEach((b) => {
-    b.setAttribute("aria-selected", String(b.textContent === sheet.label));
-  });
-
-  const view = $("sheet-view");
-  view.innerHTML = "";
-  view.append(el("p", "empty-state__body", "Drawing…"));
-
-  try {
-    const res = await fetch(`${API}/plans/${state.planId}/drawings/${sheet.key}.svg?dark=true`);
-    if (!res.ok) throw new Error(`${res.status}`);
-    view.innerHTML = await res.text();
-
-    const plan = state.plan || {};
-    $("sheet-title").textContent = sheet.label;
-    $("sheet-meta").textContent =
-      `${(plan.total_built_area || 0).toFixed(1)} m² built · FAR ${(plan.achieved_far || 0).toFixed(2)} · ` +
-      `${(plan.levels || []).length} level(s)`;
-  } catch (err) {
-    view.innerHTML = "";
-    view.append(el("p", "empty-state__body", `That drawing could not be produced (${err.message}).`));
-  }
-}
-
-/* ═══ VERDICT BAND ═══════════════════════════════════════════════════ */
-
-const inr = (n) =>
-  n >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr`
-  : n >= 1e5 ? `₹${(n / 1e5).toFixed(2)} L`
-  : `₹${Math.round(n).toLocaleString("en-IN")}`;
-
-function renderVerdict() {
-  const c = state.consensus || {};
-  $("v-score").textContent = c.winner_score != null ? c.winner_score.toFixed(2) : "—";
-  $("v-agree").textContent = c.overall_agreement != null
-    ? `${Math.round(c.overall_agreement * 100)}% committee agreement`
-    : "awaiting the committee";
-
-  if (state.vastu) {
-    $("v-vastu").textContent = `${Math.round(state.vastu.score)}`;
-    $("v-vastu-note").textContent = `${state.vastu.grade} · ${state.vastu.rules_assessed} rules assessed`;
-  }
-  if (state.cost) {
-    $("v-cost").textContent = inr(state.cost.total);
-    $("v-cost-note").textContent = `${inr(state.cost.p10)} – ${inr(state.cost.p90)}`;
-  }
-  if (state.plan) {
-    $("v-area").textContent = `${(state.plan.total_built_area || 0).toFixed(0)} m²`;
-    $("v-far").textContent = `FAR ${(state.plan.achieved_far || 0).toFixed(2)} of ${(state.plan.site || {}).max_far ?? "—"}`;
-  }
-
-  const findings = countFindings();
-  $("v-findings").textContent = String(findings.total);
-  $("v-findings-note").textContent = findings.critical
-    ? `${findings.critical} critical · must be resolved`
-    : findings.total ? "none critical" : "nothing outstanding";
-}
-
-function countFindings() {
-  const hist = ((state.consensus || {}).ranking || [{}])[0]?.finding_counts || {};
-  const total = Object.values(hist).reduce((a, b) => a + b, 0);
-  return { total, critical: hist.critical || 0 };
-}
-
-function renderRationale(data) {
-  if (!data.explanation) return;
-  const body = $("rationale-body");
-  body.innerHTML = "";
-  for (const para of String(data.explanation).split(/\n{2,}/)) {
-    if (para.trim()) body.append(el("p", null, para.trim()));
-  }
-  const close = el("button", "rationale__close", "Dismiss");
-  close.type = "button";
-  close.addEventListener("click", () => { $("rationale").hidden = true; });
-  $("rationale").hidden = false;
-  $("rationale").append(close);
-}
-
-/* ═══ VIEWS ══════════════════════════════════════════════════════════ */
-
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => showView(tab.dataset.view));
-});
-
-function showView(view) {
-  state.view = view;
-  document.querySelectorAll(".tab").forEach((t) => {
-    const on = t.dataset.view === view;
-    t.classList.toggle("is-on", on);
-    t.setAttribute("aria-pressed", String(on));
-  });
-
-  const hasPlan = Boolean(state.planId);
-  $("empty-state").hidden = hasPlan;
-  $("sheet").hidden = !(hasPlan && view === "drawings");
-  $("sheet-rail").hidden = !(hasPlan && view === "drawings");
-  for (const key of ["vastu", "cost", "interior", "walkthrough"]) {
-    $(`panel-${key}`).hidden = !(hasPlan && view === key);
-  }
-  if (!hasPlan) return;
-
-  if (view === "vastu") renderVastu();
-  if (view === "cost") renderCost();
-  if (view === "interior") renderInterior();
-  if (view === "walkthrough") renderWalkthrough();
-}
-
-/* ─── Vastu ─────────────────────────────────────────────────────────── */
-
-function renderVastu() {
-  const panel = $("panel-vastu");
-  const v = state.vastu;
-  if (!v) { panel.textContent = "No Vastu assessment for this scheme."; return; }
-
-  panel.innerHTML = "";
-  panel.append(el("h3", null, `Vastu — ${Math.round(v.score)}/100 · ${v.grade}`));
-  panel.append(el("p", "panel__lede", v.summary || ""));
-
-  // The stance control: re-scoring is instant, so the reconciliation is
-  // something you watch happen rather than something you are told about.
-  const control = el("div", "field-group");
-  const label = el("label", "fld fld--wide");
-  label.append(el("span", null, `Stance — ${STANCES[Math.round(v.tradition_weight * 4)][0]}`));
-  const slider = el("input", "stance");
-  Object.assign(slider, { type: "range", min: 0, max: 4, step: 1, value: Math.round(v.tradition_weight * 4) });
-  slider.addEventListener("change", () => rescoreVastu(Number(slider.value) / 4));
-  label.append(slider);
-  control.append(label);
-  panel.append(control);
-
-  if (v.reconciliation_note) {
-    const note = el("p", "panel__lede", v.reconciliation_note);
-    note.style.borderTop = "1px solid var(--rule)";
-    note.style.paddingTop = "0.8rem";
-    panel.append(note);
-  }
-
-  if ((v.top_remedies || []).length) {
-    panel.append(el("h3", null, "What fixing each thing is worth"));
-    for (const remedy of v.top_remedies) {
-      const row = el("div", "bar-row");
-      row.append(el("span", "bar-row__label", remedy.title));
-      const track = el("span", "bar-row__track");
-      const fill = el("i");
-      fill.style.transform = `scaleX(${Math.min(1, remedy.points_recoverable / 12.5)})`;
-      fill.style.background = remedy.modern_validity >= 0.65 ? "var(--indigo)" : "var(--chalk-3)";
-      track.append(fill);
-      row.append(track, el("span", "bar-row__value", `+${remedy.points_recoverable.toFixed(1)}`));
-      panel.append(row);
-
-      const why = el("p", "finding__fix", remedy.explanation);
-      why.style.margin = "0 0 0.7rem";
-      panel.append(why);
-    }
-  }
-
-  const violated = (v.verdicts || []).filter((x) => x.assessable && x.compliance < 0.6);
-  if (violated.length) {
-    panel.append(el("h3", null, `Rules not satisfied (${violated.length})`));
-    for (const verdict of violated) {
-      const item = el("div", "finding");
-      item.dataset.sev = verdict.verdict === "prohibited" ? "major" : "moderate";
-      item.append(el("span", "finding__sev"));
-      item.append(el("span", "finding__msg", verdict.title));
-      item.append(el("span", "finding__cite", `${verdict.citation} · ${verdict.school}`));
-      item.append(el("span", "finding__fix", verdict.remedy));
-      panel.append(item);
-    }
-  }
-
-  const skipped = (v.verdicts || []).filter((x) => !x.assessable);
-  if (skipped.length) {
-    panel.append(el("h3", null, `Not assessable (${skipped.length})`));
-    panel.append(el("p", "panel__lede",
-      "These rules were excluded from the score rather than guessed at. " +
-      "Scoring a rule the model cannot evaluate is how these systems manufacture false precision."));
-    for (const verdict of skipped) {
-      const item = el("div", "finding");
-      item.dataset.sev = "info";
-      item.append(el("span", "finding__sev"));
-      item.append(el("span", "finding__msg", verdict.title));
-      item.append(el("span", "finding__cite", verdict.reason_not_assessable || verdict.defeated_by));
-      panel.append(item);
-    }
-  }
-}
-
-async function rescoreVastu(traditionWeight) {
-  try {
-    const res = await fetch(`${API}/plans/vastu`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan_id: state.planId, tradition_weight: traditionWeight }),
-    });
-    if (!res.ok) throw new Error(String(res.status));
-    state.vastu = await res.json();
-    renderVastu();
-    renderVerdict();
-  } catch (err) {
-    toast(`Could not re-score at that stance: ${err.message}`);
-  }
-}
-
-/* ─── Cost ──────────────────────────────────────────────────────────── */
-
-function renderCost() {
-  const panel = $("panel-cost");
-  const c = state.cost;
-  if (!c) { panel.textContent = "No estimate for this scheme."; return; }
-
-  panel.innerHTML = "";
-  panel.append(el("h3", null, `Cost — ${inr(c.total)} at ${inr(c.rate_per_m2)}/m²`));
-  panel.append(el("p", "panel__lede", c.summary || ""));
-
-  panel.append(el("h3", null, "By work package"));
-  const max = Math.max(...Object.values(c.by_trade || { x: 1 }));
-  for (const [trade, amount] of Object.entries(c.by_trade || {}).slice(0, 12)) {
-    const row = el("div", "bar-row");
-    row.append(el("span", "bar-row__label", trade.replace(/_/g, " ")));
-    const track = el("span", "bar-row__track");
-    const fill = el("i");
-    fill.style.transform = `scaleX(${amount / max})`;
-    track.append(fill);
-    row.append(track, el("span", "bar-row__value", inr(amount)));
-    panel.append(row);
-  }
-
-  panel.append(el("h3", null, "Bill of quantities"));
-  const table = el("table", "ledger-table");
-  table.innerHTML =
-    "<thead><tr><th>Code</th><th>Description</th><th>Unit</th>" +
-    "<th class='num'>Qty</th><th class='num'>Rate</th><th class='num'>Amount</th></tr></thead>";
-  const body = el("tbody");
-  for (const item of (c.line_items || []).slice().sort((a, b) => b.amount - a.amount)) {
-    const tr = el("tr");
-    tr.title = item.basis || "";
-    for (const [value, cls] of [
-      [item.code], [item.description], [item.unit],
-      [item.quantity.toLocaleString("en-IN", { maximumFractionDigits: 1 }), "num"],
-      [Math.round(item.rate).toLocaleString("en-IN"), "num"],
-      [Math.round(item.amount).toLocaleString("en-IN"), "num"],
-    ]) tr.append(el("td", cls, value));
-    body.append(tr);
-  }
-  table.append(body);
-  const foot = el("tfoot");
-  const ftr = el("tr");
-  ftr.append(el("td", null, ""), el("td", null, "Works subtotal"), el("td", null, ""),
-    el("td", "num", ""), el("td", "num", ""),
-    el("td", "num", Math.round(c.works_subtotal).toLocaleString("en-IN")));
-  foot.append(ftr);
-  table.append(foot);
-  panel.append(table);
-
-  panel.append(el("h3", null, "Risk register"));
-  for (const risk of c.risks || []) {
-    const item = el("div", "finding");
-    item.dataset.sev = risk.likelihood > 0.6 ? "major" : "moderate";
-    item.append(el("span", "finding__sev"));
-    item.append(el("span", "finding__msg", risk.name));
-    item.append(el("span", "finding__cite",
-      `${Math.round(risk.likelihood * 100)}% likely · +${risk.cost_impact_percent}% cost · ` +
-      `+${risk.schedule_impact_weeks} weeks`));
-    item.append(el("span", "finding__fix", risk.mitigation));
-    panel.append(item);
-  }
-
-  panel.append(el("h3", null, "Assumptions"));
-  const ul = el("ul");
-  ul.style.cssText = "margin:0;padding-left:1.1rem;color:var(--chalk-3);font-size:var(--step);line-height:1.7";
-  for (const line of c.assumptions || []) ul.append(el("li", null, line));
-  panel.append(ul);
-}
-
-/* ─── Interior ──────────────────────────────────────────────────────── */
-
-async function renderInterior() {
-  const panel = $("panel-interior");
-  if (state.interior) return paintInterior(panel, state.interior);
-
-  panel.innerHTML = "";
-  panel.append(el("p", "panel__lede", "Solving the furniture layout…"));
-  try {
-    const res = await fetch(`${API}/plans/${state.planId}/interior`, { method: "POST" });
-    if (!res.ok) throw new Error(String(res.status));
-    state.interior = await res.json();
-    paintInterior(panel, state.interior);
-  } catch (err) {
-    panel.innerHTML = "";
-    panel.append(el("p", "panel__lede", `The interior layout could not be produced (${err.message}).`));
-  }
-}
-
-function paintInterior(panel, scheme) {
-  panel.innerHTML = "";
-  panel.append(el("h3", null, `Interior — ${scheme.style.replace(/_/g, " ")}`));
-  panel.append(el("p", "panel__lede", scheme.summary || ""));
-
-  const swatches = el("div");
-  swatches.style.cssText = "display:flex;gap:2px;margin-bottom:1.2rem;flex-wrap:wrap";
-  for (const sw of (scheme.palette && scheme.palette.swatches) || []) {
-    const chip = el("div");
-    chip.style.cssText =
-      `flex:1 1 84px;min-width:84px;height:56px;background:${sw.hex};` +
-      "display:flex;align-items:flex-end;padding:4px 6px;font-size:.56rem;" +
-      "letter-spacing:.08em;text-transform:uppercase;color:#17130E;font-weight:700";
-    chip.textContent = sw.role;
-    chip.title = `${sw.role} — ${sw.hex}`;
-    swatches.append(chip);
-  }
-  panel.append(swatches);
-
-  for (const room of scheme.rooms || []) {
-    panel.append(el("h3", null, `${room.room_name} · ${room.area_m2.toFixed(1)} m² · ${room.direction}`));
-    const table = el("table", "ledger-table");
-    table.innerHTML = "<thead><tr><th>Item</th><th>Size</th><th>Against</th><th class='num'>Cost</th></tr></thead>";
-    const body = el("tbody");
-    for (const f of room.furniture || []) {
-      const tr = el("tr");
-      tr.title = f.notes || "";
-      tr.append(
-        el("td", null, f.name),
-        el("td", null, `${f.width.toFixed(2)} × ${f.depth.toFixed(2)} m`),
-        el("td", null, f.against_wall || "—"),
-        el("td", "num", Math.round(f.cost).toLocaleString("en-IN")),
-      );
-      body.append(tr);
-    }
-    table.append(body);
-    panel.append(table);
-
-    for (const missing of room.unplaced || []) {
-      const item = el("div", "finding");
-      item.dataset.sev = "major";
-      item.append(el("span", "finding__sev"));
-      item.append(el("span", "finding__msg", `${missing.name} could not be placed`));
-      item.append(el("span", "finding__cite", missing.reason));
-      panel.append(item);
-    }
-  }
-}
-
-/* ─── Walkthrough ───────────────────────────────────────────────────── */
-
-async function renderWalkthrough() {
-  const panel = $("panel-walkthrough");
-  panel.innerHTML = "";
-  panel.append(el("h3", null, "Walkthrough"));
-  panel.append(el("p", "panel__lede",
-    "The scheme is exported as glTF, which every browser, phone and headset reads " +
-    "natively. Open it in the viewer for VR, or on a phone to place it in your own room."));
-
-  const model = `${API}/plans/${state.planId}/model.glb`;
-  const links = el("div");
-  links.style.cssText = "display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.2rem";
-  for (const [label, href] of [
-    ["Download 3D model (.glb)", model],
-    ["Download for CAD (.obj)", `${API}/plans/${state.planId}/model.obj`],
-  ]) {
-    const a = el("a", null, label);
-    a.href = href;
-    a.className = "tab";
-    a.style.textDecoration = "none";
-    links.append(a);
-  }
-  panel.append(links);
-
-  try {
-    const res = await fetch(`${API}/plans/${state.planId}/walkthrough`);
-    if (!res.ok) throw new Error(String(res.status));
-    const data = await res.json();
-
-    const s = data.statistics || {};
-    panel.append(el("p", "panel__lede",
-      `${(s.triangles || 0).toLocaleString()} triangles across ${s.parts || 0} parts, ` +
-      `${(s.height_m || 0).toFixed(2)} m tall.`));
-
-    panel.append(el("h3", null, "Narrated route"));
-    for (const line of data.narration || []) {
-      const p = el("p", "finding__msg", line.text);
-      p.style.cssText = "padding:.45rem 0;border-bottom:1px solid var(--rule)";
-      panel.append(p);
-    }
-
-    const speak = el("button", "tab", "Play narration");
-    speak.type = "button";
-    speak.addEventListener("click", () => {
-      if (!("speechSynthesis" in window)) return toast("This browser has no speech synthesis.");
-      speechSynthesis.cancel();
-      for (const line of data.narration || []) {
-        speechSynthesis.speak(new SpeechSynthesisUtterance(line.text));
-      }
-    });
-    panel.append(speak);
-  } catch (err) {
-    panel.append(el("p", "panel__lede", `Walkthrough data unavailable (${err.message}).`));
-  }
+  return { occupied, sectors };
 }
 
 /* ═══ BOOT ═══════════════════════════════════════════════════════════ */
 
 (async function boot() {
-  strikeGrid();
+  strike($("hero-mandala"));
+  strike($("review-mandala"));
+
+  $("stance").addEventListener("input", (e) => {
+    const [n, , note] = STANCES[+e.target.value];
+    $("stance-name").textContent = n; $("stance-note").textContent = note;
+  });
+  $("brief").addEventListener("submit", onSubmit);
+  $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
+  $("restart").addEventListener("click", () => phase("compose"));
+  $("see-why").addEventListener("click", openWhy);
+  $("why-close").addEventListener("click", () => { $("why").hidden = true; });
+  $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("why").hidden = true; });
+  $("dl-svg").addEventListener("click", downloadSheet);
+  $("zoom").addEventListener("click", () => {
+    const on = $("plate").classList.toggle("is-zoomed");
+    $("zoom").textContent = on ? "Fit to frame" : "Actual size";
+  });
+  document.querySelectorAll(".view-tab").forEach((t) =>
+    t.addEventListener("click", () => showView(t.dataset.view)));
+
   try {
-    const [health, caps] = await Promise.all([
+    const [h, c] = await Promise.all([
       fetch(`${API}/health`).then((r) => r.json()),
       fetch(`${API}/capabilities`).then((r) => r.json()),
     ]);
-    seatCommittee(caps.committee || []);
-    $("ledger-cost").textContent = (health.total_model_cost_usd || 0).toFixed(2);
+    S.committee = c.committee || [];
+    $("ledger-cost").textContent = (h.total_model_cost_usd || 0).toFixed(2);
+    $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
 
-    const note = $("conn-note");
-    if (health.degraded_mode) {
-      note.dataset.tone = "";
-      note.textContent =
-        "Engine ready. No hosted model provider is configured, so the three " +
-        "judgement critics will run in degraded mode. Every computed result — " +
-        "geometry, daylight, compliance, Vastu, cost — is unaffected.";
+    const note = $("engine-note");
+    if (h.degraded_mode) {
+      note.textContent = "Engine ready. No hosted model provider is configured, so the three judgement critics will run in a labelled degraded mode. Every computed result — geometry, daylight, compliance, Vastu, cost — is unaffected.";
     } else {
       note.dataset.tone = "ok";
-      note.textContent = `Engine ready · ${health.providers_configured.length} free provider(s) · corpus ${health.corpus.total} passages.`;
+      note.textContent = `Engine ready · ${h.providers_configured.length} free provider(s) · ${h.corpus.total} corpus passages · $0.00 spent.`;
     }
-  } catch (err) {
-    const note = $("conn-note");
+    seatCritics();
+  } catch {
+    const note = $("engine-note");
     note.dataset.tone = "bad";
-    note.textContent = `Cannot reach the engine at ${API}. Start it with: uvicorn aip.api.app:app --port 8000`;
+    note.textContent = `Cannot reach the engine at ${API}. Start it with:  uvicorn aip.api.app:app --port 8000`;
   }
 })();
+
+function seatCritics() {
+  const run = $("run-critics"); run.innerHTML = "";
+  const rail = $("critics"); rail.innerHTML = "";
+  for (const c of S.committee) {
+    const pig = CRITIC_PIG[c.id] || "chalk";
+
+    const li = el("li", "rc"); li.dataset.critic = c.id; li.dataset.pig = pig;
+    li.append(el("i", "rc__g"), el("span", "rc__n", c.name), el("span", "rc__s", "—"));
+    run.append(li);
+
+    const row = el("li", "cr"); row.dataset.critic = c.id; row.dataset.pig = pig;
+    row.title = c.charter || "";
+    const bar = el("span", "cr__b"); bar.append(el("i"));
+    row.append(el("i", "cr__g"), el("span", "cr__n", c.name),
+      el("span", "cr__k", c.analytical ? "computed" : "judged"),
+      el("span", "cr__s", "—"), bar);
+    rail.append(row);
+  }
+}
+
+/* ═══ RUN ════════════════════════════════════════════════════════════ */
+
+function readBrief() {
+  const d = new FormData($("brief")); const n = (k) => Number(d.get(k) || 0);
+  return {
+    project_name: "Studio scheme",
+    plot_width: n("plot_width"), plot_depth: n("plot_depth"),
+    locality: String(d.get("locality") || ""), road_direction: String(d.get("road_direction") || "N"),
+    levels: n("levels") || 1, bedrooms: n("bedrooms"), bathrooms: n("bathrooms"),
+    styles: [String(d.get("styles") || "contemporary")],
+    budget: n("budget"), currency: "INR",
+    vastu: STANCES[n("vastu_slider")][1],
+    occupant_adults: n("occupant_adults"), occupant_children: n("occupant_children"),
+    occupant_elders: n("occupant_elders"),
+  };
+}
+
+async function onSubmit(e) {
+  e.preventDefault();
+  if (S.phase === "running") return;
+
+  S.briefSent = readBrief();
+  S.plans = {}; S.planIds = []; S.activeId = null;
+  phase("running");
+  $("run-log").innerHTML = "";
+  $("run-fill").style.transform = "scaleX(0)";
+  $("run-title").textContent = "The committee is sitting";
+  document.querySelectorAll(".rc").forEach((r) => {
+    r.classList.remove("is-in"); r.querySelector(".rc__s").textContent = "—";
+  });
+  document.querySelectorAll(".cr").forEach((r) => {
+    r.classList.remove("is-low");
+    r.querySelector(".cr__s").textContent = "—";
+    r.querySelector(".cr__b i").style.transform = "scaleX(0)";
+  });
+
+  try {
+    await stream(S.briefSent);
+  } catch (err) {
+    toast(`The engine could not complete this design: ${err.message}`);
+    $("run-title").textContent = "The run failed";
+    $("restart").hidden = false;
+  }
+}
+
+async function stream(simple) {
+  const res = await fetch(`${API}/design/stream`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ simple, candidates: 3, include_generative_critics: true }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
+
+  const rd = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  while (true) {
+    const { done, value } = await rd.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) !== -1) { handle(buf.slice(0, i)); buf = buf.slice(i + 2); }
+  }
+}
+
+function handle(frame) {
+  let name = "", raw = "";
+  for (const line of frame.split("\n")) {
+    if (line.startsWith("event:")) name = line.slice(6).trim();
+    else if (line.startsWith("data:")) raw += line.slice(5).trim();
+  }
+  if (!raw) return;
+  let d; try { d = JSON.parse(raw); } catch { return; }
+
+  if (name === "progress") {
+    if (d.status !== "running" || d.stage === "critique") {
+      const p = el("p"); p.append(el("b", null, `${d.stage} `), document.createTextNode(d.message));
+      $("run-log").append(p); $("run-log").scrollTop = $("run-log").scrollHeight;
+    }
+    $("run-stage").textContent = d.message;
+    $("run-fill").style.transform = `scaleX(${d.percent || 0})`;
+    if (d.detail?.scores) markScores(d.detail.scores);
+  } else if (name === "result") {
+    applyResult(d);
+  } else if (name === "error") {
+    toast(d.message || "The engine reported an error.");
+  }
+}
+
+function markScores(scores) {
+  for (const [axis, score] of Object.entries(scores)) {
+    const c = S.committee.find((x) => x.axis === axis); if (!c) return;
+    const rc = document.querySelector(`.rc[data-critic="${c.id}"]`);
+    if (rc) { rc.classList.add("is-in"); rc.querySelector(".rc__s").textContent = score.toFixed(2); }
+  }
+}
+
+/* ═══ RESULT ═════════════════════════════════════════════════════════ */
+
+async function applyResult(d) {
+  S.planIds = d.plan_ids || [];
+  S.winnerId = d.winner_plan_id;
+  S.activeId = d.winner_plan_id;
+  S.consensus = d.consensus;
+  S.explanation = d.explanation || "";
+  S.recommendations = d.recommendations || [];
+  S.projectId = d.project_id; S.sessionId = d.trace_id;
+
+  S.plans[d.winner_plan_id] = { plan: d.plan, vastu: d.vastu, cost: d.cost };
+  $("ledger-cost").textContent = (d.model_cost_usd || 0).toFixed(2);
+  if (d.degraded) toast(d.degraded_reason || "Some critics ran in degraded mode.");
+
+  phase("review");
+  $("restart").hidden = false;
+  buildSchemeTabs();
+  buildSheetTabs();
+  renderAll();
+  showView("drawings");
+}
+
+function buildSchemeTabs() {
+  const wrap = $("schemes"); wrap.innerHTML = "";
+  const ranked = S.consensus?.ranking || [];
+  const dq = new Set((S.consensus?.disqualified || []).map((d) => d.candidate_id));
+
+  S.planIds.forEach((id, i) => {
+    const row = ranked.find((r) => r.candidate_id === id);
+    const b = el("button", "scheme-tab"); b.type = "button"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(id === S.activeId));
+    b.append(document.createTextNode(`Scheme ${String.fromCharCode(65 + i)}`));
+
+    // A scheme with no score was not merely last - it was disqualified for a
+    // critical finding and never entered the ranking. Leaving the score blank
+    // reads as a rendering fault; saying so is the honest signal.
+    if (row) {
+      b.append(el("b", null, row.score.toFixed(2)));
+      b.title = id === S.winnerId ? "Selected by the committee" : "On the trade-off frontier";
+    } else if (dq.has(id)) {
+      b.dataset.dq = "1";
+      b.append(el("b", null, "DQ"));
+      const why = (S.consensus.disqualified.find((d) => d.candidate_id === id)?.reasons || [])[0];
+      b.title = `Disqualified for a critical finding. ${why || ""}`.trim();
+    } else {
+      b.append(el("b", null, "—"));
+      b.title = "Dominated on every measured axis";
+    }
+    b.addEventListener("click", () => selectScheme(id));
+    wrap.append(b);
+  });
+}
+
+async function selectScheme(id) {
+  if (id === S.activeId) return;
+  S.activeId = id;
+  document.querySelectorAll(".scheme-tab").forEach((b, i) =>
+    b.setAttribute("aria-selected", String(S.planIds[i] === id)));
+
+  if (!S.plans[id]) {
+    S.plans[id] = {};
+    try {
+      const [plan, vastu, cost] = await Promise.all([
+        fetch(`${API}/plans/${id}`).then((r) => r.json()),
+        fetch(`${API}/plans/vastu`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan_id: id, tradition_weight: 0.5 }) }).then((r) => r.json()),
+        fetch(`${API}/plans/cost`, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan_id: id, budget: S.briefSent?.budget || 0 }) }).then((r) => r.json()),
+      ]);
+      S.plans[id] = { plan, vastu, cost };
+    } catch (err) { toast(`Could not load that scheme: ${err.message}`); }
+  }
+  renderAll();
+  showView(S.view);
+}
+
+const cur = () => S.plans[S.activeId] || {};
+
+function renderAll() {
+  renderRail();
+  renderCritics();
+  renderVerdict();
+  loadSheet(S.sheet);
+}
+
+function renderRail() {
+  const { plan } = cur();
+  const idx = S.planIds.indexOf(S.activeId);
+  $("pick-name").textContent = `Scheme ${String.fromCharCode(65 + Math.max(0, idx))}`;
+  const dq = (S.consensus?.disqualified || []).find((d) => d.candidate_id === S.activeId);
+  $("pick-why").textContent = dq
+    ? `Disqualified. ${dq.reasons[0] || "It carries a critical finding."} A statutory or physical breach removes a scheme regardless of how it scores elsewhere.`
+    : S.activeId === S.winnerId
+      ? "Selected by the committee as the best trade-off across every measured axis."
+      : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
+
+  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const bars = $("axis-bars"); bars.innerHTML = "";
+  const axes = Object.entries(row?.axis_scores || {}).sort((a, b) => a[1] - b[1]);
+  for (const [axis, v] of axes) {
+    const d = el("div", "abar");
+    const top = el("div", "abar__top");
+    top.append(el("span", null, cap(axis)), el("b", null, v.toFixed(2)));
+    const t = el("div", "abar__t"); const i = el("i");
+    i.style.background = v < 0.5 ? HEX.hingula : v < 0.75 ? HEX.ochre : HEX.indigo;
+    t.append(i); d.append(top, t); bars.append(d);
+    requestAnimationFrame(() => { i.style.transform = `scaleX(${v})`; });
+  }
+
+  const b = S.briefSent || {};
+  const recap = $("brief-recap"); recap.innerHTML = "";
+  const rows = [
+    ["Plot", `${b.plot_width} × ${b.plot_depth} m`],
+    ["Locality", b.locality], ["Road", b.road_direction],
+    ["Bedrooms", b.bedrooms], ["Bathrooms", b.bathrooms],
+    ["Floors", b.levels], ["Style", cap(b.styles?.[0] || "")],
+    ["Budget", inr(b.budget)], ["Vastu", cap(b.vastu || "")],
+  ];
+  for (const [k, v] of rows) {
+    const d = el("div"); d.append(el("dt", null, k), el("dd", null, String(v ?? "—"))); recap.append(d);
+  }
+}
+
+function renderCritics() {
+  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const scores = row?.axis_scores || {};
+  document.querySelectorAll(".cr").forEach((el2) => {
+    const c = S.committee.find((x) => x.id === el2.dataset.critic);
+    const v = c ? scores[c.axis] : undefined;
+    el2.querySelector(".cr__s").textContent = v == null ? "—" : v.toFixed(2);
+    el2.classList.toggle("is-low", v != null && v < 0.55);
+    const fill = el2.querySelector(".cr__b i");
+    requestAnimationFrame(() => { fill.style.transform = `scaleX(${v ?? 0})`; });
+  });
+  const ag = S.consensus?.overall_agreement;
+  $("agree-chip").textContent = ag == null ? "" : `${Math.round(ag * 100)}% agreed`;
+}
+
+function renderVerdict() {
+  const { plan, vastu, cost } = cur();
+  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+
+  $("v-score").textContent = row ? row.score.toFixed(2) : "—";
+  $("v-agree").textContent = S.consensus ? `${Math.round(S.consensus.overall_agreement * 100)}% committee agreement` : "—";
+  if (vastu) { $("v-vastu").textContent = Math.round(vastu.score); $("v-vastu-note").textContent = `${vastu.grade} · ${vastu.rules_assessed} rules assessed`; }
+  if (cost) { $("v-cost").textContent = inr(cost.total); $("v-cost-note").textContent = `${inr(cost.p10)} – ${inr(cost.p90)}`; }
+  if (plan) {
+    $("v-area").textContent = `${Math.round(plan.total_built_area)} m²`;
+    $("v-far").textContent = `FAR ${(plan.achieved_far || 0).toFixed(2)} of ${plan.site?.max_far ?? "—"}`;
+  }
+  const h = row?.finding_counts || {};
+  const total = Object.values(h).reduce((a, b) => a + b, 0);
+  $("v-find").textContent = total;
+  $("v-find-note").textContent = h.critical ? `${h.critical} critical · blocks delivery` : total ? "none critical" : "nothing outstanding";
+}
+
+/* ═══ VIEWS ══════════════════════════════════════════════════════════ */
+
+function showView(v) {
+  S.view = v;
+  document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("is-on", t.dataset.view === v));
+  document.querySelectorAll(".pane").forEach((p) => { p.hidden = p.dataset.view !== v; });
+
+  if (v === "mandala") renderMandala();
+  if (v === "vastu") renderVastu();
+  if (v === "cost") renderCost();
+  if (v === "interior") renderInterior();
+  if (v === "model") renderModel();
+  if (v === "findings") renderFindings();
+  if (v === "audit") renderAudit();
+}
+
+const pane = (v) => document.querySelector(`.pane[data-view="${v}"]`);
+
+function scrollPane(v) {
+  const p = pane(v); p.innerHTML = "";
+  const s = el("div", "pane__scroll"); p.append(s); return s;
+}
+
+/* ── drawings ──────────────────────────────────────────────────────── */
+
+function buildSheetTabs() {
+  const { plan } = cur();
+  const tabs = $("sheet-tabs"); tabs.innerHTML = "";
+  const levels = plan?.levels || [];
+  const sheets = [
+    ...levels.map((lv) => [`plan_level_${lv.index}`, lv.index === 0 ? "Ground plan" : `Level ${lv.index}`]),
+    ["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"],
+    ["section_aa", "Section A–A"], ["section_bb", "Section B–B"], ["roof_plan", "Roof"], ["site_plan", "Site"],
+  ];
+  for (const [key, label] of sheets) {
+    const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
+    b.dataset.sheet = key;
+    b.setAttribute("aria-selected", String(key === S.sheet));
+    b.addEventListener("click", () => loadSheet(key));
+    tabs.append(b);
+  }
+}
+
+async function loadSheet(key) {
+  S.sheet = key;
+  $("sheet-tabs").querySelectorAll("button").forEach((b) =>
+    b.setAttribute("aria-selected", String(b.dataset.sheet === key)));
+  const plate = $("plate");
+  plate.innerHTML = "";
+  plate.append(el("p", "empty-note", "Drawing…"));
+  try {
+    const r = await fetch(`${API}/plans/${S.activeId}/drawings/${key}.svg?dark=true`);
+    if (!r.ok) throw new Error(String(r.status));
+    plate.innerHTML = await r.text();
+    const { plan } = cur();
+    $("plate-caption").textContent =
+      `${(plan?.total_built_area || 0).toFixed(1)} m² built-up · FAR ${(plan?.achieved_far || 0).toFixed(2)} · ` +
+      `${(plan?.levels || []).length} level(s) · ${plan?.style ? cap(plan.style) : ""}`;
+  } catch (err) {
+    plate.innerHTML = "";
+    plate.append(el("p", "empty-note", `That drawing could not be produced (${err.message}).`));
+  }
+}
+
+function downloadSheet() {
+  const svg = $("plate").querySelector("svg");
+  if (!svg) return toast("No drawing to download yet.");
+  const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `${S.sheet}.svg`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ── mandala ───────────────────────────────────────────────────────── */
+
+function renderMandala() {
+  const { plan } = cur();
+  const { occupied, sectors } = lightPadas($("review-mandala"), plan);
+
+  const note = $("brahma-note");
+  if (occupied) {
+    note.dataset.tone = "breach";
+    note.textContent = `Brahmasthan built over — ${occupied} of 9 central padas are occupied. The corpus treats the centre as the seat of Brahma and requires it unbuilt; an open centre is also what drives stack ventilation and daylights a deep plan.`;
+  } else {
+    note.dataset.tone = "clear";
+    note.textContent = "Brahmasthan clear. The central nine padas are unbuilt, satisfying the strongest rule in the corpus and leaving the plan's core available for a courtyard or void.";
+  }
+
+  const legend = $("quarter-legend"); legend.innerHTML = "";
+  for (const [pig, label] of [
+    ["indigo", "Ishanya · north-east · analysis"],
+    ["orpiment", "Vayavya · north-west · judgement"],
+    ["hingula", "Agneya · south-east · breach"],
+    ["ochre", "Nairutya · south-west · mass and cost"],
+  ]) {
+    const d = el("div"); const i = el("i"); i.style.background = HEX[pig];
+    d.append(i, el("span", null, label)); legend.append(d);
+  }
+
+  const list = $("room-sectors"); list.innerHTML = "";
+  list.append(el("h3", "sec", `Rooms by sector (${sectors.length})`));
+  const tbl = el("table", "led");
+  tbl.innerHTML = "<thead><tr><th>Room</th><th>Sector</th><th class='n'>Area</th></tr></thead>";
+  const tb = el("tbody");
+  for (const s of sectors.sort((a, b) => b.area - a.area)) {
+    const tr = el("tr");
+    const td = el("td", null, s.name);
+    const dot = el("i"); dot.style.cssText = `display:inline-block;width:8px;height:8px;transform:rotate(45deg);background:${HEX[s.pig]};margin-right:8px`;
+    td.prepend(dot);
+    tr.append(td, el("td", null, s.dir), el("td", "n", `${s.area.toFixed(1)} m²`));
+    tb.append(tr);
+  }
+  tbl.append(tb); list.append(tbl);
+}
+
+/* ── vastu ─────────────────────────────────────────────────────────── */
+
+function renderVastu() {
+  const s = scrollPane("vastu");
+  const v = cur().vastu;
+  if (!v) { s.append(el("p", "empty-note", "No Vastu assessment for this scheme.")); return; }
+
+  const stats = el("div", "stat-row");
+  for (const [pig, k, val, sub] of [
+    ["orpiment", "Score", `${Math.round(v.score)}/100`, v.grade],
+    ["indigo", "Assessed", `${v.rules_assessed}`, `of ${v.rules_total} rules`],
+    ["chalk", "Excluded", `${v.rules_not_assessable}`, "not guessed at"],
+    ["hingula", "Violations", `${v.violations}`, `${v.serious_violations} serious`],
+  ]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); stats.append(d);
+  }
+  s.append(stats);
+  s.append(el("p", "lede", v.summary || ""));
+
+  // Stance control — re-scoring is instant, so the reconciliation is something
+  // you watch happen rather than something you are told about.
+  s.append(el("h3", "sec", "Stance"));
+  const lab = el("label", "fld fld--full");
+  lab.append(el("span", null, `Tradition weight — ${cap(v.stance_label)}`));
+  const sl = el("input"); Object.assign(sl, { type: "range", min: 0, max: 4, step: 1, value: Math.round(v.tradition_weight * 4) });
+  sl.className = "stance";
+  sl.addEventListener("change", () => rescore(+sl.value / 4));
+  lab.append(sl); s.append(lab);
+  if (v.reconciliation_note) s.append(el("p", "note-card", v.reconciliation_note));
+
+  if (v.top_remedies?.length) {
+    s.append(el("h3", "sec", "What fixing each thing is worth"));
+    for (const r of v.top_remedies) {
+      const line = el("div", "bar-line");
+      line.append(el("span", "bar-line__l", r.title));
+      const t = el("div", "bar-line__t"); const i = el("i");
+      i.style.background = r.modern_validity >= 0.65 ? HEX.indigo : HEX.chalk;
+      t.append(i); line.append(t, el("span", "bar-line__v", `+${r.points_recoverable.toFixed(1)} pts`));
+      s.append(line);
+      requestAnimationFrame(() => { i.style.transform = `scaleX(${Math.min(1, r.points_recoverable / 10)})`; });
+      const p = el("p", "find__r", r.explanation); p.style.cssText = "margin:2px 0 14px;padding-left:2px";
+      s.append(p);
+    }
+  }
+
+  const violated = (v.verdicts || []).filter((x) => x.assessable && x.compliance < 0.6);
+  if (violated.length) {
+    s.append(el("h3", "sec", `Rules not satisfied (${violated.length})`));
+    for (const x of violated) s.append(vastuRow(x, x.verdict === "prohibited" ? "major" : "moderate"));
+  }
+  const met = (v.verdicts || []).filter((x) => x.assessable && x.compliance >= 0.6);
+  if (met.length) {
+    s.append(el("h3", "sec", `Rules satisfied (${met.length})`));
+    for (const x of met) s.append(vastuRow(x, "info"));
+  }
+  const skipped = (v.verdicts || []).filter((x) => !x.assessable);
+  if (skipped.length) {
+    s.append(el("h3", "sec", `Not assessable (${skipped.length})`));
+    s.append(el("p", "lede", "Excluded from the score rather than guessed at. Scoring a rule the model cannot evaluate is how these systems manufacture false precision."));
+    for (const x of skipped) {
+      const d = el("div", "find"); d.dataset.sev = "info";
+      d.append(el("i", "find__s"), el("span", "find__t", x.title),
+        el("span", "find__c", x.reason_not_assessable || `Superseded by ${x.defeated_by}`));
+      s.append(d);
+    }
+  }
+}
+
+function vastuRow(x, sev) {
+  const d = el("div", "find"); d.dataset.sev = sev;
+  d.append(el("i", "find__s"), el("span", "find__t", x.title));
+  d.append(el("span", "find__m",
+    `${x.observed_direction ? x.observed_direction + " · " : ""}${x.verdict} · weight ${x.effective_weight.toFixed(2)} · modern validity ${x.modern_validity.toFixed(2)}`));
+  if (x.remedy && sev !== "info") d.append(el("span", "find__r", x.remedy));
+  d.append(el("span", "find__c", `${x.citation} — ${x.school}`));
+  return d;
+}
+
+async function rescore(w) {
+  try {
+    const r = await fetch(`${API}/plans/vastu`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan_id: S.activeId, tradition_weight: w }),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    S.plans[S.activeId].vastu = await r.json();
+    renderVastu(); renderVerdict();
+  } catch (err) { toast(`Could not re-score at that stance: ${err.message}`); }
+}
+
+/* ── cost ──────────────────────────────────────────────────────────── */
+
+function renderCost() {
+  const s = scrollPane("cost");
+  const c = cur().cost;
+  if (!c) { s.append(el("p", "empty-note", "No estimate for this scheme.")); return; }
+
+  const stats = el("div", "stat-row");
+  for (const [pig, k, val, sub] of [
+    ["ochre", "Estimate", inr(c.total), `${inr(c.rate_per_m2)} per m²`],
+    ["indigo", "80% range", `${inr(c.p10)}`, `to ${inr(c.p90)} · ±${c.uncertainty_band_percent ?? "—"}%`],
+    ["chalk", "Programme", `${c.duration_months} mo`, `${Math.round(c.delay_probability * 100)}% chance of delay`],
+    ["hingula", "Line items", `${c.line_items.length}`, `${c.finish_tier} spec · ${c.region}`],
+  ]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); stats.append(d);
+  }
+  s.append(stats);
+  s.append(el("p", "lede", c.summary || ""));
+
+  s.append(el("h3", "sec", "By work package"));
+  const max = Math.max(...Object.values(c.by_trade || { x: 1 }));
+  for (const [trade, amt] of Object.entries(c.by_trade || {})) {
+    const line = el("div", "bar-line");
+    line.append(el("span", "bar-line__l", cap(trade)));
+    const t = el("div", "bar-line__t"); const i = el("i"); t.append(i);
+    line.append(t, el("span", "bar-line__v", inr(amt)));
+    s.append(line);
+    requestAnimationFrame(() => { i.style.transform = `scaleX(${amt / max})`; });
+  }
+
+  s.append(el("h3", "sec", "Build-up"));
+  const bt = el("table", "led");
+  const bb = el("tbody");
+  for (const [k, v] of [
+    ["Works subtotal", c.works_subtotal], ["Overhead and profit", c.overhead_profit],
+    ["Contingency", c.contingency], ["Professional fees", c.professional_fees], ["Tax", c.tax],
+  ]) {
+    const tr = el("tr"); tr.append(el("td", null, k), el("td", "n", inr(v))); bb.append(tr);
+  }
+  bt.append(bb);
+  const tf = el("tfoot"); const tr = el("tr");
+  tr.append(el("td", null, "Total"), el("td", "n", inr(c.total))); tf.append(tr); bt.append(tf);
+  s.append(bt);
+
+  s.append(el("h3", "sec", `Bill of quantities (${c.line_items.length})`));
+  const t = el("table", "led");
+  t.innerHTML = "<thead><tr><th>Code</th><th>Description</th><th>Unit</th><th class='n'>Qty</th><th class='n'>Rate</th><th class='n'>Amount</th></tr></thead>";
+  const tb = el("tbody");
+  for (const it of [...c.line_items].sort((a, b) => b.amount - a.amount)) {
+    const r = el("tr"); r.title = it.basis || "";
+    r.append(el("td", null, it.code), el("td", null, it.description), el("td", null, it.unit),
+      el("td", "n", it.quantity.toLocaleString("en-IN", { maximumFractionDigits: 1 })),
+      el("td", "n", Math.round(it.rate).toLocaleString("en-IN")),
+      el("td", "n", Math.round(it.amount).toLocaleString("en-IN")));
+    tb.append(r);
+  }
+  t.append(tb); s.append(t);
+
+  s.append(el("h3", "sec", "Cash flow"));
+  const cf = el("table", "led");
+  cf.innerHTML = "<thead><tr><th>Month</th><th class='n'>Outflow</th><th class='n'>Cumulative</th><th class='n'>Complete</th></tr></thead>";
+  const cb = el("tbody");
+  for (const p of c.cash_flow || []) {
+    const r = el("tr");
+    r.append(el("td", null, p.label), el("td", "n", inr(p.outflow)),
+      el("td", "n", inr(p.cumulative)), el("td", "n", `${p.percent_complete}%`));
+    cb.append(r);
+  }
+  cf.append(cb); s.append(cf);
+
+  s.append(el("h3", "sec", `Risk register (${(c.risks || []).length})`));
+  for (const r of c.risks || []) {
+    const d = el("div", "find"); d.dataset.sev = r.likelihood > 0.6 ? "major" : "moderate";
+    d.append(el("i", "find__s"), el("span", "find__t", r.name),
+      el("span", "find__m", `${Math.round(r.likelihood * 100)}% likely · +${r.cost_impact_percent}% cost · +${r.schedule_impact_weeks} weeks`),
+      el("span", "find__r", r.mitigation));
+    s.append(d);
+  }
+
+  s.append(el("h3", "sec", "Assumptions"));
+  const ul = el("ul");
+  ul.style.cssText = "margin:0;padding-left:18px;color:var(--chalk-3);font-size:12.5px;line-height:1.85";
+  for (const a of c.assumptions || []) ul.append(el("li", null, a));
+  s.append(ul);
+}
+
+/* ── interior ──────────────────────────────────────────────────────── */
+
+async function renderInterior() {
+  const s = scrollPane("interior");
+  let sc = cur().interior;
+  if (!sc) {
+    s.append(el("p", "empty-note", "Solving the furniture layout…"));
+    try {
+      const r = await fetch(`${API}/plans/${S.activeId}/interior`, { method: "POST" });
+      if (!r.ok) throw new Error(String(r.status));
+      sc = await r.json(); S.plans[S.activeId].interior = sc;
+    } catch (err) {
+      s.innerHTML = ""; s.append(el("p", "empty-note", `The interior layout could not be produced (${err.message}).`)); return;
+    }
+    if (S.view !== "interior") return;
+  }
+  s.innerHTML = "";
+
+  const stats = el("div", "stat-row");
+  for (const [pig, k, val, sub] of [
+    ["ochre", "Furniture", inr(sc.total_furniture_cost), "supply and fit"],
+    ["indigo", "Finishes", inr(sc.total_finishes_cost), "floors, walls, ceilings"],
+    ["chalk", "Total", inr(sc.total_cost), sc.currency],
+    ["orpiment", "Rooms", `${sc.rooms.length}`, cap(sc.style)],
+  ]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); stats.append(d);
+  }
+  s.append(stats);
+  s.append(el("p", "lede", sc.summary || ""));
+
+  s.append(el("h3", "sec", "Palette"));
+  const chips = el("div", "chips");
+  for (const sw of sc.palette?.swatches || []) {
+    const c = el("div", "chip-sw", sw.role); c.style.background = sw.hex; c.title = `${sw.role} — ${sw.hex}`;
+    chips.append(c);
+  }
+  s.append(chips);
+  if (sc.palette?.character) s.append(el("p", "note-card", sc.palette.character));
+
+  for (const room of sc.rooms) {
+    s.append(el("h3", "sec", `${room.room_name} · ${room.area_m2.toFixed(1)} m² · ${room.direction} · layout ${room.layout_score.toFixed(2)}`));
+    if (room.furniture.length) {
+      const t = el("table", "led");
+      t.innerHTML = "<thead><tr><th>Item</th><th>Size</th><th>Against</th><th class='n'>Cost</th></tr></thead>";
+      const tb = el("tbody");
+      for (const f of room.furniture) {
+        const r = el("tr"); r.title = f.notes || "";
+        r.append(el("td", null, f.name), el("td", null, `${f.width.toFixed(2)} × ${f.depth.toFixed(2)} m`),
+          el("td", null, f.against_wall || "—"), el("td", "n", Math.round(f.cost).toLocaleString("en-IN")));
+        tb.append(r);
+      }
+      t.append(tb); s.append(t);
+    }
+    for (const u of room.unplaced || []) {
+      const d = el("div", "find"); d.dataset.sev = "major";
+      d.append(el("i", "find__s"), el("span", "find__t", `${u.name} could not be placed`),
+        el("span", "find__c", u.reason));
+      s.append(d);
+    }
+    if (room.lighting) {
+      const l = room.lighting;
+      s.append(el("p", "find__m", `Lighting — ${l.target_lux} lux target · ${l.downlight_count} downlights · ${l.colour_temperature_k}K · ~${l.estimated_load_w}W`));
+    }
+  }
+}
+
+/* ── 3D ────────────────────────────────────────────────────────────── */
+
+async function renderModel() {
+  const s = scrollPane("model");
+  s.append(el("h3", "sec", "Three-dimensional model"));
+  s.append(el("p", "lede", "Exported as glTF, which every browser, phone and XR headset reads natively. Open it on a phone to place the scheme in a real room."));
+
+  const links = el("div"); links.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px";
+  for (const [label, href] of [
+    ["Download model (.glb)", `${API}/plans/${S.activeId}/model.glb`],
+    ["Download for CAD (.obj)", `${API}/plans/${S.activeId}/model.obj`],
+  ]) {
+    const a = el("a", "ghost-btn", label); a.href = href; a.style.textDecoration = "none"; links.append(a);
+  }
+  s.append(links);
+
+  try {
+    const d = await fetch(`${API}/plans/${S.activeId}/walkthrough`).then((r) => r.json());
+    const st = d.statistics || {};
+    const stats = el("div", "stat-row");
+    for (const [pig, k, v2, sub] of [
+      ["indigo", "Triangles", (st.triangles || 0).toLocaleString(), `${st.parts || 0} parts`],
+      ["chalk", "Height", `${(st.height_m || 0).toFixed(2)} m`, `${st.bounds?.width_m ?? "—"} × ${st.bounds?.depth_m ?? "—"} m`],
+      ["orpiment", "Waypoints", `${(d.waypoints || []).length}`, "narrated route"],
+    ]) {
+      const dl = el("dl", "stat"); dl.dataset.pig = pig;
+      dl.append(el("dt", null, k), el("dd", null, v2), el("small", null, sub)); stats.append(dl);
+    }
+    s.append(stats);
+
+    s.append(el("h3", "sec", "Narrated walkthrough"));
+    const play = el("button", "ghost-btn", "Play narration"); play.type = "button";
+    play.style.marginBottom = "16px";
+    play.addEventListener("click", () => {
+      if (!("speechSynthesis" in window)) return toast("This browser has no speech synthesis.");
+      speechSynthesis.cancel();
+      for (const line of d.narration || []) speechSynthesis.speak(new SpeechSynthesisUtterance(line.text));
+    });
+    s.append(play);
+    for (const line of d.narration || []) {
+      const p = el("p", "find__t", line.text);
+      p.style.cssText = "padding:10px 0;border-bottom:1px solid var(--rule);margin:0";
+      s.append(p);
+    }
+    if (d.ar?.note) s.append(el("p", "note-card", d.ar.note));
+  } catch (err) {
+    s.append(el("p", "empty-note", `Walkthrough data unavailable (${err.message}).`));
+  }
+}
+
+/* ── findings ──────────────────────────────────────────────────────── */
+
+async function renderFindings() {
+  const s = scrollPane("findings");
+  s.append(el("h3", "sec", "Everything the committee found"));
+  s.append(el("p", "lede", "Every finding names what is wrong, where it is, the authority for that judgement, and the fix. A finding with no remedy would be noise."));
+
+  let a = cur().analysis;
+  if (!a) {
+    try {
+      a = await fetch(`${API}/plans/${S.activeId}/analysis`).then((r) => r.json());
+      S.plans[S.activeId].analysis = a;
+    } catch (err) { s.append(el("p", "empty-note", `Could not load findings (${err.message}).`)); return; }
+    if (S.view !== "findings") return;
+  }
+
+  const all = [];
+  for (const [axis, rep] of Object.entries(a.metrics || {}))
+    for (const f of rep.findings || []) all.push({ ...f, axis });
+  for (const f of a.compliance?.findings || []) all.push({ ...f, axis: "compliance" });
+  const v = cur().vastu;
+  for (const x of (v?.verdicts || []).filter((x) => x.assessable && x.compliance < 0.6))
+    all.push({ code: x.rule_id, severity: x.effective_weight > 0.5 ? "moderate" : "minor",
+      message: `${x.title} — ${x.subject_label || "element"} ${x.observed_direction || ""} (${x.verdict})`,
+      remedy: x.remedy, axis: "vastu", target_label: x.subject_label,
+      evidence: [{ source: x.citation, detail: x.school }] });
+
+  const order = { critical: 0, major: 1, moderate: 2, minor: 3, info: 4 };
+  all.sort((x, y) => (order[x.severity] ?? 9) - (order[y.severity] ?? 9));
+
+  const counts = all.reduce((m, f) => (m[f.severity] = (m[f.severity] || 0) + 1, m), {});
+  const stats = el("div", "stat-row");
+  for (const [sev, pig] of [["critical", "hingula"], ["major", "hingula"], ["moderate", "ochre"], ["minor", "chalk"], ["info", "indigo"]]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, sev), el("dd", null, String(counts[sev] || 0)),
+      el("small", null, sev === "critical" ? "blocks delivery" : ""));
+    stats.append(d);
+  }
+  s.append(stats);
+
+  if (!all.length) { s.append(el("p", "empty-note", "No findings. Every measured axis is within tolerance.")); return; }
+
+  for (const f of all) {
+    const d = el("div", "find"); d.dataset.sev = f.severity;
+    d.append(el("i", "find__s"), el("span", "find__t", f.message));
+    const meta = [cap(f.axis), f.code, f.target_label].filter(Boolean).join(" · ");
+    d.append(el("span", "find__m", meta +
+      (f.actual != null ? ` · actual ${f.actual}${f.expected != null ? ` vs expected ${f.expected}` : ""}` : "")));
+    if (f.remedy) d.append(el("span", "find__r", f.remedy));
+    const cite = (f.evidence || []).map((e) => e.source).filter(Boolean).join(" · ");
+    if (cite) d.append(el("span", "find__c", cite));
+    s.append(d);
+  }
+}
+
+/* ── audit ─────────────────────────────────────────────────────────── */
+
+function renderAudit() {
+  const s = scrollPane("audit");
+  const c = S.consensus;
+  s.append(el("h3", "sec", "How the decision was reached"));
+  s.append(el("p", "lede", c?.explanation || "No consensus record."));
+
+  if (!c) return;
+
+  const stats = el("div", "stat-row");
+  for (const [pig, k, v, sub] of [
+    ["indigo", "Method", c.method, "Pareto + weighted Borda"],
+    ["chalk", "Frontier", `${c.pareto_front.length}`, `${c.dominated.length} dominated`],
+    ["hingula", "Disqualified", `${c.disqualified.length}`, "critical findings"],
+    ["orpiment", "Agreement", `${Math.round(c.overall_agreement * 100)}%`, c.debate_triggered ? "debate opened" : "no debate needed"],
+  ]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, k), el("dd", null, v), el("small", null, sub)); stats.append(d);
+  }
+  s.append(stats);
+
+  s.append(el("h3", "sec", "Ranking"));
+  const t = el("table", "led");
+  t.innerHTML = "<thead><tr><th>Scheme</th><th class='n'>Score</th><th class='n'>Utility</th><th class='n'>Borda</th><th class='n'>Agreement</th></tr></thead>";
+  const tb = el("tbody");
+  for (const r of c.ranking) {
+    const i = S.planIds.indexOf(r.candidate_id);
+    const tr = el("tr");
+    if (r.candidate_id === S.activeId) tr.style.background = "var(--earth-3)";
+    tr.append(el("td", null, `Scheme ${String.fromCharCode(65 + Math.max(0, i))}${r.candidate_id === S.winnerId ? " ✓" : ""}`),
+      el("td", "n", r.score.toFixed(4)), el("td", "n", r.utility.toFixed(4)),
+      el("td", "n", r.borda.toFixed(4)), el("td", "n", `${Math.round(r.agreement * 100)}%`));
+    tb.append(tr);
+  }
+  t.append(tb); s.append(t);
+
+  if (c.axis_agreement?.length) {
+    s.append(el("h3", "sec", "Agreement by axis"));
+    const at = el("table", "led");
+    at.innerHTML = "<thead><tr><th>Axis</th><th class='n'>Mean</th><th class='n'>Dispersion</th><th class='n'>Agreement</th><th>Status</th></tr></thead>";
+    const ab = el("tbody");
+    for (const a of c.axis_agreement) {
+      const tr = el("tr");
+      tr.append(el("td", null, cap(a.axis)), el("td", "n", a.mean_score.toFixed(3)),
+        el("td", "n", a.dispersion.toFixed(3)), el("td", "n", `${Math.round(a.agreement * 100)}%`),
+        el("td", null, a.contested ? "contested" : "settled"));
+      if (a.contested) tr.style.color = "var(--hingula)";
+      ab.append(tr);
+    }
+    at.append(ab); s.append(at);
+  }
+
+  if (c.disqualified?.length) {
+    s.append(el("h3", "sec", "Disqualified schemes"));
+    for (const d of c.disqualified) {
+      const i = S.planIds.indexOf(d.candidate_id);
+      const box = el("div", "find"); box.dataset.sev = "critical";
+      box.append(el("i", "find__s"),
+        el("span", "find__t", `Scheme ${String.fromCharCode(65 + Math.max(0, i))} — ${d.reasons.length} critical finding(s)`));
+      for (const r of d.reasons) box.append(el("span", "find__c", r));
+      s.append(box);
+    }
+  }
+
+  if (S.recommendations.length) {
+    s.append(el("h3", "sec", "Recommended actions"));
+    const ol = el("ol");
+    ol.style.cssText = "margin:0;padding-left:20px;color:var(--chalk-2);font-size:13px;line-height:1.9";
+    for (const r of S.recommendations) ol.append(el("li", null, r));
+    s.append(ol);
+  }
+
+  s.append(el("h3", "sec", "Critic reliability weights"));
+  const wt = el("table", "led");
+  wt.innerHTML = "<thead><tr><th>Critic</th><th class='n'>Weight</th></tr></thead>";
+  const wb = el("tbody");
+  for (const [id, w] of Object.entries(c.critic_weights || {})) {
+    const tr = el("tr"); tr.append(el("td", null, id), el("td", "n", w.toFixed(4))); wb.append(tr);
+  }
+  wt.append(wb); s.append(wt);
+  s.append(el("p", "note-card", "These weights are learned. When an architect rates a delivered scheme, each critic's prediction is scored against that verdict and its influence moves — so the committee calibrates to this practice over time."));
+}
+
+/* ── why ───────────────────────────────────────────────────────────── */
+
+function openWhy() {
+  const b = $("why-body"); b.innerHTML = "";
+  const text = S.explanation || S.consensus?.explanation || "No rationale was produced.";
+  for (const p of String(text).split(/\n{2,}/)) if (p.trim()) b.append(el("p", null, p.trim()));
+  $("why").hidden = false;
+  $("why-close").focus();
+}

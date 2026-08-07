@@ -90,22 +90,39 @@ Fluid scale, three steps only: `--step` (labels), `--ui` (body), `--lede`
 
 ## Layout
 
-`.mandala-frame` is a CSS grid: **west / centre / east**, plus a full-width south
-band.
+Three phases on one URL, switched by `body[data-phase]`:
 
-- **West — Sankalpa (Intent).** The brief form. `minmax(268px, 2.1fr)`.
-- **Centre — the pada field.** A 9×9 SVG grid with the Brahmasthan overlaid at
-  the centre 3×3, holding the drawing. `minmax(0, 5.6fr)`.
-- **East — Sabha (Committee).** Thirteen critics, plus the streaming stage log.
-  `minmax(258px, 2.1fr)`.
-- **South — the verdict band.** Five cells, each border-topped in the pigment of
-  what it measures.
+**compose** — the mandala at full scale on the left, the brief on the right. The
+diagram is the first viewport and the product's thesis: nine by nine padas with
+the centre kept open.
 
-Breakpoints: at 1180px the committee moves below the mandala; at 820px everything
-stacks and the body scrolls.
+**running** — a single centred column: progress track, current stage, thirteen
+critic chips that fill as verdicts land, and a streaming log.
 
-Spacing is a fluid clamp scale keyed to viewport width, with more space above a
-heading than below it.
+**review** — `280px | 1fr | 300px` plus a full-width verdict band.
+West rail carries the selected scheme, its axis scores and a brief recap. The
+stage holds one pane at a time. East rail is the committee. Eight views:
+drawings, mandala, vastu, cost, interior, 3D, findings, audit.
+
+The mandala was originally a permanent frame around everything. That was wrong:
+it left results no room, and the architect came for the drawing. It now opens
+the app and returns as one diagnostic view among eight.
+
+Breakpoints: 1400px tightens the rails; 1180px drops the west rail; 800px stacks
+everything and lets the body scroll.
+
+### The rule that broke the first build
+
+`.brahmasthan__empty` and `.sheet` set `display:flex` in a class rule. A class
+selector outranks the user-agent `[hidden]` rule, so `hidden` did nothing and
+every pane stacked on top of the drawing — the result screen rendered as
+overlapping text. The stylesheet now opens with:
+
+```css
+[hidden] { display: none !important; }
+```
+
+Any new pane must rely on that, never on its own display toggle.
 
 ---
 
@@ -113,7 +130,8 @@ heading than below it.
 
 **Rooms light the padas they occupy, in their quarter's pigment.** The generated
 plan is projected onto the 9×9 field, so the mandala becomes a diagram of the
-building drawn on the diagram the building is judged against.
+building drawn on the diagram the building is judged against. It lives in the
+Mandala view, paired with a room-by-sector table.
 
 The Brahmasthan is scored separately: clear padas are struck open in chalk,
 occupied ones flare in hingula with a stated count. That is the one rule the
@@ -170,3 +188,6 @@ returns to the launcher.
    interface says so.
 6. **Animate transform and opacity.** Not width, height, or position.
 7. **No new type sizes** without removing one.
+8. **One pane visible at a time.** Panes hide with `hidden`; never add a
+   competing `display` rule to a pane or its children.
+9. **A missing value is an em-dash**, not a blank and not a zero.
