@@ -23,8 +23,8 @@ from pydantic import BaseModel, Field
 
 from aip.agents.base import (
     AgentContext,
-    Critique,
     CriticAgent,
+    Critique,
     Evidence,
     EvidenceKind,
     Finding,
@@ -43,7 +43,6 @@ from aip.engines.architecture.metrics import (
     spatial_quality_analysis,
     ventilation_analysis,
 )
-
 
 # ---------------------------------------------------------------------------
 # Analytical critics

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -340,16 +339,23 @@ async def _calibrate_critics(
         ).scalar_one_or_none()
 
         if row is None:
-            row = CriticCalibrationRow(firm_id=firm_id, critic_id=critic_id)
+            # Column defaults are applied by the database at INSERT, so a row
+            # that has only been added to the session still has None in every
+            # defaulted field. Seed them explicitly rather than reading None.
+            row = CriticCalibrationRow(
+                firm_id=firm_id, critic_id=critic_id,
+                reliability=0.8, observations=0, mean_brier=0.0,
+            )
             session.add(row)
 
         from aip.agents.consensus import CriticCalibration
 
+        observations = row.observations or 0
         calibration = CriticCalibration(
             critic_id=critic_id,
-            reliability=row.reliability,
-            observations=row.observations,
-            brier_sum=row.mean_brier * max(1, row.observations),
+            reliability=row.reliability if row.reliability is not None else 0.8,
+            observations=observations,
+            brier_sum=(row.mean_brier or 0.0) * max(1, observations),
         )
         calibration.observe(predicted, actual)
 

@@ -22,7 +22,7 @@ import hashlib
 import math
 import re
 import threading
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 

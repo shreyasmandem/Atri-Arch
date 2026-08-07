@@ -27,7 +27,7 @@ import numpy as np
 
 from aip.core.logging import get_logger, log_event
 from aip.domain.geometry import BoundingBox, Vec2
-from aip.domain.plan import FloorPlan, Level, Opening, Room, RoomType, Wall, WallKind
+from aip.domain.plan import FloorPlan, Level, Opening, Room, RoomType, Wall
 
 logger = get_logger("aip.experience.model3d")
 

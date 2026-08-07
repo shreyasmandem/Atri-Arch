@@ -10,9 +10,9 @@ describe orientation.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Sequence
 
 EPS = 1e-9
 
@@ -159,7 +159,7 @@ class Direction(str, Enum):
         return _BEARINGS.get(self, 0.0)
 
     @property
-    def cardinal(self) -> "Direction":
+    def cardinal(self) -> Direction:
         """Collapse to the nearest of the 8 principal directions."""
         return _TO_EIGHT.get(self, self)
 

@@ -16,7 +16,7 @@ so the loop is monotonic by construction.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from aip.agents.base import Finding
 from aip.core.logging import get_logger, log_event

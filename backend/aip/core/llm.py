@@ -39,7 +39,6 @@ from aip.core.providers import (
     PROVIDERS_BY_NAME,
     Capability,
     ModelSpec,
-    ProviderSpec,
     candidates_for,
     diversified,
 )
@@ -147,9 +146,14 @@ class RateLimiter:
 
 
 class CircuitBreaker:
-    """Parks a failing provider for an exponentially growing cool-off."""
+    """Parks a failing provider for an exponentially growing cool-off.
 
-    def __init__(self, threshold: int = 3, base_cooldown: float = 20.0) -> None:
+    The threshold is low deliberately. A committee fans thirteen critics across
+    three candidate schemes, so a provider that is simply not running would
+    otherwise be rediscovered dozens of times in a single design run.
+    """
+
+    def __init__(self, threshold: int = 2, base_cooldown: float = 30.0) -> None:
         self.threshold = threshold
         self.base_cooldown = base_cooldown
         self._failures: dict[str, int] = defaultdict(int)
@@ -640,6 +644,14 @@ class LLMRouter:
         for retry in range(self.settings.llm_max_retries):
             try:
                 res = await client.post(url, json=body, headers=provider.headers(self.settings))
+            except httpx.ConnectError as exc:
+                # Connection refused means nothing is listening - typically
+                # `ollama_enabled` is on but the daemon is not running. Retrying
+                # that with exponential backoff spends seconds per critic to
+                # rediscover the same fact, and with a committee of thirteen it
+                # was the single largest source of latency in the pipeline.
+                # Fail immediately and let the circuit breaker park the provider.
+                raise LLMError(f"connection refused at {provider.name}: {exc}") from exc
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_exc = exc
                 await asyncio.sleep(0.6 * (2**retry) + random.random() * 0.4)

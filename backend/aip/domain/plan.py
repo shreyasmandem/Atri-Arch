@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import math
 import uuid
+from collections.abc import Iterable
 from enum import Enum
-from typing import Annotated, Any, Iterable
+from typing import Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, PlainSerializer, computed_field
 

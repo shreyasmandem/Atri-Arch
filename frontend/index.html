@@ -1,0 +1,276 @@
+<!--
+THESIS: The studio is laid out on the vastu-purusha-mandala itself - a 9x9 pada
+grid whose centre stays empty, because that is the rule the engine enforces. It
+refuses the AI-dashboard default: near-black with a neon accent, glass cards, and
+a chat rail.
+OWN-WORLD: Swept-earth ground, rice-flour white line work, and the four Indic
+pigments used as directional semantics, never as accent scatter - indigo for
+Ishanya/analysis, hingula red for Agneya/violation, ochre for Nairutya/mass and
+cost, orpiment for Vayavya/judgement. Letterforms constructed on the same grid.
+STORY: The architect states intent, watches thirteen critics take their stations
+around the mandala, and leaves able to answer "why this scheme?" with a citation.
+FIRST VIEWPORT: The mandala fills the centre at full height with the Brahmasthan
+clear; intent panel west, committee ring east, score band south.
+FORM: Vastu-purusha-mandala. Position 4 of 7 on the ordered list. Seed a772e88e.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Architect Intelligence Platform — Studio</title>
+<meta name="description" content="Explainable multi-agent architectural design. Thirteen critics, one defensible scheme.">
+<link rel="stylesheet" href="studio.css">
+</head>
+<body data-state="idle">
+
+<a class="skip" href="#mandala">Skip to the mandala</a>
+
+<header class="crown">
+  <div class="crown__mark" aria-label="Architect Intelligence Platform">
+    <svg viewBox="0 0 36 36" width="30" height="30" aria-hidden="true" class="sigil">
+      <rect x="1.5" y="1.5" width="33" height="33" fill="none" stroke="currentColor" stroke-width="1"/>
+      <path d="M12.5 1.5v33M23.5 1.5v33M1.5 12.5h33M1.5 23.5h33" stroke="currentColor" stroke-width=".6" opacity=".55"/>
+      <rect x="12.5" y="12.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.4"/>
+      <circle cx="18" cy="18" r="1.6" fill="currentColor"/>
+    </svg>
+    <span class="crown__name">Architect<em>Intelligence</em></span>
+  </div>
+
+  <nav class="crown__nav" aria-label="Primary">
+    <button type="button" class="tab is-on" data-view="drawings" aria-pressed="true">Drawings</button>
+    <button type="button" class="tab" data-view="vastu" aria-pressed="false">Vastu</button>
+    <button type="button" class="tab" data-view="cost" aria-pressed="false">Cost</button>
+    <button type="button" class="tab" data-view="interior" aria-pressed="false">Interior</button>
+    <button type="button" class="tab" data-view="walkthrough" aria-pressed="false">Walkthrough</button>
+  </nav>
+
+  <div class="crown__meter" id="ledger" title="Model spend on this session">
+    <span class="ledger__dot" aria-hidden="true"></span>
+    <span class="ledger__text">$<span id="ledger-cost">0.00</span> spent</span>
+  </div>
+</header>
+
+<main class="mandala-frame">
+
+  <!-- ══ WEST · Ishanya to Nairutya · the statement of intent ══ -->
+  <section class="quarter quarter--west" aria-labelledby="intent-h">
+    <h2 class="quarter__head" id="intent-h">
+      <span class="quarter__sanskrit">Sankalpa</span>
+      Intent
+    </h2>
+
+    <form id="brief" class="intent" novalidate>
+      <fieldset class="field-group">
+        <legend>The plot</legend>
+        <div class="row">
+          <label class="fld">
+            <span>Width</span>
+            <input type="number" name="plot_width" value="12" min="3" max="200" step="0.5" required>
+            <i class="unit">m</i>
+          </label>
+          <label class="fld">
+            <span>Depth</span>
+            <input type="number" name="plot_depth" value="18" min="3" max="200" step="0.5" required>
+            <i class="unit">m</i>
+          </label>
+        </div>
+        <label class="fld fld--wide">
+          <span>Locality</span>
+          <input type="text" name="locality" value="Chennai, Tamil Nadu" maxlength="120">
+        </label>
+        <div class="row">
+          <label class="fld">
+            <span>Road lies</span>
+            <select name="road_direction">
+              <option value="N" selected>North</option>
+              <option value="NE">North-east</option>
+              <option value="E">East</option>
+              <option value="SE">South-east</option>
+              <option value="S">South</option>
+              <option value="SW">South-west</option>
+              <option value="W">West</option>
+              <option value="NW">North-west</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span>Levels</span>
+            <input type="number" name="levels" value="1" min="1" max="4">
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>The accommodation</legend>
+        <div class="row">
+          <label class="fld">
+            <span>Bedrooms</span>
+            <input type="number" name="bedrooms" value="3" min="0" max="10">
+          </label>
+          <label class="fld">
+            <span>Bathrooms</span>
+            <input type="number" name="bathrooms" value="2" min="0" max="10">
+          </label>
+        </div>
+        <div class="row">
+          <label class="fld">
+            <span>Adults</span>
+            <input type="number" name="occupant_adults" value="2" min="0" max="12">
+          </label>
+          <label class="fld">
+            <span>Children</span>
+            <input type="number" name="occupant_children" value="1" min="0" max="12">
+          </label>
+          <label class="fld">
+            <span>Elders</span>
+            <input type="number" name="occupant_elders" value="1" min="0" max="12">
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>The character</legend>
+        <label class="fld fld--wide">
+          <span>Style</span>
+          <select name="styles">
+            <option value="tropical_modern" selected>Tropical modern</option>
+            <option value="contemporary">Contemporary</option>
+            <option value="kerala_vernacular">Kerala vernacular</option>
+            <option value="chettinad">Chettinad</option>
+            <option value="modern_minimal">Modern minimal</option>
+            <option value="japandi">Japandi</option>
+            <option value="biophilic">Biophilic</option>
+            <option value="traditional_indian">Traditional Indian</option>
+            <option value="industrial">Industrial</option>
+            <option value="scandinavian">Scandinavian</option>
+          </select>
+        </label>
+        <label class="fld fld--wide">
+          <span>Budget</span>
+          <input type="number" name="budget" value="6500000" min="0" step="50000">
+          <i class="unit">₹</i>
+        </label>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Vastu stance</legend>
+        <p class="stance-read" id="stance-read">
+          <strong id="stance-name">Balanced</strong>
+          <span id="stance-note">Classical rules and modern building science carry equal weight.</span>
+        </p>
+        <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+               aria-describedby="stance-read" aria-label="Vastu stance from modern to orthodox">
+        <div class="stance__scale" aria-hidden="true">
+          <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
+        </div>
+      </fieldset>
+
+      <button type="submit" class="cast" id="cast">
+        <span class="cast__label">Convene the committee</span>
+        <span class="cast__sub">13 critics · 3 schemes</span>
+      </button>
+      <p class="intent__foot" id="conn-note">Connecting to the engine…</p>
+    </form>
+  </section>
+
+  <!-- ══ CENTRE · the mandala. Brahmasthan stays clear. ══ -->
+  <section class="quarter quarter--centre" id="mandala" aria-labelledby="mandala-h">
+    <h2 class="sr-only" id="mandala-h">The scheme on the vastu grid</h2>
+
+    <div class="pada-field" id="pada-field">
+      <svg class="pada-grid" viewBox="0 0 900 900" aria-hidden="true" id="pada-grid"></svg>
+
+      <!-- The Brahmasthan: the centre stays open, and the drawing lives in it. -->
+      <div class="brahmasthan" id="brahmasthan">
+        <div class="brahmasthan__empty" id="empty-state">
+          <svg viewBox="0 0 120 120" width="86" height="86" aria-hidden="true" class="empty-sigil">
+            <rect x="10" y="10" width="100" height="100" fill="none" stroke="currentColor" stroke-width=".9" opacity=".5"/>
+            <path d="M43.3 10v100M76.7 10v100M10 43.3h100M10 76.7h100" stroke="currentColor" stroke-width=".55" opacity=".3"/>
+            <rect x="43.3" y="43.3" width="33.4" height="33.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+          <p class="empty-state__lede">The centre is kept open.</p>
+          <p class="empty-state__body">
+            State the intent to the west and convene the committee. The scheme
+            will be drawn here, and each room will light the padas it occupies.
+          </p>
+        </div>
+
+        <figure class="sheet" id="sheet" hidden>
+          <div class="sheet__view" id="sheet-view"></div>
+          <figcaption class="sheet__block">
+            <span class="sheet__title" id="sheet-title">—</span>
+            <span class="sheet__meta" id="sheet-meta"></span>
+          </figcaption>
+        </figure>
+
+        <div class="panel" id="panel-vastu" hidden></div>
+        <div class="panel" id="panel-cost" hidden></div>
+        <div class="panel" id="panel-interior" hidden></div>
+        <div class="panel" id="panel-walkthrough" hidden></div>
+      </div>
+
+      <p class="brahma-note" id="brahmasthan-note" hidden></p>
+
+      <div class="compass" aria-hidden="true">
+        <span class="compass__n">N</span><span class="compass__e">E</span>
+        <span class="compass__s">S</span><span class="compass__w">W</span>
+        <span class="compass__ne">Ishanya</span><span class="compass__se">Agneya</span>
+        <span class="compass__sw">Nairutya</span><span class="compass__nw">Vayavya</span>
+      </div>
+    </div>
+
+    <div class="sheet-rail" id="sheet-rail" role="tablist" aria-label="Drawings" hidden></div>
+  </section>
+
+  <!-- ══ EAST · the committee takes its stations ══ -->
+  <section class="quarter quarter--east" aria-labelledby="committee-h">
+    <h2 class="quarter__head" id="committee-h">
+      <span class="quarter__sanskrit">Sabha</span>
+      Committee
+    </h2>
+
+    <ol class="committee" id="committee" aria-live="polite"></ol>
+
+    <div class="stage-log" id="stage-log" aria-live="polite" aria-label="Pipeline progress"></div>
+  </section>
+
+  <!-- ══ SOUTH · the verdict band ══ -->
+  <section class="quarter quarter--south" aria-labelledby="verdict-h">
+    <h2 class="sr-only" id="verdict-h">Verdict</h2>
+    <dl class="verdict" id="verdict">
+      <div class="verdict__cell" data-pigment="indigo">
+        <dt>Consensus</dt><dd id="v-score">—</dd>
+        <small id="v-agree">awaiting the committee</small>
+      </div>
+      <div class="verdict__cell" data-pigment="orpiment">
+        <dt>Vastu</dt><dd id="v-vastu">—</dd>
+        <small id="v-vastu-note">no scheme yet</small>
+      </div>
+      <div class="verdict__cell" data-pigment="ochre">
+        <dt>Cost</dt><dd id="v-cost">—</dd>
+        <small id="v-cost-note">P10 – P90 band</small>
+      </div>
+      <div class="verdict__cell" data-pigment="chalk">
+        <dt>Built area</dt><dd id="v-area">—</dd>
+        <small id="v-far">FAR —</small>
+      </div>
+      <div class="verdict__cell verdict__cell--wide" data-pigment="hingula">
+        <dt>Open findings</dt><dd id="v-findings">—</dd>
+        <small id="v-findings-note">critical issues block delivery</small>
+      </div>
+    </dl>
+  </section>
+
+</main>
+
+<div class="rationale" id="rationale" hidden>
+  <h2 class="rationale__head">Why this scheme</h2>
+  <div class="rationale__body" id="rationale-body"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="assertive" hidden></div>
+
+<script src="studio.js" type="module"></script>
+</body>
+</html>

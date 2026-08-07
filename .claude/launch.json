@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "aip",
+      "runtimeExecutable": "backend/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "aip.api.app:app", "--host", "127.0.0.1", "--port", "8000"],
+      "port": 8000,
+      "cwd": "backend"
+    }
+  ]
+}

@@ -33,7 +33,7 @@ architectural design, interior planning, Vastu analysis, cost prediction and
 client-centric automation.
 
 Design proposals are produced by a committee of independent critics rather than a
-single model. Nine of them are analytical: they compute daylight, ventilation,
+single model. Ten of them are analytical: they compute daylight, ventilation,
 privacy, circulation, accessibility, statutory compliance, structure, Vastu and
 cost exactly, from the geometry, at no cost and in microseconds. Three are
 generative and supply the judgement that resists formalisation. A Pareto and
@@ -155,14 +155,16 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, prefix=prefix)
 
     _mount_embed(app, settings)
+    studio_mounted = _mount_studio(app)
 
-    @app.get("/", include_in_schema=False)
-    async def root() -> dict[str, Any]:
+    @app.get("/api", include_in_schema=False)
+    async def api_root() -> dict[str, Any]:
         return {
             "name": settings.app_name,
             "version": __version__,
             "docs": "/docs",
             "api": prefix,
+            "studio": "/" if studio_mounted else None,
             "embed_script": "/embed/aip-widget.js",
             "zero_cost": True,
         }
@@ -172,6 +174,22 @@ def create_app() -> FastAPI:
         return {"status": "ok", "version": __version__}
 
     return app
+
+
+def _mount_studio(app: FastAPI) -> bool:
+    """Serve the architect studio from the same origin as the API.
+
+    Same-origin removes the CORS round trip and lets the studio call the API
+    with a relative path, so a practice can self-host the whole platform behind
+    one hostname with no reverse-proxy configuration.
+    """
+    from fastapi.staticfiles import StaticFiles
+
+    studio_dir = Path(__file__).resolve().parents[3] / "frontend"
+    if not (studio_dir / "index.html").exists():
+        return False
+    app.mount("/", StaticFiles(directory=str(studio_dir), html=True), name="studio")
+    return True
 
 
 def _mount_embed(app: FastAPI, settings) -> None:

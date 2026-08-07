@@ -34,7 +34,6 @@ from aip.agents.base import (
     AgentContext,
     Critique,
     Evidence,
-    Finding,
     Severity,
     collect_critiques,
     run_agents,
@@ -47,7 +46,7 @@ from aip.agents.consensus import (
     reach_consensus,
 )
 from aip.agents.critics import build_committee, committee_charter
-from aip.core.llm import LLMRouter, Message, get_router, system, user
+from aip.core.llm import LLMRouter, get_router, system, user
 from aip.core.logging import get_logger, log_event, span, trace_context
 from aip.core.providers import Capability
 from aip.domain.brief import ClientBrief

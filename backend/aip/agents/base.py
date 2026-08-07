@@ -224,7 +224,7 @@ class Agent(abc.ABC, Generic[TIn, TOut]):
         started = time.perf_counter()
         try:
             output = await asyncio.wait_for(self.run(payload, ctx), timeout=ctx.budget_seconds)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = (time.perf_counter() - started) * 1000
             log_event(logger, "agent.timeout", level=30, agent=self.id, ms=round(elapsed, 1))
             return AgentResult(self.id, self.role, None, ok=False, error="timeout", duration_ms=elapsed)

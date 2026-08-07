@@ -723,7 +723,6 @@ def roof_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
 
     # Falls toward the north-east, which is both good drainage practice and the
     # direction the Vastu slope rule prescribes.
-    centre = env.centre
     outlet = Vec2(env.max_x - 0.6, env.max_y - 0.6)
     for fx in (0.25, 0.5, 0.75):
         for fy in (0.25, 0.5, 0.75):

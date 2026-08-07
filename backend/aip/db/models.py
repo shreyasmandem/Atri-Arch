@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
@@ -30,7 +30,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _uid(prefix: str) -> str:
@@ -67,8 +67,8 @@ class Firm(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
 
-    api_keys: Mapped[list["ApiKey"]] = relationship(back_populates="firm", cascade="all, delete-orphan")
-    projects: Mapped[list["Project"]] = relationship(back_populates="firm", cascade="all, delete-orphan")
+    api_keys: Mapped[list[ApiKey]] = relationship(back_populates="firm", cascade="all, delete-orphan")
+    projects: Mapped[list[Project]] = relationship(back_populates="firm", cascade="all, delete-orphan")
 
     def origin_allowed(self, origin: str | None) -> bool:
         if not self.allowed_origins:
@@ -138,7 +138,7 @@ class Project(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now)
 
     firm: Mapped[Firm] = relationship(back_populates="projects")
-    sessions: Mapped[list["DesignSession"]] = relationship(
+    sessions: Mapped[list[DesignSession]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
 

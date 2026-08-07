@@ -253,6 +253,28 @@ async def get_analysis(
     }
 
 
+@router.post("/{plan_id}/interior")
+async def run_interior(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    style: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Solve the furniture layout, palette, lighting and finishes for a plan."""
+    from aip.domain.brief import ClientBrief, DesignStyle, StylePreference
+    from aip.engines.interior.engine import design_interior
+
+    plan = _load(plan_id, principal)
+    brief = ClientBrief()
+    chosen = style or plan.style
+    try:
+        brief.style = StylePreference(styles=[DesignStyle(chosen)])
+    except ValueError:
+        brief.style = StylePreference()
+
+    scheme = design_interior(plan, brief)
+    return json.loads(scheme.model_dump_json())
+
+
 @router.post("/vastu")
 async def run_vastu(
     payload: VastuRequest,

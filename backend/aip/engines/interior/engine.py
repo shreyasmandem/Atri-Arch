@@ -22,15 +22,15 @@ something a joiner can build from, not a picture of a room.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from aip.core.logging import get_logger, log_event
-from aip.domain.brief import ClientBrief, DesignStyle
+from aip.domain.brief import ClientBrief
 from aip.domain.geometry import BoundingBox, Direction, Vec2
-from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, Wall, WallKind
+from aip.domain.plan import FloorPlan, Room, RoomType
 from aip.engines.interior.catalog import (
     FurnitureItem,
     Placement,
@@ -289,10 +289,7 @@ def _place_room(
         for existing in placed:
             if _overlaps(candidate, existing.footprint):
                 return True
-        for obstacle in obstacles:
-            if _overlaps(candidate, obstacle.box):
-                return True
-        return False
+        return any(_overlaps(candidate, obstacle.box) for obstacle in obstacles)
 
     for item in catalogue:
         result = _try_place(item, room, box, windows, placed, collides, brief)
