@@ -138,10 +138,22 @@ factors, airflow, sightlines, quantity takeoff, Vastu rule evaluation — is
 solved analytically, not by burning model credits. Language models are used only
 where judgement resists formalisation.
 
-When a model *is* needed, `aip/core/providers.py` is a registry of **42 models
-across 10 providers**, every one a genuine free tier or local inference. The
-router is capability-addressed (`Capability.REASONING`, not a vendor name),
-rate-limit aware, circuit-broken and failover-capable.
+When a model *is* needed, `aip/core/providers.py` is a registry of free-tier
+and local models. The router is capability-addressed (`Capability.REASONING`,
+not a vendor name), rate-limit aware, circuit-broken, failover-capable, and
+routes on **measured latency as well as quality** - a model 4% better and 40x
+slower is the wrong choice when thirteen critics are fanning out.
+
+Provider catalogues rot, so the registry is verified rather than trusted:
+
+```bash
+cd backend && .venv/Scripts/python scripts/verify_providers.py
+```
+
+This sends one probe to every registered model and reports what actually
+answers. It is worth running before any demo - when first executed against live
+credentials it found that *every* OpenRouter `:free` id in the registry had been
+withdrawn and five Groq ids were decommissioned.
 
 **With no API key at all, the platform still works.** Every analytical result is
 unaffected; only generated commentary degrades, and it is labelled `degraded` in

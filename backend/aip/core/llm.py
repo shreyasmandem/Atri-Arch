@@ -484,8 +484,14 @@ class LLMRouter:
         pin_model: ModelSpec | None = None,
         min_context: int = 0,
         cache_key: str | None = None,
+        latency_sensitive: bool = True,
     ) -> LLMResponse:
-        """Run a completion against the best available free model."""
+        """Run a completion against the best available free model.
+
+        `latency_sensitive` defaults to True because most calls are one of many
+        in a committee fan-out. Set it False for a single, user-visible call -
+        the final rationale - where the best model is worth waiting for.
+        """
         if self.settings.llm_cache_enabled:
             key = cache_key or self._cache_key(messages, capability, temperature, json_schema)
             hit = self._cache.get(key)
@@ -495,7 +501,8 @@ class LLMRouter:
             key = None
 
         models = [pin_model] if pin_model else candidates_for(
-            capability, self.settings, min_context=min_context
+            capability, self.settings, min_context=min_context,
+            latency_sensitive=latency_sensitive,
         )
         models = [m for m in models if m is not None]
 
@@ -757,8 +764,16 @@ class LLMRouter:
         raw = message.get("content") or ""
         if isinstance(raw, list):  # some gateways return content parts
             raw = "".join(part.get("text", "") for part in raw if isinstance(part, dict))
-        if not raw and message.get("reasoning_content"):
-            raw = message["reasoning_content"]
+        if not raw:
+            # Reasoning models split their output, and providers disagree on the
+            # field name: `reasoning_content` (Groq, DeepSeek) versus `reasoning`
+            # (OpenRouter). When `content` is empty the answer is usually in one
+            # of them, and discarding it would throw away a valid critique.
+            for key in ("reasoning_content", "reasoning"):
+                value = message.get(key)
+                if isinstance(value, str) and value.strip():
+                    raw = value
+                    break
         if not raw:
             raise LLMError("empty completion")
 

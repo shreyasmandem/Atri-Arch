@@ -8,16 +8,17 @@ any API, which is the whole basis of the zero-cost claim.
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
-# Must be set before `aip.core.config` is imported anywhere.
-os.environ.setdefault("GROQ_API_KEY", "")
-os.environ.setdefault("GOOGLE_API_KEY", "")
-os.environ.setdefault("OLLAMA_ENABLED", "false")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("ENVIRONMENT", "test")
+# The suite must run as if no model provider exists. That is not a convenience
+# - it is the evidence for the platform's central claim, that every analytical
+# capability works with no API at all. Achieving it by leaving environment
+# variables unset is a trap: the moment a developer creates a `.env`, the suite
+# starts calling live providers and silently becomes slow, flaky and
+# quota-consuming while still passing. So isolation is stated explicitly.
+from aip.core.config import hermetic_settings, override_settings  # noqa: E402
+
+override_settings(hermetic_settings())
 
 from aip.domain.brief import (  # noqa: E402
     Budget,

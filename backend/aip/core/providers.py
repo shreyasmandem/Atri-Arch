@@ -54,10 +54,28 @@ class ModelSpec:
     rpd: int                     # requests / day on the free tier
     supports_json: bool = True
     supports_tools: bool = False
+    #: Measured round-trip for a short completion, from `verify_providers.py`.
+    #: Routing on quality alone put every one of thirteen critics behind a
+    #: 53-second model and pushed a full design run to five minutes, so latency
+    #: is a first-class routing input rather than a footnote.
+    typical_latency_ms: int = 3000
     notes: str = ""
 
     def handles(self, capability: Capability) -> bool:
         return capability in self.capabilities
+
+    def routing_score(self, latency_sensitive: bool = True) -> float:
+        """Quality, discounted by how long the model actually takes.
+
+        A committee fans many critics across several candidates, so a model that
+        is 4% better and 40x slower is not a better choice - it is the
+        difference between an interactive tool and a batch job. Final
+        arbitration and the client-facing rationale are single calls where
+        quality should win outright, and those pass `latency_sensitive=False`.
+        """
+        if not latency_sensitive:
+            return self.quality
+        return self.quality / (1.0 + self.typical_latency_ms / 6000.0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,10 +96,14 @@ class ProviderSpec:
         return str(getattr(settings, self.settings_key, "") or "").strip()
 
     def is_available(self, settings: Settings) -> bool:
-        if self.auth is AuthStyle.NONE:
-            return True
+        # Order matters. Ollama needs no credential, so an `AuthStyle.NONE`
+        # short-circuit placed first would return True and leave the
+        # `ollama_enabled` switch as dead code - which it was, and the router
+        # kept probing a daemon the operator had explicitly turned off.
         if self.name == "ollama":
             return bool(settings.ollama_enabled)
+        if self.auth is AuthStyle.NONE:
+            return True
         return bool(self.credential(settings))
 
     def headers(self, settings: Settings) -> dict[str, str]:
@@ -115,16 +137,16 @@ GROQ = ProviderSpec(
     settings_key="groq_api_key",
     signup_url="https://console.groq.com/keys",
     free_tier_note="Free tier, no card. Fastest inference available at zero cost.",
+    # Verified live against the Groq catalogue. Five previously-registered ids
+    # were withdrawn or decommissioned; `openai/gpt-oss-20b` answers 200 but
+    # returns an empty completion, so it is deliberately not registered.
     models=(
-        ModelSpec("llama-3.3-70b-versatile", "groq", _TEXT_LONG, 131072, 0.88, 30, 1000, supports_tools=True),
-        ModelSpec("openai/gpt-oss-120b", "groq", _TEXT_LONG, 131072, 0.90, 30, 1000, supports_tools=True),
-        ModelSpec("openai/gpt-oss-20b", "groq", _TEXT_LONG, 131072, 0.80, 30, 1000, supports_tools=True),
-        ModelSpec("qwen/qwen3-32b", "groq", _TEXT_LONG, 131072, 0.83, 60, 1000),
-        ModelSpec("deepseek-r1-distill-llama-70b", "groq", frozenset({Capability.REASONING, Capability.LONG_CONTEXT}), 131072, 0.86, 30, 1000,
-                  notes="Chain-of-thought distillation; strong for critic roles."),
-        ModelSpec("meta-llama/llama-4-scout-17b-16e-instruct", "groq", _TEXT_VISION, 131072, 0.79, 30, 1000),
-        ModelSpec("meta-llama/llama-4-maverick-17b-128e-instruct", "groq", _TEXT_VISION, 131072, 0.84, 30, 1000),
-        ModelSpec("llama-3.1-8b-instant", "groq", _TEXT, 131072, 0.62, 30, 14400),
+        ModelSpec("openai/gpt-oss-120b", "groq", _TEXT_LONG, 131072, 0.90, 30, 1000, supports_tools=True, typical_latency_ms=640),
+        ModelSpec("llama-3.3-70b-versatile", "groq", _TEXT_LONG, 131072, 0.88, 30, 1000, supports_tools=True, typical_latency_ms=210),
+        ModelSpec("qwen/qwen3.6-27b", "groq", _TEXT_LONG, 131072, 0.83, 30, 1000, typical_latency_ms=280),
+        ModelSpec("groq/compound", "groq", _TEXT_LONG, 131072, 0.84, 30, 1000,
+                  notes="Agentic system with built-in tool use.", typical_latency_ms=1500),
+        ModelSpec("llama-3.1-8b-instant", "groq", _TEXT, 131072, 0.62, 30, 14400, typical_latency_ms=100),
     ),
 )
 
@@ -149,15 +171,22 @@ CEREBRAS = ProviderSpec(
     base_url="https://api.cerebras.ai/v1",
     settings_key="cerebras_api_key",
     signup_url="https://cloud.cerebras.ai/",
-    free_tier_note="Free tier with very high tokens/sec. Excellent for parallel critics.",
+    free_tier_note=(
+        "Very high tokens/sec. NOTE: verified 2026-08 that a new account returns "
+        "402 'Payment required' on every model, so treat this as a paid provider "
+        "unless your account shows free credits."
+    ),
     models=(
-        ModelSpec("llama-3.3-70b", "cerebras", _TEXT, 65536, 0.87, 30, 14400),
-        ModelSpec("qwen-3-235b-a22b-instruct-2507", "cerebras", _TEXT_LONG, 131072, 0.91, 30, 14400),
         ModelSpec("gpt-oss-120b", "cerebras", _TEXT_LONG, 131072, 0.89, 30, 14400),
-        ModelSpec("llama3.1-8b", "cerebras", _TEXT, 32768, 0.60, 30, 14400),
+        ModelSpec("zai-glm-4.7", "cerebras", _TEXT_LONG, 131072, 0.86, 30, 14400),
+        ModelSpec("gemma-4-31b", "cerebras", _TEXT, 65536, 0.78, 30, 14400),
     ),
 )
 
+# Model ids below were verified live against the OpenRouter catalogue and each
+# one confirmed to complete a request. OpenRouter retires ':free' variants
+# without notice - every id previously registered here had been withdrawn - so
+# this list is checked with `scripts/verify_providers.py` rather than trusted.
 OPENROUTER = ProviderSpec(
     name="openrouter",
     base_url="https://openrouter.ai/api/v1",
@@ -169,13 +198,13 @@ OPENROUTER = ProviderSpec(
         "X-Title": "Architect Intelligence Platform",
     },
     models=(
-        ModelSpec("deepseek/deepseek-chat-v3.1:free", "openrouter", _TEXT_LONG, 163840, 0.89, 20, 50),
-        ModelSpec("deepseek/deepseek-r1:free", "openrouter", frozenset({Capability.REASONING, Capability.LONG_CONTEXT}), 163840, 0.90, 20, 50),
-        ModelSpec("qwen/qwen3-235b-a22b:free", "openrouter", _TEXT_LONG, 131072, 0.88, 20, 50),
-        ModelSpec("meta-llama/llama-3.3-70b-instruct:free", "openrouter", _TEXT_LONG, 131072, 0.85, 20, 50),
-        ModelSpec("qwen/qwen2.5-vl-72b-instruct:free", "openrouter", _TEXT_VISION, 32768, 0.83, 20, 50),
-        ModelSpec("google/gemma-3-27b-it:free", "openrouter", _TEXT_VISION, 96000, 0.76, 20, 50),
-        ModelSpec("mistralai/mistral-small-3.2-24b-instruct:free", "openrouter", _TEXT_VISION, 96000, 0.74, 20, 50),
+        ModelSpec("nvidia/nemotron-3-ultra-550b-a55b:free", "openrouter", _TEXT_LONG, 1000000, 0.93, 20, 50,
+                  notes="550B parameters at a 1M context, free. The strongest zero-cost text model available.", typical_latency_ms=38000),
+        ModelSpec("nvidia/nemotron-3-super-120b-a12b:free", "openrouter",
+                  frozenset({Capability.REASONING, Capability.LONG_CONTEXT, Capability.STRUCTURED}), 262144, 0.87, 20, 50,
+                  notes="Reasons out loud before answering; the router strips the trace.", typical_latency_ms=6500),
+        ModelSpec("google/gemma-4-26b-a4b-it:free", "openrouter", _TEXT_LONG, 262144, 0.79, 20, 50, typical_latency_ms=6000),
+        ModelSpec("nvidia/nemotron-3-nano-30b-a3b:free", "openrouter", _TEXT_LONG, 256000, 0.72, 20, 50, typical_latency_ms=700),
     ),
 )
 
@@ -289,6 +318,7 @@ def candidates_for(
     *,
     min_context: int = 0,
     exclude_providers: frozenset[str] = frozenset(),
+    latency_sensitive: bool = True,
 ) -> list[ModelSpec]:
     """Models that can serve `capability`, best first.
 
@@ -304,7 +334,7 @@ def candidates_for(
         for model in provider.models:
             if model.handles(capability) and model.context_window >= min_context:
                 usable.append(model)
-    usable.sort(key=lambda m: m.quality, reverse=True)
+    usable.sort(key=lambda m: m.routing_score(latency_sensitive), reverse=True)
     return usable
 
 
@@ -318,9 +348,9 @@ def diversified(models: list[ModelSpec], count: int) -> list[ModelSpec]:
     for model in models:
         buckets.setdefault(model.provider, []).append(model)
     for bucket in buckets.values():
-        bucket.sort(key=lambda m: m.quality, reverse=True)
+        bucket.sort(key=lambda m: m.routing_score(), reverse=True)
 
-    order = sorted(buckets, key=lambda name: buckets[name][0].quality, reverse=True)
+    order = sorted(buckets, key=lambda name: buckets[name][0].routing_score(), reverse=True)
     picked: list[ModelSpec] = []
     depth = 0
     while len(picked) < count and order:

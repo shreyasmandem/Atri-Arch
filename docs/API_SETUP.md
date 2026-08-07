@@ -70,24 +70,28 @@ with failover. Everything below raises ensemble diversity and resilience.
 
 ## Worth adding (another 10 minutes)
 
-### 3. Cerebras — very high throughput
+### 3. OpenRouter — one key, many model families
 
-Useful because the committee fans out many critics at once.
-
-- **https://cloud.cerebras.ai/** → sign up → API Keys
-- `CEREBRAS_API_KEY=...`
-
-### 4. OpenRouter — one key, many model families
-
-The platform only ever requests model ids ending in `:free`, so spend stays at
-zero. Its value here is *diversity*: DeepSeek, Qwen, Llama and Mistral through
-one credential.
+The best second provider. Only `:free` model ids are ever requested, so spend
+stays at zero. Its real value is *diversity*: several independent model families
+through one credential, which is what makes the critic ensemble meaningful.
 
 - **https://openrouter.ai/keys** → sign up → create key
 - `OPENROUTER_API_KEY=...`
 
-You may be asked to add credit to unlock higher free-tier limits. That is
-optional; the free models work without it.
+> OpenRouter retires `:free` model variants without notice. Run
+> `python scripts/verify_providers.py` after adding the key — it reports exactly
+> which registered ids still answer.
+
+### 4. Cerebras — check before relying on it
+
+Very high tokens/sec, but **verified 2026-08: a new account returns HTTP 402
+"Payment required" on every model.** The key authenticates; the account simply
+has no free credits. Treat this as a paid provider unless your billing tab shows
+otherwise.
+
+- **https://cloud.cerebras.ai/** → sign up → API Keys
+- `CEREBRAS_API_KEY=...`
 
 ### 5. GitHub Models — free with a token you may already have
 

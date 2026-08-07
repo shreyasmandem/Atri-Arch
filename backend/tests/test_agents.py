@@ -223,6 +223,35 @@ def test_json_extraction_survives_real_model_output():
         assert extract_json(raw)["a"] == 1, raw
 
 
+def test_suite_is_hermetic():
+    """The suite must not reach a live provider, whatever is in `.env`.
+
+    Without this the isolation is incidental rather than real: creating a `.env`
+    silently turns every router test into a live API call. It still passes, so
+    nothing alerts you - it just becomes slow, flaky, and starts consuming the
+    developer's free-tier quota. This asserts the premise the whole suite rests
+    on, which is that the analytical engines need no API at all.
+    """
+    from aip.core.config import get_settings
+
+    settings = get_settings()
+    assert settings.configured_providers() == [], (
+        "the test suite is reaching live providers; "
+        "conftest must call override_settings(hermetic_settings())"
+    )
+    assert settings.ollama_enabled is False
+
+
+def test_disabled_ollama_is_not_probed():
+    """`AuthStyle.NONE` must not short-circuit past the enabled switch."""
+    from aip.core.config import hermetic_settings
+    from aip.core.providers import PROVIDERS_BY_NAME
+
+    ollama = PROVIDERS_BY_NAME["ollama"]
+    assert ollama.is_available(hermetic_settings(ollama_enabled=False)) is False
+    assert ollama.is_available(hermetic_settings(ollama_enabled=True)) is True
+
+
 def test_truncated_json_is_recovered():
     """Every one of these shapes was produced by a live free-tier model.
 

@@ -559,7 +559,10 @@ class DesignPipeline:
                 ],
                 capability=Capability.REASONING,
                 temperature=0.55,
-                max_tokens=900,
+                max_tokens=1200,
+                # One call, and the client reads every word of it. Here the
+                # strongest available model is worth the extra seconds.
+                latency_sensitive=False,
             )
             result.explanation = (
                 response.text if not response.degraded else base
