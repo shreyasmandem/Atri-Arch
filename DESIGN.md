@@ -39,23 +39,25 @@ verdict band.
 
 | Token | Value | Quarter | Meaning |
 |---|---|---|---|
-| `--indigo` | `#6E93C8` | Ishanya · NE · water | computed analysis |
-| `--hingula` | `#E0664B` | Agneya · SE · fire | violation, breach, warning |
-| `--ochre` | `#D9A45C` | Nairutya · SW · earth | mass, quantity, cost |
-| `--orpiment` | `#EFCE63` | Vayavya · NW · air | judgement, generated opinion |
+| `--indigo` | `#7FA3D4` | Ishanya · NE · water | computed analysis |
+| `--hingula` | `#E4694C` | Agneya · SE · fire | violation, breach, warning |
+| `--ochre` | `#DFA85C` | Nairutya · SW · earth | mass, quantity, cost |
+| `--orpiment` | `#F0D165` | Vayavya · NW · air | judgement, generated opinion |
+| `--ok` | `#86B87A` | — | zero-cost confirmation only |
 
 Ground and line work:
 
 | Token | Value | Use |
 |---|---|---|
-| `--earth` | `#17130E` | swept earth ground |
-| `--earth-raised` | `#1E1912` | lifted surfaces |
-| `--earth-sunk` | `#100D09` | inset fields, crown, verdict cells |
-| `--rule` | `#33291D` | hairline divisions |
-| `--rule-bright` | `#4A3B29` | field borders, emphasised rules |
-| `--chalk` | `#F2EBDC` | rice flour — primary text and line work |
-| `--chalk-2` | `#C9BFA9` | secondary text |
-| `--chalk-3` | `#A2957C` | tertiary text, labels |
+| `--earth` | `#14100B` | swept earth ground |
+| `--earth-2` | `#1A150E` | rails, lifted surfaces |
+| `--earth-3` | `#221B12` | active rows, toasts |
+| `--sunk` | `#0E0B07` | crown, inset fields, verdict cells |
+| `--rule` | `#2E2517` | hairline divisions |
+| `--rule-2` | `#453724` | field borders, emphasised rules |
+| `--chalk` | `#F6F1E4` | rice flour — primary text and line work |
+| `--chalk-2` | `#CFC5AE` | secondary text |
+| `--chalk-3` | `#9C9078` | tertiary text, labels |
 
 **Dark, chosen from the scene, not by category:** an architect at a large monitor
 in a studio, often in the evening, often with a client beside them. Drawings
