@@ -31,6 +31,26 @@ matters for the "redesign this room from a photo" feature.
 
 No card. Rate limits are per-model and generous for this workload.
 
+> **Check the shape of what you copied.** A Google AI Studio API key starts with
+> `AIza` and is 39 characters. If yours starts with `AQ.` and is ~53 characters
+> you have copied an **OAuth access token**, not an API key. The symptom is
+> confusing, because the token authenticates successfully — listing models
+> returns HTTP 200 — but every generation returns:
+>
+> ```
+> 429 RESOURCE_EXHAUSTED
+> Quota exceeded for metric: generate_content_free_tier_requests, limit: 0
+> ```
+>
+> A limit of **zero** means no free-tier quota was ever allocated to that
+> credential, not that you have used yours up. Waiting will not fix it. Go back
+> to the link above and use *Create API key*, then verify:
+>
+> ```bash
+> curl -s -H "x-goog-api-key: $GOOGLE_API_KEY" \
+>   https://generativelanguage.googleapis.com/v1beta/models | head -c 200
+> ```
+
 ### 2. Groq — fastest inference at zero cost
 
 Groq's LPU hardware returns tokens fast enough that a thirteen-critic committee

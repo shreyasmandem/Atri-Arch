@@ -300,6 +300,45 @@ def _json_candidates(text: str) -> list[str]:
     return unique
 
 
+def _coerce_keys(payload: Any, expected: list[str]) -> Any:
+    """Map near-miss key names onto the schema's actual field names.
+
+    Free models rename fields when the surrounding prompt is domain-heavy -
+    `score_brief_fidelity` for `score`, `reasoning` for `rationale`. The value is
+    correct; only the label drifted. Renaming is cheaper and more reliable than
+    spending a repair round asking the model to try again.
+    """
+    if not isinstance(payload, dict):
+        return payload
+
+    out = dict(payload)
+    lowered = {k.lower(): k for k in payload}
+
+    for field in expected:
+        if field in out:
+            continue
+        target = field.lower()
+        match = next(
+            (
+                original
+                for low, original in lowered.items()
+                if original not in expected
+                and (low.startswith(target) or low.endswith(target) or target in low)
+            ),
+            None,
+        )
+        if match is not None:
+            out[field] = out.pop(match)
+
+    # A common synonym the schema will never guess at from the field name alone.
+    if "rationale" in expected and "rationale" not in out:
+        for synonym in ("reasoning", "justification", "explanation", "summary"):
+            if synonym in out:
+                out["rationale"] = out[synonym]
+                break
+    return out
+
+
 def _repair_json(text: str) -> Any | None:
     """Fix the malformations free models actually produce."""
     attempts = [
@@ -310,14 +349,24 @@ def _repair_json(text: str) -> Any | None:
         text.replace("'", '"'),
         re.sub(r"(?<=[{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", r'"\1":', text),  # bare keys
     ]
-    # Close unbalanced brackets produced by truncation.
+    # Recover from truncation - the model hit its token ceiling mid-object.
+    # Closing brackets alone is not enough when the cut landed inside a string
+    # literal, which is the common case: the quote has to be closed first, and
+    # a dangling key with no value has to be dropped entirely.
     balanced = text
+    if balanced.count('"') % 2 == 1:
+        balanced += '"'
+    # Drop a trailing key that never received a value. The cut can land either
+    # after the colon ("rationale":) or before it ("rationale"), so both shapes
+    # have to go.
+    balanced = re.sub(r',\s*"[^"]*"\s*:?\s*$', "", balanced)
+    balanced = re.sub(r',\s*$', "", balanced)                    # dangling comma
     opens = balanced.count("{") - balanced.count("}")
-    if opens > 0:
-        balanced += "}" * opens
     brackets = balanced.count("[") - balanced.count("]")
     if brackets > 0:
         balanced += "]" * brackets
+    if opens > 0:
+        balanced += "}" * opens
     attempts.append(balanced)
 
     for attempt in attempts:
@@ -527,11 +576,16 @@ class LLMRouter:
     ) -> tuple[T, LLMResponse]:
         """Completion validated into a Pydantic model, with guided repair."""
         schema = response_model.model_json_schema()
+        required = list(schema.get("properties", {}))
         instruction = Message(
             "system",
             "Reply with a single JSON object and nothing else. No prose, no code "
-            "fences, no explanation outside the JSON. It must validate against "
-            f"this JSON Schema:\n{json.dumps(schema, separators=(',', ':'))}",
+            "fences, no explanation outside the JSON.\n"
+            f"Use exactly these key names, spelled exactly like this: {required}.\n"
+            "Do not rename, prefix or suffix any key. Keep string values short "
+            "so the object is closed properly and never truncated.\n"
+            f"It must validate against this JSON Schema:\n"
+            f"{json.dumps(schema, separators=(',', ':'))}",
         )
         convo = [instruction, *messages]
 
@@ -544,12 +598,21 @@ class LLMRouter:
                 max_tokens=max_tokens,
                 json_schema=schema,
                 pin_model=pin_model,
-                cache_key=None if attempt else None,
+                cache_key=None,
             )
             try:
                 payload = extract_json(response.text)
                 return response_model.model_validate(payload), response
             except (ValueError, ValidationError) as exc:
+                # Models rename fields under pressure - `score_brief_fidelity`
+                # for `score` is a real observed case. Rather than burn a whole
+                # repair round on a spelling difference, map near-miss keys onto
+                # the schema before giving up on this attempt.
+                try:
+                    payload = _coerce_keys(extract_json(response.text), required)
+                    return response_model.model_validate(payload), response
+                except (ValueError, ValidationError):
+                    pass
                 last_error = str(exc)[:600]
                 if attempt >= repair_attempts:
                     break
@@ -658,11 +721,13 @@ class LLMRouter:
                 continue
 
             if res.status_code == 429:
-                retry_after = _retry_after(res)
-                if retry_after > 30 or retry >= self.settings.llm_max_retries - 1:
-                    raise LLMError(f"rate limited (retry-after {retry_after}s)")
-                await asyncio.sleep(retry_after + random.random() * 0.5)
-                continue
+                # Do not sleep-and-retry a rate limit in place. The router's
+                # whole design is that another free provider is one hop away, so
+                # failing over immediately beats blocking this critic for
+                # seconds. It also matters for the case where a credential has a
+                # *zero* free-tier quota: that 429 never clears, and retrying it
+                # on every call was costing ~12s per generative critic.
+                raise LLMError(f"rate limited (retry-after {_retry_after(res)}s)")
             if res.status_code >= 500:
                 last_exc = LLMError(f"upstream {res.status_code}")
                 await asyncio.sleep(0.8 * (2**retry) + random.random() * 0.4)

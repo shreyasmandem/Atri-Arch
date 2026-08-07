@@ -223,6 +223,45 @@ def test_json_extraction_survives_real_model_output():
         assert extract_json(raw)["a"] == 1, raw
 
 
+def test_truncated_json_is_recovered():
+    """Every one of these shapes was produced by a live free-tier model.
+
+    A model that hits its token ceiling severs the object wherever it happens to
+    be: inside a string, after a key, after a colon, or inside an array. Losing
+    the whole critique because the last field was cut is a needless failure -
+    the score, which is what consensus actually consumes, already arrived.
+    """
+    from aip.core.llm import extract_json
+
+    cases = [
+        ('{\n  "score": 0.3,\n  "reasoning": "This scheme presents', 0.3),
+        ('{"score": 0.7, "confidence": 0.8, "rationale"', 0.7),
+        ('{"score": 0.9, "confidence": 0.5, "rationale":', 0.9),
+        ('{"score": 0.4, "concerns": ["too narrow", "no cross vent', 0.4),
+    ]
+    for raw, expected in cases:
+        assert extract_json(raw)["score"] == expected, raw
+
+
+def test_renamed_keys_are_coerced_onto_the_schema():
+    """`score_brief_fidelity` for `score` is a real observed model output."""
+    from aip.core.llm import _coerce_keys
+
+    fixed = _coerce_keys(
+        {"score_brief_fidelity": 0.42, "reasoning": "the brief was not met"},
+        ["score", "confidence", "rationale"],
+    )
+    assert fixed["score"] == 0.42
+    assert fixed["rationale"] == "the brief was not met"
+
+
+def test_coercion_leaves_correct_payloads_untouched():
+    from aip.core.llm import _coerce_keys
+
+    good = {"score": 0.5, "confidence": 0.9, "rationale": "fine"}
+    assert _coerce_keys(dict(good), ["score", "confidence", "rationale"]) == good
+
+
 def test_reasoning_traces_are_split_out():
     from aip.core.llm import split_reasoning
 
