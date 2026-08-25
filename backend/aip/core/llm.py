@@ -58,6 +58,10 @@ class AllProvidersExhausted(LLMError):
     pass
 
 
+class ModelUnavailable(LLMError):
+    """This model id is gone. The provider itself may be perfectly healthy."""
+
+
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
@@ -201,6 +205,38 @@ class UsageRecord:
     latency_ms: float
     ok: bool
     degraded: bool = False
+
+
+class DeadModels:
+    """Model ids the provider says do not exist.
+
+    Free-tier catalogues churn constantly - ids are withdrawn without notice,
+    and this project has watched five Groq ids and every OpenRouter ':free'
+    variant disappear inside a fortnight. The important distinction is that a
+    withdrawn *model* is not a failed *provider*: treating a 404 as a provider
+    outage tripped the circuit breaker and took the whole of Groq offline
+    because one id in the registry had gone stale. This tracks the model
+    instead, so the router simply skips it and moves to the next one.
+    """
+
+    def __init__(self) -> None:
+        self._dead: set[str] = set()
+
+    def mark(self, model: ModelSpec, reason: str) -> None:
+        key = f"{model.provider}/{model.id}"
+        if key not in self._dead:
+            self._dead.add(key)
+            log_event(
+                logger, "model.retired", level=30, model=key, reason=reason[:160],
+                detail="Skipped for the rest of this process. Run scripts/verify_providers.py.",
+            )
+
+    def is_dead(self, model: ModelSpec) -> bool:
+        return f"{model.provider}/{model.id}" in self._dead
+
+    @property
+    def names(self) -> list[str]:
+        return sorted(self._dead)
 
 
 class UsageLedger:
@@ -447,6 +483,7 @@ class LLMRouter:
         self.settings = settings or get_settings()
         self.limiter = RateLimiter()
         self.breaker = CircuitBreaker()
+        self.dead = DeadModels()
         self.ledger = UsageLedger()
         self.offline = OfflineBackend()
         self._client: httpx.AsyncClient | None = None
@@ -509,6 +546,8 @@ class LLMRouter:
         errors: list[str] = []
         attempts = 0
         for model in models:
+            if self.dead.is_dead(model):
+                continue
             if self.breaker.is_open(model.provider):
                 continue
             if not await self.limiter.try_acquire(model):
@@ -519,6 +558,12 @@ class LLMRouter:
                 response = await self._call(
                     model, messages, temperature, max_tokens, json_schema
                 )
+            except ModelUnavailable as exc:
+                # The id is gone, not the provider. Retire the model and keep
+                # every other model on this provider in play.
+                self.dead.mark(model, str(exc))
+                errors.append(f"{model.provider}/{model.id}: retired ({exc})")
+                continue
             except Exception as exc:  # noqa: BLE001 - failover is the point
                 self.breaker.record_failure(model.provider)
                 detail = f"{model.provider}/{model.id}: {type(exc).__name__}: {exc}"
@@ -722,7 +767,13 @@ class LLMRouter:
                 # was the single largest source of latency in the pipeline.
                 # Fail immediately and let the circuit breaker park the provider.
                 raise LLMError(f"connection refused at {provider.name}: {exc}") from exc
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
+            except httpx.TimeoutException as exc:
+                # A model that could not answer inside the timeout will almost
+                # certainly miss it again, and retrying costs the full duration
+                # each time. Three retries at 90s stranded whole runs for four
+                # minutes. Give up on this model and let the router fail over.
+                raise LLMError(f"timed out after {self.settings.llm_timeout_seconds:.0f}s") from exc
+            except httpx.TransportError as exc:
                 last_exc = exc
                 await asyncio.sleep(0.6 * (2**retry) + random.random() * 0.4)
                 continue
@@ -745,7 +796,11 @@ class LLMRouter:
                 body.pop("response_format", None)
                 continue
             if res.status_code >= 400:
-                raise LLMError(f"http {res.status_code}: {res.text[:300]}")
+                body = res.text[:300]
+                lowered = body.lower()
+                if res.status_code == 404 or "does not exist" in lowered                         or "decommissioned" in lowered or "model_not_found" in lowered:
+                    raise ModelUnavailable(f"http {res.status_code}: {body}")
+                raise LLMError(f"http {res.status_code}: {body}")
 
             return self._parse(res, model, started)
 
@@ -822,6 +877,7 @@ class LLMRouter:
             "configured_providers": self.settings.configured_providers(),
             "usage": self.ledger.summary(),
             "rate_limits": await self.limiter.snapshot(),
+            "retired_models": self.dead.names,
             "zero_cost_enforced": self.settings.enforce_zero_cost,
         }
 

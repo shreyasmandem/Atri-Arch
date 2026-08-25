@@ -253,11 +253,44 @@ async function stream(simple) {
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
 
   const rd = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
-  while (true) {
-    const { done, value } = await rd.read(); if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf("\n\n")) !== -1) { handle(buf.slice(0, i)); buf = buf.slice(i + 2); }
+  let sawResult = false;
+  const seen = () => { sawResult = true; };
+  window.addEventListener("aip:result", seen, { once: true });
+
+  // Watchdog. A stream that goes quiet is stuck, not "still working", and
+  // leaving the user on a progress line forever is the worst failure mode
+  // this screen has. Surface it instead of waiting out the heat death.
+  let idle = null;
+  const kick = () => {
+    clearTimeout(idle);
+    idle = setTimeout(() => {
+      if (sawResult || S.phase !== "running") return;
+      $("run-title").textContent = "The engine stopped responding";
+      $("run-stage").textContent =
+        "No update for three minutes. The run may still be finishing on the server; check its log, or start again.";
+      $("restart").hidden = false;
+    }, 180000);
+  };
+  kick();
+
+  try {
+    while (true) {
+      const { done, value } = await rd.read(); if (done) break;
+      kick();
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) !== -1) { handle(buf.slice(0, i)); buf = buf.slice(i + 2); }
+    }
+  } finally {
+    clearTimeout(idle);
+    window.removeEventListener("aip:result", seen);
+  }
+
+  if (!sawResult && S.phase === "running") {
+    $("run-title").textContent = "The run ended without a scheme";
+    $("run-stage").textContent =
+      "The engine closed the connection before returning a design. Check the server log, then try again.";
+    $("restart").hidden = false;
   }
 }
 
@@ -296,6 +329,7 @@ function markScores(scores) {
 /* ═══ RESULT ═════════════════════════════════════════════════════════ */
 
 async function applyResult(d) {
+  window.dispatchEvent(new Event("aip:result"));
   S.planIds = d.plan_ids || [];
   S.winnerId = d.winner_plan_id;
   S.activeId = d.winner_plan_id;

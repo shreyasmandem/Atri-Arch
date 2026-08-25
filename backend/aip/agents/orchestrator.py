@@ -55,6 +55,10 @@ from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
 
 logger = get_logger("aip.pipeline")
 
+#: Ceiling on the client-facing rationale. Prose must never hold up a
+#: design that is already complete.
+EXPLAIN_BUDGET_SECONDS = 45.0
+
 
 class ProgressEvent(BaseModel):
     """One step of the pipeline, streamed to the client."""
@@ -538,7 +542,13 @@ class DesignPipeline:
             return
 
         try:
-            response = await ctx.llm().complete(
+            # Hard budget. This stage deliberately routes to the strongest (and
+            # therefore slowest) free model, and a slow provider here used to
+            # strand the whole run: the UI sat on "Writing the design
+            # rationale..." while the router burned three 90-second timeouts.
+            # The committee's own explanation is a perfectly good fallback, so
+            # never let prose block a finished design.
+            response = await asyncio.wait_for(ctx.llm().complete(
                 [
                     system(
                         "You write the design rationale an architect sends to a "
@@ -563,10 +573,17 @@ class DesignPipeline:
                 # One call, and the client reads every word of it. Here the
                 # strongest available model is worth the extra seconds.
                 latency_sensitive=False,
-            )
+            ), timeout=EXPLAIN_BUDGET_SECONDS)
             result.explanation = (
                 response.text if not response.degraded else base
             )
+        except TimeoutError:
+            log_event(
+                logger, "explain.timeout", level=30,
+                budget_s=EXPLAIN_BUDGET_SECONDS,
+                detail="Falling back to the committee's own explanation.",
+            )
+            result.explanation = base
         except Exception as exc:  # noqa: BLE001
             log_event(logger, "explain.failed", level=30, error=str(exc))
             result.explanation = base

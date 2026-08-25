@@ -402,3 +402,37 @@ def test_committee_covers_every_promised_axis():
     analytical = sum(1 for c in ALL_CRITICS if c.analytical)
     # The analytical majority is what anchors the committee to physical truth.
     assert analytical > len(ALL_CRITICS) / 2
+
+
+def test_dead_model_does_not_disable_its_provider():
+    """A withdrawn model id is not a provider outage.
+
+    Free-tier catalogues churn: this project watched seven Groq ids and every
+    OpenRouter ':free' variant disappear within a fortnight. Treating the
+    resulting 404 as a provider failure tripped the circuit breaker and took the
+    whole account offline over one stale entry, which then degraded every
+    generative critic in the run.
+    """
+    from aip.core.llm import CircuitBreaker, DeadModels
+    from aip.core.providers import Capability, ModelSpec
+
+    gone = ModelSpec("withdrawn-model", "groq", frozenset({Capability.REASONING}), 8192, 0.9, 30, 100)
+    alive = ModelSpec("still-here", "groq", frozenset({Capability.REASONING}), 8192, 0.8, 30, 100)
+
+    dead = DeadModels()
+    breaker = CircuitBreaker(threshold=2)
+
+    dead.mark(gone, "http 404: model does not exist")
+    dead.mark(gone, "http 404: model does not exist")     # idempotent
+
+    assert dead.is_dead(gone)
+    assert not dead.is_dead(alive)
+    assert dead.names == ["groq/withdrawn-model"]
+    # The provider must remain usable.
+    assert not breaker.is_open("groq")
+
+
+def test_model_unavailable_is_distinguishable():
+    from aip.core.llm import LLMError, ModelUnavailable
+
+    assert issubclass(ModelUnavailable, LLMError)

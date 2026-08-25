@@ -137,16 +137,16 @@ GROQ = ProviderSpec(
     settings_key="groq_api_key",
     signup_url="https://console.groq.com/keys",
     free_tier_note="Free tier, no card. Fastest inference available at zero cost.",
-    # Verified live against the Groq catalogue. Five previously-registered ids
-    # were withdrawn or decommissioned; `openai/gpt-oss-20b` answers 200 but
-    # returns an empty completion, so it is deliberately not registered.
+    # Verified live. Groq's catalogue churns hard: seven ids registered here
+    # from documentation have been withdrawn or decommissioned since, and
+    # `openai/gpt-oss-20b` answers 200 with an empty body. The router now
+    # retires a 404'd model at runtime rather than blaming the provider, so a
+    # stale entry degrades one model instead of the whole account.
     models=(
         ModelSpec("openai/gpt-oss-120b", "groq", _TEXT_LONG, 131072, 0.90, 30, 1000, supports_tools=True, typical_latency_ms=640),
-        ModelSpec("llama-3.3-70b-versatile", "groq", _TEXT_LONG, 131072, 0.88, 30, 1000, supports_tools=True, typical_latency_ms=210),
         ModelSpec("qwen/qwen3.6-27b", "groq", _TEXT_LONG, 131072, 0.83, 30, 1000, typical_latency_ms=280),
         ModelSpec("groq/compound", "groq", _TEXT_LONG, 131072, 0.84, 30, 1000,
                   notes="Agentic system with built-in tool use.", typical_latency_ms=1500),
-        ModelSpec("llama-3.1-8b-instant", "groq", _TEXT, 131072, 0.62, 30, 14400, typical_latency_ms=100),
     ),
 )
 
@@ -204,7 +204,6 @@ OPENROUTER = ProviderSpec(
                   frozenset({Capability.REASONING, Capability.LONG_CONTEXT, Capability.STRUCTURED}), 262144, 0.87, 20, 50,
                   notes="Reasons out loud before answering; the router strips the trace.", typical_latency_ms=6500),
         ModelSpec("google/gemma-4-26b-a4b-it:free", "openrouter", _TEXT_LONG, 262144, 0.79, 20, 50, typical_latency_ms=6000),
-        ModelSpec("nvidia/nemotron-3-nano-30b-a3b:free", "openrouter", _TEXT_LONG, 256000, 0.72, 20, 50, typical_latency_ms=700),
     ),
 )
 
