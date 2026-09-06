@@ -81,6 +81,47 @@ showed you its wins would not be one you could trust with the trade-offs.
 Explainability scores 1.00 across all arms because every arm uses the same
 finding generator; it measures the platform, not the difference between arms.
 
+## The agents negotiate, they do not just vote
+
+Selecting the best of three schemes cannot fix a flaw all three share. So after
+the committee votes, a **manager–worker consensus protocol** takes the winner and
+negotiates it against seven constraints — three hard, four soft — each owned by
+the agent responsible for repairing it.
+
+```
+opening state   score 0.6632   2 constraint(s) open
+   OPEN [hard] code.no_critical: 1 critical statutory breach(es)
+   OPEN [hard] daylight.statutory: 1 room(s) below the statutory glazing ratio
+round 1       0.6632 -> 0.8276   hard 2 -> 0
+   [ACCEPT] floorplan_architect: apply 5 targeted geometric repair(s) (+0.0784)
+   [ACCEPT] floorplan_architect: re-pack the envelope to give Master Bedroom
+                                 its statutory width (+0.0861)
+round 2       0.8276 -> 0.8700   hard 0 -> 0
+   [ACCEPT] vastu_compliance: swap two room assignments (+0.0424)
+outcome         satisfied   final 0.8700   hard open 0   1.2s
+```
+
+A proposal is accepted **only when re-measuring the whole design shows a net
+gain**, and hard constraints are weighted three times a soft one. Those two rules
+together mean the design can never end a round worse than it began, and no
+accumulation of comfort gains can outrank fixing a statutory breach. Both are
+asserted by tests.
+
+When a brief genuinely cannot be built, the loop says so — and the agent that
+owns the failing constraint has to explain why it cannot help:
+
+```
+   [no change] cost_estimator: already specified at the lowest finish tier, so no
+   further step-down exists. The overrun is driven by the size of the programme,
+   not by the specification, and cannot be closed without the client either
+   raising the budget or dropping accommodation.
+outcome         converged   hard open 0
+   STILL OPEN [soft] cost.within_budget: 310% of budget
+```
+
+An agent that owns a failing constraint and stays silent is indistinguishable
+from an agent that never ran.
+
 ## The Vastu engine
 
 Most Vastu software is a lookup table that returns a verdict with no reasoning
@@ -117,10 +158,60 @@ Three further commitments:
 - **Every violation carries a counterfactual.** *"Kitchen in the north-west
   costs 4.0 points; moving it south-east takes the score from 71 to 75."*
 
+### The knowledge graph — reasoning past the corpus
+
+An authored corpus can only judge a placement some text troubled to write down.
+Every other room falls through as "not assessable", which is honest but useless.
+So alongside the rules there is a **knowledge graph**: 98 nodes and 255 edges over
+12 relation types, linking compass sectors to mandala quarters, quarters to
+elements and presiding deities, elements to the qualities they afford, and rooms
+to the activities they host.
+
+Compliance is computed by **best-first path search**, not retrieval. Every verdict
+returns the chain that produced it:
+
+```
+Gym          -> NW  Gym -[hosts]-> Physical exertion -[demands]-> Airy -[affords]-> North-west
+Home Theatre -> S   Home Theatre -[hosts]-> Screen viewing -[demands]-> Dark -[affords]-> South
+Home Office  -> NE  Home Office -[hosts]-> Study -[demands]-> Light -[affords]-> North-east
+```
+
+No rule in the corpus mentions a gym, a home theatre or a home office. The graph
+reaches all three by reasoning through what happens inside the room.
+
+| | |
+|---|---|
+| Placements a cited text addresses | 112 |
+| Placements the graph can derive | 578 |
+| **Coverage gain** | **5.16×** |
+| Agreement with the corpus where it does speak | **112 / 113 (99.1%)** |
+| Mean query time | 0.38 ms |
+
+Perfect agreement would be a warning sign — it would mean the graph was only
+reading the assertions back. The one disagreement is *shown to the user*: the
+cited text governs the score, and the conflict is printed beside it.
+
+Two decisions worth naming, because both correct errors a purely elemental
+treatment makes confidently:
+
+- **Ritual pollution is modelled explicitly.** A WC in the north-east looks
+  harmonious on elemental grounds — ablution embodies water, Ishanya carries
+  water — yet every text prohibits it. The objection is *shaucha*, purity. Without
+  that edge the graph reaches the opposite of the doctrine by impeccable logic.
+- **No evidence is not a neutral verdict.** A placement with no supporting *or*
+  contradicting path is reported `undetermined` and excluded from the score,
+  rather than being called "neutral" as though it had been weighed.
+
 ## What it produces
 
 - **Drawings** — floorplans, four elevations, two sections, roof and site plans,
   as SVG. Walls poched, doors with swing arcs, dimensions, north point, scale bar.
+- **CAD** — AutoCAD R12 **DXF** per level: walls poched as closed polylines at
+  true thickness, doors as leaf-and-swing symbols, glazing, the structural grid,
+  dimension strings and a room schedule, on the layer names an Indian practice
+  already uses. The test suite reads the file back with an independent CAD
+  library and asserts every wall's length and thickness survived — validating our
+  own writer with our own parser would prove nothing.
 - **3D** — glTF/GLB with real window reveals (walls decomposed around openings,
   no CSG dependency), plus OBJ for CAD. WebXR walkthrough waypoints ordered as a
   visitor would experience the house.
@@ -183,9 +274,13 @@ backend/aip/
   core/         config, structured logging, the free-model router, provider registry
   domain/       geometry, the building schema, the client brief
   agents/       critic base classes, the committee, MACC consensus, orchestrator
+    protocol.py    the manager-worker negotiation state machine
   engines/
     architecture/  layout synthesis, solar, metrics, NBC codes, drawings, repair
+      dxf.py         AutoCAD R12 export, written by hand, no dependency
     vastu/         the encoded corpus and the reasoning engine
+      graph.py       the knowledge graph
+      reasoner.py    graph-path constraint reasoning
     cost/          rate schedule, quantity takeoff, Monte Carlo estimator
     interior/      furniture catalogue and the layout solver
     experience/    3D model generation, glTF/OBJ export, walkthrough
@@ -193,6 +288,7 @@ backend/aip/
   api/          FastAPI app, routers, schemas, auth and tenancy
   db/           multi-tenant SQLAlchemy schema
   evaluation/   the benchmark harness and ablations
+backend/scripts/  provider verification, report generation
 frontend/       the architect studio (no build step)
 embed/          the embeddable widget and its demo host page
 docs/           architecture, research notes, API setup, sample output
@@ -204,15 +300,27 @@ docs/           architecture, research notes, API setup, sample output
 cd backend && .venv/Scripts/python -m pytest -q
 ```
 
-123 tests. They run with **no provider configured**, which is deliberate: it
+174 tests. They run with **no provider configured**, which is deliberate: it
 proves the analytical half is genuinely independent of any API, and that is the
-whole basis of the zero-cost claim.
+whole basis of the zero-cost claim. The suite asserts that isolation explicitly
+rather than relying on environment variables being unset — the moment a developer
+creates a `.env`, the trap would be a suite that silently starts calling live
+providers and still passes.
+
+Among what they pin: the negotiation can never leave a design worse than it found
+it; no constraint may name an owner that is not a live agent; the knowledge graph
+is deterministic edge-for-edge across builds; and the DXF is read back with an
+independent CAD library to confirm every wall's length and thickness survived.
 
 ## Documentation
 
 - [docs/API_SETUP.md](docs/API_SETUP.md) — the free accounts to create, in priority order
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the pieces fit together
 - [docs/RESEARCH.md](docs/RESEARCH.md) — novelty claims, method, evaluation, limitations
+- [docs/AIP_Project_Report_Phase1.docx](docs/AIP_Project_Report_Phase1.docx) — the
+  Phase 1 report. Regenerate it with `python scripts/build_report.py` from
+  `backend/`: every figure in it is measured from the running system at build
+  time, so the document cannot drift from the code.
 - `http://127.0.0.1:8000/docs` — interactive OpenAPI reference
 
 ## Status and honest limitations
@@ -221,18 +329,30 @@ This is a working research platform, not a shipped commercial product. What is
 real and what is not:
 
 **Real:** the generator, all ten analytical critics, the consensus procedure,
-the Vastu engine and its corpus, quantity takeoff and pricing, the interior
-solver, drawing and 3D generation, the API, tenancy, the learning loop, and the
-evaluation harness. All tested.
+the manager–worker negotiation protocol, the Vastu engine with both its rule
+corpus and its knowledge graph, quantity takeoff and pricing, the interior
+solver, drawing, DXF and 3D generation, the API, tenancy, the learning loop, and
+the evaluation harness. All tested.
 
 **Indicative, needs a practice's own data:** the rate schedule is benchmarked to
 CPWD conventions and market levels but is not a tendered schedule. Load your own
 via `RateSchedule.from_file`.
 
-**Not yet built:** photorealistic rendering (prompts are generated; no image
-provider is wired in by default), structural sizing beyond span sanity checks,
-MEP layout, and iOS AR (GLB covers WebXR and Android; iOS Quick Look needs a
-USDZ conversion requiring Apple's toolchain).
+**Not built, and not claimed:** photorealistic rendering — there is no image
+provider wired in and no diffusion step anywhere in the pipeline. The
+visualisation path is the vector drawing set and a dimensionally exact 3D model,
+which is the more defensible artefact: a photorealistic render of a concept plan
+invites a client to react to lighting and materials that no part of the system
+has reasoned about. Also absent: structural sizing beyond span sanity checks,
+MEP layout, IFC/BIM export (DXF is the honest target at concept stage — IFC would
+imply a multi-discipline coordination this system has not performed), and iOS AR
+(GLB covers WebXR and Android; iOS Quick Look needs a USDZ conversion requiring
+Apple's toolchain).
+
+**Where the knowledge graph stops:** 94 of 578 room-and-sector placements have no
+derivation path and are reported `undetermined` rather than scored. That is the
+correct behaviour, but it is coverage left on the table, and closing it is the
+first item of next-phase work.
 
 **Not measurable without a human study:** user satisfaction, expert-rated design
 quality, and retrieval relevance. The harness reports these as

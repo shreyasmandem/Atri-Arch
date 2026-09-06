@@ -74,13 +74,56 @@ def test_design_returns_a_complete_result(designed):
     assert designed["winner_plan_id"]
     assert len(designed["plan_ids"]) == 2
     assert designed["plan"]["total_built_area"] > 0
-    assert designed["consensus"]["winner_id"] == designed["winner_plan_id"]
+    # The committee votes on a candidate; refinement and negotiation then
+    # produce a new revision of it. Both ids are reported so the client can show
+    # what was chosen and what it became, and the returned plan must descend
+    # from the chosen candidate rather than being some unrelated scheme.
+    assert designed["selected_candidate_id"] == designed["consensus"]["winner_id"]
+    if designed["winner_plan_id"] != designed["selected_candidate_id"]:
+        assert designed["plan"]["variant_of"], "an improved plan must record its parent"
+
+    # Every specialist report must describe the plan actually returned.
+    assert designed["vastu"]["plan_id"] == designed["winner_plan_id"]
+    assert designed["cost"]["plan_id"] == designed["winner_plan_id"]
+
     assert designed["vastu"]["score"] >= 0
     assert designed["cost"]["total"] > 0
     assert designed["model_cost_usd"] == 0.0
     assert designed["committee"]
     assert designed["drawing_urls"]
     assert designed["model_url"].endswith(".glb")
+
+    # The negotiation must have run and reported a recognised outcome.
+    assert designed["negotiation_outcome"] in {
+        "satisfied", "converged", "converged_with_open_constraints", "exhausted",
+    }
+    assert designed["negotiation"]["rounds"] >= 0
+
+    exports = designed["export_urls"]
+    assert any(k.startswith("dxf_level_") for k in exports)
+    assert exports["model_obj"].endswith(".obj")
+
+
+def test_selected_candidate_is_findable_in_the_ranking(designed):
+    """The client resolves the verdict bar through the ranking, keyed by the
+    candidate the committee scored.
+
+    Refinement and negotiation each mint a new plan id, so a client that looks
+    the ranking up by `winner_plan_id` misses whenever the agents actually
+    improve the design - and a missed lookup renders as a clean bill of health
+    ("0 findings, nothing outstanding") on a scheme that may carry critical
+    statutory breaches. Asserting the candidate id is present keeps the id the
+    client must key on unambiguous.
+    """
+    ranking = {r["candidate_id"] for r in designed["consensus"]["ranking"]}
+    disqualified = {d["candidate_id"] for d in designed["consensus"]["disqualified"]}
+
+    assert designed["selected_candidate_id"] in ranking, (
+        "the selected candidate must appear in the ranking the client reads"
+    )
+    assert set(designed["plan_ids"]) <= ranking | disqualified, (
+        "every advertised scheme must be either ranked or explicitly disqualified"
+    )
 
 
 def test_design_rejects_an_empty_request(client):
@@ -129,6 +172,25 @@ def test_drawings_render_for_every_advertised_url(client, designed):
         assert response.status_code == 200, f"{name} -> {response.status_code}"
         assert response.headers["content-type"].startswith("image/svg+xml")
         assert response.text.lstrip().startswith("<svg")
+
+
+def test_every_advertised_export_downloads(client, designed):
+    for name, url in designed["export_urls"].items():
+        response = client.get(url)
+        assert response.status_code == 200, f"{name} -> {response.status_code}"
+        assert response.content, f"{name} returned an empty file"
+
+        if name.startswith("dxf_level_"):
+            assert response.headers["content-type"].startswith("image/vnd.dxf")
+            body = response.text
+            assert body.startswith("0\nSECTION")
+            assert body.rstrip().endswith("EOF")
+            assert "A-WALL" in body
+
+
+def test_dxf_for_a_missing_level_is_a_404(client, designed):
+    plan_id = designed["winner_plan_id"]
+    assert client.get(f"/api/v1/plans/{plan_id}/level-99.dxf").status_code == 404
 
 
 def test_unknown_drawing_is_a_404(client, designed):

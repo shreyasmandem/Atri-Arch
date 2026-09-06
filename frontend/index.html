@@ -47,6 +47,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <button type="button" class="view-tab" data-view="interior">Interior</button>
     <button type="button" class="view-tab" data-view="model">3D</button>
     <button type="button" class="view-tab" data-view="findings">Findings</button>
+    <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
     <button type="button" class="view-tab" data-view="audit">Audit</button>
   </nav>
 
@@ -210,7 +211,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
         <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Drawings"></div>
         <div class="pane__tools">
           <button type="button" class="ghost-btn" id="zoom">Actual size</button>
-          <button type="button" class="ghost-btn" id="dl-svg">Download SVG</button>
+          <button type="button" class="ghost-btn" id="dl-svg">SVG</button>
+          <button type="button" class="ghost-btn" id="dl-dxf" title="Editable CAD, opens in AutoCAD, BricsCAD, LibreCAD or QCAD">DXF</button>
         </div>
       </div>
       <div class="plate" id="plate"></div>
@@ -242,6 +244,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="pane" data-view="interior" hidden></div>
     <div class="pane" data-view="model" hidden></div>
     <div class="pane" data-view="findings" hidden></div>
+    <div class="pane" data-view="negotiation" hidden></div>
     <div class="pane" data-view="audit" hidden></div>
   </section>
 

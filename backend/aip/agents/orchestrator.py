@@ -96,6 +96,13 @@ class DesignResult(BaseModel):
     debate_rounds: int = 0
     refinement_applied: bool = False
     refinement_delta: float = 0.0
+
+    #: Manager-worker negotiation record. The transcript is a deliverable in its
+    #: own right: it is the evidence that the constraints were satisfied by
+    #: argument between agents rather than asserted by one pass of a model.
+    negotiation: dict[str, Any] | None = None
+    negotiation_outcome: str = ""
+    negotiation_applied: bool = False
     degraded: bool = False
     degraded_reason: str = ""
 
@@ -110,6 +117,9 @@ class PipelineConfig:
     include_generative_critics: bool = True
     enable_debate: bool = True
     enable_refinement: bool = True
+    enable_negotiation: bool = True
+    negotiation_rounds: int = 3
+    negotiation_seconds: float = 25.0
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
     max_parallel_agents: int = 6
     agent_timeout_seconds: float = 90.0
@@ -123,7 +133,7 @@ class DesignPipeline:
 
     STAGES = (
         "interpret", "retrieve", "generate", "critique",
-        "consensus", "debate", "refine", "explain",
+        "consensus", "debate", "refine", "negotiate", "explain",
     )
 
     def __init__(
@@ -187,17 +197,43 @@ class DesignPipeline:
             else:
                 emit("refine", "skipped", "Refinement disabled for this run.", 0.82)
 
+            if self.config.enable_negotiation:
+                await self._stage_negotiate(result, brief, emit)
+            else:
+                emit("negotiate", "skipped", "Negotiation disabled for this run.", 0.85)
+
             await self._stage_explain(result, ctx, emit)
 
             # Attach the specialist reports the critics already computed, so the
             # API does not recompute them.
-            plan_id = winner.artifact.id
+            # Key off the plan actually being returned, not the candidate the
+            # committee voted for. Refinement and negotiation both produce a new
+            # plan with a new id, so reusing the candidate's cached reports would
+            # show the client a Vastu score and a cost for a scheme they are not
+            # looking at. When the cache misses, recompute: both are pure
+            # analytical passes costing milliseconds, and a stale number beside a
+            # drawing is worse than no number at all.
+            final = result.winner or winner.artifact
             vastu_reports = ctx.shared.get("vastu_reports", {})
             cost_estimates = ctx.shared.get("cost_estimates", {})
-            if plan_id in vastu_reports:
-                result.vastu = vastu_reports[plan_id].model_dump()
-            if plan_id in cost_estimates:
-                result.cost = cost_estimates[plan_id].model_dump()
+
+            if final.id in vastu_reports:
+                result.vastu = vastu_reports[final.id].model_dump()
+            else:
+                from aip.engines.vastu.engine import analyse_vastu
+
+                result.vastu = (
+                    await asyncio.to_thread(analyse_vastu, final, brief.tradition_weight)
+                ).model_dump()
+
+            if final.id in cost_estimates:
+                result.cost = cost_estimates[final.id].model_dump()
+            else:
+                from aip.engines.cost.estimator import estimate_cost
+
+                result.cost = (
+                    await asyncio.to_thread(estimate_cost, final, brief)
+                ).model_dump()
 
             result.evidence = merge_evidence(candidates)[:40]
             result.committee = committee_charter()
@@ -528,6 +564,74 @@ class DesignPipeline:
         )
         return repaired, delta
 
+    async def _stage_negotiate(self, result: DesignResult, brief: ClientBrief, emit) -> None:
+        """Run the manager-worker consensus protocol on the selected scheme.
+
+        Everything upstream of this point is a single forward pass: generate,
+        critique, vote, repair. That produces a scheme which is good on average
+        but can still carry a specific unsatisfied constraint, because no stage
+        is obliged to look at the design again after changing it.
+
+        This stage closes the loop. The manager measures every hard and soft
+        constraint, routes each failure to the worker that owns it, and accepts
+        a proposed mutation only when re-measurement shows the whole design
+        improved. It repeats until the constraints are satisfied, the rounds
+        stop paying for themselves, or the time budget runs out.
+        """
+        if result.winner is None:
+            emit("negotiate", "skipped", "No scheme to negotiate.", 0.85)
+            return
+
+        from aip.agents.protocol import ConsensusProtocol, ProtocolConfig
+
+        protocol = ConsensusProtocol(config=ProtocolConfig(
+            max_rounds=self.config.negotiation_rounds,
+            time_budget_seconds=self.config.negotiation_seconds,
+        ))
+
+        opening = protocol.measure(result.winner, brief)
+        open_now = [c for c in opening if not c.satisfied]
+        emit(
+            "negotiate", "running",
+            (
+                f"Negotiating {len(open_now)} open constraint(s) between "
+                f"{len(protocol.workers)} agents..."
+                if open_now else
+                "Verifying all constraints hold on the selected scheme..."
+            ),
+            0.84,
+            open_constraints=[
+                {"id": c.id, "severity": c.severity.value, "owner": c.owner, "detail": c.detail}
+                for c in open_now
+            ],
+        )
+
+        def relay(phase: str, detail: dict[str, Any]) -> None:
+            emit("negotiate", "running", _NEGOTIATION_PHRASING.get(phase, phase), 0.85, **detail)
+
+        negotiated, transcript = await asyncio.to_thread(
+            protocol.run, result.winner, brief, relay
+        )
+
+        result.negotiation = transcript.to_dict()
+        result.negotiation_outcome = transcript.outcome
+
+        accepted = sum(1 for r in transcript.rounds for m in r.mutations if m.accepted)
+        if accepted and negotiated is not result.winner:
+            result.winner = negotiated
+            result.negotiation_applied = True
+
+        emit(
+            "negotiate", "done",
+            _negotiation_message(transcript, accepted),
+            0.85,
+            outcome=transcript.outcome,
+            rounds=len(transcript.rounds),
+            accepted=accepted,
+            hard_open=transcript.hard_open,
+            score=round(transcript.final_score, 4),
+        )
+
     async def _stage_explain(self, result: DesignResult, ctx: AgentContext, emit) -> None:
         emit("explain", "running", "Writing the design rationale...", 0.86)
 
@@ -595,6 +699,45 @@ class DesignPipeline:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+#: The state machine's phase names are terse by design; these are what the
+#: client shows while a round is in flight.
+_NEGOTIATION_PHRASING = {
+    "intake": "Registering constraints and assigning owners...",
+    "propose": "Workers are proposing changes for the constraints they own...",
+    "measure": "Re-measuring the design against every constraint...",
+    "negotiate": "Weighing proposals against each other...",
+    "apply": "Applying the winning proposal...",
+    "decide": "Deciding whether to continue negotiating...",
+    "settled": "Negotiation settled.",
+}
+
+
+def _negotiation_message(transcript: Any, accepted: int) -> str:
+    rounds = len(transcript.rounds)
+    if transcript.outcome == "satisfied":
+        if accepted:
+            return (
+                f"All constraints satisfied after {rounds} round(s); "
+                f"{accepted} agent proposal(s) were accepted."
+            )
+        return "All constraints already held; no changes were needed."
+    if transcript.outcome == "converged":
+        return (
+            f"Negotiation converged after {rounds} round(s) with "
+            f"{accepted} accepted change(s); further rounds stopped paying for themselves."
+        )
+    if transcript.outcome == "converged_with_open_constraints":
+        return (
+            f"{transcript.hard_open} hard constraint(s) remain open after {rounds} "
+            f"round(s). No agent could propose a change that improved the design, "
+            f"so they are reported rather than papered over."
+        )
+    return (
+        f"Negotiation stopped at the time budget after {rounds} round(s) with "
+        f"{accepted} accepted change(s)."
+    )
 
 
 def _axis_priorities(brief: ClientBrief) -> dict[str, float]:

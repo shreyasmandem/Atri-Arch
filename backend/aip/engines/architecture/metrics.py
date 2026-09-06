@@ -294,6 +294,7 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
         directions: set[Direction] = set()
         wind_alignment = 0.0
         internal_doors = 0
+        external_openings = 0
 
         for wall in walls:
             direction = _opening_direction(plan, wall)
@@ -307,6 +308,7 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
                 if not (opening.kind.is_glazed or opening.kind is OpeningKind.SLIDING_DOOR):
                     continue
                 openable += opening.area * OPENABLE_FRACTION.get(opening.kind, 0.6)
+                external_openings += 1
                 directions.add(direction)
                 delta = abs(((direction.bearing - summer_wind.bearing) + 180) % 360 - 180)
                 wind_alignment = max(wind_alignment, math.cos(math.radians(min(delta, 90))))
@@ -331,7 +333,19 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
         ratio = openable / room.area if room.area else 0.0
         adequacy = _clamp(ratio / (1 / 6))
 
-        score = _clamp(0.45 * cross + 0.35 * adequacy + 0.20 * wind_alignment)
+        # How far the air actually reaches. Openable area governs how much air
+        # can pass; the mode and the room's depth govern whether it reaches the
+        # back wall. A deep room with a single window has a stagnant zone no
+        # amount of extra glazing on that one wall will clear.
+        mode = ventilation_mode(directions, external_openings)
+        depth = _flow_depth(room, directions)
+        reach = VENTILATION_DEPTH_LIMIT[mode] * room.ceiling_height
+        stagnant = _clamp(1.0 - reach / depth) if depth > 1e-6 else 0.0
+        reach_score = 1.0 - stagnant
+
+        score = _clamp(
+            0.34 * cross + 0.27 * adequacy + 0.15 * wind_alignment + 0.24 * reach_score
+        )
         per_room[room.id] = round(score, 4)
         detail[room.id] = {
             "name": room.display_name(),
@@ -339,6 +353,10 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
             "openable_ratio": round(ratio, 4),
             "orientations": sorted(d.value for d in directions),
             "cross_ventilated": bool(opposing),
+            "ventilation_mode": mode,
+            "flow_depth_m": round(depth, 2),
+            "effective_reach_m": round(reach, 2),
+            "stagnant_fraction": round(stagnant, 3),
             "wind_alignment": round(wind_alignment, 3),
             "estimated_ach": round(_estimate_ach(openable, room.volume, opposing, wind_alignment), 2),
         }
@@ -419,6 +437,46 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
                 )
             )
 
+        # Area is not reach. A room can satisfy the one-sixth openable-area rule
+        # and still have a dead zone at the back, because the code governs how
+        # much opening there is and says nothing about where it is.
+        if stagnant > 0.15 and room.type.is_habitable:
+            dead = depth - reach
+            findings.append(
+                Finding(
+                    code="VENT.REACH",
+                    severity=Severity.MAJOR if stagnant > 0.35 else Severity.MINOR,
+                    message=(
+                        f"{room.display_name()} is {depth:.1f} m deep but "
+                        f"{mode.replace('_', ' ')} ventilation carries air only about "
+                        f"{reach:.1f} m in; the far {dead:.1f} m recirculates rather "
+                        f"than flushes."
+                    ),
+                    target_id=room.id,
+                    target_label=room.display_name(),
+                    metric="stagnant_fraction",
+                    actual=f"{stagnant:.0%} of depth",
+                    expected="under 15%",
+                    remedy=(
+                        "Add an opening on a different face so the air has a path "
+                        "through. On a single wall, more glazing does not buy more "
+                        "depth - it enlarges the same recirculation cell."
+                    ),
+                    evidence=[
+                        Evidence(
+                            kind=EvidenceKind.COMPUTED,
+                            source="BS 5925 / CIBSE AM10 effective-depth rule",
+                            detail=(
+                                f"{mode.replace('_', ' ')} ventilation reaches "
+                                f"{VENTILATION_DEPTH_LIMIT[mode]:.1f} x the "
+                                f"{room.ceiling_height:.2f} m ceiling height."
+                            ),
+                            locator=room.id,
+                        )
+                    ],
+                )
+            )
+
     score = sum(per_room.values()) / len(per_room)
     return MetricReport(
         axis="ventilation",
@@ -440,6 +498,57 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
             f"/{len(per_room)} rooms cross-ventilated."
         ),
     )
+
+
+#: Effective ventilation depth, as a multiple of floor-to-ceiling height.
+#:
+#: From BS 5925 and CIBSE AM10. The numbers encode what the CFD shows: with one
+#: opening, air enters and leaves through the same aperture, so a recirculation
+#: cell forms and the far end of the room is never flushed. Give the air a second
+#: opening on a different pressure face and the path becomes a through-flow that
+#: reaches more than twice as far.
+#:
+#: This is why a room can satisfy the one-sixth openable-area rule and still be
+#: stuffy: the code governs how *much* opening there is, and says nothing about
+#: where it is. Area is necessary and not sufficient.
+VENTILATION_DEPTH_LIMIT: dict[str, float] = {
+    "cross": 5.0,                  # opposed openings, clear path through
+    "single_sided_double": 2.5,    # two openings, same face, separated
+    "single_sided": 2.0,           # one opening: enters and leaves the same way
+    "none": 0.0,
+}
+
+
+def ventilation_mode(directions: set[Direction], opening_count: int) -> str:
+    """Classify how a room ventilates, which fixes how deep it can be."""
+    if not directions or opening_count == 0:
+        return "none"
+    if _has_opposing_pair(directions):
+        return "cross"
+    if opening_count >= 2:
+        return "single_sided_double"
+    return "single_sided"
+
+
+def _flow_depth(room: Room, directions: set[Direction]) -> float:
+    """Room dimension along the direction the air has to travel.
+
+    For a through-flow that is the span between the two opposed faces; for
+    single-sided it is how far the room extends away from its only opening. Both
+    reduce to a bounding-box dimension chosen by the axis the openings sit on.
+    """
+    box = room.bbox
+    if not directions:
+        return max(box.width, box.height)
+    # North/south facing openings drive flow along Y; east/west along X. A
+    # direction is north-south facing when its bearing is nearer the N-S axis
+    # than the E-W one, which is exactly a comparison of |cos| against |sin|.
+    north_south = sum(
+        1 for d in directions
+        if abs(math.cos(math.radians(d.bearing))) >= abs(math.sin(math.radians(d.bearing)))
+    )
+    east_west = len(directions) - north_south
+    return box.height if north_south >= east_west else box.width
 
 
 def _has_opposing_pair(directions: set[Direction]) -> bool:

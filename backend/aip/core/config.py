@@ -68,10 +68,6 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_enabled: bool = True
 
-    # Free image generation backends.
-    pollinations_enabled: bool = True  # keyless, no signup
-    hf_image_model: str = "stabilityai/stable-diffusion-xl-base-1.0"
-
     # ---------------------------------------------------------- behaviour ---
     # Hard ceiling on spend. The router refuses any provider that would bill.
     enforce_zero_cost: bool = True

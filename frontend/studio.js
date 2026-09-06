@@ -47,6 +47,8 @@ const S = {
   committee: [], phase: "compose", view: "drawings",
   planIds: [], activeId: null, winnerId: null,
   consensus: null, explanation: "", recommendations: [],
+  negotiation: null, negotiationOutcome: "", exportUrls: {},
+  candidateId: null,   // the scheme the committee voted for, before negotiation changed it
   projectId: null, sessionId: null, briefSent: null,
   plans: {},          // id -> { plan, vastu, cost, interior, analysis, drawing }
   sheet: "plan_level_0",
@@ -149,6 +151,7 @@ function lightPadas(svg, plan) {
   $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("why").hidden = true; });
   $("dl-svg").addEventListener("click", downloadSheet);
+  $("dl-dxf").addEventListener("click", downloadDxf);
   $("zoom").addEventListener("click", () => {
     const on = $("plate").classList.toggle("is-zoomed");
     $("zoom").textContent = on ? "Fit to frame" : "Actual size";
@@ -334,6 +337,14 @@ async function applyResult(d) {
   S.winnerId = d.winner_plan_id;
   S.activeId = d.winner_plan_id;
   S.consensus = d.consensus;
+  // The committee ranks *candidates*. Refinement and negotiation each mint a new
+  // plan with a new id, so the returned plan is usually not in the ranking at
+  // all. Keeping the candidate id separate is what stops every consensus lookup
+  // silently missing the moment the agents actually improve the design.
+  S.candidateId = d.selected_candidate_id || d.consensus?.winner_id || d.winner_plan_id;
+  S.negotiation = d.negotiation || null;
+  S.negotiationOutcome = d.negotiation_outcome || "";
+  S.exportUrls = d.export_urls || {};
   S.explanation = d.explanation || "";
   S.recommendations = d.recommendations || [];
   S.projectId = d.project_id; S.sessionId = d.trace_id;
@@ -358,7 +369,7 @@ function buildSchemeTabs() {
   S.planIds.forEach((id, i) => {
     const row = ranked.find((r) => r.candidate_id === id);
     const b = el("button", "scheme-tab"); b.type = "button"; b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", String(id === S.activeId));
+    b.setAttribute("aria-selected", String(id === activeCandidate()));
     b.append(document.createTextNode(`Scheme ${String.fromCharCode(65 + i)}`));
 
     // A scheme with no score was not merely last - it was disqualified for a
@@ -366,7 +377,7 @@ function buildSchemeTabs() {
     // reads as a rendering fault; saying so is the honest signal.
     if (row) {
       b.append(el("b", null, row.score.toFixed(2)));
-      b.title = id === S.winnerId ? "Selected by the committee" : "On the trade-off frontier";
+      b.title = id === S.candidateId ? "Selected by the committee" : "On the trade-off frontier";
     } else if (dq.has(id)) {
       b.dataset.dq = "1";
       b.append(el("b", null, "DQ"));
@@ -406,6 +417,13 @@ async function selectScheme(id) {
 
 const cur = () => S.plans[S.activeId] || {};
 
+// Map whatever is on screen back to the candidate the committee scored. The
+// winner tab shows a post-negotiation plan; every other tab is a candidate and
+// maps to itself.
+const activeCandidate = () => (S.activeId === S.winnerId ? S.candidateId : S.activeId);
+const rankingRow = () =>
+  (S.consensus?.ranking || []).find((r) => r.candidate_id === activeCandidate());
+
 function renderAll() {
   renderRail();
   renderCritics();
@@ -415,16 +433,18 @@ function renderAll() {
 
 function renderRail() {
   const { plan } = cur();
-  const idx = S.planIds.indexOf(S.activeId);
-  $("pick-name").textContent = `Scheme ${String.fromCharCode(65 + Math.max(0, idx))}`;
-  const dq = (S.consensus?.disqualified || []).find((d) => d.candidate_id === S.activeId);
+  const idx = S.planIds.indexOf(activeCandidate());
+  $("pick-name").textContent = idx >= 0
+    ? `Scheme ${String.fromCharCode(65 + idx)}`
+    : "Selected scheme";
+  const dq = (S.consensus?.disqualified || []).find((d) => d.candidate_id === activeCandidate());
   $("pick-why").textContent = dq
     ? `Disqualified. ${dq.reasons[0] || "It carries a critical finding."} A statutory or physical breach removes a scheme regardless of how it scores elsewhere.`
     : S.activeId === S.winnerId
       ? "Selected by the committee as the best trade-off across every measured axis."
       : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
 
-  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const row = rankingRow();
   const bars = $("axis-bars"); bars.innerHTML = "";
   const axes = Object.entries(row?.axis_scores || {}).sort((a, b) => a[1] - b[1]);
   for (const [axis, v] of axes) {
@@ -452,7 +472,7 @@ function renderRail() {
 }
 
 function renderCritics() {
-  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const row = rankingRow();
   const scores = row?.axis_scores || {};
   document.querySelectorAll(".cr").forEach((el2) => {
     const c = S.committee.find((x) => x.id === el2.dataset.critic);
@@ -468,7 +488,7 @@ function renderCritics() {
 
 function renderVerdict() {
   const { plan, vastu, cost } = cur();
-  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const row = rankingRow();
 
   $("v-score").textContent = row ? row.score.toFixed(2) : "—";
   $("v-agree").textContent = S.consensus ? `${Math.round(S.consensus.overall_agreement * 100)}% committee agreement` : "—";
@@ -478,10 +498,57 @@ function renderVerdict() {
     $("v-area").textContent = `${Math.round(plan.total_built_area)} m²`;
     $("v-far").textContent = `FAR ${(plan.achieved_far || 0).toFixed(2)} of ${plan.site?.max_far ?? "—"}`;
   }
-  const h = row?.finding_counts || {};
-  const total = Object.values(h).reduce((a, b) => a + b, 0);
+  // Finding counts must describe the plan being shown, not the candidate the
+  // committee voted on. Negotiation routinely clears a critical breach and
+  // returns a new plan; reading the counts off the ranking row would keep
+  // telling the client their scheme is blocked after the agents unblocked it.
+  paintFindingCounts();
+}
+
+function paintFindingCounts() {
+  const analysis = cur().analysis;
+  if (!analysis) {
+    $("v-find").textContent = "…";
+    $("v-find-note").textContent = "counting";
+    loadAnalysis();
+    return;
+  }
+
+  let total = 0;
+  let critical = 0;
+  const tally = (list) => {
+    for (const f of list || []) {
+      total += 1;
+      if (f.severity === "critical") critical += 1;
+    }
+  };
+  for (const report of Object.values(analysis.metrics || {})) tally(report.findings);
+  tally(analysis.compliance?.findings);
+
   $("v-find").textContent = total;
-  $("v-find-note").textContent = h.critical ? `${h.critical} critical · blocks delivery` : total ? "none critical" : "nothing outstanding";
+  $("v-find-note").textContent = critical
+    ? `${critical} critical · blocks delivery`
+    : total ? "none critical" : "nothing outstanding";
+}
+
+async function loadAnalysis() {
+  const id = S.activeId;
+  if (!id || S.plans[id]?.analysisPending) return;
+  S.plans[id] = S.plans[id] || {};
+  S.plans[id].analysisPending = true;
+  try {
+    const r = await fetch(`${API}/plans/${id}/analysis`);
+    if (!r.ok) throw new Error(String(r.status));
+    S.plans[id].analysis = await r.json();
+    if (S.activeId === id) paintFindingCounts();
+  } catch {
+    if (S.activeId === id) {
+      $("v-find").textContent = "—";
+      $("v-find-note").textContent = "could not load";
+    }
+  } finally {
+    S.plans[id].analysisPending = false;
+  }
 }
 
 /* ═══ VIEWS ══════════════════════════════════════════════════════════ */
@@ -497,6 +564,7 @@ function showView(v) {
   if (v === "interior") renderInterior();
   if (v === "model") renderModel();
   if (v === "findings") renderFindings();
+  if (v === "negotiation") renderNegotiation();
   if (v === "audit") renderAudit();
 }
 
@@ -517,6 +585,7 @@ function buildSheetTabs() {
     ...levels.map((lv) => [`plan_level_${lv.index}`, lv.index === 0 ? "Ground plan" : `Level ${lv.index}`]),
     ["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"],
     ["section_aa", "Section A–A"], ["section_bb", "Section B–B"], ["roof_plan", "Roof"], ["site_plan", "Site"],
+    ...levels.map((lv) => [`airflow_level_${lv.index}`, levels.length > 1 ? `Airflow L${lv.index}` : "Airflow"]),
   ];
   for (const [key, label] of sheets) {
     const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
@@ -555,6 +624,20 @@ function downloadSheet() {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `${S.sheet}.svg`; a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function downloadDxf() {
+  // The sheet tabs cover elevations and sections too; DXF is emitted per floor
+  // plan, so fall back to the ground floor when the current sheet is not one.
+  const m = /^plan_level_(\d+)$/.exec(S.sheet);
+  const level = m ? m[1] : 0;
+  const url = S.exportUrls[`dxf_level_${level}`]
+    || `${API}/plans/${S.activeId}/level-${level}.dxf`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${S.activeId}_level_${level}.dxf`;
+  a.click();
+  toast(`Level ${level} exported as editable CAD geometry.`);
 }
 
 /* ── mandala ───────────────────────────────────────────────────────── */
@@ -666,6 +749,75 @@ function renderVastu() {
       s.append(d);
     }
   }
+
+  // ── knowledge graph ──────────────────────────────────────────────
+  // The rule corpus can only speak where a text speaks. The graph derives a
+  // verdict for every room by reasoning through what it is used for, and shows
+  // the chain that produced it — which is the part a client can actually argue
+  // with.
+  const gp = v.graph_placements || [];
+  if (gp.length) {
+    s.append(el("h3", "sec", "Knowledge graph — every room, derived"));
+
+    const gstats = el("div", "stat-row");
+    const derived = gp.filter((p) => p.derived).length;
+    const undet = gp.filter((p) => p.verdict === "undetermined").length;
+    const cov = v.graph_coverage || {};
+    for (const [pig, k, val, sub] of [
+      ["indigo", "Graph score", `${Math.round(v.graph_score)}/100`, "area-weighted"],
+      ["ochre", "Rooms derived", `${derived}`, "no rule enumerates these"],
+      ["chalk", "Coverage", `${cov.coverage_gain || "—"}×`,
+        `${cov.placements_derivable_by_graph || 0} vs ${cov.placements_asserted_by_text || 0} placements`],
+      [undet ? "hingula" : "orpiment", "Undetermined", `${undet}`, "excluded from score"],
+    ]) {
+      const d = el("dl", "stat"); d.dataset.pig = pig;
+      d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); gstats.append(d);
+    }
+    s.append(gstats);
+    if (v.graph_note) s.append(el("p", "note-card", v.graph_note));
+
+    for (const p of gp) {
+      const box = el("div", "deriv");
+      box.dataset.v = p.verdict;
+
+      const h = el("div", "deriv__h");
+      h.append(el("b", null, p.room));
+      h.append(el("span", "deriv__dir", `${p.direction} · ${p.quarter}`));
+      h.append(el("span", "deriv__sc", p.verdict === "undetermined" ? "—" : p.score.toFixed(2)));
+      h.append(el("span", "deriv__tag", p.derived ? "derived" : "cited"));
+      box.append(h);
+
+      if (p.derivation) box.append(chainRow("supports", p.derivation));
+      if (p.objection) box.append(chainRow("objects", p.objection));
+      if (!p.derivation && !p.objection) {
+        box.append(el("p", "deriv__x", p.explanation));
+      }
+
+      if (p.agrees_with_text === false) {
+        box.append(el("p", "deriv__warn",
+          "The derivation disagrees with a cited text. The text governs the score; the disagreement is shown rather than hidden."));
+      }
+      if (p.better_directions?.length) {
+        box.append(el("p", "deriv__alt",
+          "Better: " + p.better_directions
+            .map((b) => `${b.direction} (${b.score.toFixed(2)})`).join(", ")));
+      }
+      if (p.citations?.length) box.append(el("p", "deriv__cite", p.citations.join(" · ")));
+      s.append(box);
+    }
+  }
+}
+
+function chainRow(kind, chain) {
+  const row = el("div", "chain"); row.dataset.k = kind;
+  // Render "A -[edge]-> B" as alternating node / edge tokens so the reasoning
+  // reads as a path rather than a string.
+  const parts = chain.split(/\s*-\[|\]->\s*/);
+  parts.forEach((tok, i) => {
+    if (!tok) return;
+    row.append(el("span", i % 2 ? "chain__e" : "chain__n", tok));
+  });
+  return row;
 }
 
 function vastuRow(x, sev) {
@@ -947,6 +1099,112 @@ async function renderFindings() {
     if (cite) d.append(el("span", "find__c", cite));
     s.append(d);
   }
+}
+
+/* ── audit ─────────────────────────────────────────────────────────── */
+
+/* ── negotiation ───────────────────────────────────────────────────── */
+
+const OUTCOME_COPY = {
+  satisfied: ["Settled", "Every hard and soft constraint holds."],
+  converged: ["Converged", "Further rounds stopped paying for themselves."],
+  converged_with_open_constraints: ["Open", "No agent could improve the design further."],
+  exhausted: ["Timed out", "The round budget ran out before settling."],
+};
+
+function renderNegotiation() {
+  const s = scrollPane("negotiation");
+  const n = S.negotiation;
+
+  s.append(el("h3", "sec", "The agents negotiating"));
+  s.append(el("p", "lede",
+    "Everything before this point is one forward pass — generate, critique, vote, repair. " +
+    "It produces a scheme that is good on average but can still carry a specific unsatisfied " +
+    "constraint, because no stage looks at the design again after changing it. " +
+    "Here the manager measures every constraint, hands each failure to the agent that owns it, " +
+    "and accepts a proposal only when re-measuring shows the whole design improved."));
+
+  if (!n) { s.append(el("p", "empty-note", "No negotiation record for this scheme.")); return; }
+
+  const [word, sub] = OUTCOME_COPY[n.outcome] || [cap(n.outcome || "—"), ""];
+  const stats = el("div", "stat-row");
+  const accepted = (n.log || []).reduce(
+    (a, r) => a + r.mutations.filter((m) => m.accepted).length, 0);
+  const proposed = (n.log || []).reduce((a, r) => a + r.mutations.length, 0);
+  for (const [pig, k, v, sm] of [
+    ["indigo", "Outcome", word, sub],
+    ["chalk", "Rounds", `${n.rounds}`, `${n.seconds}s`],
+    ["orpiment", "Proposals", `${accepted}/${proposed}`, "accepted"],
+    [n.hard_constraints_open ? "hingula" : "ochre", "Hard open",
+      `${n.hard_constraints_open}`, n.hard_constraints_open ? "unresolved" : "all satisfied"],
+  ]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, k), el("dd", null, v), el("small", null, sm)); stats.append(d);
+  }
+  s.append(stats);
+
+  if (!n.log?.length) {
+    s.append(el("p", "note-card",
+      "The scheme satisfied every constraint on first measurement, so no negotiation was needed. " +
+      "The protocol still ran — a clean measurement is a result, not a skipped step."));
+    return;
+  }
+
+  for (const r of n.log) {
+    const card = el("div", "round");
+
+    const head = el("div", "round__h");
+    head.append(el("span", "round__n", `Round ${r.round}`));
+    const [from, to] = String(r.score).split(" -> ");
+    const delta = (+to) - (+from);
+    const chip = el("span", "round__d", `${from} → ${to}`);
+    chip.dataset.dir = delta > 0.0001 ? "up" : "flat";
+    head.append(chip);
+    if (r.hard_open !== "0 -> 0") head.append(el("span", "round__hard", `hard ${r.hard_open}`));
+    card.append(head);
+
+    if (r.unsatisfied?.length) {
+      const ul = el("ul", "round__open");
+      for (const c of r.unsatisfied) {
+        const li = el("li");
+        li.dataset.sev = c.severity;
+        li.append(el("b", null, c.id), el("span", null, c.detail),
+          el("em", null, `owner: ${c.owner}`));
+        ul.append(li);
+      }
+      card.append(el("p", "round__lab", `${r.unsatisfied.length} constraint(s) open at the start of this round`));
+      card.append(ul);
+    }
+
+    if (r.mutations?.length) {
+      card.append(el("p", "round__lab", "Proposals"));
+      for (const m of r.mutations) {
+        const row = el("div", "mut");
+        row.dataset.ok = m.accepted ? "y" : "n";
+        row.append(el("span", "mut__w", m.worker.replace(/_/g, " ")));
+        row.append(el("span", "mut__c", m.change));
+        row.append(el("span", "mut__f", `for ${m["for"]}`));
+        row.append(el("span", "mut__d", `${m.delta >= 0 ? "+" : ""}${m.delta.toFixed(4)}`));
+        row.append(el("span", "mut__v", m.accepted ? "accepted" : "rejected"));
+        card.append(row);
+      }
+    } else if (!r.notes?.length) {
+      card.append(el("p", "round__lab", "No agent proposed a change in this round."));
+    }
+
+    // An agent that owns a failing constraint and cannot help has to say why.
+    // Silence from the responsible agent looks identical to the agent not running.
+    for (const note of r.notes || []) {
+      card.append(el("p", "round__note", note));
+    }
+    s.append(card);
+  }
+
+  s.append(el("p", "note-card",
+    "A proposal is accepted only when re-measuring the whole design shows a net gain, and hard " +
+    "constraints are weighted three times a soft one. That is what makes the loop safe to run " +
+    "unattended: no accumulation of small comfort gains can ever outrank fixing a statutory breach, " +
+    "and the design can never end a round worse than it began."));
 }
 
 /* ── audit ─────────────────────────────────────────────────────────── */

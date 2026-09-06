@@ -47,6 +47,9 @@ dev = [
     "ruff>=0.7",
     "mypy>=1.13",
     "httpx>=0.27",
+    # Reads our hand-written DXF back with an independent CAD library, so the
+    # "opens in AutoCAD" claim is verified by something other than our own writer.
+    "ezdxf>=1.3",
 ]
 
 [project.scripts]

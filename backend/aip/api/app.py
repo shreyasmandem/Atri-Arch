@@ -188,7 +188,39 @@ def _mount_studio(app: FastAPI) -> bool:
     studio_dir = Path(__file__).resolve().parents[3] / "frontend"
     if not (studio_dir / "index.html").exists():
         return False
-    app.mount("/", StaticFiles(directory=str(studio_dir), html=True), name="studio")
+
+    from aip.core.config import get_settings
+
+    class _Studio(StaticFiles):
+        """StaticFiles that refuses to be cached in development.
+
+        The studio has no build step and no content hashing, so a browser that
+        heuristically caches studio.js keeps serving yesterday's file after an
+        edit. That failure is silent and expensive: the page looks like the code
+        on disk, behaves like the code that was cached, and every conclusion
+        drawn from it is wrong. In production the assets are versioned by
+        deployment and cache normally.
+        """
+
+        def __init__(self, *args, no_store: bool, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.no_store = no_store
+
+        def file_response(self, *args, **kwargs):  # type: ignore[override]
+            response = super().file_response(*args, **kwargs)
+            if self.no_store:
+                response.headers["Cache-Control"] = "no-store, must-revalidate"
+            return response
+
+    app.mount(
+        "/",
+        _Studio(
+            directory=str(studio_dir),
+            html=True,
+            no_store=get_settings().environment == "development",
+        ),
+        name="studio",
+    )
     return True
 
 

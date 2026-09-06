@@ -660,17 +660,23 @@ class FloorPlan(BaseModel):
         ]
 
     def clone(self, **overrides: Any) -> FloorPlan:
-        data = self.model_dump()
-        data.update(overrides)
-        data.pop("id", None)
-        data["variant_of"] = self.id
-        data["generation"] = self.generation + 1
-        for key in (
-            "total_built_area", "total_carpet_area", "footprint_area",
-            "achieved_far", "building_height",
-        ):
-            data.pop(key, None)
-        return FloorPlan.model_validate(data)
+        """An exact in-memory copy, with a fresh identity.
+
+        Deep-copies rather than round-tripping through `model_dump`. The JSON
+        serialiser rounds coordinates to four decimals, which is right for the
+        wire and wrong for an internal copy: that rounding shifted room polygons
+        by ~5e-5 m and pushed a plan sitting exactly on the 60% ground-coverage
+        limit to 60.0005%, manufacturing a critical statutory breach out of
+        nothing. Any code that clones a plan to trial a change would then
+        measure the breach and reject its own improvement.
+        """
+        copy = self.model_copy(deep=True)
+        copy.id = _new_id("plan")
+        copy.variant_of = self.id
+        copy.generation = self.generation + 1
+        for key, value in overrides.items():
+            setattr(copy, key, value)
+        return copy
 
 
 def make_level(index: int, rooms: Iterable[Room], walls: Iterable[Wall] | None = None, **kw: Any) -> Level:

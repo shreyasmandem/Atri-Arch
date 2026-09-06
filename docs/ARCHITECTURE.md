@@ -19,11 +19,22 @@ ClientBrief
     │
     ├─ debate ─────── only if the committee genuinely disagrees
     ├─ refine ─────── apply named remedies; keep only if the score improves
+    │
+    ├─ negotiate ──── manager-worker consensus protocol
+    │                   measure 7 constraints (3 hard, 3x weighted)
+    │                   route each failure to the agent that owns it
+    │                   accept a change only if re-measurement improves
+    │                   repeat until satisfied, converged, or out of budget
+    │
     └─ explain ────── plain-language rationale for the client
                             │
                             ▼
-              drawings · 3D · Vastu report · BOQ · interior
+       drawings · DXF · 3D · Vastu report · BOQ · interior · transcript
 ```
+
+The distinction between `consensus` and `negotiate` is the one that matters.
+Consensus *selects* between fixed candidates; it cannot fix a flaw all of them
+share. Negotiation *changes* the chosen scheme and re-measures, so it can.
 
 Progress streams as server-sent events, so a client watching in a browser sees
 the committee working rather than a spinner.

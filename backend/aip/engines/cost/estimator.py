@@ -19,6 +19,7 @@ The estimate is built in five stages, each of which is separately inspectable:
 
 from __future__ import annotations
 
+import contextlib
 import math
 import random
 from dataclasses import dataclass, field
@@ -394,7 +395,18 @@ def estimate_cost(
 ) -> CostEstimate:
     """Full cost prediction for a plan."""
     brief = brief or ClientBrief()
+    # A plan may carry its own specification decision - the cost worker in the
+    # consensus protocol sets one when it steps the finish down to meet budget.
+    # Reading only the brief made that mutation a silent no-op, so the protocol
+    # proposed a step-down, measured no saving, and rejected its own fix.
     tier = _infer_tier(brief)
+    override = plan.metadata.get("finish_tier")
+    if override:
+        # An unrecognised override falls back to the inferred tier rather than
+        # failing the estimate: the plan is still costable, just at the default
+        # specification.
+        with contextlib.suppress(ValueError):
+            tier = FinishTier(str(override).lower())
     schedule = schedule or default_schedule(
         region=_infer_region(brief), finish_tier=tier
     )

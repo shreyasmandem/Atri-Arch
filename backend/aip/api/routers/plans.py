@@ -15,6 +15,7 @@ from aip.core.logging import get_logger
 from aip.db.session import get_session
 from aip.domain.geometry import Direction
 from aip.domain.plan import FloorPlan
+from aip.engines.architecture.airflow import airflow_svg
 from aip.engines.architecture.codes import compliance_analysis
 from aip.engines.architecture.drawings import (
     DrawingStyle,
@@ -24,6 +25,7 @@ from aip.engines.architecture.drawings import (
     section_svg,
     site_plan_svg,
 )
+from aip.engines.architecture.dxf import export_dxf
 from aip.engines.architecture.metrics import analyse_all
 from aip.engines.cost.estimator import estimate_cost
 from aip.engines.cost.rates import FinishTier, default_schedule
@@ -116,6 +118,9 @@ async def get_drawing(
             svg = roof_plan_svg(plan, style=style)
         elif name == "site_plan":
             svg = site_plan_svg(plan, style=style)
+        elif name.startswith("airflow_level_"):
+            level_index = int(name.rsplit("_", 1)[1])
+            svg = airflow_svg(plan, level_index, style=style)
         else:
             raise HTTPException(status_code=404, detail=f"Unknown drawing '{name}'.")
     except (ValueError, IndexError) as exc:
@@ -144,6 +149,31 @@ async def get_model_glb(
         headers={
             "Cache-Control": SVG_CACHE,
             "Content-Disposition": f'inline; filename="{plan_id}.glb"',
+        },
+    )
+
+
+@router.get("/{plan_id}/level-{level_index}.dxf", response_class=Response)
+async def get_level_dxf(
+    plan_id: str,
+    level_index: int,
+    principal: Principal = Depends(get_principal),
+) -> Response:
+    """AutoCAD R12 DXF for one level.
+
+    This is the export that makes the generated layout the practice's own: the
+    walls, openings, grid and room schedule arrive as editable CAD entities on
+    conventional layers, not as an image to trace over.
+    """
+    plan = _load(plan_id, principal)
+    if plan.level_at(level_index) is None:
+        raise HTTPException(status_code=404, detail=f"Plan has no level {level_index}.")
+    return Response(
+        content=export_dxf(plan, level_index),
+        media_type="image/vnd.dxf",
+        headers={
+            "Cache-Control": SVG_CACHE,
+            "Content-Disposition": f'attachment; filename="{plan_id}_level_{level_index}.dxf"',
         },
     )
 

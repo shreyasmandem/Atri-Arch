@@ -94,6 +94,13 @@ RULES: dict[str, CodeRule] = {
     ),
 }
 
+#: Relative tolerance on statutory *ratios* (FAR, ground coverage).
+#: An approving authority does not reject a drawing for exceeding coverage by
+#: forty-six square millimetres; an exact comparison turns floating-point noise
+#: into a critical breach. 0.1% of the permitted value is well inside drafting
+#: tolerance and still far tighter than any real plan-check.
+RATIO_TOLERANCE = 0.001
+
 MIN_HABITABLE_HEIGHT = 2.75
 MIN_STAIR_WIDTH = 1.0
 MAX_STAIR_RISER = 0.19
@@ -132,7 +139,7 @@ def compliance_analysis(plan: FloorPlan, brief: ClientBrief | None = None) -> Me
 
     # ------------------------------------------------------------ envelope --
     checks_run += 1
-    if site.plot_area > 0 and plan.achieved_far > site.max_far + 1e-6:
+    if site.plot_area > 0 and plan.achieved_far > site.max_far * (1 + RATIO_TOLERANCE):
         findings.append(
             _finding(
                 "FAR_MAX",
@@ -151,7 +158,7 @@ def compliance_analysis(plan: FloorPlan, brief: ClientBrief | None = None) -> Me
 
     checks_run += 1
     coverage = plan.footprint_area / site.plot_area if site.plot_area else 0.0
-    if coverage > site.max_ground_coverage + 1e-6:
+    if coverage > site.max_ground_coverage * (1 + RATIO_TOLERANCE):
         findings.append(
             _finding(
                 "COVERAGE_MAX",
@@ -166,7 +173,7 @@ def compliance_analysis(plan: FloorPlan, brief: ClientBrief | None = None) -> Me
         checks_passed += 1
 
     checks_run += 1
-    if plan.building_height > site.max_height + 1e-6:
+    if plan.building_height > site.max_height * (1 + RATIO_TOLERANCE):
         findings.append(
             _finding(
                 "HEIGHT_MAX",

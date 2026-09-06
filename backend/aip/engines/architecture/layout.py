@@ -264,7 +264,15 @@ class LayoutGenerator:
     """Produces buildable, optimised floorplans from a client brief."""
 
     def __init__(self, brief: ClientBrief, config: GeneratorConfig | None = None) -> None:
-        self.brief = brief
+        from aip.engines.architecture.programme import apply_defaults
+
+        # A client states rooms and areas; they never state that the kitchen
+        # should be near the dining room, because nobody thinks to write down
+        # what everybody knows. Without it the search has no opinion on where
+        # anything goes relative to anything else, and produces plans that pass
+        # every metric while being unusable. The programme is the architect's
+        # contribution to the brief, so the generator supplies it.
+        self.brief = apply_defaults(brief)
         self.config = config or GeneratorConfig()
         self.rng = random.Random(self.config.seed)
         self.requirements = self._prepare_requirements()
@@ -552,6 +560,14 @@ class LayoutGenerator:
             if short < MIN_ROOM_DIMENSION:
                 penalty += 0.14 * (MIN_ROOM_DIMENSION - short) / MIN_ROOM_DIMENSION
 
+            # The shape term below saturates at zero around 3:1, which makes an
+            # 8:1 room cost exactly as much as a 3:1 one - so once a room is bad
+            # the search has no reason to stop making it worse. This penalty has
+            # no ceiling, which is what actually rules out habitable rooms shaped
+            # like corridors.
+            if req.type.is_habitable and box.aspect_ratio > 2.4:
+                penalty += 0.09 * (box.aspect_ratio - 2.4)
+
             # Area fidelity: undersize is a defect, oversize merely costs money.
             ratio = box.area / max(req.target_area, 0.5)
             deviation = abs(math.log(max(ratio, 0.12)))
@@ -585,35 +601,45 @@ class LayoutGenerator:
             return sum(values) / len(values) if values else default
 
         score = (
-            0.30 * mean(area_terms)
-            + 0.20 * mean(shape_terms)
-            + 0.22 * mean(light_terms)
-            + 0.14 * mean(orientation_terms, 0.75)
-            + 0.14 * adjacency_score
+            0.20 * mean(area_terms)
+            + 0.21 * mean(shape_terms)
+            + 0.23 * mean(light_terms)
+            + 0.07 * mean(orientation_terms, 0.75)
+            + 0.29 * adjacency_score
         )
         return max(0.0, min(1.0, score - penalty))
 
     def _surrogate_adjacency(
         self, placed: list[tuple[int, BoundingBox]], slot_to_level: dict[int, int]
     ) -> float:
-        satisfied = 0
-        total = 0
-        for req_index, box in placed:
-            req = self.requirements[req_index]
-            if not req.must_be_adjacent_to and not req.must_not_be_adjacent_to:
-                continue
-            neighbours = {
-                self.requirements[other_index].type
-                for other_index, other_box in placed
-                if other_index != req_index and _rects_touch(box, other_box)
-            }
-            for wanted in req.must_be_adjacent_to:
-                total += 1
-                satisfied += 1 if wanted in neighbours else 0
-            for unwanted in req.must_not_be_adjacent_to:
-                total += 1
-                satisfied += 0 if unwanted in neighbours else 1
-        return satisfied / total if total else 0.8
+        """Score the programme against raw rectangles.
+
+        Deliberately the *same* scoring the exact evaluation applies to finished
+        walls, so the cheap search and the expensive ranking agree about what a
+        good plan is. Two different notions of adjacency here would mean the
+        search converges on plans the final ranking then throws away.
+
+        Counting each relationship equally - which is what the flattened
+        `must_be_adjacent_to` lists invite - treats kitchen-to-dining as no more
+        important than study-to-bedroom. The weighted programme is what makes
+        the search spend its effort on the pairs that matter.
+        """
+        from aip.engines.architecture.programme import score_pairs
+
+        touching: set[tuple[RoomType, RoomType]] = set()
+        for i, (req_index, box) in enumerate(placed):
+            a = self.requirements[req_index].type
+            for other_index, other_box in placed[i + 1:]:
+                if slot_to_level.get(req_index) != slot_to_level.get(other_index):
+                    continue
+                if _rects_touch(box, other_box):
+                    b = self.requirements[other_index].type
+                    touching.add((a, b))
+                    touching.add((b, a))
+
+        present = {self.requirements[i].type for i, _ in placed}
+        score, _honoured, _broken = score_pairs(touching, present, self.brief.kind)
+        return score
 
     def _vastu_direction(self, room_type: RoomType) -> Direction | None:
         """Ideal Vastu direction for a room type, when the brief asks for it."""
@@ -650,6 +676,7 @@ class LayoutGenerator:
             "spatial": reports["spatial"].score,
             "compliance": compliance.score,
             "programme": self._programme_fit(plan),
+            "layout": self._layout_sense(plan),
         }
 
         score = (
@@ -658,10 +685,16 @@ class LayoutGenerator:
             + weights.get("privacy", 0.16) * breakdown["privacy"]
             + weights.get("circulation", 0.16) * breakdown["circulation"]
         )
-        # Compliance, spatial usability and programme fit are not client
-        # preferences - they are prerequisites, so they carry fixed weight.
-        score = 0.42 * score + 0.24 * breakdown["compliance"] + 0.17 * breakdown["spatial"]
-        score += 0.11 * breakdown["programme"] + 0.06 * breakdown["accessibility"]
+        # Compliance, spatial usability, programme fit and functional layout are
+        # not client preferences - they are prerequisites, so they carry fixed
+        # weight. `layout` is weighted comparably to compliance deliberately: a
+        # kitchen across the house from the dining room is not a lesser defect
+        # than an undersized window, and weighting it lower is precisely how the
+        # search previously produced plans that passed every check and made no
+        # sense to walk through.
+        score = 0.38 * score + 0.24 * breakdown["compliance"] + 0.13 * breakdown["spatial"]
+        score += 0.08 * breakdown["programme"] + 0.05 * breakdown["accessibility"]
+        score += 0.12 * breakdown["layout"]
 
         if self.brief.vastu.is_constraining:
             try:
@@ -675,6 +708,12 @@ class LayoutGenerator:
                 pass
 
         return round(max(0.0, min(1.0, score)), 5), {k: round(v, 4) for k, v in breakdown.items()}
+
+    def _layout_sense(self, plan: FloorPlan) -> float:
+        """Does the plan work as a building, not just as a set of rooms?"""
+        from aip.engines.architecture.programme import evaluate
+
+        return evaluate(plan, self.brief).score
 
     def _programme_fit(self, plan: FloorPlan) -> float:
         """How closely realised room areas match what the brief asked for."""
@@ -956,21 +995,28 @@ class LayoutGenerator:
         connected = {root}
         frontier: list[tuple[float, str, str]] = []
 
+        from aip.engines.architecture.programme import door_cost_factor
+
         def push(node: str) -> None:
             for neighbour in adjacency.get(node, set()):
                 if neighbour in connected:
                     continue
                 a, b = rooms[node], rooms[neighbour]
                 cost = a.centre.distance_to(b.centre)
+
+                # Circulation is what a plan should hang off: rooms opening from
+                # a hall rather than through each other is the difference between
+                # a house and a set of connected boxes.
                 if a.type.is_circulation or b.type.is_circulation:
                     cost *= 0.35
                 if a.type.is_private and b.type.is_private:
                     cost *= 1.8      # avoid bedrooms opening into bedrooms
-                if {a.type, b.type} & {RoomType.BATHROOM, RoomType.TOILET} and (
-                    a.type in {RoomType.LIVING, RoomType.DINING, RoomType.KITCHEN}
-                    or b.type in {RoomType.LIVING, RoomType.DINING, RoomType.KITCHEN}
-                ):
-                    cost *= 3.0      # never open a WC onto a social room if avoidable
+
+                # Everything else comes from the declared programme rather than
+                # from heuristics maintained separately here, so the doors the
+                # plan ends up with cannot contradict the adjacency rules the
+                # same plan is scored against.
+                cost *= door_cost_factor(a.type, b.type, self.brief.kind)
                 frontier.append((cost, node, neighbour))
 
         push(root)

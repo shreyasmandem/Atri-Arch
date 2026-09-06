@@ -213,6 +213,12 @@ class DesignResponse(BaseModel):
     project_id: str
     trace_id: str
     plan_ids: list[str] = Field(default_factory=list)
+
+    #: The scheme the committee voted for.
+    selected_candidate_id: str = ""
+    #: The plan actually returned. Refinement and negotiation each produce a new
+    #: revision, so this differs from `selected_candidate_id` whenever the design
+    #: was improved after the vote - which is the normal case, not an anomaly.
     winner_plan_id: str = ""
     plan: dict[str, Any] = Field(default_factory=dict)
     consensus: dict[str, Any] = Field(default_factory=dict)
@@ -222,11 +228,19 @@ class DesignResponse(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
     committee: list[dict[str, Any]] = Field(default_factory=list)
     evidence: list[dict[str, Any]] = Field(default_factory=list)
+
+    #: Manager-worker negotiation record: which constraints were open, which
+    #: agent proposed what, and whether re-measurement accepted it.
+    negotiation: dict[str, Any] | None = None
+    negotiation_outcome: str = ""
+
     duration_ms: float = 0.0
     model_cost_usd: float = 0.0
     degraded: bool = False
     degraded_reason: str = ""
     drawing_urls: dict[str, str] = Field(default_factory=dict)
+    #: Downloadable editable formats: DXF per level, GLB and OBJ.
+    export_urls: dict[str, str] = Field(default_factory=dict)
     model_url: str = ""
 
 
