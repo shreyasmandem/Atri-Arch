@@ -302,6 +302,17 @@ body[data-phase="review"]  .review  { display: grid; }
   background: radial-gradient(circle, rgba(127, 163, 212, 0.08), transparent 70%);
   border-radius: 8px;
 }
+.mandala-heart-logo {
+  width: 34px; height: 34px;
+  object-fit: contain;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 0 10px rgba(229, 169, 88, 0.45)) brightness(1.15);
+  animation: pulse-logo 4s ease-in-out infinite;
+}
+@keyframes pulse-logo {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.08); opacity: 1; filter: drop-shadow(0 0 16px rgba(229, 169, 88, 0.7)) brightness(1.25); }
+}
 .heart__eyebrow {
   margin: 0 0 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--ochre);
