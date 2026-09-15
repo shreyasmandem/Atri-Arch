@@ -54,7 +54,13 @@
 html, body { height: 100%; margin: 0; }
 
 body {
-  background: var(--bg-base);
+  background-color: #000000;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -5%, rgba(127, 163, 212, 0.12) 0%, transparent 60%),
+    radial-gradient(circle 800px at 95% 85%, rgba(229, 169, 88, 0.06) 0%, transparent 55%),
+    radial-gradient(circle 600px at 5% 95%, rgba(142, 110, 240, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.8) 100%);
+  background-attachment: fixed;
   color: var(--chalk-2);
   font-family: var(--face);
   font-size: 14px;
@@ -117,11 +123,16 @@ button { font: inherit; color: inherit; }
 
 .mark__icon {
   width: 32px; height: 32px; border-radius: 8px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.03));
-  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(229, 169, 88, 0.25);
+  box-shadow: 0 0 14px rgba(229, 169, 88, 0.12);
   display: grid; place-items: center;
-  color: var(--chalk);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.mark__logo-img {
+  width: 22px; height: 22px;
+  object-fit: contain;
+  filter: brightness(1.15);
 }
 
 .mark__text { display: flex; align-items: center; gap: 8px; }
@@ -130,8 +141,8 @@ button { font: inherit; color: inherit; }
 .mark__badge {
   font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
   padding: 2px 7px; border-radius: var(--r-pill);
-  background: rgba(255,255,255,0.08); color: var(--chalk-3);
-  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(229, 169, 88, 0.08); color: var(--ochre);
+  border: 1px solid rgba(229, 169, 88, 0.15);
 }
 
 .schemes { display: flex; gap: 6px; }
@@ -349,6 +360,24 @@ body[data-phase="review"]  .review  { display: grid; }
   margin-bottom: 14px;
 }
 .sparkle { font-size: 12px; }
+
+.brief-brand-seal {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 4px 14px 4px 8px; border-radius: var(--r-pill);
+  background: linear-gradient(135deg, rgba(229, 169, 88, 0.12), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(229, 169, 88, 0.28);
+  box-shadow: 0 2px 16px rgba(229, 169, 88, 0.08);
+  margin-bottom: 16px;
+}
+.brief-brand-seal__img {
+  width: 18px; height: 18px; object-fit: contain;
+  filter: brightness(1.15);
+}
+.brief-brand-seal__tag {
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ochre);
+}
 
 .brief-head h1 {
   margin: 0 0 10px;

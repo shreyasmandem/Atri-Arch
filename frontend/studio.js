@@ -363,20 +363,7 @@ function updatePlotStats() {
     }
   }
 
-  // Compare Modal Controller
-  const compareBtn = $("btn-compare");
-  const compareModal = $("compare-modal");
-  const compareClose = $("compare-close");
 
-  compareBtn?.addEventListener("click", () => {
-    if (compareModal) compareModal.hidden = false;
-  });
-  compareClose?.addEventListener("click", () => {
-    if (compareModal) compareModal.hidden = true;
-  });
-  compareModal?.addEventListener("click", (e) => {
-    if (e.target === compareModal) compareModal.hidden = true;
-  });
 
   strike($("hero-mandala"));
   strike($("review-mandala"));

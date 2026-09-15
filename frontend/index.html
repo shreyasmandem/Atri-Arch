@@ -175,11 +175,7 @@
   <div class="crown__inner">
     <button type="button" class="mark" id="home" title="Back to the brief">
       <div class="mark__icon">
-        <svg viewBox="0 0 36 36" width="22" height="22" aria-hidden="true">
-          <rect x="2" y="2" width="32" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M12 2v32M24 2v32M2 12h32M2 24h32" stroke="currentColor" stroke-width=".6" opacity=".35"/>
-          <rect x="12" y="12" width="12" height="12" rx="2" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.4"/>
-        </svg>
+        <img src="logo.png" alt="Atri Arch" class="mark__logo-img" />
       </div>
       <div class="mark__text">
         <span class="mark__title">Atri<b>Arch</b></span>
@@ -202,19 +198,11 @@
     </nav>
 
     <div class="crown__end">
-      <!-- Compare Split Screen Button -->
-      <button type="button" class="compare-trigger-btn" id="btn-compare" title="Compare Modern vs Classic Design">
-        <span>Compare UI</span>
-      </button>
-
       <div class="status-pill" title="Engine Status">
         <span class="status-pill__dot"></span>
         <span class="status-pill__text">13 Critics Ready</span>
       </div>
       <button type="button" class="ghost-btn" id="restart" hidden>New brief</button>
-      <span class="ledger" id="ledger" title="Model spend this session">
-        <i class="ledger__dot"></i><span>$<b id="ledger-cost">0.00</b></span>
-      </span>
     </div>
   </div>
 </header>
@@ -269,8 +257,9 @@
   <div class="compose__brief">
     <div class="brief-container">
       <div class="brief-head">
-        <div class="eyebrow-pill">
-          <span>Architectural Brief</span>
+        <div class="brief-brand-seal">
+          <img src="logo.png" alt="Atri Arch Logo" class="brief-brand-seal__img" />
+          <span class="brief-brand-seal__tag">Architectural Intelligence Studio</span>
         </div>
         <h1>Design with precision.</h1>
         <p class="brief-lede">
@@ -554,42 +543,6 @@
       <button type="button" class="x" id="why-close" aria-label="Close">✕</button>
     </div>
     <div class="sheetover__body" id="why-body"></div>
-  </div>
-</div>
-
-<!-- Side-by-Side Modern vs Classic Comparison Modal -->
-<div class="compare-modal" id="compare-modal" hidden>
-  <div class="compare-modal__panel">
-    <div class="compare-modal__header">
-      <div class="compare-title">
-        <span class="compare-badge">Interactive Comparison</span>
-        <h2>Modern Apple Studio vs Classic Heritage Studio</h2>
-      </div>
-      <div class="compare-actions">
-        <a href="classic.html" target="_blank" class="ghost-btn">Open Classic in New Tab ↗</a>
-        <button type="button" class="x" id="compare-close" aria-label="Close Comparison">✕</button>
-      </div>
-    </div>
-    <div class="compare-split">
-      <div class="split-pane split-pane--modern">
-        <div class="split-pane__bar">
-          <span class="dot-label dot-modern"></span>
-          <span><b>Updated Version</b> (Apple Minimalist UI)</span>
-        </div>
-        <div class="split-pane__frame-wrap">
-          <iframe src="index.html" class="split-iframe" title="Modern Version Preview"></iframe>
-        </div>
-      </div>
-      <div class="split-pane split-pane--classic">
-        <div class="split-pane__bar">
-          <span class="dot-label dot-classic"></span>
-          <span><b>Original Shared Version</b> (Classic Heritage Indic)</span>
-        </div>
-        <div class="split-pane__frame-wrap">
-          <iframe src="classic.html" class="split-iframe" title="Classic Version Preview"></iframe>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
