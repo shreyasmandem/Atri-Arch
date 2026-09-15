@@ -135,9 +135,61 @@ function lightPadas(svg, plan) {
 
 /* ═══ BOOT ═══════════════════════════════════════════════════════════ */
 
+function updatePlotStats() {
+  const w = parseFloat($("inp-plot-width")?.value || 12);
+  const d = parseFloat($("inp-plot-depth")?.value || 18);
+  const areaM2 = (w * d).toFixed(0);
+  const areaSqFt = (w * d * 10.7639).toFixed(0);
+  const badge = $("plot-area-calc");
+  if (badge) {
+    badge.textContent = `${areaM2} m² · ${Number(areaSqFt).toLocaleString()} sq ft (Aspect 1:${(d/w).toFixed(2)})`;
+  }
+}
+
 (async function boot() {
+  // Intro Drawing Screen Controller
+  const curtain = $("intro-curtain");
+  const skipBtn = $("intro-skip");
+  const inIframe = window.self !== window.top;
+
+  if (curtain) {
+    if (inIframe) {
+      curtain.style.display = "none";
+    } else {
+      const dismissIntro = () => {
+        curtain.classList.add("is-fading");
+        setTimeout(() => { curtain.style.display = "none"; }, 800);
+      };
+      // Auto-dismiss after drawing animation completes (2.6s)
+      const introTimer = setTimeout(dismissIntro, 2600);
+      skipBtn?.addEventListener("click", () => { clearTimeout(introTimer); dismissIntro(); });
+      curtain.addEventListener("click", (e) => {
+        if (e.target !== skipBtn) { clearTimeout(introTimer); dismissIntro(); }
+      });
+    }
+  }
+
+  // Compare Modal Controller
+  const compareBtn = $("btn-compare");
+  const compareModal = $("compare-modal");
+  const compareClose = $("compare-close");
+
+  compareBtn?.addEventListener("click", () => {
+    if (compareModal) compareModal.hidden = false;
+  });
+  compareClose?.addEventListener("click", () => {
+    if (compareModal) compareModal.hidden = true;
+  });
+  compareModal?.addEventListener("click", (e) => {
+    if (e.target === compareModal) compareModal.hidden = true;
+  });
+
   strike($("hero-mandala"));
   strike($("review-mandala"));
+  updatePlotStats();
+
+  $("inp-plot-width")?.addEventListener("input", updatePlotStats);
+  $("inp-plot-depth")?.addEventListener("input", updatePlotStats);
 
   $("stance").addEventListener("input", (e) => {
     const [n, , note] = STANCES[+e.target.value];
@@ -149,7 +201,12 @@ function lightPadas(svg, plan) {
   $("see-why").addEventListener("click", openWhy);
   $("why-close").addEventListener("click", () => { $("why").hidden = true; });
   $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("why").hidden = true; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      $("why").hidden = true;
+      if (compareModal) compareModal.hidden = true;
+    }
+  });
   $("dl-svg").addEventListener("click", downloadSheet);
   $("dl-dxf").addEventListener("click", downloadDxf);
   $("zoom").addEventListener("click", () => {

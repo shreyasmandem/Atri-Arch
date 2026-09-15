@@ -1,176 +1,343 @@
-<!--
-THESIS: The vastu-purusha-mandala is struck once, at full scale, as the opening
-act - then it steps aside and becomes one diagnostic among many, because the
-architect came for the drawing, not for our metaphor. Refuses the AI-dashboard
-default: near-black with a neon accent, glass cards, a chat rail.
-OWN-WORLD: Swept-earth ground, rice-flour line work, and four Indic pigments
-used as directional semantics - indigo Ishanya/analysis, hingula Agneya/breach,
-ochre Nairutya/cost, orpiment Vayavya/judgement. Lettering built on the grid.
-STORY: State intent. Watch thirteen critics take their stations. Leave able to
-answer "why this scheme?" with a citation.
-FIRST VIEWPORT: The mandala at full height with its centre open, the brief to
-the west, the committee waiting to the east.
-FORM: Vastu-purusha-mandala. Position 4 of 7 on the ordered list. Seed a772e88e.
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
--->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Architect Intelligence — Studio</title>
-<meta name="description" content="Explainable multi-agent architectural design. Thirteen critics, one defensible scheme.">
+<title>Atri Arch — Architect Intelligence Studio</title>
+<meta name="description" content="Autonomous multi-agent architectural design. Thirteen independent analytical critics, one defensible scheme.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="studio.css">
 </head>
 <body data-phase="compose">
 
+<!-- ══════════════════════ INTRO DRAWING CURTAIN ══════════════════════ -->
+<div class="intro-curtain" id="intro-curtain" aria-hidden="true">
+  <div class="intro-curtain__ambient"></div>
+  <div class="intro-curtain__canvas">
+    <div class="drafting-box">
+      <!-- Animated Drafting SVG Logo -->
+      <svg class="drafting-svg" viewBox="0 0 400 400" width="220" height="220">
+        <!-- Outer Box & Crosshairs -->
+        <rect class="draw-line draw-line--frame" x="20" y="20" width="360" height="360" rx="20"/>
+        
+        <!-- Grid Structure -->
+        <line class="draw-line draw-line--grid" x1="140" y1="20" x2="140" y2="380"/>
+        <line class="draw-line draw-line--grid" x1="260" y1="20" x2="260" y2="380"/>
+        <line class="draw-line draw-line--grid" x1="20" y1="140" x2="380" y2="140"/>
+        <line class="draw-line draw-line--grid" x1="20" y1="260" x2="380" y2="260"/>
+
+        <!-- Diagonal Rays -->
+        <line class="draw-line draw-line--diag" x1="20" y1="20" x2="380" y2="380"/>
+        <line class="draw-line draw-line--diag" x1="380" y1="20" x2="20" y2="380"/>
+
+        <!-- Central Brahmasthan Square -->
+        <rect class="draw-line draw-line--center" x="140" y="140" width="120" height="120" rx="10"/>
+
+        <!-- Core Architectural Icon Emblem -->
+        <path class="draw-line draw-line--emblem" d="M 200 80 L 320 200 L 200 320 L 80 200 Z" />
+        <circle class="draw-line draw-line--node" cx="200" cy="200" r="16" />
+      </svg>
+      
+      <div class="intro-brand">
+        <h1 class="intro-brand__title">Atri<b>Arch</b></h1>
+        <p class="intro-brand__sub">Architectural Intelligence Platform</p>
+      </div>
+
+      <div class="intro-loader">
+        <span class="intro-loader__bar"></span>
+      </div>
+    </div>
+  </div>
+  <button type="button" class="intro-skip" id="intro-skip">Skip Intro ✕</button>
+</div>
+
 <a class="skip" href="#stage">Skip to the work</a>
 
-<!-- ══════════════════════ CROWN ══════════════════════ -->
+<!-- ══════════════════════ CROWN / HEADER ══════════════════════ -->
 <header class="crown">
-  <button type="button" class="mark" id="home" title="Back to the brief">
-    <svg viewBox="0 0 36 36" width="26" height="26" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="33" height="33" fill="none" stroke="currentColor" stroke-width="1.1"/>
-      <path d="M12.5 1.5v33M23.5 1.5v33M1.5 12.5h33M1.5 23.5h33" stroke="currentColor" stroke-width=".55" opacity=".5"/>
-      <rect x="12.5" y="12.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"/>
-    </svg>
-    <span class="mark__word">Architect<b>Intelligence</b></span>
-  </button>
+  <div class="crown__inner">
+    <button type="button" class="mark" id="home" title="Back to the brief">
+      <div class="mark__icon">
+        <svg viewBox="0 0 36 36" width="22" height="22" aria-hidden="true">
+          <rect x="2" y="2" width="32" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M12 2v32M24 2v32M2 12h32M2 24h32" stroke="currentColor" stroke-width=".6" opacity=".35"/>
+          <rect x="12" y="12" width="12" height="12" rx="2" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+      </div>
+      <div class="mark__text">
+        <span class="mark__title">Atri<b>Arch</b></span>
+        <span class="mark__badge">Studio</span>
+      </div>
+    </button>
 
-  <div class="schemes" id="schemes" role="tablist" aria-label="Candidate schemes"></div>
+    <div class="schemes" id="schemes" role="tablist" aria-label="Candidate schemes"></div>
 
-  <nav class="views" id="views" aria-label="Views">
-    <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
-    <button type="button" class="view-tab" data-view="mandala">Mandala</button>
-    <button type="button" class="view-tab" data-view="vastu">Vastu</button>
-    <button type="button" class="view-tab" data-view="cost">Cost</button>
-    <button type="button" class="view-tab" data-view="interior">Interior</button>
-    <button type="button" class="view-tab" data-view="model">3D</button>
-    <button type="button" class="view-tab" data-view="findings">Findings</button>
-    <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
-    <button type="button" class="view-tab" data-view="audit">Audit</button>
-  </nav>
+    <nav class="views" id="views" aria-label="Views">
+      <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
+      <button type="button" class="view-tab" data-view="mandala">Mandala</button>
+      <button type="button" class="view-tab" data-view="vastu">Vastu</button>
+      <button type="button" class="view-tab" data-view="cost">Cost</button>
+      <button type="button" class="view-tab" data-view="interior">Interior</button>
+      <button type="button" class="view-tab" data-view="model">3D</button>
+      <button type="button" class="view-tab" data-view="findings">Findings</button>
+      <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
+      <button type="button" class="view-tab" data-view="audit">Audit</button>
+    </nav>
 
-  <div class="crown__end">
-    <button type="button" class="ghost-btn" id="restart" hidden>New brief</button>
-    <span class="ledger" id="ledger" title="Model spend this session">
-      <i class="ledger__dot"></i><span>$<b id="ledger-cost">0.00</b></span>
-    </span>
+    <div class="crown__end">
+      <!-- Compare Split Screen Button -->
+      <button type="button" class="compare-trigger-btn" id="btn-compare" title="Compare Modern vs Classic Design">
+        <span class="compare-icon">⚖️</span>
+        <span>Compare vs Classic</span>
+      </button>
+
+      <div class="status-pill" title="Engine Status">
+        <span class="status-pill__dot"></span>
+        <span class="status-pill__text">13 Critics Ready</span>
+      </div>
+      <button type="button" class="ghost-btn" id="restart" hidden>New brief</button>
+      <span class="ledger" id="ledger" title="Model spend this session">
+        <i class="ledger__dot"></i><span>$<b id="ledger-cost">0.00</b></span>
+      </span>
+    </div>
   </div>
 </header>
 
-<!-- ══════════════════════ COMPOSE ══════════════════════ -->
+<!-- ══════════════════════ COMPOSE / HOME OPENING PAGE ══════════════════════ -->
 <section class="compose" id="compose" aria-label="State the brief">
 
+  <!-- Ambient Glow Backgrounds -->
+  <div class="ambient-glow ambient-glow--top"></div>
+  <div class="ambient-glow ambient-glow--bottom"></div>
+
+  <!-- Left: Interactive Spatial Mandala & Plot Visualizer -->
   <div class="compose__diagram">
-    <div class="mandala-shell">
-      <svg class="mandala" id="hero-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
-      <div class="mandala__heart">
-        <p class="heart__eyebrow">Vastu-purusha-mandala</p>
-        <p class="heart__line">The centre is kept open.</p>
-        <p class="heart__body">
-          Nine by nine padas. The engine will not build over the Brahmasthan,
-          and neither does this interface.
-        </p>
+    <div class="diagram-card">
+      <div class="diagram-card__header">
+        <div class="diagram-tag">
+          <span class="diagram-tag__dot"></span>
+          <span>Vastu Purusha Mandala · Spatial Grid</span>
+        </div>
+        <div class="diagram-stats" id="plot-stats-badge">
+          <span class="stat-pill" id="plot-area-calc">216 m² · 2,325 sq ft</span>
+        </div>
       </div>
-      <span class="rose rose--n">N</span><span class="rose rose--e">E</span>
-      <span class="rose rose--s">S</span><span class="rose rose--w">W</span>
-      <span class="rose rose--ne">Ishanya</span><span class="rose rose--se">Agneya</span>
-      <span class="rose rose--sw">Nairutya</span><span class="rose rose--nw">Vayavya</span>
+
+      <div class="mandala-shell">
+        <svg class="mandala" id="hero-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
+        <div class="mandala__heart">
+          <p class="heart__eyebrow">Brahmasthan</p>
+          <p class="heart__line">Open Sanctum</p>
+          <p class="heart__body">
+            Nine central padas preserved unbuilt. The geometry anchors natural daylight and micro-ventilation.
+          </p>
+        </div>
+        <span class="rose rose--n">North</span>
+        <span class="rose rose--e">East</span>
+        <span class="rose rose--s">South</span>
+        <span class="rose rose--w">West</span>
+        <span class="rose rose--ne">Ishanya · Water</span>
+        <span class="rose rose--se">Agneya · Fire</span>
+        <span class="rose rose--sw">Nairutya · Earth</span>
+        <span class="rose rose--nw">Vayavya · Air</span>
+      </div>
+
+      <div class="diagram-card__footer">
+        <div class="compass-legend">
+          <span class="leg-item leg-indigo">Ishanya (NE)</span>
+          <span class="leg-item leg-hingula">Agneya (SE)</span>
+          <span class="leg-item leg-ochre">Nairutya (SW)</span>
+          <span class="leg-item leg-orpiment">Vayavya (NW)</span>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- Right: Briefing Studio Form (Apple Minimal Card Style) -->
   <div class="compose__brief">
-    <div class="brief-head">
-      <p class="sanskrit">Sankalpa</p>
-      <h1>State the intent</h1>
-      <p class="brief-lede">
-        Thirteen independent critics will review three competing schemes.
-        Ten of them compute daylight factors, air changes, sightlines,
-        building code and quantity takeoff, and cannot be talked round.
-      </p>
+    <div class="brief-container">
+      <div class="brief-head">
+        <div class="eyebrow-pill">
+          <span class="sparkle">✦</span>
+          <span>Multi-Agent Generative Architecture</span>
+        </div>
+        <h1>Design with precision.</h1>
+        <p class="brief-lede">
+          Define your plot and requirements. Thirteen independent analytical critics will synthesize and score candidate architectural schemes with full trace evidence.
+        </p>
+      </div>
+
+      <form id="brief" class="brief" novalidate>
+        
+        <!-- Plot & Site Geometry -->
+        <fieldset class="form-card">
+          <legend class="form-card__legend">
+            <span class="legend-icon">📐</span>
+            <span>Plot & Site Geometry</span>
+          </legend>
+          <div class="grid-3">
+            <label class="fld">
+              <span>Width</span>
+              <div class="input-wrap">
+                <input type="number" id="inp-plot-width" name="plot_width" value="12" min="3" max="200" step="0.5">
+                <i>m</i>
+              </div>
+            </label>
+            <label class="fld">
+              <span>Depth</span>
+              <div class="input-wrap">
+                <input type="number" id="inp-plot-depth" name="plot_depth" value="18" min="3" max="200" step="0.5">
+                <i>m</i>
+              </div>
+            </label>
+            <label class="fld">
+              <span>Floors</span>
+              <div class="input-wrap">
+                <input type="number" name="levels" value="1" min="1" max="4">
+                <i>lvl</i>
+              </div>
+            </label>
+          </div>
+          <div class="grid-2">
+            <label class="fld">
+              <span>Location / City</span>
+              <div class="input-wrap">
+                <input type="text" name="locality" value="Chennai, Tamil Nadu" maxlength="120" placeholder="e.g. Bangalore, Karnataka">
+              </div>
+            </label>
+            <label class="fld">
+              <span>Road Facing Direction</span>
+              <div class="input-wrap select-wrap">
+                <select name="road_direction" id="inp-road-dir">
+                  <option value="N" selected>North (Uttara)</option>
+                  <option value="NE">North-East (Ishanya)</option>
+                  <option value="E">East (Purva)</option>
+                  <option value="SE">South-East (Agneya)</option>
+                  <option value="S">South (Dakshina)</option>
+                  <option value="SW">South-West (Nairutya)</option>
+                  <option value="W">West (Pashchima)</option>
+                  <option value="NW">North-West (Vayavya)</option>
+                </select>
+              </div>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Household Program -->
+        <fieldset class="form-card">
+          <legend class="form-card__legend">
+            <span class="legend-icon">🏡</span>
+            <span>Household Program</span>
+          </legend>
+          <div class="grid-2">
+            <label class="fld">
+              <span>Bedrooms</span>
+              <div class="input-wrap">
+                <input type="number" name="bedrooms" value="3" min="0" max="10">
+                <i>BHK</i>
+              </div>
+            </label>
+            <label class="fld">
+              <span>Bathrooms</span>
+              <div class="input-wrap">
+                <input type="number" name="bathrooms" value="2" min="0" max="10">
+                <i>baths</i>
+              </div>
+            </label>
+          </div>
+          <div class="grid-3">
+            <label class="fld">
+              <span>Adults</span>
+              <div class="input-wrap">
+                <input type="number" name="occupant_adults" value="2" min="0" max="12">
+              </div>
+            </label>
+            <label class="fld">
+              <span>Children</span>
+              <div class="input-wrap">
+                <input type="number" name="occupant_children" value="1" min="0" max="12">
+              </div>
+            </label>
+            <label class="fld">
+              <span>Elders</span>
+              <div class="input-wrap">
+                <input type="number" name="occupant_elders" value="1" min="0" max="12">
+              </div>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Architectural Style & Budget -->
+        <fieldset class="form-card">
+          <legend class="form-card__legend">
+            <span class="legend-icon">✨</span>
+            <span>Character & Investment</span>
+          </legend>
+          <div class="grid-2">
+            <label class="fld">
+              <span>Architectural Style</span>
+              <div class="input-wrap select-wrap">
+                <select name="styles">
+                  <option value="tropical_modern" selected>Tropical Modern</option>
+                  <option value="contemporary">Contemporary Minimal</option>
+                  <option value="kerala_vernacular">Kerala Vernacular</option>
+                  <option value="chettinad">Chettinad Heritage</option>
+                  <option value="modern_minimal">Modern Minimalist</option>
+                  <option value="japandi">Japandi</option>
+                  <option value="biophilic">Biophilic Sanctuary</option>
+                  <option value="traditional_indian">Traditional Indian</option>
+                  <option value="industrial">Industrial Loft</option>
+                  <option value="scandinavian">Scandinavian Warm</option>
+                </select>
+              </div>
+            </label>
+            <label class="fld">
+              <span>Estimated Budget</span>
+              <div class="input-wrap">
+                <input type="number" name="budget" value="6500000" min="0" step="50000">
+                <i>₹</i>
+              </div>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Vastu Alignment Slider -->
+        <fieldset class="form-card stance-block">
+          <legend class="form-card__legend">
+            <span class="legend-icon">🧭</span>
+            <span>Vastu & Scientific Alignment</span>
+          </legend>
+          <div class="stance-read">
+            <div class="stance-header">
+              <span class="stance-badge" id="stance-name">Balanced</span>
+            </div>
+            <p class="stance-desc" id="stance-note">Classical rules and modern building science carry equal weight.</p>
+          </div>
+          <div class="slider-container">
+            <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+                   aria-label="Vastu stance from modern to orthodox">
+            <div class="stance-scale" aria-hidden="true">
+              <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Submit Convene Committee Button -->
+        <div class="cta-wrap">
+          <button type="submit" class="convene" id="convene">
+            <div class="convene__glow"></div>
+            <div class="convene__content">
+              <span class="convene__main">Convene the Committee <span class="arrow">→</span></span>
+              <span class="convene__sub" id="convene-sub">13 Critics · 3 Candidate Schemes · Real-Time Consensus</span>
+            </div>
+          </button>
+          <p class="engine-note" id="engine-note">Connecting to engine…</p>
+        </div>
+
+      </form>
     </div>
-
-    <form id="brief" class="brief" novalidate>
-      <fieldset>
-        <legend>The plot</legend>
-        <div class="grid-3">
-          <label class="fld"><span>Width</span>
-            <input type="number" name="plot_width" value="12" min="3" max="200" step="0.5"><i>m</i></label>
-          <label class="fld"><span>Depth</span>
-            <input type="number" name="plot_depth" value="18" min="3" max="200" step="0.5"><i>m</i></label>
-          <label class="fld"><span>Floors</span>
-            <input type="number" name="levels" value="1" min="1" max="4"></label>
-        </div>
-        <div class="grid-2">
-          <label class="fld"><span>Locality</span>
-            <input type="text" name="locality" value="Chennai, Tamil Nadu" maxlength="120"></label>
-          <label class="fld"><span>Road lies to the</span>
-            <select name="road_direction">
-              <option value="N" selected>North</option><option value="NE">North-east</option>
-              <option value="E">East</option><option value="SE">South-east</option>
-              <option value="S">South</option><option value="SW">South-west</option>
-              <option value="W">West</option><option value="NW">North-west</option>
-            </select></label>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>The household</legend>
-        <div class="grid-2">
-          <label class="fld"><span>Bedrooms</span>
-            <input type="number" name="bedrooms" value="3" min="0" max="10"></label>
-          <label class="fld"><span>Bathrooms</span>
-            <input type="number" name="bathrooms" value="2" min="0" max="10"></label>
-        </div>
-        <div class="grid-3">
-          <label class="fld"><span>Adults</span>
-            <input type="number" name="occupant_adults" value="2" min="0" max="12"></label>
-          <label class="fld"><span>Children</span>
-            <input type="number" name="occupant_children" value="1" min="0" max="12"></label>
-          <label class="fld"><span>Elders</span>
-            <input type="number" name="occupant_elders" value="1" min="0" max="12"></label>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <legend>The character</legend>
-        <label class="fld fld--full"><span>Style</span>
-          <select name="styles">
-            <option value="tropical_modern" selected>Tropical modern</option>
-            <option value="contemporary">Contemporary</option>
-            <option value="kerala_vernacular">Kerala vernacular</option>
-            <option value="chettinad">Chettinad</option>
-            <option value="modern_minimal">Modern minimal</option>
-            <option value="japandi">Japandi</option>
-            <option value="biophilic">Biophilic</option>
-            <option value="traditional_indian">Traditional Indian</option>
-            <option value="industrial">Industrial</option>
-            <option value="scandinavian">Scandinavian</option>
-          </select></label>
-        <label class="fld fld--full"><span>Budget</span>
-          <input type="number" name="budget" value="6500000" min="0" step="50000"><i>₹</i></label>
-      </fieldset>
-
-      <fieldset class="stance-block">
-        <legend>Vastu stance</legend>
-        <div class="stance-read">
-          <b id="stance-name">Balanced</b>
-          <span id="stance-note">Classical rules and modern building science carry equal weight.</span>
-        </div>
-        <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
-               aria-label="Vastu stance from modern to orthodox">
-        <div class="stance-scale" aria-hidden="true">
-          <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
-        </div>
-      </fieldset>
-
-      <button type="submit" class="convene" id="convene">
-        <span class="convene__main">Convene the committee</span>
-        <span class="convene__sub" id="convene-sub">13 critics · 3 schemes · ₹0 to run</span>
-      </button>
-      <p class="engine-note" id="engine-note">Connecting to the engine…</p>
-    </form>
   </div>
 </section>
 
@@ -283,6 +450,42 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <button type="button" class="x" id="why-close" aria-label="Close">✕</button>
     </div>
     <div class="sheetover__body" id="why-body"></div>
+  </div>
+</div>
+
+<!-- Side-by-Side Modern vs Classic Comparison Modal -->
+<div class="compare-modal" id="compare-modal" hidden>
+  <div class="compare-modal__panel">
+    <div class="compare-modal__header">
+      <div class="compare-title">
+        <span class="compare-badge">Interactive Comparison</span>
+        <h2>Modern Apple Studio vs Classic Heritage Studio</h2>
+      </div>
+      <div class="compare-actions">
+        <a href="classic.html" target="_blank" class="ghost-btn">Open Classic in New Tab ↗</a>
+        <button type="button" class="x" id="compare-close" aria-label="Close Comparison">✕</button>
+      </div>
+    </div>
+    <div class="compare-split">
+      <div class="split-pane split-pane--modern">
+        <div class="split-pane__bar">
+          <span class="dot-label dot-modern"></span>
+          <span><b>Updated Version</b> (Apple Minimalist UI)</span>
+        </div>
+        <div class="split-pane__frame-wrap">
+          <iframe src="index.html" class="split-iframe" title="Modern Version Preview"></iframe>
+        </div>
+      </div>
+      <div class="split-pane split-pane--classic">
+        <div class="split-pane__bar">
+          <span class="dot-label dot-classic"></span>
+          <span><b>Original Shared Version</b> (Classic Heritage Indic)</span>
+        </div>
+        <div class="split-pane__frame-wrap">
+          <iframe src="classic.html" class="split-iframe" title="Classic Version Preview"></iframe>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
