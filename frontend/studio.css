@@ -980,268 +980,130 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
   max-width: 90vw;
 }
 
-.drafting-box {
-  display: flex; flex-direction: column; align-items: center; gap: 16px;
+/* ── Logo-Centered Intro ── */
+
+.intro-center {
+  display: flex; flex-direction: column; align-items: center; gap: 24px;
 }
 
-/* Blueprint HUD Header */
-.drafting-hud {
-  display: flex; gap: 20px; font-family: var(--num); font-size: 10px; letter-spacing: 0.16em;
-  color: var(--chalk-4); text-transform: uppercase;
-  opacity: 0; animation: hud-reveal 0.6s ease 0.1s forwards;
-}
-.hud-item { display: flex; align-items: center; gap: 6px; }
-.hud-dot { width: 5px; height: 5px; border-radius: 50%; background: #30D158; }
-.hud-accent { color: var(--chalk-2); font-weight: 500; }
-@keyframes hud-reveal { to { opacity: 1; transform: translateY(0); } }
-
-/* SVG Canvas Drafting Layers */
-.drafting-svg {
-  overflow: visible;
-  max-width: 100%;
-  height: auto;
+/* Logo container with golden ring pulse */
+.intro-logo {
+  position: relative;
+  width: 180px; height: 180px;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  animation: logo-reveal 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
 }
 
-/* 1. Compass & Guide Geometry */
-.cad-arc {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.12);
-  stroke-dasharray: 4 4;
+/* Golden orbital ring behind logo */
+.intro-logo::before {
+  content: '';
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  border: 1px solid rgba(229, 169, 88, 0);
+  animation: ring-expand 2.4s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
+  pointer-events: none;
+}
+.intro-logo::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(229, 169, 88, 0.08) 0%, transparent 70%);
   opacity: 0;
-  animation: cad-fade 1.2s ease 0.1s forwards;
-}
-.cad-arc--golden {
-  stroke: rgba(229, 169, 88, 0.4);
-  stroke-width: 1;
-  stroke-dasharray: 800;
-  stroke-dashoffset: 800;
-  animation: cad-draw 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
-}
-.cad-guide {
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 0.75;
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-  animation: cad-draw 1s ease 0.1s forwards;
-}
-.cad-ray {
-  stroke: rgba(229, 169, 88, 0.4);
-  stroke-width: 1;
-  stroke-dasharray: 200;
-  stroke-dashoffset: 200;
-  animation: cad-draw 0.8s ease 0.5s forwards;
-}
-.cad-label {
-  fill: var(--ochre);
-  font-family: var(--num);
-  font-size: 8px;
-  letter-spacing: 0.12em;
-  opacity: 0;
-  animation: cad-fade 0.6s ease 0.8s forwards;
+  animation: glow-breathe 3s ease-in-out 1.2s infinite;
 }
 
-/* 2. Isometric Pavilion Structure */
-.iso-plane {
-  fill: rgba(255, 255, 255, 0.02);
-  stroke: rgba(255, 255, 255, 0.25);
-  stroke-width: 1;
-  stroke-dasharray: 500;
-  stroke-dashoffset: 500;
-  animation: cad-draw 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
-}
-.iso-mod {
-  stroke: rgba(255, 255, 255, 0.08);
-  stroke-width: 0.75;
-  stroke-dasharray: 200;
-  stroke-dashoffset: 200;
-  animation: cad-draw 0.8s ease 0.4s forwards;
-}
-.iso-col {
-  stroke: #FFFFFF;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  animation: cad-draw 1s cubic-bezier(0.2, 1, 0.4, 1) 0.5s forwards;
-}
-.iso-slab {
-  fill: rgba(255, 255, 255, 0.04);
-  stroke: #FFFFFF;
-  stroke-width: 1.6;
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-  animation: cad-draw 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards;
-}
-.iso-slab-edge {
-  fill: rgba(255, 255, 255, 0.06);
-  stroke: rgba(255, 255, 255, 0.4);
-  stroke-width: 1;
-  opacity: 0;
-  animation: cad-fade 0.6s ease 0.9s forwards;
-}
-.iso-roof {
-  fill: rgba(229, 169, 88, 0.04);
-  stroke: #E5A958;
-  stroke-width: 1.2;
-  stroke-dasharray: 400;
-  stroke-dashoffset: 400;
-  animation: cad-draw 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
-}
-.iso-glass {
-  stroke: rgba(255, 255, 255, 0.2);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
-  opacity: 0;
-  animation: cad-fade 0.5s ease 1s forwards;
+.intro-logo__img {
+  width: 140px; height: 140px;
+  object-fit: contain;
+  filter: brightness(1.1) contrast(1.05);
 }
 
-/* 3. CAD Dimension Annotations */
-.dim-line {
-  stroke: rgba(255, 255, 255, 0.2);
-  stroke-width: 0.75;
-  stroke-dasharray: 300;
-  stroke-dashoffset: 300;
-  animation: cad-draw 1s ease 0.7s forwards;
-}
-.dim-tick {
-  stroke: rgba(255, 255, 255, 0.6);
-  stroke-width: 1.2;
-  opacity: 0;
-  animation: cad-fade 0.4s ease 1s forwards;
-}
-.dim-text {
-  fill: var(--chalk-3);
-  font-family: var(--num);
-  font-size: 8.5px;
-  letter-spacing: 0.1em;
-  opacity: 0;
-  animation: cad-fade 0.5s ease 1.1s forwards;
-}
-.cad-node {
-  stroke: #E5A958;
-  stroke-width: 1.2;
-  opacity: 0;
-  animation: cad-node-pulse 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 1s forwards;
-}
-@keyframes cad-node-pulse {
-  0% { opacity: 0; transform: scale(0); }
-  50% { opacity: 1; transform: scale(1.4); }
-  100% { opacity: 0.8; transform: scale(1); }
-}
-
-/* 4. Brand Typography & Laser Strokes */
-.brand-rule {
-  stroke: rgba(255, 255, 255, 0.12);
-  stroke-width: 0.75;
-  stroke-dasharray: 600;
-  stroke-dashoffset: 600;
-  animation: cad-draw 1.2s ease 0.8s forwards;
-}
-.brand-stroke {
-  fill: none;
-  stroke: #FFFFFF;
-  stroke-width: 2.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-dasharray: 200;
-  stroke-dashoffset: 200;
-  animation: cad-draw 1.4s cubic-bezier(0.2, 1, 0.3, 1) 1.1s forwards;
-}
-.brand-cross {
-  stroke: rgba(255, 255, 255, 0.7);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 30;
-  stroke-dashoffset: 30;
-  animation: cad-draw 0.6s ease 1.5s forwards;
-}
-.brand-dot {
-  fill: #E5A958;
-  opacity: 0;
-  animation: cad-fade 0.4s ease 1.6s forwards;
-}
-.brand-subtext {
-  fill: #FFFFFF;
+/* Tagline */
+.intro-tagline {
+  margin: 0;
   font-family: var(--sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  opacity: 0;
-  animation: cad-fade 0.7s ease 1.4s forwards;
-}
-.brand-subtext--dim {
-  fill: var(--chalk-4);
+  font-size: 12px;
   font-weight: 400;
-  letter-spacing: 0.18em;
-}
-.brand-subtext--mono {
-  fill: var(--ochre);
-  font-family: var(--num);
-  font-size: 8px;
-  font-weight: 500;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  opacity: 0;
+  transform: translateY(8px);
+  animation: tagline-up 1s ease 1.2s forwards;
 }
 
-/* Generic Drawing Keyframes */
-@keyframes cad-draw {
-  0% { opacity: 0.1; }
-  20% { opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 1; }
+/* Loader */
+.intro-loader {
+  width: 160px; height: 1.5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px; overflow: hidden;
+  opacity: 0;
+  animation: cad-fade 0.6s ease 1s forwards;
 }
+.intro-loader__bar {
+  display: block; width: 100%; height: 100%;
+  background: linear-gradient(90deg, rgba(229, 169, 88, 0.5), #E5A958, rgba(255, 255, 255, 0.6));
+  transform: translateX(-100%);
+  animation: loader-fill 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Skip / Enter button */
+.intro-skip {
+  position: absolute; bottom: 28px; right: 28px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4); font-family: var(--sans); font-size: 11px; font-weight: 400;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 8px 20px; border-radius: var(--r-pill); cursor: pointer;
+  transition: all 0.3s var(--ease);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  opacity: 0; animation: cad-fade 0.8s ease 2s forwards;
+}
+.intro-skip:hover {
+  background: rgba(229, 169, 88, 0.12); color: #E5A958;
+  border-color: rgba(229, 169, 88, 0.3); transform: translateY(-1px);
+  box-shadow: 0 4px 24px rgba(229, 169, 88, 0.1);
+}
+
+/* ── Intro Keyframes ── */
+
+@keyframes logo-reveal {
+  0%   { opacity: 0; transform: scale(0.7); filter: blur(8px); }
+  60%  { opacity: 1; transform: scale(1.03); filter: blur(0px); }
+  100% { opacity: 1; transform: scale(1);   filter: blur(0px); }
+}
+
+@keyframes ring-expand {
+  0%   { border-color: rgba(229, 169, 88, 0); transform: scale(0.6); }
+  50%  { border-color: rgba(229, 169, 88, 0.35); }
+  100% { border-color: rgba(229, 169, 88, 0.12); transform: scale(1); }
+}
+
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50%      { opacity: 0.7; transform: scale(1.08); }
+}
+
+@keyframes tagline-up {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loader-fill {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(0); }
+}
+
 @keyframes cad-fade {
   to { opacity: 1; }
 }
 
-/* Bottom Loader & Status Ticker */
-.intro-loader {
-  width: 200px; height: 1.5px; background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px; overflow: hidden; margin-top: 4px;
-}
-.intro-loader__bar {
-  display: block; width: 100%; height: 100%;
-  background: linear-gradient(90deg, #7FA3D4, #FFFFFF, #E5A958);
-  transform: translateX(-100%);
-  animation: loader-fill 2.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes loader-fill {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(0); }
-}
-
-.intro-status {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--num); font-size: 10px; color: var(--chalk-4);
-  letter-spacing: 0.06em;
-  opacity: 0; animation: cad-fade 0.8s ease 1.2s forwards;
-}
-.status-pulse {
-  width: 4px; height: 4px; border-radius: 50%; background: var(--indigo);
-  animation: status-blink 1s ease-in-out infinite;
-}
-@keyframes status-blink {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.3); }
-}
-
-.intro-skip {
-  position: absolute; bottom: 28px; right: 28px;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--chalk-3); font-family: var(--sans); font-size: 11px; font-weight: 500;
-  letter-spacing: 0.08em;
-  padding: 8px 18px; border-radius: var(--r-pill); cursor: pointer;
-  transition: all 0.25s var(--ease);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-.intro-skip:hover {
-  background: rgba(255, 255, 255, 0.15); color: #FFFFFF;
-  border-color: rgba(255, 255, 255, 0.35); transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-}
-
 @media (max-width: 680px) {
-  .drafting-hud { font-size: 8.5px; gap: 10px; flex-wrap: wrap; justify-content: center; }
-  .drafting-svg { width: 100%; height: auto; }
+  .intro-logo { width: 140px; height: 140px; }
+  .intro-logo__img { width: 110px; height: 110px; }
+  .intro-tagline { font-size: 10px; letter-spacing: 0.2em; }
+  .intro-loader { width: 120px; }
 }
 
 /* ══════════════════════ COMPARE SYSTEM ══════════════════════ */
