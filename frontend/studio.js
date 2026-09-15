@@ -220,8 +220,8 @@ function updatePlotStats() {
         curtain.classList.add("is-fading");
         setTimeout(() => { curtain.style.display = "none"; }, 800);
       };
-      // Auto-dismiss after drawing animation completes (2.6s)
-      const introTimer = setTimeout(dismissIntro, 2600);
+      // Auto-dismiss after architectural drawing sequence completes (3.4s)
+      const introTimer = setTimeout(dismissIntro, 3400);
       skipBtn?.addEventListener("click", () => { clearTimeout(introTimer); dismissIntro(); });
       curtain.addEventListener("click", (e) => {
         if (e.target !== skipBtn) { clearTimeout(introTimer); dismissIntro(); }
