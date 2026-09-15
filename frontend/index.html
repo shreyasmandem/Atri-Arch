@@ -18,7 +18,6 @@
 <!-- ══════════════════════ ARCHITECTURAL DRAFTING INTRO ══════════════════════ -->
 <div class="intro-curtain" id="intro-curtain" aria-hidden="true">
   <div class="intro-curtain__space-grid"></div>
-  <div class="intro-curtain__scanline"></div>
   
   <div class="intro-curtain__canvas">
     <div class="drafting-box">
@@ -33,26 +32,6 @@
 
       <!-- Master Architectural Blueprint SVG Drafting Canvas -->
       <svg class="drafting-svg" viewBox="0 0 720 320" width="620" height="275">
-        <defs>
-          <filter id="glow-laser" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-          <linearGradient id="laser-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#FFFFFF" />
-            <stop offset="50%" stop-color="#93B8E8" />
-            <stop offset="100%" stop-color="#E5A958" />
-          </linearGradient>
-          <linearGradient id="beam-sweep" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stop-color="transparent" />
-            <stop offset="50%" stop-color="rgba(147, 184, 232, 0.25)" />
-            <stop offset="100%" stop-color="transparent" />
-          </linearGradient>
-        </defs>
-
         <!-- 1. Drafting Compass / Golden Ratio Arcs -->
         <g class="arch-layer arch-layer--guides">
           <!-- Compass Circle & Orientation Arc -->
@@ -70,7 +49,7 @@
         </g>
 
         <!-- 2. Isometric Architectural Pavilion Structure -->
-        <g class="arch-layer arch-layer--structure" filter="url(#glow-laser)">
+        <g class="arch-layer arch-layer--structure">
           <!-- Ground Base Grid / Site Boundary -->
           <polygon class="iso-plane iso-plane--ground" points="360,180 470,125 360,70 250,125" />
           
@@ -105,19 +84,19 @@
           <line class="dim-line" x1="210" y1="80" x2="340" y2="145" />
           <line class="dim-tick" x1="205" y1="75" x2="215" y2="85" />
           <line class="dim-tick" x1="335" y1="140" x2="345" y2="150" />
-          <text class="dim-text" x="255" y="122" transform="rotate(26, 255, 122)">18.00 m</text>
+          <text class="dim-text" x="255" y="105">18.00 m</text>
 
           <!-- Right Dimension String (Depth 12.00m) -->
           <line class="dim-line" x1="380" y1="145" x2="510" y2="80" />
           <line class="dim-tick" x1="375" y1="150" x2="385" y2="140" />
           <line class="dim-tick" x1="505" y1="85" x2="515" y2="75" />
-          <text class="dim-text" x="460" y="122" transform="rotate(-26, 460, 122)">12.00 m</text>
+          <text class="dim-text" x="460" y="105">12.00 m</text>
 
           <!-- Height Dimension Leader (Elevation +6.80m) -->
           <line class="dim-line dim-line--vert" x1="215" y1="70" x2="215" y2="140" />
           <line class="dim-tick" x1="210" y1="70" x2="220" y2="70" />
           <line class="dim-tick" x1="210" y1="140" x2="220" y2="140" />
-          <text class="dim-text dim-text--vert" x="180" y="110">EL +6.80</text>
+          <text class="dim-text dim-text--vert" x="175" y="110">EL +6.80</text>
 
           <!-- Vertex Crosshair Nodes -->
           <path class="cad-node" d="M 357 5 h 6 M 360 2 v 6" />
@@ -134,33 +113,33 @@
           
           <!-- Master Logotype Vector Strokes (ATRI · ARCH) -->
           <!-- A -->
-          <path class="brand-stroke" d="M 125 285 L 142 240 L 159 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 125 285 L 142 240 L 159 285" />
           <line class="brand-cross" x1="133" y1="268" x2="151" y2="268" />
 
           <!-- T -->
-          <path class="brand-stroke" d="M 172 240 L 204 240 M 188 240 L 188 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 172 240 L 204 240 M 188 240 L 188 285" />
 
           <!-- R -->
-          <path class="brand-stroke" d="M 218 285 L 218 240 L 238 240 C 250 240 250 260 238 260 L 218 260 M 234 260 L 250 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 218 285 L 218 240 L 238 240 C 250 240 250 260 238 260 L 218 260 M 234 260 L 250 285" />
 
           <!-- I -->
-          <path class="brand-stroke" d="M 268 240 L 268 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 268 240 L 268 285" />
 
           <!-- Central Harmonic Pivot Dot -->
           <circle class="brand-dot" cx="295" cy="262" r="3" />
 
           <!-- A -->
-          <path class="brand-stroke" d="M 320 285 L 337 240 L 354 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 320 285 L 337 240 L 354 285" />
           <line class="brand-cross" x1="328" y1="268" x2="346" y2="268" />
 
           <!-- R -->
-          <path class="brand-stroke" d="M 368 285 L 368 240 L 388 240 C 400 240 400 260 388 260 L 368 260 M 384 260 L 400 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 368 285 L 368 240 L 388 240 C 400 240 400 260 388 260 L 368 260 M 384 260 L 400 285" />
 
           <!-- C -->
-          <path class="brand-stroke" d="M 442 248 C 435 240 418 240 418 262.5 C 418 285 435 285 442 277" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 442 248 C 435 240 418 240 418 262.5 C 418 285 435 285 442 277" />
 
           <!-- H -->
-          <path class="brand-stroke" d="M 458 240 L 458 285 M 458 262.5 L 474 262.5 M 474 240 L 474 285" filter="url(#glow-laser)" />
+          <path class="brand-stroke" d="M 458 240 L 458 285 M 458 262.5 L 474 262.5 M 474 240 L 474 285" />
 
           <!-- Architectural Tagline and Spec Subtext -->
           <text class="brand-subtext" x="500" y="254">ARCHITECTURAL</text>

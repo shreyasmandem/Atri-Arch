@@ -141,64 +141,58 @@ function initStarField() {
   if (!canvas) return { spread: () => {} };
   const ctx = canvas.getContext("2d");
 
-  const STAR_COUNT = 280;
+  const STAR_COUNT = 240;
   const stars = [];
   let state = "forming"; // "forming" | "spreading" | "ambient"
   let spreadStart = 0;
   let cx = window.innerWidth / 2;
-  let cy = window.innerHeight * 0.42;
+  let cy = window.innerHeight * 0.40;
   let mouse = { x: -1000, y: -1000, active: false };
 
   function resize() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
     cx = canvas.width / 2;
-    cy = canvas.height * 0.42;
+    cy = canvas.height * 0.40;
   }
 
+  // Pure monochrome & starlight gold palette (ZERO blue tints)
   const COLORS = [
     "255, 255, 255",     // Pure Diamond White
-    "200, 225, 255",     // Cool Celestial Blue
-    "160, 200, 255",     // Indigo Laser Glow
-    "255, 235, 180",     // Warm Amber Gold
-    "240, 245, 255"      // Crisp Starlight
+    "255, 255, 255",     // Pure Diamond White
+    "245, 245, 250",     // Crisp Starlight
+    "255, 240, 215",     // Warm Amber Starlight
+    "255, 255, 255"      // Pure Diamond White
   ];
 
-  function createStar(index) {
+  function createStar() {
     const angle = Math.random() * Math.PI * 2;
-    // Clustered initial orbital radius around the central drafting structure (15 to 220px)
-    const orbitR = Math.pow(Math.random(), 1.6) * 220 + 20;
+    const orbitR = Math.pow(Math.random(), 1.4) * 180 + 20;
     const targetX = Math.random() * (canvas.width || window.innerWidth);
     const targetY = Math.random() * (canvas.height || window.innerHeight);
 
     return {
       x: cx + Math.cos(angle) * orbitR,
-      y: cy + Math.sin(angle) * orbitR,
-      prevX: cx + Math.cos(angle) * orbitR,
-      prevY: cy + Math.sin(angle) * orbitR,
+      y: cy + Math.sin(angle) * (orbitR * 0.7),
       orbitR: orbitR,
       orbitAngle: angle,
-      orbitSpeed: (Math.random() * 0.008 + 0.003) * (Math.random() > 0.5 ? 1 : -1),
+      orbitSpeed: (Math.random() * 0.006 + 0.002) * (Math.random() > 0.5 ? 1 : -1),
       targetX: targetX,
       targetY: targetY,
-      vx: 0,
-      vy: 0,
-      r: Math.random() * 1.3 + 0.35,              // radius 0.35 – 1.65 px
-      baseAlpha: Math.random() * 0.55 + 0.35,     // 0.35 – 0.90
+      r: Math.random() * 1.2 + 0.4,               // radius 0.4 – 1.6 px
+      baseAlpha: Math.random() * 0.5 + 0.4,       // 0.4 – 0.9
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      birthDelay: Math.random() * 1800,           // staggered ignition over 1.8s
-      birthProgress: 0,
       phase: Math.random() * Math.PI * 2,
-      speed: Math.random() * 0.007 + 0.003,
-      driftX: (Math.random() - 0.5) * 0.12,
-      driftY: (Math.random() - 0.5) * 0.12,
+      speed: Math.random() * 0.006 + 0.003,
+      driftX: (Math.random() - 0.5) * 0.08,
+      driftY: (Math.random() - 0.5) * 0.08,
     };
   }
 
   function seed() {
     stars.length = 0;
     for (let i = 0; i < STAR_COUNT; i++) {
-      stars.push(createStar(i));
+      stars.push(createStar());
     }
   }
 
@@ -206,92 +200,53 @@ function initStarField() {
     if (state === "ambient") return;
     state = "spreading";
     spreadStart = performance.now();
-
-    for (const s of stars) {
-      const dx = s.targetX - s.x;
-      const dy = s.targetY - s.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const force = fast ? 0.07 : 0.032 + Math.random() * 0.02;
-      s.vx = (dx / dist) * Math.min(dist * force, 24);
-      s.vy = (dy / dist) * Math.min(dist * force, 24);
-    }
   }
 
   function draw(t) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const isSpreading = state === "spreading";
+    // Pure Pitch Black background fill
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
 
-      // ─── 1. FORMING STAGE (Orbiting & gathering near the CAD center) ───
+      // ─── 1. FORMING STAGE (Orbiting gently around CAD center) ───
       if (state === "forming") {
-        if (t < s.birthDelay) continue;
-        s.birthProgress = Math.min(1, s.birthProgress + 0.03);
-
         s.orbitAngle += s.orbitSpeed;
-        s.prevX = s.x;
-        s.prevY = s.y;
         s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
-        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.72); // slightly isometric elliptical tilt
+        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.7);
 
-        const twinkle = Math.sin(t * s.speed + s.phase) * 0.35 + 0.65;
-        const alpha = s.baseAlpha * s.birthProgress * twinkle;
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r * s.birthProgress, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-
-        // Subtle glowing halo on brighter forming stars
-        if (s.r > 1.1) {
-          ctx.beginPath();
-          ctx.arc(s.x, s.y, s.r * 2.6, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.15).toFixed(3)})`;
-          ctx.fill();
-        }
-      }
-
-      // ─── 2. SPREADING STAGE (Cosmic expansion across the screen) ───
-      else if (state === "spreading") {
-        s.prevX = s.x;
-        s.prevY = s.y;
-
-        // Spring towards target position with friction
-        const dx = s.targetX - s.x;
-        const dy = s.targetY - s.y;
-        const dist = Math.hypot(dx, dy);
-
-        s.vx += dx * 0.0028;
-        s.vy += dy * 0.0028;
-        s.vx *= 0.92;
-        s.vy *= 0.92;
-
-        s.x += s.vx;
-        s.y += s.vy;
-
-        // Draw light warp streak while traveling
-        const speed = Math.hypot(s.vx, s.vy);
-        const twinkle = Math.sin(t * s.speed + s.phase) * 0.2 + 0.8;
-        const alpha = Math.min(1, s.baseAlpha * twinkle * 1.2);
-
-        if (speed > 1.2) {
-          ctx.beginPath();
-          ctx.moveTo(s.prevX, s.prevY);
-          ctx.lineTo(s.x, s.y);
-          ctx.strokeStyle = `rgba(${s.color}, ${(alpha * 0.6).toFixed(3)})`;
-          ctx.lineWidth = s.r * 1.2;
-          ctx.stroke();
-        }
+        const twinkle = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        const alpha = s.baseAlpha * twinkle;
 
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
         ctx.fill();
 
-        // Switch to ambient once spread settles (after ~1.6s)
-        if (performance.now() - spreadStart > 1800) {
+        if (s.r > 1.1) {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r * 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.15).toFixed(3)})`;
+          ctx.fill();
+        }
+      }
+
+      // ─── 2. SPREADING STAGE (Smooth exponential expansion to home page) ───
+      else if (state === "spreading") {
+        // Smooth exponential spring towards target resting coordinates
+        s.x += (s.targetX - s.x) * 0.055;
+        s.y += (s.targetY - s.y) * 0.055;
+
+        const twinkle = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        const alpha = s.baseAlpha * twinkle;
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
+        ctx.fill();
+
+        if (performance.now() - spreadStart > 1600) {
           state = "ambient";
         }
       }
@@ -307,13 +262,13 @@ function initStarField() {
         if (s.y < 0) s.y = canvas.height;
         if (s.y > canvas.height) s.y = 0;
 
-        // Subtle interactive mouse repulsion / ripple
+        // Gentle interactive mouse repulsion
         if (mouse.active) {
           const mdx = s.x - mouse.x;
           const mdy = s.y - mouse.y;
           const mdist = Math.hypot(mdx, mdy);
-          if (mdist < 100 && mdist > 0) {
-            const push = (1 - mdist / 100) * 1.8;
+          if (mdist < 90 && mdist > 0) {
+            const push = (1 - mdist / 90) * 1.5;
             s.x += (mdx / mdist) * push;
             s.y += (mdy / mdist) * push;
           }
@@ -329,8 +284,8 @@ function initStarField() {
 
         if (s.r > 1.0) {
           ctx.beginPath();
-          ctx.arc(s.x, s.y, s.r * 2.4, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.14).toFixed(3)})`;
+          ctx.arc(s.x, s.y, s.r * 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.12).toFixed(3)})`;
           ctx.fill();
         }
       }
