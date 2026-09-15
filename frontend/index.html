@@ -12,37 +12,69 @@
 </head>
 <body data-phase="compose">
 
-<!-- ══════════════════════ INTRO DRAWING CURTAIN ══════════════════════ -->
+<!-- ══════════════════════ COSMIC UNIVERSE STARS BACKGROUND ══════════════════════ -->
+<canvas id="space-stars" class="space-stars" aria-hidden="true"></canvas>
+
+<!-- ══════════════════════ TYPOGRAPHIC DRAWING INTRO ══════════════════════ -->
 <div class="intro-curtain" id="intro-curtain" aria-hidden="true">
-  <div class="intro-curtain__ambient"></div>
+  <div class="intro-curtain__space-grid"></div>
   <div class="intro-curtain__canvas">
     <div class="drafting-box">
-      <!-- Animated Drafting SVG Logo -->
-      <svg class="drafting-svg" viewBox="0 0 400 400" width="220" height="220">
-        <!-- Outer Box & Crosshairs -->
-        <rect class="draw-line draw-line--frame" x="20" y="20" width="360" height="360" rx="20"/>
-        
-        <!-- Grid Structure -->
-        <line class="draw-line draw-line--grid" x1="140" y1="20" x2="140" y2="380"/>
-        <line class="draw-line draw-line--grid" x1="260" y1="20" x2="260" y2="380"/>
-        <line class="draw-line draw-line--grid" x1="20" y1="140" x2="380" y2="140"/>
-        <line class="draw-line draw-line--grid" x1="20" y1="260" x2="380" y2="260"/>
+      
+      <!-- Architectural Dimension Ticks -->
+      <div class="drafting-meta">
+        <span class="coord-tag">SYS // ARCH.V2</span>
+        <span class="coord-tag">AXIS 12.809 // 80.244</span>
+      </div>
 
-        <!-- Diagonal Rays -->
-        <line class="draw-line draw-line--diag" x1="20" y1="20" x2="380" y2="380"/>
-        <line class="draw-line draw-line--diag" x1="380" y1="20" x2="20" y2="380"/>
+      <!-- Vector Font Stroke Drawing of ATRI ARCH -->
+      <svg class="drafting-svg" viewBox="0 0 460 120" width="340" height="90">
+        <defs>
+          <filter id="glow-laser" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
 
-        <!-- Central Brahmasthan Square -->
-        <rect class="draw-line draw-line--center" x="140" y="140" width="120" height="120" rx="10"/>
+        <!-- Precision Grid Horizon Line -->
+        <line class="font-line font-line--grid" x1="10" y1="95" x2="450" y2="95"/>
+        <line class="font-line font-line--grid" x1="10" y1="20" x2="450" y2="20"/>
 
-        <!-- Core Architectural Icon Emblem -->
-        <path class="draw-line draw-line--emblem" d="M 200 80 L 320 200 L 200 320 L 80 200 Z" />
-        <circle class="draw-line draw-line--node" cx="200" cy="200" r="16" />
+        <!-- 'A' -->
+        <path class="font-line font-line--stroke" d="M 25 90 L 50 25 L 75 90" filter="url(#glow-laser)"/>
+        <path class="font-line font-line--cross" d="M 36 65 L 64 65"/>
+
+        <!-- 'T' -->
+        <path class="font-line font-line--stroke" d="M 90 25 L 140 25 M 115 25 L 115 90" filter="url(#glow-laser)"/>
+
+        <!-- 'R' -->
+        <path class="font-line font-line--stroke" d="M 155 90 L 155 25 L 185 25 C 202 25 202 55 185 55 L 155 55 M 180 55 L 202 90" filter="url(#glow-laser)"/>
+
+        <!-- 'I' -->
+        <path class="font-line font-line--stroke" d="M 220 25 L 220 90" filter="url(#glow-laser)"/>
+
+        <!-- Gap / Separator Dot -->
+        <circle class="font-line font-line--dot" cx="245" cy="58" r="3.5" />
+
+        <!-- 'A' -->
+        <path class="font-line font-line--stroke" d="M 270 90 L 295 25 L 320 90" filter="url(#glow-laser)"/>
+        <path class="font-line font-line--cross" d="M 281 65 L 309 65"/>
+
+        <!-- 'R' -->
+        <path class="font-line font-line--stroke" d="M 335 90 L 335 25 L 365 25 C 382 25 382 55 365 55 L 335 55 M 360 55 L 382 90" filter="url(#glow-laser)"/>
+
+        <!-- 'C' -->
+        <path class="font-line font-line--stroke" d="M 425 38 C 415 25 395 25 395 58 C 395 90 415 90 425 78" filter="url(#glow-laser)"/>
+
+        <!-- 'H' -->
+        <path class="font-line font-line--stroke" d="M 438 25 L 438 90 M 438 58 L 458 58 M 458 25 L 458 90" filter="url(#glow-laser)"/>
       </svg>
       
       <div class="intro-brand">
-        <h1 class="intro-brand__title">Atri<b>Arch</b></h1>
-        <p class="intro-brand__sub">Architectural Intelligence Platform</p>
+        <p class="intro-brand__sub">Architectural Intelligence Studio</p>
       </div>
 
       <div class="intro-loader">
@@ -50,7 +82,7 @@
       </div>
     </div>
   </div>
-  <button type="button" class="intro-skip" id="intro-skip">Skip Intro ✕</button>
+  <button type="button" class="intro-skip" id="intro-skip">Skip Intro</button>
 </div>
 
 <a class="skip" href="#stage">Skip to the work</a>
@@ -89,8 +121,7 @@
     <div class="crown__end">
       <!-- Compare Split Screen Button -->
       <button type="button" class="compare-trigger-btn" id="btn-compare" title="Compare Modern vs Classic Design">
-        <span class="compare-icon">⚖️</span>
-        <span>Compare vs Classic</span>
+        <span>Compare UI</span>
       </button>
 
       <div class="status-pill" title="Engine Status">
@@ -108,17 +139,13 @@
 <!-- ══════════════════════ COMPOSE / HOME OPENING PAGE ══════════════════════ -->
 <section class="compose" id="compose" aria-label="State the brief">
 
-  <!-- Ambient Glow Backgrounds -->
-  <div class="ambient-glow ambient-glow--top"></div>
-  <div class="ambient-glow ambient-glow--bottom"></div>
-
   <!-- Left: Interactive Spatial Mandala & Plot Visualizer -->
   <div class="compose__diagram">
     <div class="diagram-card">
       <div class="diagram-card__header">
         <div class="diagram-tag">
           <span class="diagram-tag__dot"></span>
-          <span>Vastu Purusha Mandala · Spatial Grid</span>
+          <span>Vastu Purusha Mandala · Spatial Field</span>
         </div>
         <div class="diagram-stats" id="plot-stats-badge">
           <span class="stat-pill" id="plot-area-calc">216 m² · 2,325 sq ft</span>
@@ -155,17 +182,16 @@
     </div>
   </div>
 
-  <!-- Right: Briefing Studio Form (Apple Minimal Card Style) -->
+  <!-- Right: Briefing Studio Form (Minimalist Card Style) -->
   <div class="compose__brief">
     <div class="brief-container">
       <div class="brief-head">
         <div class="eyebrow-pill">
-          <span class="sparkle">✦</span>
-          <span>Multi-Agent Generative Architecture</span>
+          <span>Architectural Brief</span>
         </div>
         <h1>Design with precision.</h1>
         <p class="brief-lede">
-          Define your plot and requirements. Thirteen independent analytical critics will synthesize and score candidate architectural schemes with full trace evidence.
+          State your site parameters and program requirements. Thirteen independent analytical critics review candidate floorplans, structural economy, and spatial metrics.
         </p>
       </div>
 
@@ -174,8 +200,7 @@
         <!-- Plot & Site Geometry -->
         <fieldset class="form-card">
           <legend class="form-card__legend">
-            <span class="legend-icon">📐</span>
-            <span>Plot & Site Geometry</span>
+            <span>Plot & Site Parameters</span>
           </legend>
           <div class="grid-3">
             <label class="fld">
@@ -211,25 +236,24 @@
               <span>Road Facing Direction</span>
               <div class="input-wrap select-wrap">
                 <select name="road_direction" id="inp-road-dir">
-                  <option value="N" selected>North (Uttara)</option>
-                  <option value="NE">North-East (Ishanya)</option>
-                  <option value="E">East (Purva)</option>
-                  <option value="SE">South-East (Agneya)</option>
-                  <option value="S">South (Dakshina)</option>
-                  <option value="SW">South-West (Nairutya)</option>
-                  <option value="W">West (Pashchima)</option>
-                  <option value="NW">North-West (Vayavya)</option>
+                  <option value="N" selected>North</option>
+                  <option value="NE">North-East</option>
+                  <option value="E">East</option>
+                  <option value="SE">South-East</option>
+                  <option value="S">South</option>
+                  <option value="SW">South-West</option>
+                  <option value="W">West</option>
+                  <option value="NW">North-West</option>
                 </select>
               </div>
             </label>
           </div>
         </fieldset>
 
-        <!-- Household Program -->
+        <!-- Program & Occupancy -->
         <fieldset class="form-card">
           <legend class="form-card__legend">
-            <span class="legend-icon">🏡</span>
-            <span>Household Program</span>
+            <span>Program & Occupancy</span>
           </legend>
           <div class="grid-2">
             <label class="fld">
@@ -269,15 +293,14 @@
           </div>
         </fieldset>
 
-        <!-- Architectural Style & Budget -->
+        <!-- Style & Investment -->
         <fieldset class="form-card">
           <legend class="form-card__legend">
-            <span class="legend-icon">✨</span>
-            <span>Character & Investment</span>
+            <span>Style & Budget</span>
           </legend>
           <div class="grid-2">
             <label class="fld">
-              <span>Architectural Style</span>
+              <span>Architectural Language</span>
               <div class="input-wrap select-wrap">
                 <select name="styles">
                   <option value="tropical_modern" selected>Tropical Modern</option>
@@ -306,8 +329,7 @@
         <!-- Vastu Alignment Slider -->
         <fieldset class="form-card stance-block">
           <legend class="form-card__legend">
-            <span class="legend-icon">🧭</span>
-            <span>Vastu & Scientific Alignment</span>
+            <span>Vastu Stance</span>
           </legend>
           <div class="stance-read">
             <div class="stance-header">
@@ -327,10 +349,9 @@
         <!-- Submit Convene Committee Button -->
         <div class="cta-wrap">
           <button type="submit" class="convene" id="convene">
-            <div class="convene__glow"></div>
             <div class="convene__content">
-              <span class="convene__main">Convene the Committee <span class="arrow">→</span></span>
-              <span class="convene__sub" id="convene-sub">13 Critics · 3 Candidate Schemes · Real-Time Consensus</span>
+              <span class="convene__main">Convene Committee <span class="arrow">→</span></span>
+              <span class="convene__sub" id="convene-sub">13 Critics · 3 Candidate Schemes</span>
             </div>
           </button>
           <p class="engine-note" id="engine-note">Connecting to engine…</p>

@@ -133,6 +133,63 @@ function lightPadas(svg, plan) {
   return { occupied, sectors };
 }
 
+/* ═══ STAR-FIELD RENDERER ═════════════════════════════════════════════ */
+
+function initStarField() {
+  if (window.self !== window.top) return;           // skip in iframes
+  const canvas = document.getElementById("space-stars");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  const STAR_COUNT = 220;
+  const stars = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+
+  function seed() {
+    stars.length = 0;
+    for (let i = 0; i < STAR_COUNT; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.4 + 0.3,              // radius 0.3 – 1.7 px
+        baseAlpha: Math.random() * 0.6 + 0.2,       // 0.2 – 0.8
+        phase: Math.random() * Math.PI * 2,          // twinkle offset
+        speed: Math.random() * 0.008 + 0.003,        // twinkle speed
+      });
+    }
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const s of stars) {
+      const twinkle = Math.sin(t * s.speed + s.phase) * 0.35 + 0.65;   // 0.3 – 1.0
+      const alpha   = s.baseAlpha * twinkle;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
+      ctx.fill();
+
+      // faint glow for the brighter / bigger stars
+      if (s.r > 1.0) {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r * 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200,210,255,${(alpha * 0.12).toFixed(3)})`;
+        ctx.fill();
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  seed();
+  requestAnimationFrame(draw);
+  window.addEventListener("resize", () => { resize(); seed(); });
+}
+
 /* ═══ BOOT ═══════════════════════════════════════════════════════════ */
 
 function updatePlotStats() {
@@ -147,6 +204,9 @@ function updatePlotStats() {
 }
 
 (async function boot() {
+  // Star-field background
+  initStarField();
+
   // Intro Drawing Screen Controller
   const curtain = $("intro-curtain");
   const skipBtn = $("intro-skip");
