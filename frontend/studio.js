@@ -141,59 +141,92 @@ function initStarField() {
   if (!canvas) return { spread: () => {} };
   const ctx = canvas.getContext("2d");
 
-  const STAR_COUNT = 320;
+  const STAR_COUNT = 380;
   const stars = [];
   let state = "forming"; // "forming" | "splitting" | "ambient"
   let spreadStart = 0;
   let cx = window.innerWidth / 2;
-  let cy = window.innerHeight / 2; // Centered exactly with the logo!
+  let cy = window.innerHeight / 2;
+  let dpr = 1;
   let mouse = { x: -1000, y: -1000, active: false };
 
-  function resize() {
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    cx = canvas.width / 2;
-    cy = canvas.height / 2;
+  function updateCenter() {
+    const stage = document.querySelector(".intro-brand-stage");
+    if (stage && state === "forming") {
+      const rect = stage.getBoundingClientRect();
+      cx = rect.left + rect.width / 2;
+      cy = rect.top + rect.height / 2;
+    } else {
+      cx = window.innerWidth / 2;
+      cy = window.innerHeight / 2;
+    }
   }
 
-  // Pure monochrome & starlight gold palette
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width  = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    updateCenter();
+  }
+
+  // Celestial palette: pure diamond white, warm starlight gold, and crisp sapphire
   const COLORS = [
-    "255, 255, 255",     // Pure Diamond White
-    "255, 255, 255",     // Pure Diamond White
-    "245, 245, 250",     // Crisp Starlight
-    "255, 240, 215",     // Warm Amber Starlight
-    "255, 255, 255"      // Pure Diamond White
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" }, // Diamond White
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
+    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.40)" }, // Crisp Starlight
+    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.55)" },  // Celestial Gold
+    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.50)" }, // Sapphire Accent
   ];
 
   function createStar() {
     const angle = Math.random() * Math.PI * 2;
-    // Formed tightly around the center logo in a swirling galaxy
-    const orbitR = Math.pow(Math.random(), 1.2) * 160 + 25;
-    const targetX = Math.random() * (canvas.width || window.innerWidth);
-    const targetY = Math.random() * (canvas.height || window.innerHeight);
+    // Distribution: dense swirling galactic disc (70–170px) + extended cosmic halo (170–340px)
+    const isInner = Math.random() < 0.65;
+    const orbitR = isInner
+      ? Math.pow(Math.random(), 0.9) * 105 + 68
+      : Math.pow(Math.random(), 1.1) * 170 + 173;
+
+    // Keplerian orbital velocity: inner stars orbit faster than outer stars
+    const dir = Math.random() > 0.4 ? 1 : -1;
+    const baseSpeed = 0.005 + (340 - Math.min(orbitR, 340)) / 340 * 0.010;
+    const orbitSpeed = baseSpeed * dir;
+
+    const targetX = Math.random() * window.innerWidth;
+    const targetY = Math.random() * window.innerHeight;
+
+    const isHero = Math.random() < 0.12;
+    const radius = isHero
+      ? Math.random() * 1.2 + 2.0   // Hero stars 2.0 – 3.2px
+      : Math.random() * 1.1 + 0.7;  // Stardust 0.7 – 1.8px
+
+    const col = COLORS[Math.floor(Math.random() * COLORS.length)];
 
     return {
       x: cx + Math.cos(angle) * orbitR,
-      y: cy + Math.sin(angle) * (orbitR * 0.7),
+      y: cy + Math.sin(angle) * (orbitR * 0.72),
       orbitR: orbitR,
       orbitAngle: angle,
-      orbitSpeed: (Math.random() * 0.008 + 0.003) * (Math.random() > 0.5 ? 1 : -1),
+      orbitSpeed: orbitSpeed,
       targetX: targetX,
       targetY: targetY,
       vx: 0,
       vy: 0,
-      r: Math.random() * 1.3 + 0.4,               // radius 0.4 – 1.7 px
-      baseAlpha: Math.random() * 0.5 + 0.45,      // 0.45 – 0.95
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      r: radius,
+      isHero: isHero,
+      baseAlpha: Math.random() * 0.40 + 0.60,      // 0.60 – 1.0 (bright & clearly visible!)
+      color: col,
       phase: Math.random() * Math.PI * 2,
-      speed: Math.random() * 0.007 + 0.003,
-      driftX: (Math.random() - 0.5) * 0.1,
-      driftY: (Math.random() - 0.5) * 0.1,
+      twinkleSpeed: Math.random() * 0.008 + 0.004,
+      driftX: (Math.random() - 0.5) * 0.14,
+      driftY: (Math.random() - 0.5) * 0.14,
     };
   }
 
   function seed() {
     stars.length = 0;
+    updateCenter();
     for (let i = 0; i < STAR_COUNT; i++) {
       stars.push(createStar());
     }
@@ -203,110 +236,150 @@ function initStarField() {
     if (state === "ambient") return;
     state = "splitting";
     spreadStart = performance.now();
+    updateCenter();
 
-    // ─── RADIAL SPLIT: Every star receives an outward blast vector ───
+    // ─── SUPERNOVA RADIAL SPLIT: High-speed outward explosion ───
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
-      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.35;
-      const speed = fast ? (Math.random() * 26 + 16) : (Math.random() * 18 + 9);
+      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.28;
+      const speed = fast ? (Math.random() * 28 + 18) : (Math.random() * 20 + 11);
       s.vx = Math.cos(angle) * speed;
       s.vy = Math.sin(angle) * speed;
     }
   }
 
   function draw(t) {
-    // Transparent canvas clear so cosmic color-graded background shines through
+    // Transparent canvas clear so subtle cosmic gradients & deep black void shine through
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    if (state === "forming") {
+      updateCenter();
+    }
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
 
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
 
-      // ─── 1. FORMING STAGE (Orbiting tightly around center logo) ───
+      // ─── 1. FORMING STAGE (Tightly swirling galaxy around center emblem) ───
       if (state === "forming") {
         s.orbitAngle += s.orbitSpeed;
         s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
-        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.7);
+        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.72);
 
-        const twinkle = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.35 + 0.65;
         const alpha = s.baseAlpha * twinkle;
 
+        // Glowing starlight corona
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
+        ctx.arc(s.x, s.y, s.r * 2.4, 0, Math.PI * 2);
+        ctx.fillStyle = s.color.glow;
         ctx.fill();
 
-        if (s.r > 1.1) {
+        // Solid star nucleus
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
+        ctx.fill();
+
+        // 4-Point luxury diamond diffraction spikes on hero stars
+        if (s.isHero) {
           ctx.beginPath();
-          ctx.arc(s.x, s.y, s.r * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.18).toFixed(3)})`;
-          ctx.fill();
+          ctx.moveTo(s.x - s.r * 2.8, s.y);
+          ctx.lineTo(s.x + s.r * 2.8, s.y);
+          ctx.moveTo(s.x, s.y - s.r * 2.8);
+          ctx.lineTo(s.x, s.y + s.r * 2.8);
+          ctx.strokeStyle = `rgba(${s.color.rgb}, ${(alpha * 0.65).toFixed(3)})`;
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
       }
 
       // ─── 2. SPLITTING STAGE (Outward radial blast across the screen) ───
       else if (state === "splitting") {
+        const prevX = s.x;
+        const prevY = s.y;
+
         s.x += s.vx;
         s.y += s.vy;
-        s.vx *= 0.93; // Smooth physics friction
-        s.vy *= 0.93;
+        s.vx *= 0.91; // Smooth friction
+        s.vy *= 0.91;
 
         // Smoothly settle toward resting home screen coordinates
         s.x += (s.targetX - s.x) * 0.055;
         s.y += (s.targetY - s.y) * 0.055;
 
-        const twinkle = Math.sin(t * s.speed + s.phase) * 0.3 + 0.7;
+        const currentSpeed = Math.hypot(s.vx, s.vy);
+        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.3 + 0.7;
         const alpha = s.baseAlpha * twinkle;
 
+        // Draw motion warp-streak while velocity is high
+        if (currentSpeed > 1.2) {
+          ctx.beginPath();
+          ctx.moveTo(s.x, s.y);
+          ctx.lineTo(prevX - s.vx * 0.6, prevY - s.vy * 0.6);
+          ctx.strokeStyle = `rgba(${s.color.rgb}, ${(alpha * Math.min(currentSpeed / 8, 0.75)).toFixed(3)})`;
+          ctx.lineWidth = s.r * 0.9;
+          ctx.stroke();
+        }
+
+        // Star core
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
         ctx.fill();
 
-        if (performance.now() - spreadStart > 1800) {
+        if (performance.now() - spreadStart > 1850) {
           state = "ambient";
         }
       }
 
-      // ─── 3. AMBIENT STAGE (Resting & drifting across home page) ───
+      // ─── 3. AMBIENT STAGE (Resting & gently drifting across home page) ───
       else {
         s.x += s.driftX;
         s.y += s.driftY;
 
         // Screen edge wrapping
-        if (s.x < 0) s.x = canvas.width;
-        if (s.x > canvas.width) s.x = 0;
-        if (s.y < 0) s.y = canvas.height;
-        if (s.y > canvas.height) s.y = 0;
+        if (s.x < 0) s.x = w;
+        if (s.x > w) s.x = 0;
+        if (s.y < 0) s.y = h;
+        if (s.y > h) s.y = 0;
 
-        // Gentle interactive mouse repulsion
+        // Interactive mouse repulsion
         if (mouse.active) {
           const mdx = s.x - mouse.x;
           const mdy = s.y - mouse.y;
           const mdist = Math.hypot(mdx, mdy);
-          if (mdist < 90 && mdist > 0) {
-            const push = (1 - mdist / 90) * 1.5;
+          if (mdist < 110 && mdist > 0) {
+            const push = (1 - mdist / 110) * 1.8;
             s.x += (mdx / mdist) * push;
             s.y += (mdy / mdist) * push;
           }
         }
 
-        const twinkle = Math.sin(t * s.speed + s.phase) * 0.35 + 0.65;
+        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.35 + 0.65;
         const alpha = s.baseAlpha * twinkle;
 
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-
-        if (s.r > 1.0) {
+        // Soft halo on larger stars
+        if (s.r > 1.4) {
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.r * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.12).toFixed(3)})`;
+          ctx.fillStyle = s.color.glow;
           ctx.fill();
         }
+
+        // Core
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
+        ctx.fill();
       }
     }
 
+    ctx.restore();
     requestAnimationFrame(draw);
   }
 
@@ -356,27 +429,28 @@ function updatePlotStats() {
   if (curtain) {
     if (inIframe) {
       curtain.style.display = "none";
+      document.body.classList.remove("is-loading");
       starField.spread(true);
     } else {
       const dismissIntro = (fast = false) => {
         // Trigger stars cosmic spread outward into the home page
         starField.spread(fast);
+        document.body.classList.remove("is-loading");
         curtain.classList.add("is-fading");
-        setTimeout(() => { curtain.style.display = "none"; }, 800);
+        setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // Auto-trigger star spread and dismiss when blueprint drawing finishes (2.8s)
+      // Auto-trigger star spread and dismiss when intro sequence finishes (2.8s)
       const introTimer = setTimeout(() => dismissIntro(false), 2800);
 
-      skipBtn?.addEventListener("click", () => {
+      skipBtn?.addEventListener("click", (e) => {
+        e.stopPropagation();
         clearTimeout(introTimer);
         dismissIntro(true);
       });
-      curtain.addEventListener("click", (e) => {
-        if (e.target !== skipBtn) {
-          clearTimeout(introTimer);
-          dismissIntro(true);
-        }
+      curtain.addEventListener("click", () => {
+        clearTimeout(introTimer);
+        dismissIntro(true);
       });
     }
   }

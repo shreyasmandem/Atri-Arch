@@ -10,19 +10,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="studio.css">
 </head>
-<body data-phase="compose">
+<body class="is-loading" data-phase="compose">
 
 <!-- ══════════════════════ COSMIC UNIVERSE STARS BACKGROUND ══════════════════════ -->
 <canvas id="space-stars" class="space-stars" aria-hidden="true"></canvas>
 
 <!-- ══════════════════════ ARCHITECTURAL DRAFTING INTRO ══════════════════════ -->
-<div class="intro-curtain" id="intro-curtain" aria-hidden="true">
+<div class="intro-curtain" id="intro-curtain" aria-label="atri arch loading">
   <div class="intro-curtain__space-grid"></div>
   
   <div class="intro-curtain__canvas">
     <div class="intro-brand-box">
       <!-- Concentric CAD Compass Halo & Illuminated Emblem -->
       <div class="intro-brand-stage">
+        <div class="intro-compass-pulse"></div>
         <div class="intro-compass-ring intro-compass-ring--outer"></div>
         <div class="intro-compass-ring intro-compass-ring--inner"></div>
         <div class="intro-brand-glow"></div>

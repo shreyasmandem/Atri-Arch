@@ -43,6 +43,7 @@
   
   /* Precision Apple Typography Stack */
   --face: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
+  --sans: var(--face);
   --num: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
 
   --crown-h: 64px;
@@ -997,120 +998,210 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
 /* ══════════════════════ COSMIC UNIVERSE STARS ══════════════════════ */
 
 .space-stars {
-  position: fixed; inset: 0; width: 100vw; height: 100vh;
-  z-index: 0; pointer-events: none;
-  background: #000000;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+  pointer-events: none;
+  background: transparent;
+}
+
+/* While intro is loading, keep home UI pristine & hidden behind pure cosmic starlight */
+body.is-loading > :not(#space-stars):not(#intro-curtain) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(6px);
+}
+
+body > :not(#space-stars):not(#intro-curtain) {
+  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ══════════════════════ ARCHITECTURAL DRAFTING INTRO ══════════════════════ */
 
 .intro-curtain {
-  position: fixed; inset: 0; z-index: 99999;
-  background: #000000;
-  display: flex; align-items: center; justify-content: center;
-  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.75s;
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: transparent; /* TRANSPARENT so stars are 100% visible throughout loading */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.85s;
   overflow: hidden;
+  user-select: none;
 }
 
 .intro-curtain.is-fading {
   opacity: 0;
-  transform: scale(1.02);
+  transform: scale(1.04);
   pointer-events: none;
   visibility: hidden;
 }
 
 .intro-curtain__space-grid {
-  position: absolute; inset: 0; pointer-events: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
   background-position: center center;
-  mask-image: radial-gradient(circle at center, black 50%, transparent 90%);
-  -webkit-mask-image: radial-gradient(circle at center, black 50%, transparent 90%);
+  mask-image: radial-gradient(circle 420px at center, black 40%, transparent 85%);
+  -webkit-mask-image: radial-gradient(circle 420px at center, black 40%, transparent 85%);
+  opacity: 0.7;
 }
 
 .intro-curtain__canvas {
-  position: relative; z-index: 2; text-align: center;
+  position: relative;
+  z-index: 5;
+  text-align: center;
   max-width: 90vw;
 }
 
 /* ── Luxury Brand Intro Stage ── */
 
 .intro-brand-box {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
 }
 
 /* Concentric CAD Compass Halo & Emblem Stage */
 .intro-brand-stage {
   position: relative;
-  width: 140px; height: 140px;
-  display: flex; align-items: center; justify-content: center;
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sonar Architectural Radar Ping */
+.intro-compass-pulse {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px solid rgba(229, 169, 88, 0.45);
+  pointer-events: none;
+  animation: intro-pulse 2.6s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
 }
 
 .intro-compass-ring {
-  position: absolute; border-radius: 50%; pointer-events: none;
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
 }
+
+/* Outer Celestial Compass Ring with Cardinal Ticks */
 .intro-compass-ring--outer {
-  inset: -14px;
-  border: 1px dashed rgba(229, 169, 88, 0.3);
-  animation: intro-spin-cw 28s linear infinite;
+  inset: -18px;
+  border: 1px dashed rgba(229, 169, 88, 0.38);
+  animation: intro-spin-cw 26s linear infinite;
 }
+.intro-compass-ring--outer::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 8px;
+  background: #E5A958;
+  box-shadow: 0 0 8px #E5A958;
+}
+.intro-compass-ring--outer::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 8px;
+  background: #E5A958;
+  box-shadow: 0 0 8px #E5A958;
+}
+
+/* Inner Orbit Ring with Glowing Satellite Pip */
 .intro-compass-ring--inner {
-  inset: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  animation: intro-spin-ccw 20s linear infinite;
+  inset: 4px;
+  border: 1px solid rgba(127, 163, 212, 0.25);
+  animation: intro-spin-ccw 18s linear infinite;
 }
 .intro-compass-ring--inner::after {
-  content: ''; position: absolute; top: -3px; left: 50%;
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #E5A958; box-shadow: 0 0 10px #E5A958;
-}
-
-.intro-brand-glow {
-  position: absolute; inset: 10px;
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(229, 169, 88, 0.2) 0%, rgba(229, 169, 88, 0.04) 60%, transparent 80%);
-  filter: blur(14px);
-  animation: intro-breathe 4s ease-in-out infinite;
+  background: #FFFFFF;
+  box-shadow: 0 0 10px #FFFFFF, 0 0 20px rgba(127, 163, 212, 0.9);
 }
 
+/* Multi-Tier Celestial Breathing Aura */
+.intro-brand-glow {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(229, 169, 88, 0.28) 0%, rgba(127, 163, 212, 0.12) 45%, transparent 75%);
+  filter: blur(16px);
+  animation: intro-breathe 3.6s ease-in-out infinite;
+}
+
+/* Floating Illuminated Logo Emblem */
 .intro-brand-img {
-  position: relative; z-index: 2;
-  width: 90px; height: 90px;
+  position: relative;
+  z-index: 3;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
-  filter: drop-shadow(0 0 24px rgba(229, 169, 88, 0.65)) brightness(1.22);
-  animation: intro-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  filter: drop-shadow(0 0 28px rgba(229, 169, 88, 0.75)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.45)) brightness(1.22);
+  animation: intro-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards, intro-float 4s ease-in-out 1.2s infinite;
 }
 
 /* Company Title (Only text on loading screen) */
 .intro-brand-title {
   margin: 0;
-  font-family: var(--sans);
+  font-family: var(--face);
   font-size: 38px;
   font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #FFFFFF;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  background: linear-gradient(135deg, #FFFFFF 0%, #FFFFFF 38%, #E5A958 55%, #FFFFFF 72%, #FFFFFF 100%);
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   text-align: center;
   opacity: 0;
   transform: translateY(8px);
-  animation: intro-text-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
-  text-shadow: 0 0 32px rgba(255, 255, 255, 0.3);
+  animation: intro-text-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards, intro-title-shimmer 3.5s ease-in-out 0.8s infinite;
+  filter: drop-shadow(0 0 20px rgba(229, 169, 88, 0.3));
 }
 
 /* Razor-thin Laser Progress Line */
 .intro-loader {
-  width: 180px; height: 2px;
+  width: 180px;
+  height: 2px;
   background: rgba(255, 255, 255, 0.08);
-  border-radius: 2px; overflow: hidden;
+  border-radius: 2px;
+  overflow: hidden;
   margin-top: 4px;
   box-shadow: 0 0 14px rgba(229, 169, 88, 0.25);
   opacity: 0;
-  animation: intro-fade 0.8s ease 0.5s forwards;
+  animation: intro-fade 0.8s ease 0.4s forwards;
 }
 .intro-loader__bar {
-  display: block; width: 100%; height: 100%;
+  display: block;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(90deg, #7FA3D4, #FFFFFF, #E5A958);
   transform: translateX(-100%);
   animation: loader-fill 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -1118,27 +1209,52 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
 
 /* Skip / Enter Studio Button */
 .intro-skip {
-  position: absolute; bottom: 28px; right: 28px;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--chalk-3); font-family: var(--sans); font-size: 11px; font-weight: 500;
+  position: absolute;
+  bottom: 28px;
+  right: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--chalk-3);
+  font-family: var(--face);
+  font-size: 11px;
+  font-weight: 500;
   letter-spacing: 0.08em;
-  padding: 8px 18px; border-radius: var(--r-pill); cursor: pointer;
+  padding: 8px 18px;
+  border-radius: var(--r-pill);
+  cursor: pointer;
   transition: all 0.25s var(--ease);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  opacity: 0; animation: intro-fade 0.8s ease 1.5s forwards;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  opacity: 0;
+  animation: intro-fade 0.8s ease 1.2s forwards;
 }
 .intro-skip:hover {
-  background: rgba(255, 255, 255, 0.15); color: #FFFFFF;
-  border-color: rgba(255, 255, 255, 0.35); transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.15);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-1px);
 }
 
+@keyframes intro-pulse {
+  0%   { transform: scale(0.85); opacity: 0.85; }
+  100% { transform: scale(1.75); opacity: 0; }
+}
 @keyframes intro-reveal {
   0%   { opacity: 0; transform: scale(0.75); }
   100% { opacity: 1; transform: scale(1); }
 }
+@keyframes intro-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
 @keyframes intro-text-reveal {
   0%   { opacity: 0; transform: translateY(8px); }
   100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes intro-title-shimmer {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 @keyframes intro-spin-cw {
   to { transform: rotate(360deg); }
