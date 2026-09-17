@@ -459,11 +459,11 @@ function updatePlotStats() {
         setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // 1. Trigger Supernova Star Blast exactly when Gold + Silver arches collide (1.45s)
-      const blastTimer = setTimeout(triggerBlast, 1450);
+      // 1. Trigger Star Blast when left + right halves collide (1.25s)
+      const blastTimer = setTimeout(triggerBlast, 1250);
 
-      // 2. Smoothly transition into home studio after intro sequence (3.3s)
-      const introTimer = setTimeout(() => dismissIntro(false), 3300);
+      // 2. Smoothly transition into home studio after intro (3.1s)
+      const introTimer = setTimeout(() => dismissIntro(false), 3100);
 
       skipBtn?.addEventListener("click", (e) => {
         e.stopPropagation();
