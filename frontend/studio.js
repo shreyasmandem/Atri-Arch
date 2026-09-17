@@ -385,19 +385,19 @@ function initStarField() {
 /* ═══ BOOT & STUDIO INTERACTION ═════════════════════════════════════ */
 
 const DIR_LABELS = {
-  N: "North Facing · Kuber · Air",
-  NE: "Ishanya (NE) · Water · Holy",
-  E: "East Facing · Indra · Light",
-  SE: "Agneya (SE) · Fire · Energy",
-  S: "South Facing · Yama · Focus",
-  SW: "Nairutya (SW) · Earth · Master",
-  W: "West Facing · Varuna · Sunset",
-  NW: "Vayavya (NW) · Air · Wind"
+  N: "North Facing",
+  NE: "North-East Facing",
+  E: "East Facing",
+  SE: "South-East Facing",
+  S: "South Facing",
+  SW: "South-West Facing",
+  W: "West Facing",
+  NW: "North-West Facing"
 };
 
 const PRESETS = {
   "vastu-villa": {
-    prompt: "Contemporary 3BHK duplex with an open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
+    prompt: "Contemporary 3BHK duplex with open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
     width: 12, depth: 18, levels: "2", dir: "N", bedrooms: 3, bathrooms: 3, kitchen: "open_modular",
     budget: 6500000, finish: "premium", style: "tropical_modern", stance: 2
   },
@@ -407,17 +407,17 @@ const PRESETS = {
     budget: 4500000, finish: "standard", style: "contemporary", stance: 1
   },
   "biophilic-retreat": {
-    prompt: "4BHK biophilic villa with large central courtyard (Brahmasthan), extensive verandahs, double-height living room, and senior accessibility.",
+    prompt: "4BHK courtyard villa with central lightwell, generous verandahs, double-height living area, and senior accessibility.",
     width: 15, depth: 22, levels: "2", dir: "NE", bedrooms: 4, bathrooms: 4, kitchen: "wet_dry",
     budget: 9000000, finish: "luxury", style: "biophilic", stance: 3
   },
   "kerala-vernacular": {
-    prompt: "Traditional Kerala vernacular home with wooden pillars, sloping terracotta tile roofs, central Nadumuttam courtyard, and strict Vastu alignment.",
+    prompt: "Kerala vernacular residence with timber joinery, pitched terracotta tile roofs, central courtyard, and natural cross-ventilation.",
     width: 14, depth: 20, levels: "2", dir: "E", bedrooms: 3, bathrooms: 3, kitchen: "closed",
     budget: 7500000, finish: "premium", style: "kerala_vernacular", stance: 3
   },
   "modern-studio": {
-    prompt: "Modern compact single-floor residence with open minimalist floorplan, seamless indoor-outdoor flow, and low carbon footprint.",
+    prompt: "Modern compact single-floor residence with open minimalist floorplan, seamless indoor-outdoor connection, and efficient footprint.",
     width: 8, depth: 12, levels: "1", dir: "N", bedrooms: 1, bathrooms: 1, kitchen: "open_modular",
     budget: 3500000, finish: "standard", style: "modern_minimal", stance: 0
   }
@@ -450,13 +450,13 @@ function updateStudioHUD() {
   // Vastu Stance
   const stanceVal = +($("stance")?.value ?? 2);
   const hudVastu = $("hud-vastu");
-  if (hudVastu && STANCES[stanceVal]) hudVastu.textContent = `${STANCES[stanceVal][0]} (Panchabhuta)`;
+  if (hudVastu && STANCES[stanceVal]) hudVastu.textContent = STANCES[stanceVal][0];
 
   // Budget
   const budget = parseFloat($("inp-budget")?.value || 6500000);
   const tier = $("inp-finish-tier")?.value || "premium";
   const hudBudget = $("hud-budget");
-  if (hudBudget) hudBudget.textContent = `${inr(budget)} · CPWD ${cap(tier)}`;
+  if (hudBudget) hudBudget.textContent = `${inr(budget)} · ${cap(tier)}`;
 }
 
 (async function boot() {
