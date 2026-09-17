@@ -10,6 +10,9 @@
 const API = (() => {
   const o = new URLSearchParams(location.search).get("api");
   if (o) return o.replace(/\/$/, "");
+  if (location.port === "8080" || location.port === "3000" || location.port === "5500") {
+    return `http://${location.hostname || "127.0.0.1"}:8000/api/v1`;
+  }
   return `${location.origin}/api/v1`;
 })();
 
