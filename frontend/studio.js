@@ -183,10 +183,10 @@ function initStarField() {
 
   function createStar(index) {
     const angle = Math.random() * Math.PI * 2;
-    const isInner = Math.random() < 0.6;
+    const isInner = Math.random() < 0.45;
     const orbitR = isInner
-      ? Math.pow(Math.random(), 0.9) * 110 + 60
-      : Math.pow(Math.random(), 1.1) * 180 + 170;
+      ? Math.pow(Math.random(), 0.85) * 140 + 80
+      : Math.pow(Math.random(), 1.0) * 280 + 220;
 
     const dir = Math.random() > 0.4 ? 1 : -1;
     const baseSpeed = 0.004 + (340 - Math.min(orbitR, 340)) / 340 * 0.008;
