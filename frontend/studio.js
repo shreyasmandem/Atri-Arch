@@ -444,23 +444,35 @@ function updatePlotStats() {
       document.body.classList.remove("is-loading");
       starField.spread(true);
     } else {
+      let isDismissed = false;
+      const triggerBlast = () => {
+        // Trigger stars explosion from center collision blast
+        starField.spread(false);
+      };
+
       const dismissIntro = (fast = false) => {
-        // Trigger stars cosmic spread outward into the home page
+        if (isDismissed) return;
+        isDismissed = true;
         starField.spread(fast);
         document.body.classList.remove("is-loading");
         curtain.classList.add("is-fading");
         setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // Auto-trigger star spread and dismiss when intro sequence finishes (2.8s)
-      const introTimer = setTimeout(() => dismissIntro(false), 2800);
+      // 1. Trigger Supernova Star Blast exactly when Gold + Silver arches collide (1.45s)
+      const blastTimer = setTimeout(triggerBlast, 1450);
+
+      // 2. Smoothly transition into home studio after intro sequence (3.3s)
+      const introTimer = setTimeout(() => dismissIntro(false), 3300);
 
       skipBtn?.addEventListener("click", (e) => {
         e.stopPropagation();
+        clearTimeout(blastTimer);
         clearTimeout(introTimer);
         dismissIntro(true);
       });
       curtain.addEventListener("click", () => {
+        clearTimeout(blastTimer);
         clearTimeout(introTimer);
         dismissIntro(true);
       });
