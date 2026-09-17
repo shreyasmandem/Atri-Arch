@@ -70,6 +70,7 @@ function phase(p) { S.phase = p; document.body.dataset.phase = p; }
 /* ═══ MANDALA ════════════════════════════════════════════════════════ */
 
 function strike(svg) {
+  if (!svg) return;
   const N = 9, U = 900 / N, out = [];
   for (let r = 0; r < N; r++)
     for (let c = 0; c < N; c++)
@@ -378,9 +379,48 @@ function initStarField() {
   return { spread };
 }
 
-/* ═══ BOOT ═══════════════════════════════════════════════════════════ */
+/* ═══ BOOT & STUDIO INTERACTION ═════════════════════════════════════ */
 
-function updatePlotStats() {
+const DIR_LABELS = {
+  N: "North Facing · Kuber · Air",
+  NE: "Ishanya (NE) · Water · Holy",
+  E: "East Facing · Indra · Light",
+  SE: "Agneya (SE) · Fire · Energy",
+  S: "South Facing · Yama · Focus",
+  SW: "Nairutya (SW) · Earth · Master",
+  W: "West Facing · Varuna · Sunset",
+  NW: "Vayavya (NW) · Air · Wind"
+};
+
+const PRESETS = {
+  "vastu-villa": {
+    prompt: "Contemporary 3BHK duplex with an open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
+    width: 12, depth: 18, levels: "2", dir: "N", bedrooms: 3, bathrooms: 3, kitchen: "open_modular",
+    budget: 6500000, finish: "premium", style: "tropical_modern", stance: 2
+  },
+  "compact-urban": {
+    prompt: "2BHK urban residence with efficient open kitchen, master bedroom with balcony, attached bathrooms, and covered car porch.",
+    width: 9, depth: 14, levels: "2", dir: "E", bedrooms: 2, bathrooms: 2, kitchen: "open_modular",
+    budget: 4500000, finish: "standard", style: "contemporary", stance: 1
+  },
+  "biophilic-retreat": {
+    prompt: "4BHK biophilic villa with large central courtyard (Brahmasthan), extensive verandahs, double-height living room, and senior accessibility.",
+    width: 15, depth: 22, levels: "2", dir: "NE", bedrooms: 4, bathrooms: 4, kitchen: "wet_dry",
+    budget: 9000000, finish: "luxury", style: "biophilic", stance: 3
+  },
+  "kerala-vernacular": {
+    prompt: "Traditional Kerala vernacular home with wooden pillars, sloping terracotta tile roofs, central Nadumuttam courtyard, and strict Vastu alignment.",
+    width: 14, depth: 20, levels: "2", dir: "E", bedrooms: 3, bathrooms: 3, kitchen: "closed",
+    budget: 7500000, finish: "premium", style: "kerala_vernacular", stance: 3
+  },
+  "modern-studio": {
+    prompt: "Modern compact single-floor residence with open minimalist floorplan, seamless indoor-outdoor flow, and low carbon footprint.",
+    width: 8, depth: 12, levels: "1", dir: "N", bedrooms: 1, bathrooms: 1, kitchen: "open_modular",
+    budget: 3500000, finish: "standard", style: "modern_minimal", stance: 0
+  }
+};
+
+function updateStudioHUD() {
   const w = parseFloat($("inp-plot-width")?.value || 12);
   const d = parseFloat($("inp-plot-depth")?.value || 18);
   const areaM2 = (w * d).toFixed(0);
@@ -389,6 +429,31 @@ function updatePlotStats() {
   if (badge) {
     badge.textContent = `${areaM2} m² · ${Number(areaSqFt).toLocaleString()} sq ft (Aspect 1:${(d/w).toFixed(2)})`;
   }
+
+  // Orientation
+  const checkedRadio = document.querySelector('input[name="road_direction"]:checked');
+  const dir = checkedRadio?.value || "N";
+  const hudOri = $("hud-orientation");
+  if (hudOri) hudOri.textContent = DIR_LABELS[dir] || `${dir} Facing`;
+
+  // Program
+  const bhk = $("inp-bedrooms")?.value || "3";
+  const baths = $("inp-bathrooms")?.value || "3";
+  const levels = $("inp-levels")?.value || "2";
+  const levelText = levels === "1" ? "Ground" : levels === "2" ? "Duplex" : levels === "3" ? "Triplex" : "Multi-level";
+  const hudProg = $("hud-program");
+  if (hudProg) hudProg.textContent = `${bhk} BHK ${levelText} · ${baths} Baths`;
+
+  // Vastu Stance
+  const stanceVal = +($("stance")?.value ?? 2);
+  const hudVastu = $("hud-vastu");
+  if (hudVastu && STANCES[stanceVal]) hudVastu.textContent = `${STANCES[stanceVal][0]} (Panchabhuta)`;
+
+  // Budget
+  const budget = parseFloat($("inp-budget")?.value || 6500000);
+  const tier = $("inp-finish-tier")?.value || "premium";
+  const hudBudget = $("hud-budget");
+  if (hudBudget) hudBudget.textContent = `${inr(budget)} · CPWD ${cap(tier)}`;
 }
 
 (async function boot() {
@@ -408,7 +473,6 @@ function updatePlotStats() {
     } else {
       let isDismissed = false;
       const triggerBlast = () => {
-        // Trigger stars explosion from center collision blast
         starField.spread(false);
       };
 
@@ -441,18 +505,105 @@ function updatePlotStats() {
     }
   }
 
-
-
   strike($("hero-mandala"));
   strike($("review-mandala"));
-  updatePlotStats();
+  updateStudioHUD();
 
-  $("inp-plot-width")?.addEventListener("input", updatePlotStats);
-  $("inp-plot-depth")?.addEventListener("input", updatePlotStats);
+  // Dynamic plot inputs
+  $("inp-plot-width")?.addEventListener("input", updateStudioHUD);
+  $("inp-plot-depth")?.addEventListener("input", updateStudioHUD);
+  $("inp-bedrooms")?.addEventListener("input", updateStudioHUD);
+  $("inp-bathrooms")?.addEventListener("input", updateStudioHUD);
+  $("inp-levels")?.addEventListener("change", updateStudioHUD);
+  $("inp-budget")?.addEventListener("input", () => {
+    const val = parseFloat($("inp-budget")?.value || 0);
+    document.querySelectorAll(".budget-chip").forEach(b => {
+      b.classList.toggle("is-active", parseFloat(b.dataset.amt) === val);
+    });
+    updateStudioHUD();
+  });
+  $("inp-finish-tier")?.addEventListener("change", updateStudioHUD);
+
+  // Direction grid radios
+  document.querySelectorAll('.dir-radio input[type="radio"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
+      radio.closest(".dir-radio")?.classList.add("is-selected");
+      updateStudioHUD();
+    });
+  });
+
+  // Amenities checkboxes
+  document.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => {
+    chk.addEventListener("change", () => {
+      chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
+    });
+  });
+
+  // Budget quick chips
+  document.querySelectorAll(".budget-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const amt = btn.dataset.amt;
+      const inp = $("inp-budget");
+      if (inp && amt) {
+        inp.value = amt;
+        document.querySelectorAll(".budget-chip").forEach((b) => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+        updateStudioHUD();
+      }
+    });
+  });
+
+  // Architectural presets
+  document.querySelectorAll(".preset-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.preset;
+      const p = PRESETS[key];
+      if (!p) return;
+
+      document.querySelectorAll(".preset-chip").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+
+      if ($("client-prompt")) $("client-prompt").value = p.prompt;
+      if ($("inp-plot-width")) $("inp-plot-width").value = p.width;
+      if ($("inp-plot-depth")) $("inp-plot-depth").value = p.depth;
+      if ($("inp-levels")) $("inp-levels").value = p.levels;
+      if ($("inp-bedrooms")) $("inp-bedrooms").value = p.bedrooms;
+      if ($("inp-bathrooms")) $("inp-bathrooms").value = p.bathrooms;
+      if (document.querySelector('select[name="kitchen_type"]')) {
+        document.querySelector('select[name="kitchen_type"]').value = p.kitchen;
+      }
+      if ($("inp-budget")) $("inp-budget").value = p.budget;
+      if ($("inp-finish-tier")) $("inp-finish-tier").value = p.finish;
+      if ($("inp-styles")) $("inp-styles").value = p.style;
+      if ($("stance")) {
+        $("stance").value = p.stance;
+        const [n, , note] = STANCES[p.stance];
+        if ($("stance-name")) $("stance-name").textContent = n;
+        if ($("stance-note")) $("stance-note").textContent = note;
+      }
+
+      // Update Direction Radio
+      const radio = document.querySelector(`.dir-radio[data-val="${p.dir}"] input[type="radio"]`);
+      if (radio) {
+        radio.checked = true;
+        document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
+        radio.closest(".dir-radio")?.classList.add("is-selected");
+      }
+
+      // Update Budget Chip
+      document.querySelectorAll(".budget-chip").forEach((b) => {
+        b.classList.toggle("is-active", parseFloat(b.dataset.amt) === p.budget);
+      });
+
+      updateStudioHUD();
+    });
+  });
 
   $("stance").addEventListener("input", (e) => {
     const [n, , note] = STANCES[+e.target.value];
     $("stance-name").textContent = n; $("stance-note").textContent = note;
+    updateStudioHUD();
   });
   $("brief").addEventListener("submit", onSubmit);
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });

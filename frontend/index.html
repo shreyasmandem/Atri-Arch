@@ -85,231 +85,610 @@
   </div>
 </header>
 
-<!-- ══════════════════════ COMPOSE / HOME OPENING PAGE ══════════════════════ -->
+<!-- ══════════════════════ COMPOSE / FULL-WIDTH ARCHITECTURAL STUDIO ══════════════════════ -->
 <section class="compose" id="compose" aria-label="State the brief">
+  <div class="compose__studio">
 
-  <!-- Left: Interactive Spatial Mandala & Plot Visualizer -->
-  <div class="compose__diagram">
-    <div class="diagram-card">
-      <div class="diagram-card__header">
-        <div class="diagram-tag">
-          <span class="diagram-tag__dot"></span>
-          <span>Vastu Purusha Mandala · Spatial Field</span>
-        </div>
-        <div class="diagram-stats" id="plot-stats-badge">
-          <span class="stat-pill" id="plot-area-calc">216 m² · 2,325 sq ft</span>
-        </div>
-      </div>
-
-      <div class="mandala-shell">
-        <svg class="mandala" id="hero-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
-        <div class="mandala__heart">
-          <img src="logo_emblem.png" alt="Atri Arch" class="mandala-heart-logo" />
-          <p class="heart__eyebrow">Brahmasthan</p>
-          <p class="heart__line">Open Sanctum</p>
-          <p class="heart__body">
-            Nine central padas preserved unbuilt. The geometry anchors natural daylight and micro-ventilation.
-          </p>
-        </div>
-        <span class="rose rose--n">North</span>
-        <span class="rose rose--e">East</span>
-        <span class="rose rose--s">South</span>
-        <span class="rose rose--w">West</span>
-        <span class="rose rose--ne">Ishanya · Water</span>
-        <span class="rose rose--se">Agneya · Fire</span>
-        <span class="rose rose--sw">Nairutya · Earth</span>
-        <span class="rose rose--nw">Vayavya · Air</span>
-      </div>
-
-      <div class="diagram-card__footer">
-        <div class="compass-legend">
-          <span class="leg-item leg-indigo">Ishanya (NE)</span>
-          <span class="leg-item leg-hingula">Agneya (SE)</span>
-          <span class="leg-item leg-ochre">Nairutya (SW)</span>
-          <span class="leg-item leg-orpiment">Vayavya (NW)</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Right: Briefing Studio Form (Minimalist Card Style) -->
-  <div class="compose__brief">
-    <div class="brief-container">
-      <div class="brief-head">
+    <!-- Studio Header & Hero -->
+    <div class="studio-hero">
+      <div class="studio-hero__brand">
         <div class="brief-brand-seal">
-          <img src="logo.png" alt="Atri Arch Logo" class="brief-brand-seal__img" />
-          <span class="brief-brand-seal__tag">Architectural Intelligence Studio</span>
+          <img src="logo_emblem.png" alt="Atri Arch" class="brief-brand-seal__img" />
+          <span class="brief-brand-seal__tag">Architect Intelligence Platform (AIP) · Phase I</span>
         </div>
-        <h1>Design with precision.</h1>
-        <p class="brief-lede">
-          State your site parameters and program requirements. Thirteen independent analytical critics review candidate floorplans, structural economy, and spatial metrics.
-        </p>
+        <div class="authors-badge">
+          <span>VIT Academic Project</span> · <span>Shreyas Mandem (24BCE0381)</span> · <span>Charith Reddy (24BCT0093)</span>
+        </div>
       </div>
 
-      <form id="brief" class="brief" novalidate>
-        
-        <!-- Plot & Site Geometry -->
-        <fieldset class="form-card">
-          <legend class="form-card__legend">
-            <span>Plot & Site Parameters</span>
-          </legend>
-          <div class="grid-3">
-            <label class="fld">
-              <span>Width</span>
-              <div class="input-wrap">
-                <input type="number" id="inp-plot-width" name="plot_width" value="12" min="3" max="200" step="0.5">
-                <i>m</i>
-              </div>
-            </label>
-            <label class="fld">
-              <span>Depth</span>
-              <div class="input-wrap">
-                <input type="number" id="inp-plot-depth" name="plot_depth" value="18" min="3" max="200" step="0.5">
-                <i>m</i>
-              </div>
-            </label>
-            <label class="fld">
-              <span>Floors</span>
-              <div class="input-wrap">
-                <input type="number" name="levels" value="1" min="1" max="4">
-                <i>lvl</i>
-              </div>
-            </label>
-          </div>
-          <div class="grid-2">
-            <label class="fld">
-              <span>Location / City</span>
-              <div class="input-wrap">
-                <input type="text" name="locality" value="Chennai, Tamil Nadu" maxlength="120" placeholder="e.g. Bangalore, Karnataka">
-              </div>
-            </label>
-            <label class="fld">
-              <span>Road Facing Direction</span>
-              <div class="input-wrap select-wrap">
-                <select name="road_direction" id="inp-road-dir">
-                  <option value="N" selected>North</option>
-                  <option value="NE">North-East</option>
-                  <option value="E">East</option>
-                  <option value="SE">South-East</option>
-                  <option value="S">South</option>
-                  <option value="SW">South-West</option>
-                  <option value="W">West</option>
-                  <option value="NW">North-West</option>
-                </select>
-              </div>
-            </label>
-          </div>
-        </fieldset>
+      <h1 class="studio-hero__title">Design with precision.</h1>
+      <p class="studio-hero__lede">
+        An explainable, multi-agent AI framework for intelligent architectural design, interior planning, Vastu analysis, cost prediction, and client-centric design automation.
+      </p>
 
-        <!-- Program & Occupancy -->
-        <fieldset class="form-card">
-          <legend class="form-card__legend">
-            <span>Program & Occupancy</span>
-          </legend>
-          <div class="grid-2">
-            <label class="fld">
-              <span>Bedrooms</span>
-              <div class="input-wrap">
-                <input type="number" name="bedrooms" value="3" min="0" max="10">
-                <i>BHK</i>
-              </div>
-            </label>
-            <label class="fld">
-              <span>Bathrooms</span>
-              <div class="input-wrap">
-                <input type="number" name="bathrooms" value="2" min="0" max="10">
-                <i>baths</i>
-              </div>
-            </label>
-          </div>
-          <div class="grid-3">
-            <label class="fld">
-              <span>Adults</span>
-              <div class="input-wrap">
-                <input type="number" name="occupant_adults" value="2" min="0" max="12">
-              </div>
-            </label>
-            <label class="fld">
-              <span>Children</span>
-              <div class="input-wrap">
-                <input type="number" name="occupant_children" value="1" min="0" max="12">
-              </div>
-            </label>
-            <label class="fld">
-              <span>Elders</span>
-              <div class="input-wrap">
-                <input type="number" name="occupant_elders" value="1" min="0" max="12">
-              </div>
-            </label>
-          </div>
-        </fieldset>
+      <!-- Live Dynamic Architectural HUD Bar -->
+      <div class="studio-hud" id="studio-hud">
+        <div class="hud-item" title="Calculated Ground Footprint">
+          <span class="hud-label">Site Footprint</span>
+          <span class="hud-val" id="plot-area-calc">216 m² · 2,325 sq ft</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item" title="Cardinal Orientation">
+          <span class="hud-label">Orientation</span>
+          <span class="hud-val hud-val--gold" id="hud-orientation">North Facing · Kuber</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item" title="Spatial Program">
+          <span class="hud-label">Program</span>
+          <span class="hud-val" id="hud-program">3 BHK Duplex · 2 Baths</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item" title="Vastu Knowledge Graph Alignment">
+          <span class="hud-label">Vastu Stance</span>
+          <span class="hud-val hud-val--indigo" id="hud-vastu">Balanced (Panchabhuta)</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item" title="Budget Ceiling">
+          <span class="hud-label">Budget Target</span>
+          <span class="hud-val" id="hud-budget">₹65.00 L · CPWD Premium</span>
+        </div>
+        <div class="hud-divider"></div>
+        <div class="hud-item" title="Multi-Agent Consensus Topology">
+          <span class="hud-label">Multi-Agent Engine</span>
+          <span class="hud-val hud-val--ok">4 Agents Active · LangGraph</span>
+        </div>
+      </div>
+    </div>
 
-        <!-- Style & Investment -->
-        <fieldset class="form-card">
-          <legend class="form-card__legend">
-            <span>Style & Budget</span>
-          </legend>
-          <div class="grid-2">
-            <label class="fld">
-              <span>Architectural Language</span>
-              <div class="input-wrap select-wrap">
-                <select name="styles">
-                  <option value="tropical_modern" selected>Tropical Modern</option>
-                  <option value="contemporary">Contemporary Minimal</option>
-                  <option value="kerala_vernacular">Kerala Vernacular</option>
-                  <option value="chettinad">Chettinad Heritage</option>
-                  <option value="modern_minimal">Modern Minimalist</option>
-                  <option value="japandi">Japandi</option>
-                  <option value="biophilic">Biophilic Sanctuary</option>
-                  <option value="traditional_indian">Traditional Indian</option>
-                  <option value="industrial">Industrial Loft</option>
-                  <option value="scandinavian">Scandinavian Warm</option>
-                </select>
-              </div>
-            </label>
-            <label class="fld">
-              <span>Estimated Budget</span>
-              <div class="input-wrap">
-                <input type="number" name="budget" value="6500000" min="0" step="50000">
-                <i>₹</i>
-              </div>
-            </label>
-          </div>
-        </fieldset>
+    <!-- Master Brief Form -->
+    <form id="brief" class="brief-studio-form" novalidate>
 
-        <!-- Vastu Alignment Slider -->
-        <fieldset class="form-card stance-block">
-          <legend class="form-card__legend">
-            <span>Vastu Stance</span>
-          </legend>
-          <div class="stance-read">
-            <div class="stance-header">
-              <span class="stance-badge" id="stance-name">Balanced</span>
-            </div>
-            <p class="stance-desc" id="stance-note">Classical rules and modern building science carry equal weight.</p>
+      <!-- ── SECTION 0: Natural Language Brief & Quick Presets (Module 1) ── -->
+      <div class="form-card form-card--featured">
+        <div class="form-card__head">
+          <div class="form-card__icon-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
           </div>
-          <div class="slider-container">
-            <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
-                   aria-label="Vastu stance from modern to orthodox">
-            <div class="stance-scale" aria-hidden="true">
-              <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
-            </div>
+          <div>
+            <h3 class="form-card__title">Client Interaction & Requirement Capture</h3>
+            <p class="form-card__subtitle">Natural Language Parsing (Module 1) · Describe your vision or pick an architectural template</p>
           </div>
-        </fieldset>
-
-        <!-- Submit Convene Committee Button -->
-        <div class="cta-wrap">
-          <button type="submit" class="convene" id="convene">
-            <div class="convene__content">
-              <span class="convene__main">Convene Committee <span class="arrow">→</span></span>
-              <span class="convene__sub" id="convene-sub">13 Critics · 3 Candidate Schemes</span>
-            </div>
-          </button>
-          <p class="engine-note" id="engine-note">Connecting to engine…</p>
         </div>
 
-      </form>
-    </div>
+        <div class="prompt-wrap">
+          <textarea class="studio-prompt" name="client_prompt" id="client-prompt" rows="2"
+            placeholder="e.g. Contemporary 3BHK duplex with an open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹75 Lakhs."></textarea>
+        </div>
+
+        <div class="preset-chips-wrap">
+          <span class="preset-chips__label">Quick Architectural Presets:</span>
+          <div class="preset-chips">
+            <button type="button" class="preset-chip is-active" data-preset="vastu-villa">
+              <span class="preset-chip__icon">🏛️</span> 3BHK Vastu Villa (Duplex)
+            </button>
+            <button type="button" class="preset-chip" data-preset="compact-urban">
+              <span class="preset-chip__icon">🏙️</span> 2BHK Urban Residence (G+1)
+            </button>
+            <button type="button" class="preset-chip" data-preset="biophilic-retreat">
+              <span class="preset-chip__icon">🌿</span> 4BHK Biophilic Sanctuary
+            </button>
+            <button type="button" class="preset-chip" data-preset="kerala-vernacular">
+              <span class="preset-chip__icon">🏯</span> Kerala Vernacular Courtyard
+            </button>
+            <button type="button" class="preset-chip" data-preset="modern-studio">
+              <span class="preset-chip__icon">🏢</span> Modern Compact (Single Level)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TWO-COLUMN BENTO GRID ── -->
+      <div class="studio-grid">
+
+        <!-- ══════ COLUMN 1: PHYSICAL ARCHITECTURE & SPACE ══════ -->
+        <div class="studio-col">
+
+          <!-- Card 1: Site Geometry, Orientation & Setbacks (Modules 1, 3, 5.1) -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Site Geometry & Cardinal Orientation</span>
+                <span class="form-card__subtitle">Plot boundaries, levels, road frontage & NBC setback requirements</span>
+              </div>
+            </legend>
+
+            <div class="grid-3">
+              <label class="fld">
+                <span class="fld-label">Plot Width <i class="fld-hint">(East-West)</i></span>
+                <div class="input-wrap">
+                  <input type="number" id="inp-plot-width" name="plot_width" value="12" min="3" max="200" step="0.5">
+                  <i>m</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Plot Depth <i class="fld-hint">(North-South)</i></span>
+                <div class="input-wrap">
+                  <input type="number" id="inp-plot-depth" name="plot_depth" value="18" min="3" max="200" step="0.5">
+                  <i>m</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Storey Levels</span>
+                <div class="input-wrap select-wrap">
+                  <select name="levels" id="inp-levels">
+                    <option value="1">G (Ground Only)</option>
+                    <option value="2" selected>G+1 (Duplex)</option>
+                    <option value="3">G+2 (Triplex)</option>
+                    <option value="4">Stilt + 3 Floors</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <!-- Cardinal Road Facing Grid -->
+            <div class="fld fld--spacing">
+              <span class="fld-label">Road Frontage & Directional Facing (Cardinal / Inter-cardinal)</span>
+              <div class="direction-grid" id="direction-grid">
+                <label class="dir-radio is-selected" data-val="N">
+                  <input type="radio" name="road_direction" value="N" checked>
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">N</span>
+                    <span class="dir-radio__name">North</span>
+                    <span class="dir-radio__elem">Kuber · Air</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="NE">
+                  <input type="radio" name="road_direction" value="NE">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">NE</span>
+                    <span class="dir-radio__name">Ishanya</span>
+                    <span class="dir-radio__elem">Water · Holy</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="E">
+                  <input type="radio" name="road_direction" value="E">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">E</span>
+                    <span class="dir-radio__name">East</span>
+                    <span class="dir-radio__elem">Indra · Light</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="SE">
+                  <input type="radio" name="road_direction" value="SE">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">SE</span>
+                    <span class="dir-radio__name">Agneya</span>
+                    <span class="dir-radio__elem">Fire · Energy</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="S">
+                  <input type="radio" name="road_direction" value="S">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">S</span>
+                    <span class="dir-radio__name">South</span>
+                    <span class="dir-radio__elem">Yama · Focus</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="SW">
+                  <input type="radio" name="road_direction" value="SW">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">SW</span>
+                    <span class="dir-radio__name">Nairutya</span>
+                    <span class="dir-radio__elem">Earth · Power</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="W">
+                  <input type="radio" name="road_direction" value="W">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">W</span>
+                    <span class="dir-radio__name">West</span>
+                    <span class="dir-radio__elem">Varuna · Sunset</span>
+                  </span>
+                </label>
+                <label class="dir-radio" data-val="NW">
+                  <input type="radio" name="road_direction" value="NW">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__code">NW</span>
+                    <span class="dir-radio__name">Vayavya</span>
+                    <span class="dir-radio__elem">Air · Wind</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <label class="fld">
+                <span class="fld-label">Project Location / Jurisdiction</span>
+                <div class="input-wrap">
+                  <input type="text" name="locality" id="inp-locality" value="Bengaluru, Karnataka" maxlength="120" placeholder="e.g. Chennai, Mumbai, Hyderabad">
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">National Building Code (NBC) Setbacks</span>
+                <div class="grid-3 mini-inputs">
+                  <div class="input-wrap input-wrap--mini" title="Front Setback">
+                    <input type="number" name="setback_front" value="2.5" step="0.5" min="1"><i>front</i>
+                  </div>
+                  <div class="input-wrap input-wrap--mini" title="Rear Setback">
+                    <input type="number" name="setback_rear" value="1.5" step="0.5" min="1"><i>rear</i>
+                  </div>
+                  <div class="input-wrap input-wrap--mini" title="Side Setback">
+                    <input type="number" name="setback_side" value="1.2" step="0.2" min="1"><i>side</i>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Card 2: Spatial Programme & Room Taxonomy (Modules 3, 8 - RPLAN / CubiCasa5k) -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Spatial Programme & Room Taxonomy</span>
+                <span class="form-card__subtitle">Vectorized Room Bounding Boxes & Adjacency Constraints (RPLAN Dataset)</span>
+              </div>
+            </legend>
+
+            <div class="grid-3">
+              <label class="fld">
+                <span class="fld-label">Bedrooms (BHK)</span>
+                <div class="input-wrap">
+                  <input type="number" name="bedrooms" id="inp-bedrooms" value="3" min="1" max="8">
+                  <i>BHK</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Bathrooms</span>
+                <div class="input-wrap">
+                  <input type="number" name="bathrooms" id="inp-bathrooms" value="3" min="1" max="8">
+                  <i>baths</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Kitchen Typology</span>
+                <div class="input-wrap select-wrap">
+                  <select name="kitchen_type">
+                    <option value="open_modular" selected>Open Modular</option>
+                    <option value="closed">Traditional Closed</option>
+                    <option value="wet_dry">Dual (Wet + Dry)</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <!-- Dedicated Architectural Spaces Checklist -->
+            <div class="fld fld--spacing">
+              <span class="fld-label">Ancillary Functional Spaces (Module 8 Graph Adjacencies)</span>
+              <div class="amenities-grid">
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_pooja" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__icon">🕉️</span>
+                    <span class="amenity-chip__name">Vastu Pooja Room</span>
+                    <span class="amenity-chip__zone">Ishanya (NE)</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_dining" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__icon">🍽️</span>
+                    <span class="amenity-chip__name">Formal Dining Hall</span>
+                    <span class="amenity-chip__zone">East/Central</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_study" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__icon">💼</span>
+                    <span class="amenity-chip__name">Home Office / Study</span>
+                    <span class="amenity-chip__zone">Budh / Mercury</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_utility" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__icon">🧺</span>
+                    <span class="amenity-chip__name">Utility & Wash Area</span>
+                    <span class="amenity-chip__zone">Service Zone</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_balcony" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__icon">🌿</span>
+                    <span class="amenity-chip__name">Verandah & Balcony</span>
+                    <span class="amenity-chip__zone">Cross-breeze</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_parking" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__icon">🚗</span>
+                    <span class="amenity-chip__name">Covered Car Porch</span>
+                    <span class="amenity-chip__zone">NW / SE Entry</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Family Demographics & Accessibility (Module 1) -->
+            <div class="demographics-subcard">
+              <span class="fld-label">Family Demographics & Universal Design</span>
+              <div class="grid-3">
+                <label class="fld">
+                  <span class="fld-sublabel">Adults</span>
+                  <div class="input-wrap">
+                    <input type="number" name="occupant_adults" value="2" min="1" max="10">
+                  </div>
+                </label>
+                <label class="fld">
+                  <span class="fld-sublabel">Children</span>
+                  <div class="input-wrap">
+                    <input type="number" name="occupant_children" value="1" min="0" max="8">
+                  </div>
+                </label>
+                <label class="fld">
+                  <span class="fld-sublabel">Senior Citizens</span>
+                  <div class="input-wrap">
+                    <input type="number" name="occupant_elders" value="1" min="0" max="6">
+                  </div>
+                </label>
+              </div>
+              <label class="accessibility-toggle">
+                <input type="checkbox" name="elderly_access" value="1" checked>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-text">
+                  <strong>Senior Accessibility Guarantee</strong>: Enforce ground-floor master suite, zero-threshold doorways, and 1.2m wide circulation corridors.
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+        </div>
+
+        <!-- ══════ COLUMN 2: INTELLIGENCE, VASTU, COST & ENGINE ══════ -->
+        <div class="studio-col">
+
+          <!-- Card 3: Vastu Knowledge Graph (VKG) Stance & Element Balance (Module 4, 5.2.2) -->
+          <fieldset class="form-card stance-block">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge form-card__icon-badge--gold">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Vastu Knowledge Graph (VKG) Reasoning</span>
+                <span class="form-card__subtitle">Deterministic Graph-Path Traversal (Direction → Room → Panchabhuta)</span>
+              </div>
+            </legend>
+
+            <div class="stance-read">
+              <div class="stance-header">
+                <span class="stance-badge" id="stance-name">Balanced</span>
+                <span class="stance-subtag">Module 4 Constraint Reasoner</span>
+              </div>
+              <p class="stance-desc" id="stance-note">Classical Vastu principles and modern structural science carry equal weight.</p>
+            </div>
+
+            <div class="slider-container">
+              <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+                     aria-label="Vastu stance from modern to orthodox">
+              <div class="stance-scale" aria-hidden="true">
+                <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
+              </div>
+            </div>
+
+            <!-- Panchabhuta Five Elements Distribution (VKG Nodes) -->
+            <div class="panchabhuta-matrix">
+              <span class="fld-sublabel">Panchabhuta 5-Element Graph Alignment Targets:</span>
+              <div class="elements-grid">
+                <div class="elem-node elem-node--water" title="Ishanya NE">
+                  <span class="elem-node__dot"></span>
+                  <span class="elem-node__name">Water (Jala)</span>
+                  <span class="elem-node__zone">Ishanya NE · Mandir</span>
+                </div>
+                <div class="elem-node elem-node--fire" title="Agneya SE">
+                  <span class="elem-node__dot"></span>
+                  <span class="elem-node__name">Fire (Agni)</span>
+                  <span class="elem-node__zone">Agneya SE · Kitchen</span>
+                </div>
+                <div class="elem-node elem-node--earth" title="Nairutya SW">
+                  <span class="elem-node__dot"></span>
+                  <span class="elem-node__name">Earth (Prithvi)</span>
+                  <span class="elem-node__zone">Nairutya SW · Master</span>
+                </div>
+                <div class="elem-node elem-node--air" title="Vayavya NW">
+                  <span class="elem-node__dot"></span>
+                  <span class="elem-node__name">Air (Vayu)</span>
+                  <span class="elem-node__zone">Vayavya NW · Guests</span>
+                </div>
+                <div class="elem-node elem-node--space" title="Brahmasthan Center">
+                  <span class="elem-node__dot"></span>
+                  <span class="elem-node__name">Space (Akasha)</span>
+                  <span class="elem-node__zone">Center · Courtyard</span>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Card 4: Cost Estimation & RAG Pricing (Module 5, 7, 5.2.4 - CPWD Rates) -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Cost Estimator Agent & Material RAG</span>
+                <span class="form-card__subtitle">CPWD Schedule of Rates + Built-up Area Regression (Module 5 & 7)</span>
+              </div>
+            </legend>
+
+            <div class="grid-2">
+              <label class="fld">
+                <span class="fld-label">Target Budget Ceiling</span>
+                <div class="input-wrap">
+                  <input type="number" name="budget" id="inp-budget" value="6500000" min="500000" step="50000">
+                  <i>₹</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Specification & Finish Tier</span>
+                <div class="input-wrap select-wrap">
+                  <select name="finish_tier" id="inp-finish-tier">
+                    <option value="standard">Standard (CPWD Benchmark)</option>
+                    <option value="premium" selected>Premium Architectural</option>
+                    <option value="luxury">Luxury Bespoke Custom</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <!-- Quick Budget Target Chips -->
+            <div class="budget-chips">
+              <span class="budget-chips__label">Quick Target:</span>
+              <button type="button" class="budget-chip" data-amt="4500000">₹45 Lakhs</button>
+              <button type="button" class="budget-chip is-active" data-amt="6500000">₹65 Lakhs</button>
+              <button type="button" class="budget-chip" data-amt="9000000">₹90 Lakhs</button>
+              <button type="button" class="budget-chip" data-amt="15000000">₹1.50 Crore</button>
+            </div>
+          </fieldset>
+
+          <!-- Card 5: Architectural Language & Cosmetic Rendering (Module 6, 9) -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Architectural Style & Interior Styling</span>
+                <span class="form-card__subtitle">3D-FRONT Catalogues & Cosmetic Diffusion Render (Module 6 & 9)</span>
+              </div>
+            </legend>
+
+            <div class="grid-2">
+              <label class="fld">
+                <span class="fld-label">Architectural Language</span>
+                <div class="input-wrap select-wrap">
+                  <select name="styles" id="inp-styles">
+                    <option value="tropical_modern" selected>Tropical Modern (Courtyard & Deep Eaves)</option>
+                    <option value="contemporary">Contemporary Minimal (Glass & Clean Geometry)</option>
+                    <option value="biophilic">Biophilic Sanctuary (Indoor Flora & Natural Light)</option>
+                    <option value="kerala_vernacular">Kerala Vernacular (Sloped Terracotta & Wood)</option>
+                    <option value="chettinad">Chettinad Heritage (Granite Pillars & Atrium)</option>
+                    <option value="modern_minimal">Modern Minimalist (Pure Concrete & Monolith)</option>
+                    <option value="japandi">Japandi (Warm Oak & Wabi-Sabi Flow)</option>
+                    <option value="industrial">Industrial Loft (Exposed Steel & Brick)</option>
+                    <option value="scandinavian">Scandinavian Warm (Light Pine & Hygge)</option>
+                  </select>
+                </div>
+              </label>
+
+              <label class="fld">
+                <span class="fld-label">Cosmetic Pass Mode (Module 9)</span>
+                <div class="input-wrap select-wrap">
+                  <select name="render_mode">
+                    <option value="both" selected>Vector Geometry + Diffusion Textures</option>
+                    <option value="vector_only">Strict Vector CAD Only (SVG/DXF)</option>
+                    <option value="photoreal">Photorealistic Surface Renders</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Card 6: Multi-Agent Consensus Protocol Settings (Module 2, 5.2.1 - LangGraph) -->
+          <fieldset class="form-card form-card--engine">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge form-card__icon-badge--ok">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Multi-Agent Consensus Protocol Engine</span>
+                <span class="form-card__subtitle">Manager-Worker Topology (LangGraph Orchestration State Machine)</span>
+              </div>
+            </legend>
+
+            <!-- 4 Active Worker Agents Display -->
+            <div class="agents-squad">
+              <div class="agent-chip" title="Floorplan Architect Agent (Module 3)">
+                <span class="agent-chip__indicator"></span>
+                <span class="agent-chip__name">Floorplan Architect</span>
+                <span class="agent-chip__role">NBC Rule Base</span>
+              </div>
+              <div class="agent-chip" title="Vastu Compliance Agent (Module 4)">
+                <span class="agent-chip__indicator"></span>
+                <span class="agent-chip__name">Vastu Compliance</span>
+                <span class="agent-chip__role">VKG Reasoner</span>
+              </div>
+              <div class="agent-chip" title="Cost Estimator Agent (Module 5)">
+                <span class="agent-chip__indicator"></span>
+                <span class="agent-chip__name">Cost Estimator</span>
+                <span class="agent-chip__role">CPWD RAG</span>
+              </div>
+              <div class="agent-chip" title="Interior Renderer Agent (Module 6)">
+                <span class="agent-chip__indicator"></span>
+                <span class="agent-chip__name">Interior Renderer</span>
+                <span class="agent-chip__role">3D-FRONT Spec</span>
+              </div>
+            </div>
+
+            <div class="grid-2 fld--spacing">
+              <label class="fld">
+                <span class="fld-label">Consensus Debate Depth</span>
+                <div class="input-wrap select-wrap">
+                  <select name="consensus_rounds" id="inp-consensus-rounds">
+                    <option value="3">3 Debate Rounds (Rapid Exploration)</option>
+                    <option value="5" selected>5 Debate Rounds (Balanced Convergence)</option>
+                    <option value="8">8 Debate Rounds (Deep Structural Negotiation)</option>
+                  </select>
+                </div>
+              </label>
+
+              <label class="fld">
+                <span class="fld-label">Hard Constraint Enforcement</span>
+                <div class="constraints-toggles">
+                  <label class="mini-check" title="Structural integrity & wall thickness">
+                    <input type="checkbox" name="enforce_nbc" checked disabled>
+                    <span>NBC Structural</span>
+                  </label>
+                  <label class="mini-check" title="Vastu Score Threshold >= 80%">
+                    <input type="checkbox" name="enforce_vastu" checked>
+                    <span>Vastu ≥80%</span>
+                  </label>
+                  <label class="mini-check" title="Strict Budget Ceiling">
+                    <input type="checkbox" name="enforce_cost" checked>
+                    <span>Cost Ceiling</span>
+                  </label>
+                </div>
+              </label>
+            </div>
+          </fieldset>
+
+        </div>
+      </div>
+
+      <!-- ── ACTION CALL-TO-ACTION (Luminous Bar) ── -->
+      <div class="studio-cta-wrap">
+        <button type="submit" class="convene convene--studio" id="convene">
+          <div class="convene__content">
+            <span class="convene__main">
+              <span>Convene Multi-Agent Committee</span>
+              <span class="arrow">→</span>
+            </span>
+            <span class="convene__sub" id="convene-sub">
+              LangGraph Orchestration State Machine · 4 Worker Agents · 13 Analytical Critics · 3 Candidate Schemes
+            </span>
+          </div>
+        </button>
+        <p class="engine-note" id="engine-note">Connecting to engine at localhost:8000…</p>
+      </div>
+
+    </form>
   </div>
 </section>
 
