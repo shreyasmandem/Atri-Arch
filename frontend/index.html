@@ -33,14 +33,53 @@
         <div class="intro-compass-ring intro-compass-ring--inner"></div>
         <div class="intro-brand-glow"></div>
         <div class="intro-brand-core">
+          <!-- Layer-by-Layer Architectural Blueprint Construction Wireframe -->
+          <svg class="intro-arch-blueprint" viewBox="0 0 120 120" fill="none" aria-hidden="true">
+            <!-- Layer 1: Coordinate Reticle & Construction Lines -->
+            <g class="bp-layer bp-reticle">
+              <line x1="60" y1="4" x2="60" y2="116" stroke="rgba(229,169,88,0.3)" stroke-width="0.75" stroke-dasharray="3 3" />
+              <line x1="4" y1="60" x2="116" y2="60" stroke="rgba(229,169,88,0.3)" stroke-width="0.75" stroke-dasharray="3 3" />
+              <circle cx="60" cy="60" r="50" stroke="rgba(255,255,255,0.15)" stroke-width="0.75" stroke-dasharray="2 4" />
+            </g>
+            
+            <!-- Layer 2: Left Platinum Arch Rib (Traced upward) -->
+            <path class="bp-layer bp-left-arch" d="M 28 102 L 42 60 Q 52 26 60 14" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" />
+            
+            <!-- Layer 3: Right Gold Outer Arch Rib (Traced downward) -->
+            <path class="bp-layer bp-right-arch" d="M 60 14 Q 85 36 98 72 L 100 102 L 80 102" stroke="#E5A958" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+            
+            <!-- Layer 4: Right Gold Inner Arch Curve -->
+            <path class="bp-layer bp-inner-curve" d="M 50 48 Q 66 65 78 92" stroke="#E5A958" stroke-width="2.8" stroke-linecap="round" />
+            
+            <!-- Layer 5: Architectural Truss Struts -->
+            <line class="bp-layer bp-strut bp-strut--1" x1="52" y1="36" x2="72" y2="44" stroke="#E5A958" stroke-width="2.6" stroke-linecap="round" />
+            <line class="bp-layer bp-strut bp-strut--2" x1="45" y1="58" x2="82" y2="68" stroke="#E5A958" stroke-width="2.6" stroke-linecap="round" />
+            <line class="bp-layer bp-strut bp-strut--3" x1="38" y1="80" x2="90" y2="88" stroke="#E5A958" stroke-width="2.6" stroke-linecap="round" />
+          </svg>
+
+          <!-- Solid Master Luxury Emblem (Locks in at completion) -->
           <img src="logo_emblem.png" alt="Atri Arch" class="intro-brand-img" />
+
+          <!-- Laser Etching Scan Line -->
           <div class="intro-laser-scan"></div>
+
+          <!-- Optical Lens Flare Bloom -->
           <div class="intro-optic-flare"></div>
         </div>
       </div>
 
-      <!-- Company Title -->
-      <h1 class="intro-brand-title">atri arch</h1>
+      <!-- Company Title (Staggered Letter Reveal) -->
+      <h1 class="intro-brand-title" aria-label="atri arch">
+        <span class="intro-char" style="--i:0">a</span>
+        <span class="intro-char" style="--i:1">t</span>
+        <span class="intro-char" style="--i:2">r</span>
+        <span class="intro-char" style="--i:3">i</span>
+        <span class="intro-char intro-char--space">&nbsp;</span>
+        <span class="intro-char intro-char--gold" style="--i:4">a</span>
+        <span class="intro-char intro-char--gold" style="--i:5">r</span>
+        <span class="intro-char intro-char--gold" style="--i:6">c</span>
+        <span class="intro-char intro-char--gold" style="--i:7">h</span>
+      </h1>
 
       <!-- Tagline -->
       <p class="intro-brand-tagline">architect intelligence studio</p>
