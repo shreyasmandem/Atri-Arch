@@ -54,12 +54,13 @@
 html, body { height: 100%; margin: 0; }
 
 body {
-  background-color: #000000;
+  background-color: #020306;
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -5%, rgba(127, 163, 212, 0.12) 0%, transparent 60%),
-    radial-gradient(circle 800px at 95% 85%, rgba(229, 169, 88, 0.06) 0%, transparent 55%),
-    radial-gradient(circle 600px at 5% 95%, rgba(142, 110, 240, 0.05) 0%, transparent 50%),
-    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.8) 100%);
+    radial-gradient(circle 500px at var(--mouse-x, 50%) var(--mouse-y, 40%), rgba(229, 169, 88, 0.045) 0%, transparent 70%),
+    radial-gradient(ellipse 85% 55% at 50% -5%, rgba(127, 163, 212, 0.13) 0%, transparent 65%),
+    radial-gradient(circle 900px at 95% 85%, rgba(229, 169, 88, 0.07) 0%, transparent 55%),
+    radial-gradient(circle 700px at 5% 95%, rgba(142, 110, 240, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.88) 100%);
   background-attachment: fixed;
   color: var(--chalk-2);
   font-family: var(--face);
@@ -299,8 +300,11 @@ body[data-phase="review"]  .review  { display: grid; }
   position: absolute; left: 33.33%; top: 33.33%; width: 33.34%; height: 33.34%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center; padding: 6%;
-  background: radial-gradient(circle, rgba(127, 163, 212, 0.08), transparent 70%);
-  border-radius: 8px;
+  background: radial-gradient(circle, rgba(229, 169, 88, 0.09), rgba(7, 9, 14, 0.75) 70%);
+  border: 1px solid rgba(229, 169, 88, 0.22);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 28px rgba(229, 169, 88, 0.14), inset 0 0 16px rgba(229, 169, 88, 0.06);
 }
 .mandala-heart-logo {
   width: 34px; height: 34px;
@@ -373,30 +377,32 @@ body[data-phase="review"]  .review  { display: grid; }
 .sparkle { font-size: 12px; }
 
 .brief-brand-seal {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 4px 14px 4px 8px; border-radius: var(--r-pill);
-  background: linear-gradient(135deg, rgba(229, 169, 88, 0.12), rgba(255, 255, 255, 0.03));
-  border: 1px solid rgba(229, 169, 88, 0.28);
-  box-shadow: 0 2px 16px rgba(229, 169, 88, 0.08);
-  margin-bottom: 16px;
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 6px 18px 6px 10px; border-radius: var(--r-pill);
+  background: linear-gradient(135deg, rgba(229, 169, 88, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1px solid rgba(229, 169, 88, 0.35);
+  box-shadow: 0 4px 24px rgba(229, 169, 88, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  margin-bottom: 18px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .brief-brand-seal__img {
-  width: 18px; height: 18px; object-fit: contain;
-  filter: brightness(1.15);
+  width: 22px; height: 22px; object-fit: contain;
+  filter: drop-shadow(0 0 8px rgba(229, 169, 88, 0.6)) brightness(1.2);
 }
 .brief-brand-seal__tag {
-  font-size: 10.5px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--ochre);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: #FFFFFF;
 }
 
 .brief-head h1 {
-  margin: 0 0 10px;
-  font-size: clamp(28px, 2.8vw, 36px);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  background: linear-gradient(180deg, #FFFFFF 0%, rgba(255,255,255,0.7) 100%);
+  margin: 0 0 12px;
+  font-size: clamp(30px, 3.2vw, 42px);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+  background: linear-gradient(180deg, #FFFFFF 10%, #E2E6EC 65%, #E5A958 120%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -518,18 +524,27 @@ body[data-phase="review"]  .review  { display: grid; }
 .cta-wrap { margin-top: 24px; }
 .convene {
   position: relative; width: 100%; cursor: pointer; text-align: left;
-  background: linear-gradient(180deg, #FFFFFF 0%, #E8EBF0 100%);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F5F7FA 50%, #E4E8EE 100%);
   color: #07080B;
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.95);
   border-radius: var(--r);
-  padding: 16px 22px;
-  box-shadow: 0 16px 32px -8px rgba(255, 255, 255, 0.18), 0 4px 12px rgba(0, 0, 0, 0.4);
-  transition: all .22s var(--ease);
+  padding: 18px 24px;
+  box-shadow: 0 16px 36px -6px rgba(229, 169, 88, 0.16), 0 4px 16px rgba(0, 0, 0, 0.6);
+  transition: all .25s var(--ease);
   overflow: hidden;
+}
+.convene::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: translateX(-100%);
+  transition: transform 0.65s var(--ease);
+}
+.convene:hover:not([disabled])::before {
+  transform: translateX(100%);
 }
 .convene:hover:not([disabled]) {
   transform: translateY(-2px);
-  box-shadow: 0 20px 40px -6px rgba(255, 255, 255, 0.28), 0 6px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 22px 48px -6px rgba(229, 169, 88, 0.28), 0 8px 20px rgba(0, 0, 0, 0.7);
   background: #FFFFFF;
 }
 .convene:active:not([disabled]) { transform: translateY(1px); }
@@ -1038,28 +1053,33 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
 /* Integrated Brand Logo Badge */
 .intro-brand-badge {
   position: relative;
-  width: 58px; height: 58px;
+  width: 66px; height: 66px;
   display: flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(229, 169, 88, 0.25);
-  box-shadow: 0 0 24px rgba(229, 169, 88, 0.08), inset 0 0 16px rgba(229, 169, 88, 0.04);
+  background: radial-gradient(circle, rgba(229, 169, 88, 0.12) 0%, rgba(255, 255, 255, 0.02) 70%);
+  border: 1px solid rgba(229, 169, 88, 0.38);
+  box-shadow: 0 0 36px rgba(229, 169, 88, 0.22), inset 0 0 20px rgba(229, 169, 88, 0.08);
   opacity: 0;
-  animation: badge-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
+  animation: badge-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+}
+.intro-brand-badge::before {
+  content: ''; position: absolute; inset: -11px;
+  border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
 }
 .intro-brand-badge::after {
   content: '';
   position: absolute;
-  inset: -6px;
+  inset: -5px;
   border-radius: 50%;
-  border: 1px dashed rgba(229, 169, 88, 0.18);
+  border: 1px dashed rgba(229, 169, 88, 0.28);
   pointer-events: none;
-  animation: badge-spin 20s linear infinite;
+  animation: badge-spin 24s linear infinite;
 }
 .intro-brand-badge__img {
-  width: 38px; height: 38px;
+  width: 44px; height: 44px;
   object-fit: contain;
-  filter: brightness(1.15) contrast(1.05);
+  filter: drop-shadow(0 0 10px rgba(229, 169, 88, 0.6)) brightness(1.25);
 }
 @keyframes badge-reveal {
   0%   { opacity: 0; transform: scale(0.7); }
@@ -1317,70 +1337,4 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
   .drafting-hud { font-size: 8.5px; gap: 10px; flex-wrap: wrap; justify-content: center; }
   .drafting-svg { width: 100%; height: auto; }
 }
-
-/* ══════════════════════ COMPARE SYSTEM ══════════════════════ */
-
-.compare-trigger-btn {
-  display: flex; align-items: center; gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: var(--r-pill);
-  padding: 5px 13px; cursor: pointer; color: var(--chalk-2);
-  font-size: 11.5px; font-weight: 500; letter-spacing: -0.01em;
-  transition: all 0.2s var(--ease);
-}
-.compare-trigger-btn:hover {
-  background: rgba(255, 255, 255, 0.12); color: #FFF; border-color: rgba(255, 255, 255, 0.25);
-}
-
-.compare-modal {
-  position: fixed; inset: 0; z-index: 1000;
-  background: rgba(0, 0, 0, 0.92);
-  backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px 30px;
-}
-
-.compare-modal__panel {
-  width: 100%; height: 100%; max-width: 1700px;
-  background: #050608; border: 1px solid var(--rule); border-radius: var(--r-lg);
-  display: flex; flex-direction: column; overflow: hidden;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.9);
-}
-
-.compare-modal__header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 16px 24px; border-bottom: 1px solid var(--rule);
-  background: rgba(8, 10, 15, 0.95);
-}
-
-.compare-title { display: flex; align-items: center; gap: 14px; }
-.compare-badge {
-  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
-  padding: 3px 9px; border-radius: var(--r-pill); background: rgba(255, 255, 255, 0.08); color: var(--chalk-2);
-}
-.compare-title h2 { margin: 0; font-size: 15px; font-weight: 600; color: #FFF; }
-
-.compare-actions { display: flex; align-items: center; gap: 12px; }
-
-.compare-split {
-  flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-  background: var(--rule); min-height: 0;
-}
-
-.split-pane {
-  background: #000000; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
-}
-
-.split-pane__bar {
-  padding: 10px 18px; font-size: 12px; color: var(--chalk-3);
-  display: flex; align-items: center; gap: 8px;
-  border-bottom: 1px solid var(--rule); background: rgba(8, 10, 14, 0.8);
-}
-
-.dot-label { width: 7px; height: 7px; border-radius: 50%; }
-.dot-modern { background: #7FA3D4; box-shadow: 0 0 8px #7FA3D4; }
-.dot-classic { background: #E5A958; box-shadow: 0 0 8px #E5A958; }
-
-.split-pane__frame-wrap { flex: 1; position: relative; min-height: 0; }
-.split-iframe { width: 100%; height: 100%; border: 0; background: transparent; }
 

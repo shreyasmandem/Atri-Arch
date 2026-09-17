@@ -203,9 +203,8 @@ function initStarField() {
   }
 
   function draw(t) {
-    // Pure Pitch Black background fill
-    ctx.fillStyle = "#000000";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Transparent canvas clear so cosmic color-graded background shines through
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
@@ -307,6 +306,8 @@ function initStarField() {
     mouse.x = e.clientX;
     mouse.y = e.clientY;
     mouse.active = true;
+    document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
+    document.documentElement.style.setProperty("--mouse-y", `${e.clientY}px`);
   });
   window.addEventListener("mouseleave", () => { mouse.active = false; });
 
