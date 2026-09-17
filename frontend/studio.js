@@ -141,8 +141,8 @@ function initStarField() {
   if (!canvas) return { spread: () => {} };
   const ctx = canvas.getContext("2d");
 
-  const INTRO_STAR_COUNT = 32;
-  const BURST_STAR_COUNT = 200;
+  const INTRO_STAR_COUNT = 0; // Pure black void during intro; only the logo is visible
+  const BURST_STAR_COUNT = 240; // All stars are born directly when the logo splits
   const stars = [];
   let state = "forming"; // "forming" | "splitting" | "ambient"
   let spreadStart = 0;
@@ -173,74 +173,36 @@ function initStarField() {
     updateCenter();
   }
 
-  // Celestial palette
+  // Celestial palette: Gold, Diamond White, Sapphire
   const COLORS = [
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.35)" },
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.35)" },
-    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.30)" },
-    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.40)" },
-    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.35)" },
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
+    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.35)" },
+    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.55)" },
+    { rgb: "229, 169, 88",  glow: "rgba(229, 169, 88, 0.50)" },
+    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.40)" },
   ];
 
-  // Creates wide-apart initial stars scattered across the deep space perimeter
-  function createIntroStar(index) {
-    const angle = Math.random() * Math.PI * 2;
-    // Spread wide across the screen: minimum 240px away from logo so center is pristine
-    const maxRadius = Math.max(window.innerWidth, window.innerHeight) * 0.55;
-    const orbitR = Math.random() * (maxRadius - 240) + 240;
-
-    const dir = Math.random() > 0.5 ? 1 : -1;
-    const orbitSpeed = (Math.random() * 0.002 + 0.001) * dir;
-
-    const targetX = Math.random() * window.innerWidth;
-    const targetY = Math.random() * window.innerHeight;
-
-    const isHero = Math.random() < 0.15;
-    const radius = isHero
-      ? Math.random() * 0.8 + 1.6
-      : Math.random() * 0.9 + 0.6;
-
-    const col = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const popDelay = (index / INTRO_STAR_COUNT) * 1400 + Math.random() * 300;
-
-    return {
-      x: cx + Math.cos(angle) * orbitR,
-      y: cy + Math.sin(angle) * (orbitR * 0.75),
-      orbitR, orbitAngle: angle, orbitSpeed,
-      targetX, targetY,
-      vx: 0, vy: 0,
-      r: radius,
-      isHero,
-      introAlpha: Math.random() * 0.30 + 0.55,
-      ambientAlpha: Math.random() * 0.10 + 0.14, // Calm, dull background presence
-      color: col,
-      phase: Math.random() * Math.PI * 2,
-      twinkleSpeed: Math.random() * 0.002 + 0.001,
-      driftX: (Math.random() - 0.5) * 0.08,
-      driftY: (Math.random() - 0.5) * 0.08,
-      popDelay,
-      popDuration: 400,
-    };
-  }
-
-  // Creates additional stars generated during the supernova spread
+  // Creates stars that burst directly out from the logo when it splits
   function createBurstStar() {
     const angle = Math.random() * Math.PI * 2;
-    const startDist = Math.random() * 60 + 10;
+    // Spawns right inside the logo boundary so they literally split from the logo
+    const rx = (Math.random() - 0.5) * 50;
+    const ry = (Math.random() - 0.5) * 50;
     const targetX = Math.random() * window.innerWidth;
     const targetY = Math.random() * window.innerHeight;
 
-    const isHero = Math.random() < 0.08;
+    const isHero = Math.random() < 0.12;
     const radius = isHero
-      ? Math.random() * 0.8 + 1.5
-      : Math.random() * 0.8 + 0.5;
+      ? Math.random() * 0.9 + 1.6
+      : Math.random() * 0.8 + 0.6;
 
     const col = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const speed = Math.random() * 24 + 14;
+    const speed = Math.random() * 26 + 12;
 
     return {
-      x: cx + Math.cos(angle) * startDist,
-      y: cy + Math.sin(angle) * startDist,
+      x: cx + rx,
+      y: cy + ry,
       orbitR: 0, orbitAngle: angle, orbitSpeed: 0,
       targetX, targetY,
       vx: Math.cos(angle) * speed,
@@ -459,11 +421,11 @@ function updatePlotStats() {
         setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // 1. Trigger Star Blast when silver collapses into gold in center (1.45s)
-      const blastTimer = setTimeout(triggerBlast, 1450);
+      // 1. Trigger Star Blast when silver locks with gold (both visible, 1.25s)
+      const blastTimer = setTimeout(triggerBlast, 1250);
 
-      // 2. Smoothly transition into home studio after intro sequence (3.3s)
-      const introTimer = setTimeout(() => dismissIntro(false), 3300);
+      // 2. Smoothly transition into home studio after stars settle (3.15s)
+      const introTimer = setTimeout(() => dismissIntro(false), 3150);
 
       skipBtn?.addEventListener("click", (e) => {
         e.stopPropagation();

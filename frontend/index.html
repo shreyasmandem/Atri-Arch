@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=collapse_v3">
+<link rel="stylesheet" href="studio.css?v=both_visible_v5">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -17,36 +17,15 @@
 
 <!-- ══════════════════════ ARCHITECTURAL DRAFTING INTRO ══════════════════════ -->
 <div class="intro-curtain" id="intro-curtain" aria-label="atri arch loading">
-  <div class="intro-curtain__space-grid"></div>
-
-  <!-- Horizontal Cinematic Accent Lines -->
-  <div class="intro-line intro-line--left"></div>
-  <div class="intro-line intro-line--right"></div>
-
   <div class="intro-curtain__canvas">
     <div class="intro-brand-box">
-      <!-- Concentric CAD Compass Halo & Illuminated Emblem -->
       <div class="intro-brand-stage">
-        <div class="intro-compass-pulse intro-compass-pulse--1"></div>
-        <div class="intro-compass-pulse intro-compass-pulse--2"></div>
-        <div class="intro-compass-ring intro-compass-ring--outer"></div>
-        <div class="intro-compass-ring intro-compass-ring--inner"></div>
-        <div class="intro-brand-glow"></div>
-
         <div class="intro-brand-core">
-          <!-- 1. Gold Logo (Centered, appears first) -->
+          <!-- 1. Gold Part (Appears first, centered) -->
           <img src="logo_gold.png" alt="Atri Arch Gold" class="intro-logo-gold" />
 
-          <!-- 2. Silver Logo (Collapses directly into it in the center) -->
+          <!-- 2. Silver Part (Appears second, overlaps in center; both remain visible) -->
           <img src="logo_silver.png" alt="Atri Arch Silver" class="intro-logo-silver" />
-
-          <!-- 3. Full combined master emblem (Fuses on collapse impact) -->
-          <img src="logo_emblem.png" alt="Atri Arch" class="intro-brand-img" />
-
-          <!-- Collapse blast shockwaves & flash -->
-          <div class="intro-blast-ring"></div>
-          <div class="intro-blast-ring intro-blast-ring--2"></div>
-          <div class="intro-blast-flash"></div>
         </div>
       </div>
 
@@ -62,14 +41,6 @@
         <span class="intro-char intro-char--gold" style="--i:6">c</span>
         <span class="intro-char intro-char--gold" style="--i:7">h</span>
       </h1>
-
-      <!-- Tagline -->
-      <p class="intro-brand-tagline">architect intelligence studio</p>
-
-      <!-- Minimal Laser Progress Line -->
-      <div class="intro-loader">
-        <span class="intro-loader__bar"></span>
-      </div>
     </div>
   </div>
   <button type="button" class="intro-skip" id="intro-skip">Enter Studio →</button>

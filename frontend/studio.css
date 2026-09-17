@@ -1041,45 +1041,6 @@ body > :not(#space-stars):not(#intro-curtain) {
   visibility: hidden;
 }
 
-.intro-curtain__space-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 64px 64px;
-  background-position: center center;
-  mask-image: radial-gradient(circle 480px at center, black 30%, transparent 80%);
-  -webkit-mask-image: radial-gradient(circle 480px at center, black 30%, transparent 80%);
-  opacity: 0;
-  animation: intro-fade 1.2s ease 0.2s forwards;
-}
-
-/* ── Horizontal Cinematic Accent Lines ── */
-.intro-line {
-  position: absolute;
-  top: 50%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(229, 169, 88, 0.45), transparent);
-  pointer-events: none;
-  transform: scaleX(0);
-}
-.intro-line--left {
-  right: 50%;
-  width: 38vw;
-  margin-right: 110px;
-  transform-origin: right center;
-  animation: intro-line-extend 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
-}
-.intro-line--right {
-  left: 50%;
-  width: 38vw;
-  margin-left: 110px;
-  transform-origin: left center;
-  animation: intro-line-extend 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
-}
-
 .intro-curtain__canvas {
   position: relative;
   z-index: 5;
@@ -1087,110 +1048,25 @@ body > :not(#space-stars):not(#intro-curtain) {
   max-width: 90vw;
 }
 
-/* ── Luxury Brand Intro Stage ── */
+/* ── Pure Void Brand Stage (Zero Circles, Pure Architectural Space) ── */
 
 .intro-brand-box {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 24px;
 }
 
-/* Emblem Container */
+/* Emblem Container - Completely clean, no circles, no rings */
 .intro-brand-stage {
   position: relative;
-  width: 170px;
-  height: 170px;
+  width: 120px;
+  height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-/* Dual Sonar Pulse Rings */
-.intro-compass-pulse {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid rgba(229, 169, 88, 0.45);
-  pointer-events: none;
-}
-.intro-compass-pulse--1 {
-  inset: -10px;
-  animation: intro-pulse 2.8s cubic-bezier(0.1, 0.8, 0.3, 1) 0.2s infinite;
-}
-.intro-compass-pulse--2 {
-  inset: -4px;
-  border-color: rgba(127, 163, 212, 0.35);
-  animation: intro-pulse 2.8s cubic-bezier(0.1, 0.8, 0.3, 1) 1.5s infinite;
-}
-
-.intro-compass-ring {
-  position: absolute;
-  border-radius: 50%;
-  pointer-events: none;
-  opacity: 0;
-}
-
-/* Outer Compass Ring */
-.intro-compass-ring--outer {
-  inset: -20px;
-  border: 1px dashed rgba(229, 169, 88, 0.35);
-  animation: intro-ring-appear 0.8s ease 0.4s forwards, intro-spin-cw 26s linear 0.4s infinite;
-}
-.intro-compass-ring--outer::before {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 9px;
-  background: #E5A958;
-  box-shadow: 0 0 8px #E5A958;
-}
-.intro-compass-ring--outer::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 9px;
-  background: #E5A958;
-  box-shadow: 0 0 8px #E5A958;
-}
-
-/* Inner Ring */
-.intro-compass-ring--inner {
-  inset: 8px;
-  border: 1px solid rgba(127, 163, 212, 0.25);
-  animation: intro-ring-appear 0.8s ease 0.6s forwards, intro-spin-ccw 18s linear 0.6s infinite;
-}
-.intro-compass-ring--inner::after {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #FFFFFF;
-  box-shadow: 0 0 10px #FFFFFF, 0 0 20px rgba(127, 163, 212, 0.9);
-}
-
-/* Breathing Aura */
-.intro-brand-glow {
-  position: absolute;
-  inset: 0px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(229, 169, 88, 0.3) 0%, rgba(127, 163, 212, 0.12) 42%, transparent 70%);
-  filter: blur(18px);
-  opacity: 0;
-  animation: intro-glow-appear 1s ease 0.1s forwards, intro-breathe 3.4s ease-in-out 1.2s infinite;
-}
-
-/* ── Pure Center-Collapse Logo Animation ── */
 
 .intro-brand-core {
   position: relative;
@@ -1201,7 +1077,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   justify-content: center;
 }
 
-/* 1. Golden Logo: Centered, appears first with warm gold brilliance */
+/* 1. Golden Part: Appears first in center, glows, STAYS VISIBLE */
 .intro-logo-gold {
   position: absolute;
   inset: 0;
@@ -1211,11 +1087,12 @@ body > :not(#space-stars):not(#intro-curtain) {
   opacity: 0;
   z-index: 2;
   will-change: transform, opacity, filter;
-  animation: logo-gold-reveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards,
-             logo-collapse-fadeout 0.12s ease 1.45s forwards;
+  animation: logo-gold-reveal 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.18s forwards,
+             logo-fuse-pulse 0.65s cubic-bezier(0.16, 1, 0.3, 1) 1.25s forwards,
+             intro-float 4.5s ease-in-out 1.9s infinite;
 }
 
-/* 2. Silver Logo: Centered, collapses directly inward onto the gold logo */
+/* 2. Silver Part: Appears second, overlaps on top in center, STAYS VISIBLE */
 .intro-logo-silver {
   position: absolute;
   inset: 0;
@@ -1225,62 +1102,12 @@ body > :not(#space-stars):not(#intro-curtain) {
   opacity: 0;
   z-index: 3;
   will-change: transform, opacity, filter;
-  animation: logo-silver-collapse 0.72s cubic-bezier(0.16, 1, 0.3, 1) 0.73s forwards,
-             logo-collapse-fadeout 0.12s ease 1.45s forwards;
+  animation: logo-silver-enter 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.72s forwards,
+             logo-fuse-pulse 0.65s cubic-bezier(0.16, 1, 0.3, 1) 1.25s forwards,
+             intro-float 4.5s ease-in-out 1.9s infinite;
 }
 
-/* 3. Master Emblem: Fuses on collapse impact with high-energy punch */
-.intro-brand-img {
-  position: relative;
-  z-index: 4;
-  width: 104px;
-  height: 104px;
-  object-fit: contain;
-  opacity: 0;
-  transform: scale(0.92);
-  filter: drop-shadow(0 0 32px rgba(229, 169, 88, 0.95)) drop-shadow(0 0 14px rgba(255, 255, 255, 0.65)) brightness(1.22);
-  animation: emblem-collapse-impact 0.65s cubic-bezier(0.16, 1, 0.3, 1) 1.45s forwards,
-             intro-float 4.5s ease-in-out 2.1s infinite;
-}
-
-/* Blast shockwave rings */
-.intro-blast-ring {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 80px; height: 80px;
-  margin: -40px 0 0 -40px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 0 26px 6px rgba(229, 169, 88, 0.9), 0 0 14px 2px #fff;
-  opacity: 0;
-  transform: scale(0.15);
-  pointer-events: none;
-  z-index: 5;
-  animation: blast-ring 0.85s cubic-bezier(0.1, 0.85, 0.25, 1) 1.45s forwards;
-}
-.intro-blast-ring--2 {
-  border-color: rgba(229, 169, 88, 0.8);
-  box-shadow: 0 0 22px 4px rgba(229, 169, 88, 0.65);
-  animation-delay: 1.58s;
-}
-
-/* White-gold flash on collapse */
-.intro-blast-flash {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 220px; height: 220px;
-  margin: -110px 0 0 -110px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(229,169,88,0.8) 32%, transparent 70%);
-  filter: blur(8px);
-  opacity: 0;
-  transform: scale(0.05);
-  pointer-events: none;
-  z-index: 6;
-  animation: blast-flash 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1.45s forwards;
-}
-
-/* ── Title, Tagline, Loader, Skip ── */
+/* ── Company Title (Staggered Letter Reveal) ── */
 
 .intro-brand-title {
   display: flex;
@@ -1288,9 +1115,9 @@ body > :not(#space-stars):not(#intro-curtain) {
   justify-content: center;
   margin: 0;
   font-family: var(--face);
-  font-size: 42px;
+  font-size: 44px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: lowercase;
 }
 
@@ -1299,45 +1126,16 @@ body > :not(#space-stars):not(#intro-curtain) {
   opacity: 0;
   transform: translateY(12px) scale(0.9);
   color: #FFFFFF;
-  text-shadow: 0 0 22px rgba(255, 255, 255, 0.35);
-  animation: char-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) calc(1.68s + var(--i, 0) * 0.055s) forwards;
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.35);
+  animation: char-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) calc(1.5s + var(--i, 0) * 0.055s) forwards;
 }
 .intro-char--gold {
   color: #E5A958;
-  text-shadow: 0 0 26px rgba(229, 169, 88, 0.6);
+  text-shadow: 0 0 28px rgba(229, 169, 88, 0.65);
 }
 .intro-char--space { width: 0.3em; }
 
-.intro-brand-tagline {
-  margin: -6px 0 0;
-  font-family: var(--face);
-  font-size: 11.5px;
-  font-weight: 400;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.42);
-  opacity: 0;
-  transform: translateY(8px);
-  animation: intro-text-reveal 0.9s ease 2.1s forwards;
-}
-
-.intro-loader {
-  width: 190px; height: 2px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-top: 6px;
-  box-shadow: 0 0 16px rgba(229, 169, 88, 0.2);
-  opacity: 0;
-  animation: intro-fade 0.8s ease 1.85s forwards;
-}
-.intro-loader__bar {
-  display: block; width: 100%; height: 100%;
-  background: linear-gradient(90deg, #7FA3D4, #FFFFFF, #E5A958);
-  transform: translateX(-100%);
-  animation: loader-fill 2.2s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
-}
-
+/* Skip Button */
 .intro-skip {
   position: absolute; bottom: 28px; right: 28px;
   background: rgba(255, 255, 255, 0.04);
@@ -1351,7 +1149,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   transition: all 0.25s var(--ease);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   opacity: 0;
-  animation: intro-fade 0.8s ease 1.5s forwards;
+  animation: intro-fade 0.8s ease 1.2s forwards;
 }
 .intro-skip:hover {
   background: rgba(255, 255, 255, 0.15);
@@ -1360,76 +1158,67 @@ body > :not(#space-stars):not(#intro-curtain) {
   transform: translateY(-1px);
 }
 
-/* ══════════════════════ INTRO KEYFRAMES ══════════════════════ */
+/* ══════════════════════ KEYFRAMES ══════════════════════ */
 
-/* 1. Gold Logo: Centered, appears cleanly with golden glow */
+/* 1. Gold Part: Appears first alone */
 @keyframes logo-gold-reveal {
   0% {
     opacity: 0;
-    transform: scale(0.85);
-    filter: drop-shadow(0 0 20px rgba(229, 169, 88, 0.35)) brightness(0.85);
+    transform: scale(0.86);
+    filter: drop-shadow(0 0 15px rgba(229, 169, 88, 0.3)) brightness(0.85);
   }
   65% {
     opacity: 1;
-    transform: scale(1.03);
-    filter: drop-shadow(0 0 38px rgba(229, 169, 88, 1)) brightness(1.28);
+    transform: scale(1.02);
+    filter: drop-shadow(0 0 32px rgba(229, 169, 88, 0.95)) brightness(1.25);
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    filter: drop-shadow(0 0 30px rgba(229, 169, 88, 0.9)) brightness(1.18);
+    filter: drop-shadow(0 0 24px rgba(229, 169, 88, 0.85)) brightness(1.15);
   }
 }
 
-/* 2. Silver Logo: Centered, collapses directly inward onto the gold logo */
-@keyframes logo-silver-collapse {
+/* 2. Silver Part: Appears second, zooms in and overlaps directly on top */
+@keyframes logo-silver-enter {
   0% {
     opacity: 0;
-    transform: scale(2.4);
-    filter: blur(10px) drop-shadow(0 0 55px rgba(255, 255, 255, 1)) brightness(2.4);
+    transform: scale(1.55);
+    filter: blur(6px) drop-shadow(0 0 45px rgba(255, 255, 255, 1)) brightness(2.2);
   }
-  30% {
-    opacity: 0.85;
-    filter: blur(5px) drop-shadow(0 0 45px rgba(255, 255, 255, 1)) brightness(1.9);
+  35% {
+    opacity: 0.92;
+    filter: blur(2px) drop-shadow(0 0 35px rgba(255, 255, 255, 0.95)) brightness(1.7);
   }
   80% {
-    opacity: 1;
-    transform: scale(1.04);
-    filter: blur(0.5px) drop-shadow(0 0 35px rgba(255, 255, 255, 1)) brightness(1.4);
+    transform: scale(1.03);
+    filter: blur(0) drop-shadow(0 0 28px rgba(255, 255, 255, 0.9)) brightness(1.3);
   }
   100% {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0) drop-shadow(0 0 28px rgba(255, 255, 255, 0.95)) brightness(1.25);
+    filter: blur(0) drop-shadow(0 0 22px rgba(255, 255, 255, 0.85)) brightness(1.2);
   }
 }
 
-/* Seamless handoff at collapse instant */
-@keyframes logo-collapse-fadeout {
-  to { opacity: 0; }
-}
-
-/* Master emblem fuses on collapse impact */
-@keyframes emblem-collapse-impact {
-  0%   { opacity: 0; transform: scale(0.92); filter: drop-shadow(0 0 65px rgba(229,169,88,1)) drop-shadow(0 0 28px #fff) brightness(2.2); }
-  32%  { opacity: 1; transform: scale(1.15); filter: drop-shadow(0 0 50px rgba(229,169,88,1)) drop-shadow(0 0 18px #fff) brightness(1.65); }
-  68%  { transform: scale(0.97); filter: drop-shadow(0 0 35px rgba(229,169,88,0.9)) brightness(1.28); }
-  100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 30px rgba(229,169,88,0.9)) drop-shadow(0 0 12px rgba(255,255,255,0.55)) brightness(1.2); }
-}
-
-/* Expanding blast ring */
-@keyframes blast-ring {
-  0%   { opacity: 0; transform: scale(0.15); }
-  18%  { opacity: 1; }
-  78%  { opacity: 0.5; transform: scale(3.2); }
-  100% { opacity: 0; transform: scale(4.2); }
-}
-
-/* Flash on collision */
-@keyframes blast-flash {
-  0%   { opacity: 0; transform: scale(0.05); }
-  25%  { opacity: 1; transform: scale(1.25); }
-  100% { opacity: 0; transform: scale(2.0); }
+/* 3. Both Parts Pulse Together on Fusion Lock (Both Remain Visible!) */
+@keyframes logo-fuse-pulse {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.12);
+    filter: drop-shadow(0 0 48px rgba(229, 169, 88, 1)) drop-shadow(0 0 18px #FFFFFF) brightness(1.6);
+  }
+  70% {
+    transform: scale(0.98);
+    filter: drop-shadow(0 0 30px rgba(229, 169, 88, 0.85)) brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 25px rgba(229, 169, 88, 0.8)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.45)) brightness(1.15);
+  }
 }
 
 /* Letters pop in */
@@ -1438,40 +1227,12 @@ body > :not(#space-stars):not(#intro-curtain) {
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Shared keyframes */
-@keyframes intro-pulse {
-  0%   { transform: scale(0.88); opacity: 0.85; }
-  100% { transform: scale(1.85); opacity: 0; }
-}
-@keyframes intro-ring-appear {
-  0%   { opacity: 0; transform: scale(0.85); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes intro-glow-appear {
-  0%   { opacity: 0; transform: scale(0.65); }
-  100% { opacity: 1; transform: scale(1); }
-}
-@keyframes intro-line-extend {
-  0%   { transform: scaleX(0); opacity: 0; }
-  60%  { opacity: 1; }
-  100% { transform: scaleX(1); opacity: 0.65; }
-}
+/* Floating animation */
 @keyframes intro-float {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-4px); }
 }
-@keyframes intro-text-reveal {
-  0%   { opacity: 0; transform: translateY(8px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes intro-spin-cw { to { transform: rotate(360deg); } }
-@keyframes intro-spin-ccw { to { transform: rotate(-360deg); } }
-@keyframes intro-breathe {
-  0%, 100% { opacity: 0.7; transform: scale(0.95); }
-  50%      { opacity: 1; transform: scale(1.08); }
-}
+
 @keyframes intro-fade { to { opacity: 1; } }
-@keyframes loader-fill {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(0); }
-}
+
+
