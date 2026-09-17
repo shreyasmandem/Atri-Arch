@@ -141,10 +141,11 @@ function initStarField() {
   if (!canvas) return { spread: () => {} };
   const ctx = canvas.getContext("2d");
 
-  const STAR_COUNT = 380;
+  const STAR_COUNT = 340;
   const stars = [];
   let state = "forming"; // "forming" | "splitting" | "ambient"
   let spreadStart = 0;
+  let birthTime = performance.now();
   let cx = window.innerWidth / 2;
   let cy = window.innerHeight / 2;
   let dpr = 1;
@@ -171,64 +172,67 @@ function initStarField() {
     updateCenter();
   }
 
-  // Celestial palette: pure diamond white, warm starlight gold, and crisp sapphire
+  // Celestial palette
   const COLORS = [
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" }, // Diamond White
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
-    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.40)" }, // Crisp Starlight
-    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.55)" },  // Celestial Gold
-    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.50)" }, // Sapphire Accent
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.35)" },
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.35)" },
+    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.30)" },
+    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.40)" },
+    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.35)" },
   ];
 
-  function createStar() {
+  function createStar(index) {
     const angle = Math.random() * Math.PI * 2;
-    // Distribution: dense swirling galactic disc (70–170px) + extended cosmic halo (170–340px)
-    const isInner = Math.random() < 0.65;
+    const isInner = Math.random() < 0.6;
     const orbitR = isInner
-      ? Math.pow(Math.random(), 0.9) * 105 + 68
-      : Math.pow(Math.random(), 1.1) * 170 + 173;
+      ? Math.pow(Math.random(), 0.9) * 110 + 60
+      : Math.pow(Math.random(), 1.1) * 180 + 170;
 
-    // Keplerian orbital velocity: inner stars orbit faster than outer stars
     const dir = Math.random() > 0.4 ? 1 : -1;
-    const baseSpeed = 0.005 + (340 - Math.min(orbitR, 340)) / 340 * 0.010;
+    const baseSpeed = 0.004 + (340 - Math.min(orbitR, 340)) / 340 * 0.008;
     const orbitSpeed = baseSpeed * dir;
 
     const targetX = Math.random() * window.innerWidth;
     const targetY = Math.random() * window.innerHeight;
 
-    const isHero = Math.random() < 0.12;
+    const isHero = Math.random() < 0.08;
     const radius = isHero
-      ? Math.random() * 1.2 + 2.0   // Hero stars 2.0 – 3.2px
-      : Math.random() * 1.1 + 0.7;  // Stardust 0.7 – 1.8px
+      ? Math.random() * 0.8 + 1.6
+      : Math.random() * 0.9 + 0.5;
 
     const col = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    // Staggered pop-in: each star has a birth delay so they cascade into existence
+    const popDelay = (index / STAR_COUNT) * 1800 + Math.random() * 400; // 0–2200ms spread
 
     return {
       x: cx + Math.cos(angle) * orbitR,
       y: cy + Math.sin(angle) * (orbitR * 0.72),
-      orbitR: orbitR,
-      orbitAngle: angle,
-      orbitSpeed: orbitSpeed,
-      targetX: targetX,
-      targetY: targetY,
-      vx: 0,
-      vy: 0,
+      orbitR, orbitAngle: angle, orbitSpeed,
+      targetX, targetY,
+      vx: 0, vy: 0,
       r: radius,
-      isHero: isHero,
-      baseAlpha: Math.random() * 0.40 + 0.60,      // 0.60 – 1.0 (bright & clearly visible!)
+      isHero,
+      // Intro alpha is bright (for the pop-in effect)
+      introAlpha: Math.random() * 0.35 + 0.65,
+      // Ambient alpha is deliberately DULL — just a subtle presence
+      ambientAlpha: Math.random() * 0.12 + 0.15,     // 0.15 – 0.27 (very subdued)
       color: col,
       phase: Math.random() * Math.PI * 2,
-      twinkleSpeed: Math.random() * 0.008 + 0.004,
-      driftX: (Math.random() - 0.5) * 0.14,
-      driftY: (Math.random() - 0.5) * 0.14,
+      twinkleSpeed: Math.random() * 0.003 + 0.001,    // Very slow twinkle for ambient
+      driftX: (Math.random() - 0.5) * 0.08,
+      driftY: (Math.random() - 0.5) * 0.08,
+      popDelay,        // ms after birthTime before this star appears
+      popDuration: 350, // ms to fade from 0 → full alpha
     };
   }
 
   function seed() {
     stars.length = 0;
     updateCenter();
+    birthTime = performance.now();
     for (let i = 0; i < STAR_COUNT; i++) {
-      stars.push(createStar());
+      stars.push(createStar(i));
     }
   }
 
@@ -238,18 +242,16 @@ function initStarField() {
     spreadStart = performance.now();
     updateCenter();
 
-    // ─── SUPERNOVA RADIAL SPLIT: High-speed outward explosion ───
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
-      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.28;
-      const speed = fast ? (Math.random() * 28 + 18) : (Math.random() * 20 + 11);
+      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.3;
+      const speed = fast ? (Math.random() * 24 + 16) : (Math.random() * 18 + 10);
       s.vx = Math.cos(angle) * speed;
       s.vy = Math.sin(angle) * speed;
     }
   }
 
   function draw(t) {
-    // Transparent canvas clear so subtle cosmic gradients & deep black void shine through
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.scale(dpr, dpr);
@@ -260,118 +262,98 @@ function initStarField() {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
+    const elapsed = t - birthTime; // ms since stars were seeded
 
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
 
-      // ─── 1. FORMING STAGE (Tightly swirling galaxy around center emblem) ───
+      // ─── 1. FORMING: Stars pop into existence with staggered cascade ───
       if (state === "forming") {
+        // Haven't been born yet
+        if (elapsed < s.popDelay) continue;
+
+        // Pop-in fade: 0 → 1 over popDuration
+        const popAge = elapsed - s.popDelay;
+        const popFade = Math.min(popAge / s.popDuration, 1);
+        // Ease-out for a smooth "pop"
+        const popEase = 1 - Math.pow(1 - popFade, 3);
+
         s.orbitAngle += s.orbitSpeed;
         s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
         s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.72);
 
-        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.35 + 0.65;
-        const alpha = s.baseAlpha * twinkle;
+        const alpha = s.introAlpha * popEase;
+        // Scale pop: star grows from 0 to full size
+        const rNow = s.r * (0.3 + 0.7 * popEase);
 
-        // Glowing starlight corona
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r * 2.4, 0, Math.PI * 2);
-        ctx.fillStyle = s.color.glow;
-        ctx.fill();
-
-        // Solid star nucleus
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-
-        // 4-Point luxury diamond diffraction spikes on hero stars
-        if (s.isHero) {
+        // Soft glow halo
+        if (rNow > 0.6) {
           ctx.beginPath();
-          ctx.moveTo(s.x - s.r * 2.8, s.y);
-          ctx.lineTo(s.x + s.r * 2.8, s.y);
-          ctx.moveTo(s.x, s.y - s.r * 2.8);
-          ctx.lineTo(s.x, s.y + s.r * 2.8);
-          ctx.strokeStyle = `rgba(${s.color.rgb}, ${(alpha * 0.65).toFixed(3)})`;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
-      }
-
-      // ─── 2. SPLITTING STAGE (Outward radial blast across the screen) ───
-      else if (state === "splitting") {
-        const prevX = s.x;
-        const prevY = s.y;
-
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vx *= 0.91; // Smooth friction
-        s.vy *= 0.91;
-
-        // Smoothly settle toward resting home screen coordinates
-        s.x += (s.targetX - s.x) * 0.055;
-        s.y += (s.targetY - s.y) * 0.055;
-
-        const currentSpeed = Math.hypot(s.vx, s.vy);
-        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.3 + 0.7;
-        const alpha = s.baseAlpha * twinkle;
-
-        // Draw motion warp-streak while velocity is high
-        if (currentSpeed > 1.2) {
-          ctx.beginPath();
-          ctx.moveTo(s.x, s.y);
-          ctx.lineTo(prevX - s.vx * 0.6, prevY - s.vy * 0.6);
-          ctx.strokeStyle = `rgba(${s.color.rgb}, ${(alpha * Math.min(currentSpeed / 8, 0.75)).toFixed(3)})`;
-          ctx.lineWidth = s.r * 0.9;
-          ctx.stroke();
+          ctx.arc(s.x, s.y, rNow * 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = s.color.glow;
+          ctx.globalAlpha = popEase * 0.7;
+          ctx.fill();
+          ctx.globalAlpha = 1;
         }
 
         // Star core
         ctx.beginPath();
+        ctx.arc(s.x, s.y, rNow, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
+        ctx.fill();
+      }
+
+      // ─── 2. SPLITTING: Radial burst outward ───
+      else if (state === "splitting") {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vx *= 0.92;
+        s.vy *= 0.92;
+
+        s.x += (s.targetX - s.x) * 0.05;
+        s.y += (s.targetY - s.y) * 0.05;
+
+        const splitAge = performance.now() - spreadStart;
+        // Fade from intro brightness → ambient dullness during split
+        const fadeProgress = Math.min(splitAge / 1800, 1);
+        const alpha = s.introAlpha * (1 - fadeProgress) + s.ambientAlpha * fadeProgress;
+
+        ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
         ctx.fill();
 
-        if (performance.now() - spreadStart > 1850) {
+        if (splitAge > 1800) {
           state = "ambient";
         }
       }
 
-      // ─── 3. AMBIENT STAGE (Resting & gently drifting across home page) ───
+      // ─── 3. AMBIENT: Dull, subtle, quietly present — NO flashy twinkling ───
       else {
         s.x += s.driftX;
         s.y += s.driftY;
 
-        // Screen edge wrapping
         if (s.x < 0) s.x = w;
         if (s.x > w) s.x = 0;
         if (s.y < 0) s.y = h;
         if (s.y > h) s.y = 0;
 
-        // Interactive mouse repulsion
+        // Gentle mouse repulsion
         if (mouse.active) {
           const mdx = s.x - mouse.x;
           const mdy = s.y - mouse.y;
           const mdist = Math.hypot(mdx, mdy);
-          if (mdist < 110 && mdist > 0) {
-            const push = (1 - mdist / 110) * 1.8;
+          if (mdist < 100 && mdist > 0) {
+            const push = (1 - mdist / 100) * 1.2;
             s.x += (mdx / mdist) * push;
             s.y += (mdy / mdist) * push;
           }
         }
 
-        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.35 + 0.65;
-        const alpha = s.baseAlpha * twinkle;
+        // Very subtle, almost-static twinkle — just enough to feel alive, NOT flashy
+        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.06 + 0.94;
+        const alpha = s.ambientAlpha * twinkle;
 
-        // Soft halo on larger stars
-        if (s.r > 1.4) {
-          ctx.beginPath();
-          ctx.arc(s.x, s.y, s.r * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = s.color.glow;
-          ctx.fill();
-        }
-
-        // Core
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
