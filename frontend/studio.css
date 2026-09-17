@@ -1190,7 +1190,18 @@ body > :not(#space-stars):not(#intro-curtain) {
   animation: intro-glow-appear 1s ease 0.1s forwards, intro-breathe 3.4s ease-in-out 1.2s infinite;
 }
 
-/* ── Logo: Cinematic Reveal ── */
+/* ── Logo Formation Stage (Emerging from pitch black screen) ── */
+
+.intro-brand-core {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Logo: Formed from black void with laser unmasking & starlight bloom */
 .intro-brand-img {
   position: relative;
   z-index: 3;
@@ -1198,8 +1209,46 @@ body > :not(#space-stars):not(#intro-curtain) {
   height: 104px;
   object-fit: contain;
   opacity: 0;
-  filter: drop-shadow(0 0 28px rgba(229, 169, 88, 0.75)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.4)) brightness(1.2);
-  animation: intro-logo-cinematic 1.3s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards, intro-float 4s ease-in-out 1.4s infinite;
+  clip-path: inset(100% 0 0 0);
+  filter: drop-shadow(0 0 35px rgba(229, 169, 88, 0.9)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.6)) brightness(1.4);
+  animation:
+    intro-logo-form 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards,
+    intro-float 4s ease-in-out 1.6s infinite;
+}
+
+/* Laser Scan Line that etches the logo out of pure darkness */
+.intro-laser-scan {
+  position: absolute;
+  left: -20px;
+  right: -20px;
+  height: 2px;
+  top: 100%;
+  background: linear-gradient(90deg, transparent 0%, #E5A958 20%, #FFFFFF 50%, #E5A958 80%, transparent 100%);
+  box-shadow: 0 0 12px 2px #FFFFFF, 0 0 24px 4px #E5A958, 0 0 40px 6px rgba(127, 163, 212, 0.6);
+  border-radius: 2px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  animation: intro-laser-sweep 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+}
+
+/* Brilliant Optical Lens Flare that flashes when the logo locks in */
+.intro-optic-flare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 140px;
+  height: 140px;
+  margin-top: -70px;
+  margin-left: -70px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(229, 169, 88, 0.6) 30%, rgba(127, 163, 212, 0.2) 55%, transparent 70%);
+  filter: blur(8px);
+  opacity: 0;
+  transform: scale(0.1);
+  pointer-events: none;
+  z-index: 5;
+  animation: intro-flare-burst 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.85s forwards;
 }
 
 /* Company Title */
@@ -1217,7 +1266,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   text-align: center;
   opacity: 0;
   transform: translateY(12px);
-  animation: intro-title-cinematic 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards, intro-title-shimmer 3.8s ease-in-out 1.4s infinite;
+  animation: intro-title-cinematic 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.6s forwards, intro-title-shimmer 3.8s ease-in-out 1.5s infinite;
   filter: drop-shadow(0 0 22px rgba(229, 169, 88, 0.35));
 }
 
@@ -1232,7 +1281,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   color: rgba(255, 255, 255, 0.42);
   opacity: 0;
   transform: translateY(8px);
-  animation: intro-text-reveal 0.9s ease 0.9s forwards;
+  animation: intro-text-reveal 0.9s ease 1.0s forwards;
 }
 
 /* Laser Progress Line */
@@ -1245,7 +1294,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   margin-top: 6px;
   box-shadow: 0 0 16px rgba(229, 169, 88, 0.2);
   opacity: 0;
-  animation: intro-fade 0.8s ease 0.8s forwards;
+  animation: intro-fade 0.8s ease 0.9s forwards;
 }
 .intro-loader__bar {
   display: block;
@@ -1286,12 +1335,78 @@ body > :not(#space-stars):not(#intro-curtain) {
 
 /* ══════════════════════ INTRO KEYFRAMES ══════════════════════ */
 
-@keyframes intro-logo-cinematic {
-  0%   { opacity: 0;   transform: scale(0.75) translateY(14px);  filter: drop-shadow(0 0 32px rgba(229, 169, 88, 0.5)) brightness(1.35) blur(8px); }
-  50%  { opacity: 1;   transform: scale(1.05) translateY(-2px); filter: drop-shadow(0 0 36px rgba(229, 169, 88, 0.85)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.5)) brightness(1.25) blur(0px); }
-  75%  { transform: scale(0.98) translateY(1px); filter: drop-shadow(0 0 28px rgba(229, 169, 88, 0.7)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.4)) brightness(1.2) blur(0px); }
-  100% { opacity: 1;   transform: scale(1) translateY(0);    filter: drop-shadow(0 0 28px rgba(229, 169, 88, 0.75)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.45)) brightness(1.2); }
+/* Logo forms from bottom to top as laser sweeps */
+@keyframes intro-logo-form {
+  0% {
+    opacity: 0;
+    clip-path: inset(100% 0 0 0);
+    transform: scale(0.92) translateY(6px);
+    filter: drop-shadow(0 0 40px rgba(229, 169, 88, 1)) drop-shadow(0 0 15px #FFFFFF) brightness(1.6);
+  }
+  20% {
+    opacity: 1;
+    clip-path: inset(70% 0 0 0);
+    transform: scale(0.96) translateY(3px);
+    filter: drop-shadow(0 0 35px rgba(229, 169, 88, 0.95)) drop-shadow(0 0 12px #FFFFFF) brightness(1.5);
+  }
+  60% {
+    opacity: 1;
+    clip-path: inset(0% 0 0 0);
+    transform: scale(1.05) translateY(-2px);
+    filter: drop-shadow(0 0 32px rgba(229, 169, 88, 0.9)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.8)) brightness(1.35);
+  }
+  80% {
+    clip-path: inset(0% 0 0 0);
+    transform: scale(0.98) translateY(1px);
+    filter: drop-shadow(0 0 28px rgba(229, 169, 88, 0.8)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.5)) brightness(1.22);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0% 0 0 0);
+    transform: scale(1) translateY(0);
+    filter: drop-shadow(0 0 26px rgba(229, 169, 88, 0.75)) drop-shadow(0 0 10px rgba(255, 255, 255, 0.45)) brightness(1.2);
+  }
 }
+
+/* Laser sweep keyframes */
+@keyframes intro-laser-sweep {
+  0% {
+    top: 100%;
+    opacity: 0;
+    transform: scaleX(0.2);
+  }
+  15% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  75% {
+    top: 0%;
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    top: -5%;
+    opacity: 0;
+    transform: scaleX(0.4);
+  }
+}
+
+/* Optical flare burst */
+@keyframes intro-flare-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.1);
+  }
+  40% {
+    opacity: 0.95;
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
 @keyframes intro-title-cinematic {
   0%   { opacity: 0; transform: translateY(14px) scale(0.95); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
