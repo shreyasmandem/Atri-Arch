@@ -459,11 +459,11 @@ function updatePlotStats() {
         setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // 1. Trigger Star Blast when left + right halves collide (1.25s)
-      const blastTimer = setTimeout(triggerBlast, 1250);
+      // 1. Trigger Star Blast when silver arch overlaps & fuses with gold base (1.5s)
+      const blastTimer = setTimeout(triggerBlast, 1500);
 
-      // 2. Smoothly transition into home studio after intro (3.1s)
-      const introTimer = setTimeout(() => dismissIntro(false), 3100);
+      // 2. Smoothly transition into home studio after intro sequence (3.35s)
+      const introTimer = setTimeout(() => dismissIntro(false), 3350);
 
       skipBtn?.addEventListener("click", (e) => {
         e.stopPropagation();
