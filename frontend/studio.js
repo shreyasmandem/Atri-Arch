@@ -141,22 +141,22 @@ function initStarField() {
   if (!canvas) return { spread: () => {} };
   const ctx = canvas.getContext("2d");
 
-  const STAR_COUNT = 240;
+  const STAR_COUNT = 320;
   const stars = [];
-  let state = "forming"; // "forming" | "spreading" | "ambient"
+  let state = "forming"; // "forming" | "splitting" | "ambient"
   let spreadStart = 0;
   let cx = window.innerWidth / 2;
-  let cy = window.innerHeight * 0.40;
+  let cy = window.innerHeight / 2; // Centered exactly with the logo!
   let mouse = { x: -1000, y: -1000, active: false };
 
   function resize() {
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
     cx = canvas.width / 2;
-    cy = canvas.height * 0.40;
+    cy = canvas.height / 2;
   }
 
-  // Pure monochrome & starlight gold palette (ZERO blue tints)
+  // Pure monochrome & starlight gold palette
   const COLORS = [
     "255, 255, 255",     // Pure Diamond White
     "255, 255, 255",     // Pure Diamond White
@@ -167,7 +167,8 @@ function initStarField() {
 
   function createStar() {
     const angle = Math.random() * Math.PI * 2;
-    const orbitR = Math.pow(Math.random(), 1.4) * 180 + 20;
+    // Formed tightly around the center logo in a swirling galaxy
+    const orbitR = Math.pow(Math.random(), 1.2) * 160 + 25;
     const targetX = Math.random() * (canvas.width || window.innerWidth);
     const targetY = Math.random() * (canvas.height || window.innerHeight);
 
@@ -176,16 +177,18 @@ function initStarField() {
       y: cy + Math.sin(angle) * (orbitR * 0.7),
       orbitR: orbitR,
       orbitAngle: angle,
-      orbitSpeed: (Math.random() * 0.006 + 0.002) * (Math.random() > 0.5 ? 1 : -1),
+      orbitSpeed: (Math.random() * 0.008 + 0.003) * (Math.random() > 0.5 ? 1 : -1),
       targetX: targetX,
       targetY: targetY,
-      r: Math.random() * 1.2 + 0.4,               // radius 0.4 – 1.6 px
-      baseAlpha: Math.random() * 0.5 + 0.4,       // 0.4 – 0.9
+      vx: 0,
+      vy: 0,
+      r: Math.random() * 1.3 + 0.4,               // radius 0.4 – 1.7 px
+      baseAlpha: Math.random() * 0.5 + 0.45,      // 0.45 – 0.95
       color: COLORS[Math.floor(Math.random() * COLORS.length)],
       phase: Math.random() * Math.PI * 2,
-      speed: Math.random() * 0.006 + 0.003,
-      driftX: (Math.random() - 0.5) * 0.08,
-      driftY: (Math.random() - 0.5) * 0.08,
+      speed: Math.random() * 0.007 + 0.003,
+      driftX: (Math.random() - 0.5) * 0.1,
+      driftY: (Math.random() - 0.5) * 0.1,
     };
   }
 
@@ -198,8 +201,17 @@ function initStarField() {
 
   function spread(fast = false) {
     if (state === "ambient") return;
-    state = "spreading";
+    state = "splitting";
     spreadStart = performance.now();
+
+    // ─── RADIAL SPLIT: Every star receives an outward blast vector ───
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.35;
+      const speed = fast ? (Math.random() * 26 + 16) : (Math.random() * 18 + 9);
+      s.vx = Math.cos(angle) * speed;
+      s.vy = Math.sin(angle) * speed;
+    }
   }
 
   function draw(t) {
@@ -209,7 +221,7 @@ function initStarField() {
     for (let i = 0; i < stars.length; i++) {
       const s = stars[i];
 
-      // ─── 1. FORMING STAGE (Orbiting gently around CAD center) ───
+      // ─── 1. FORMING STAGE (Orbiting tightly around center logo) ───
       if (state === "forming") {
         s.orbitAngle += s.orbitSpeed;
         s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
@@ -226,14 +238,19 @@ function initStarField() {
         if (s.r > 1.1) {
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.r * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.15).toFixed(3)})`;
+          ctx.fillStyle = `rgba(${s.color}, ${(alpha * 0.18).toFixed(3)})`;
           ctx.fill();
         }
       }
 
-      // ─── 2. SPREADING STAGE (Smooth exponential expansion to home page) ───
-      else if (state === "spreading") {
-        // Smooth exponential spring towards target resting coordinates
+      // ─── 2. SPLITTING STAGE (Outward radial blast across the screen) ───
+      else if (state === "splitting") {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vx *= 0.93; // Smooth physics friction
+        s.vy *= 0.93;
+
+        // Smoothly settle toward resting home screen coordinates
         s.x += (s.targetX - s.x) * 0.055;
         s.y += (s.targetY - s.y) * 0.055;
 
@@ -245,7 +262,7 @@ function initStarField() {
         ctx.fillStyle = `rgba(${s.color}, ${alpha.toFixed(3)})`;
         ctx.fill();
 
-        if (performance.now() - spreadStart > 1600) {
+        if (performance.now() - spreadStart > 1800) {
           state = "ambient";
         }
       }
