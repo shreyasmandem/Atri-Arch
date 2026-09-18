@@ -424,77 +424,47 @@
             </div>
           </fieldset>
 
-          <!-- Card 5: Architectural Style & Render Mode -->
+          <!-- Card 5: Architectural Style -->
           <fieldset class="form-card">
             <legend class="form-card__head">
               <div class="form-card__icon-badge">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
               </div>
               <div>
-                <span class="form-card__title">Architectural Style & Output</span>
-                <span class="form-card__subtitle">Design vocabulary & drawing rendering detail</span>
+                <span class="form-card__title">Architectural Style</span>
+                <span class="form-card__subtitle">Design vocabulary & aesthetic language</span>
               </div>
             </legend>
 
-            <div class="grid-2">
-              <label class="fld">
-                <span class="fld-label">Style Vocabulary</span>
-                <div class="input-wrap select-wrap">
-                  <select name="styles" id="inp-styles">
-                    <option value="tropical_modern" selected>Tropical Modern</option>
-                    <option value="contemporary">Contemporary Minimal</option>
-                    <option value="biophilic">Biophilic Sanctuary</option>
-                    <option value="kerala_vernacular">Kerala Vernacular</option>
-                    <option value="chettinad">Chettinad Heritage</option>
-                    <option value="modern_minimal">Modern Minimalist</option>
-                    <option value="japandi">Japandi</option>
-                    <option value="industrial">Industrial Loft</option>
-                    <option value="scandinavian">Scandinavian</option>
-                  </select>
-                </div>
-              </label>
+            <label class="fld">
+              <span class="fld-label">Style Vocabulary</span>
+              <div class="input-wrap select-wrap">
+                <select name="styles" id="inp-styles">
+                  <option value="tropical_modern" selected>Tropical Modern</option>
+                  <option value="contemporary">Contemporary Minimal</option>
+                  <option value="biophilic">Biophilic Sanctuary</option>
+                  <option value="kerala_vernacular">Kerala Vernacular</option>
+                  <option value="chettinad">Chettinad Heritage</option>
+                  <option value="modern_minimal">Modern Minimalist</option>
+                  <option value="japandi">Japandi</option>
+                  <option value="industrial">Industrial Loft</option>
+                  <option value="scandinavian">Scandinavian</option>
+                </select>
+              </div>
+            </label>
 
-              <label class="fld">
-                <span class="fld-label">Output Pass</span>
-                <div class="input-wrap select-wrap">
-                  <select name="render_mode">
-                    <option value="both" selected>Vector CAD + Render Textures</option>
-                    <option value="vector_only">Vector CAD Only (SVG/DXF)</option>
-                    <option value="photoreal">Surface Renders</option>
-                  </select>
-                </div>
-              </label>
-            </div>
-
-            <div class="grid-2 fld--spacing">
-              <label class="fld">
-                <span class="fld-label">Optimization Depth</span>
-                <div class="input-wrap select-wrap">
-                  <select name="consensus_rounds" id="inp-consensus-rounds">
-                    <option value="3">3 Iterations (Fast Exploration)</option>
-                    <option value="5" selected>5 Iterations (Balanced Convergence)</option>
-                    <option value="8">8 Iterations (Exhaustive Analysis)</option>
-                  </select>
-                </div>
-              </label>
-
-              <label class="fld">
-                <span class="fld-label">Statutory Constraints</span>
-                <div class="constraints-toggles">
-                  <label class="mini-check" title="Structural integrity & wall thickness">
-                    <input type="checkbox" name="enforce_nbc" checked disabled>
-                    <span>NBC Structural</span>
-                  </label>
-                  <label class="mini-check" title="Vastu Score Threshold >= 80%">
-                    <input type="checkbox" name="enforce_vastu" checked>
-                    <span>Vastu ≥80%</span>
-                  </label>
-                  <label class="mini-check" title="Strict Budget Ceiling">
-                    <input type="checkbox" name="enforce_cost" checked>
-                    <span>Cost Ceiling</span>
-                  </label>
-                </div>
-              </label>
+            <!-- Style Option Chips -->
+            <div class="style-chips">
+              <span class="style-chips__label">Options:</span>
+              <button type="button" class="style-chip is-active" data-style="tropical_modern">Tropical Modern</button>
+              <button type="button" class="style-chip" data-style="contemporary">Contemporary</button>
+              <button type="button" class="style-chip" data-style="biophilic">Biophilic</button>
+              <button type="button" class="style-chip" data-style="kerala_vernacular">Kerala Vernacular</button>
+              <button type="button" class="style-chip" data-style="chettinad">Chettinad</button>
+              <button type="button" class="style-chip" data-style="modern_minimal">Minimalist</button>
+              <button type="button" class="style-chip" data-style="japandi">Japandi</button>
+              <button type="button" class="style-chip" data-style="industrial">Industrial</button>
+              <button type="button" class="style-chip" data-style="scandinavian">Scandinavian</button>
             </div>
           </fieldset>
 
