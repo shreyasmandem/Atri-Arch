@@ -400,57 +400,105 @@ const ORIENTATION_DATA = {
     azimuth: "000°",
     angle: 0,
     label: "North Facing",
+    deva: "Kubera · Wealth",
     daylight: "Continuous Diffused North Light · Zero Direct Glare",
-    vastu: "Kubera (Lord of Wealth) · Highly Auspicious Entrance"
+    daylight_meta: "Lux Potential: 92% · Glare-Free Ambient Luminance",
+    climate: "Minimal Solar Heat Gain · Optimal Thermal Equilibrium",
+    climate_meta: "Standard 0.6m Overhangs · High Energy Efficiency",
+    vastu: "Kubera (Lord of Wealth) · Prime Auspicious Gateway",
+    vastu_meta: "Ideal for Main Entrance, Foyer, Living & Study",
+    frontageClass: "frontage--n"
   },
   NE: {
     azimuth: "045°",
     angle: 45,
     label: "North-East Facing",
-    daylight: "Sacred Morning Ingress · Optimal Light for Living & Study",
-    vastu: "Ishanya (Supreme Spiritual Axis) · Purest Flow of Prana"
+    deva: "Ishanya · Supreme Prana",
+    daylight: "Sacred Morning Dawn Ingress · Soft Diffused Daylight",
+    daylight_meta: "Early UV-A Spectrum · Optimal Morning Awakening",
+    climate: "Gentle Morning Warming · Low Afternoon Heat Build-Up",
+    climate_meta: "Maximise Openings · Shading: Minimal Glazing Overhang",
+    vastu: "Ishanya (Lord Shiva) · Supreme Spiritual Energy Axis",
+    vastu_meta: "Mandatory Sacred Zone · Best for Pooja, Water & Entrance",
+    frontageClass: "frontage--ne"
   },
   E: {
     azimuth: "090°",
     angle: 90,
     label: "East Facing",
-    daylight: "Direct Solar Dawn Exposure · Circadian Awakening",
-    vastu: "Indra (Solar Clarity & Health) · Prime Auspicious Gateway"
+    deva: "Indra · Solar Vitality",
+    daylight: "Direct Solar Dawn Exposure · Circadian Awakening Rhythm",
+    daylight_meta: "Morning Lux: 1,800+ lx · High Visual Warmth",
+    climate: "Morning Solar Warming · Cool Afternoon Shading",
+    climate_meta: "Horizontal Fixed Louvers · Morning Daylight Penetration",
+    vastu: "Indra / Surya (Solar Vitality) · Highly Auspicious",
+    vastu_meta: "Prime Main Portal · Ideal for Living, Dining & Verandahs",
+    frontageClass: "frontage--e"
   },
   SE: {
     azimuth: "135°",
     angle: 135,
     label: "South-East Facing",
-    daylight: "Early Morning Thermal Ingress · Culinary Zone Warming",
-    vastu: "Agneya (Fire Element) · Optimal Kitchen Placement"
+    deva: "Agneya · Fire Element",
+    daylight: "Mid-Morning Thermal Ingress · High Radiant Energy",
+    daylight_meta: "Thermal Accumulation: Moderate-High · Glare Management",
+    climate: "Early Heat Ingress · Dedicated Cross-Ventilation Axis",
+    climate_meta: "Overhang Spec: 0.9m Cantilever · Louvered Screens",
+    vastu: "Agneya (Lord of Fire) · Culinary & Energy Stronghold",
+    vastu_meta: "Standard Kitchen & Transformer Zone · Avoid Master Bed",
+    frontageClass: "frontage--se"
   },
   S: {
     azimuth: "180°",
     angle: 180,
     label: "South Facing",
-    daylight: "High Zenith Solar Radiation · Deep Shading Overhangs Advised",
-    vastu: "Yama (Stability & Justice) · Thickened Thermal Massing Buffer"
+    deva: "Yama · Grounding & Mass",
+    daylight: "High Zenith Direct Radiation · Intense Midday Sun",
+    daylight_meta: "Peak Noon Insolation · Deep Shading Overhangs Required",
+    climate: "High Thermal Gain · Thickened Structural Massing",
+    climate_meta: "Deep 1.2m Overhangs · High Solar Heat Gain Coefficient",
+    vastu: "Yama (Dharma & Stability) · Heavy Massing Buffer",
+    vastu_meta: "Secondary Access · Buffer with Stairs, Balconies & Utility",
+    frontageClass: "frontage--s"
   },
   SW: {
     azimuth: "225°",
     angle: 225,
     label: "South-West Facing",
-    daylight: "Intense Afternoon Heat · Shielding & Structural Massing",
-    vastu: "Nairrutya (Earth & Master Anchor) · Master Suite Stronghold"
+    deva: "Nairrutya · Earth Anchor",
+    daylight: "Harsh Afternoon Insolation · Critical Heat Island Risk",
+    daylight_meta: "Peak Infrared Radiation · Double-Glazing Advised",
+    climate: "Maximum Heat Absorption · Heavy Cavity Walls & Buffers",
+    climate_meta: "Minimal Fenestration · Heavy Shading & Green Wall Buffers",
+    vastu: "Nairrutya (Earth & Ancestral Anchor) · Master Stronghold",
+    vastu_meta: "Highest Elevation & Mass · Master Suite Placement",
+    frontageClass: "frontage--sw"
   },
   W: {
     azimuth: "270°",
     angle: 270,
     label: "West Facing",
-    daylight: "Low-Angle Golden Sunset Heat · Vertical Louvers Needed",
-    vastu: "Varuna (Rain & Prosperity) · Evening Gathering & Balconies"
+    deva: "Varuna · Water & Dusk",
+    daylight: "Low-Angle Golden Sunset Glare · Sustained Evening Heat",
+    daylight_meta: "Low-Angle Horizon Ingress · High Visual Glare Risk",
+    climate: "Evening Thermal Storage · Vertical Architectural Louvers",
+    climate_meta: "Vertical Operable Fins · Thermal Delay Massing",
+    vastu: "Varuna (Lord of Waters) · Evening Social Axis",
+    vastu_meta: "Suitable for Dining, Children's Bedrooms & Terraces",
+    frontageClass: "frontage--w"
   },
   NW: {
     azimuth: "315°",
     angle: 315,
     label: "North-West Facing",
-    daylight: "Prevailing Breezeway Ingress · Optimal Cross-Ventilation",
-    vastu: "Vayavya (Air & Movement) · Ideal for Guest Rooms & Services"
+    deva: "Vayavya · Air & Motion",
+    daylight: "Gentle Evening Light · Balanced Afternoon Luminance",
+    daylight_meta: "Lux Potential: 78% · Uniform Soft Ambient Spread",
+    climate: "Prevailing Seasonal Breezeways · Natural Passive Stack",
+    climate_meta: "Operable Clerestory Vents · Cross-Ventilation Couplers",
+    vastu: "Vayavya (Lord of Winds) · Dynamic Movement Zone",
+    vastu_meta: "Ideal for Guest Rooms, Car Porch, Utility & Restrooms",
+    frontageClass: "frontage--nw"
   }
 };
 
@@ -475,27 +523,39 @@ function updateOrientationDial(dir = "N") {
     badgeVal.textContent = `${DIR_LABELS[dir] || dir} · ${data.azimuth}`;
   }
 
-  // 4. Telemetry Bar
+  // 4. Telemetry Cells (Value + Meta Subtext)
   const dayVal = $("telemetry-daylight");
-  if (dayVal) {
-    dayVal.textContent = data.daylight;
-  }
-  const vastuVal = $("telemetry-vastu");
-  if (vastuVal) {
-    vastuVal.textContent = data.vastu;
-  }
+  if (dayVal) dayVal.textContent = data.daylight;
+  const dayMeta = $("telemetry-daylight-meta");
+  if (dayMeta) dayMeta.textContent = data.daylight_meta;
 
-  // 5. Update Center Plot Dimensions
+  const climVal = $("telemetry-climate");
+  if (climVal) climVal.textContent = data.climate;
+  const climMeta = $("telemetry-climate-meta");
+  if (climMeta) climMeta.textContent = data.climate_meta;
+
+  const vastuVal = $("telemetry-vastu");
+  if (vastuVal) vastuVal.textContent = data.vastu;
+  const vastuMeta = $("telemetry-vastu-meta");
+  if (vastuMeta) vastuMeta.textContent = data.vastu_meta;
+
+  // 5. Update Center Plot Dimensions & Dynamic Frontage Curb
   const w = parseFloat($("inp-plot-width")?.value || 12);
   const d = parseFloat($("inp-plot-depth")?.value || 18);
   const metric = $("compass-plot-metric");
   if (metric) {
     metric.textContent = `${w}×${d}m`;
   }
+  const submetric = $("compass-plot-submetric");
+  if (submetric) {
+    submetric.textContent = `${(w * d).toFixed(0)} m²`;
+  }
   const frame = $("compass-plot-frame");
   if (frame) {
-    const ratio = Math.max(0.65, Math.min(1.4, d / w));
-    frame.style.height = `${Math.round(36 * ratio)}px`;
+    const ratio = Math.max(0.68, Math.min(1.35, d / w));
+    frame.style.height = `${Math.round(42 * ratio)}px`;
+    // Update active frontage curb class (frontage--n, frontage--e, etc.)
+    frame.className = `compass-plot-frame ${data.frontageClass || "frontage--n"}`;
   }
 }
 
@@ -619,11 +679,36 @@ function updateStudioHUD() {
   $("inp-budget")?.addEventListener("input", updateStudioHUD);
   $("inp-finish-tier")?.addEventListener("change", updateStudioHUD);
 
-  // Direction grid radios
-  document.querySelectorAll('.dir-radio input[type="radio"]').forEach((radio) => {
-    radio.addEventListener("change", () => {
+  // Direction grid radios with dynamic tactile hover preview & click commit
+  document.querySelectorAll(".dir-radio").forEach((card) => {
+    const radio = card.querySelector('input[type="radio"]');
+    const val = card.dataset.val || radio?.value;
+
+    card.addEventListener("mouseenter", () => {
+      if (!val) return;
+      const data = ORIENTATION_DATA[val];
+      if (data) {
+        const needle = $("compass-needle-stage");
+        if (needle) needle.style.transform = `rotate(${data.angle}deg)`;
+        const bearing = $("compass-bearing-readout");
+        if (bearing) bearing.textContent = `${data.azimuth} ${val}`;
+      }
+    });
+
+    card.addEventListener("mouseleave", () => {
+      const activeRadio = document.querySelector('input[name="road_direction"]:checked');
+      if (activeRadio) {
+        const activeData = ORIENTATION_DATA[activeRadio.value] || ORIENTATION_DATA.N;
+        const needle = $("compass-needle-stage");
+        if (needle) needle.style.transform = `rotate(${activeData.angle}deg)`;
+        const bearing = $("compass-bearing-readout");
+        if (bearing) bearing.textContent = `${activeData.azimuth} ${activeRadio.value}`;
+      }
+    });
+
+    radio?.addEventListener("change", () => {
       document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
-      radio.closest(".dir-radio")?.classList.add("is-selected");
+      card.classList.add("is-selected");
       updateOrientationDial(radio.value);
       updateStudioHUD();
     });

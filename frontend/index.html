@@ -158,13 +158,14 @@
               <div class="orientation-compass-matrix" id="direction-grid">
 
                 <!-- 1. North-West (315°) -->
-                <label class="dir-radio dir-radio--nw" data-val="NW">
+                <label class="dir-radio dir-radio--nw" data-val="NW" title="North-West (315°) · Vayavya">
                   <input type="radio" name="road_direction" value="NW">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">NW</span>
                       <span class="dir-radio__deg">315°</span>
                     </span>
+                    <span class="dir-radio__deva">Vayavya · Air</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">North-West</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="13" y1="13" x2="3" y2="3"></line><polyline points="3 9 3 3 9 3"></polyline></svg>
@@ -173,13 +174,14 @@
                 </label>
 
                 <!-- 2. North (000°) -->
-                <label class="dir-radio dir-radio--n is-selected" data-val="N">
+                <label class="dir-radio dir-radio--n is-selected" data-val="N" title="North (000°) · Kubera">
                   <input type="radio" name="road_direction" value="N" checked>
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">N</span>
                       <span class="dir-radio__deg">000°</span>
                     </span>
+                    <span class="dir-radio__deva">Kubera · Wealth</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">North</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="14" x2="8" y2="2"></line><polyline points="4 6 8 2 12 6"></polyline></svg>
@@ -188,13 +190,14 @@
                 </label>
 
                 <!-- 3. North-East (045°) -->
-                <label class="dir-radio dir-radio--ne" data-val="NE">
+                <label class="dir-radio dir-radio--ne" data-val="NE" title="North-East (045°) · Ishanya">
                   <input type="radio" name="road_direction" value="NE">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">NE</span>
                       <span class="dir-radio__deg">045°</span>
                     </span>
+                    <span class="dir-radio__deva">Ishanya · Prana</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">North-East</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="13" x2="13" y2="3"></line><polyline points="7 3 13 3 13 9"></polyline></svg>
@@ -203,13 +206,14 @@
                 </label>
 
                 <!-- 4. West (270°) -->
-                <label class="dir-radio dir-radio--w" data-val="W">
+                <label class="dir-radio dir-radio--w" data-val="W" title="West (270°) · Varuna">
                   <input type="radio" name="road_direction" value="W">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">W</span>
                       <span class="dir-radio__deg">270°</span>
                     </span>
+                    <span class="dir-radio__deva">Varuna · Water</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">West</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="14" y1="8" x2="2" y2="8"></line><polyline points="6 4 2 8 6 12"></polyline></svg>
@@ -217,52 +221,118 @@
                   </span>
                 </label>
 
-                <!-- 5. CENTER: Precision Architectural Compass Dial Instrument -->
+                <!-- 5. CENTER: Master Architectural Compass Dial Instrument -->
                 <div class="compass-dial" id="compass-dial" aria-hidden="true">
-                  <!-- Dial Graduations & Bezel Rings -->
-                  <svg class="compass-dial__bezel" viewBox="0 0 160 160">
-                    <circle cx="80" cy="80" r="76" class="bezel-ring bezel-ring--outer" />
-                    <circle cx="80" cy="80" r="66" class="bezel-ring bezel-ring--inner" />
-                    <circle cx="80" cy="80" r="48" class="bezel-ring bezel-ring--core" />
-                    <!-- Crosshair Reticles -->
-                    <line x1="80" y1="4" x2="80" y2="156" class="bezel-crosshair" />
-                    <line x1="4" y1="80" x2="156" y2="80" class="bezel-crosshair" />
-                    <line x1="26" y1="26" x2="134" y2="134" class="bezel-crosshair bezel-crosshair--sub" />
-                    <line x1="134" y1="26" x2="26" y2="134" class="bezel-crosshair bezel-crosshair--sub" />
-                    <!-- Cardinal Marks -->
-                    <text x="80" y="16" class="bezel-label">N</text>
-                    <text x="146" y="84" class="bezel-label">E</text>
-                    <text x="80" y="152" class="bezel-label">S</text>
-                    <text x="14" y="84" class="bezel-label">W</text>
+                  <!-- Dial Graduations, Solar Ingress & Bezel Rings -->
+                  <svg class="compass-dial__bezel" viewBox="0 0 200 200">
+                    <defs>
+                      <!-- Solar Ecliptic Arc Gradient (Dawn East -> Zenith South -> Sunset West) -->
+                      <linearGradient id="solarArcGrad" x1="1" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.85" />
+                        <stop offset="50%" stop-color="#fbbf24" stop-opacity="1" />
+                        <stop offset="100%" stop-color="#ea580c" stop-opacity="0.85" />
+                      </linearGradient>
+                      <!-- Diffuse North Sky Arc Gradient (Cool Ambient Light) -->
+                      <linearGradient id="skyArcGrad" x1="0" y1="1" x2="1" y2="0">
+                        <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.75" />
+                        <stop offset="50%" stop-color="#818cf8" stop-opacity="0.85" />
+                        <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.75" />
+                      </linearGradient>
+                      <filter id="dialGlow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="2" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                    </defs>
+
+                    <!-- Outer Milled Chronometer Rim -->
+                    <circle cx="100" cy="100" r="97" class="bezel-ring bezel-ring--outer" />
+                    <circle cx="100" cy="100" r="92" class="bezel-ring bezel-ring--track" />
+
+                    <!-- Direct Solar Ecliptic Arc (East 090° -> South 180° -> West 270°) -->
+                    <path d="M 191 100 A 91 91 0 0 1 9 100" class="bezel-arc bezel-arc--solar" filter="url(#dialGlow)" />
+                    <!-- Diffuse Ambient Sky Arc (West 270° -> North 000° -> East 090°) -->
+                    <path d="M 9 100 A 91 91 0 0 1 191 100" class="bezel-arc bezel-arc--sky" />
+
+                    <!-- Minor Degree Ticks (Every 5°) -->
+                    <path d="M107.41,15.32L107.76,11.34 M114.76,16.29L115.45,12.35 M129.07,20.13L130.44,16.37 M135.92,22.96L137.61,19.34 M148.75,30.37L151.05,27.1 M154.64,34.89L157.21,31.82 M165.11,45.36L168.18,42.79 M169.63,51.25L172.9,48.95 M177.04,64.08L180.66,62.39 M179.87,70.93L183.63,69.56 M183.71,85.24L187.65,84.55 M184.68,92.59L188.66,92.24 M184.68,107.41L188.66,107.76 M183.71,114.76L187.65,115.45 M179.87,129.07L183.63,130.44 M177.04,135.92L180.66,137.61 M169.63,148.75L172.9,151.05 M165.11,154.64L168.18,157.21 M154.64,165.11L157.21,168.18 M148.75,169.63L151.05,172.9 M135.92,177.04L137.61,180.66 M129.07,179.87L130.44,183.63 M114.76,183.71L115.45,187.65 M107.41,184.68L107.76,188.66 M92.59,184.68L92.24,188.66 M85.24,183.71L84.55,187.65 M70.93,179.87L69.56,183.63 M64.08,177.04L62.39,180.66 M51.25,169.63L48.95,172.9 M45.36,165.11L42.79,168.18 M34.89,154.64L31.82,157.21 M30.37,148.75L27.1,151.05 M22.96,135.92L19.34,137.61 M20.13,129.07L16.37,130.44 M16.29,114.76L12.35,115.45 M15.32,107.41L11.34,107.76 M15.32,92.59L11.34,92.24 M16.29,85.24L12.35,84.55 M20.13,70.93L16.37,69.56 M22.96,64.08L19.34,62.39 M30.37,51.25L27.1,48.95 M34.89,45.36L31.82,42.79 M45.36,34.89L42.79,31.82 M51.25,30.37L48.95,27.1 M64.08,22.96L62.39,19.34 M70.93,20.13L69.56,16.37 M85.24,16.29L84.55,12.35 M92.59,15.32L92.24,11.34" class="bezel-ticks bezel-ticks--minor" />
+
+                    <!-- Medium Degree Ticks (Every 15°) -->
+                    <path d="M121.22,20.79L123.29,13.07 M141.0,28.99L145.0,22.06 M171.01,59.0L177.94,55.0 M179.21,78.78L186.93,76.71 M179.21,121.22L186.93,123.29 M171.01,141.0L177.94,145.0 M141.0,171.01L145.0,177.94 M121.22,179.21L123.29,186.93 M78.78,179.21L76.71,186.93 M59.0,171.01L55.0,177.94 M28.99,141.0L22.06,145.0 M20.79,121.22L13.07,123.29 M20.79,78.78L13.07,76.71 M28.99,59.0L22.06,55.0 M59.0,28.99L55.0,22.06 M78.78,20.79L76.71,13.07" class="bezel-ticks bezel-ticks--medium" />
+
+                    <!-- Major Cardinal & Ordinal Ticks (Every 45°) -->
+                    <path d="M100.0,22.0L100.0,9.0 M155.15,44.85L164.35,35.65 M178.0,100.0L191.0,100.0 M155.15,155.15L164.35,164.35 M100.0,178.0L100.0,191.0 M44.85,155.15L35.65,164.35 M22.0,100.0L9.0,100.0 M44.85,44.85L35.65,35.65" class="bezel-ticks bezel-ticks--major" />
+
+                    <!-- Inner Concentric Dial Rings -->
+                    <circle cx="100" cy="100" r="76" class="bezel-ring bezel-ring--inner" />
+                    <circle cx="100" cy="100" r="58" class="bezel-ring bezel-ring--core" />
+
+                    <!-- Reticle Crosshairs -->
+                    <line x1="100" y1="26" x2="100" y2="174" class="bezel-crosshair" />
+                    <line x1="26" y1="100" x2="174" y2="100" class="bezel-crosshair" />
+                    <line x1="48" y1="48" x2="152" y2="152" class="bezel-crosshair bezel-crosshair--sub" />
+                    <line x1="152" y1="48" x2="48" y2="152" class="bezel-crosshair bezel-crosshair--sub" />
+
+                    <!-- True North Polaris Diamond Marker (000°) -->
+                    <polygon points="100,2 103,9 100,16 97,9" class="bezel-polaris" filter="url(#dialGlow)" />
+
+                    <!-- Solar Zenith Pip (180° South) -->
+                    <circle cx="100" cy="188" r="3.5" class="bezel-sun-zenith" filter="url(#dialGlow)" />
+
+                    <!-- Cardinal & Ordinal Labels -->
+                    <text x="100" y="27" class="bezel-label bezel-label--n">N</text>
+                    <text x="176" y="103" class="bezel-label bezel-label--e">E</text>
+                    <text x="100" y="177" class="bezel-label bezel-label--s">S</text>
+                    <text x="24" y="103" class="bezel-label bezel-label--w">W</text>
+
+                    <text x="154" y="50" class="bezel-sublabel">NE</text>
+                    <text x="154" y="155" class="bezel-sublabel">SE</text>
+                    <text x="46" y="155" class="bezel-sublabel">SW</text>
+                    <text x="46" y="50" class="bezel-sublabel">NW</text>
                   </svg>
 
                   <!-- Dynamic Rotating Road Frontage Pointer Needle -->
                   <div class="compass-needle-stage" id="compass-needle-stage">
                     <div class="compass-needle">
-                      <div class="compass-needle__head"></div>
+                      <div class="compass-needle__head" title="Road Frontage Vector">
+                        <div class="needle-tip"></div>
+                        <div class="needle-chevron"></div>
+                      </div>
                       <div class="compass-needle__shaft"></div>
+                      <div class="compass-needle__counter">
+                        <div class="counter-disc"></div>
+                      </div>
                       <div class="compass-needle__road-arc"></div>
                     </div>
                   </div>
 
-                  <!-- Central Architectural Site Footprint -->
+                  <!-- Central Architectural Site Footprint Box -->
                   <div class="compass-plot-box" id="compass-plot-box">
-                    <div class="compass-plot-frame" id="compass-plot-frame">
+                    <div class="compass-plot-frame frontage--n" id="compass-plot-frame">
+                      <div class="plot-crop plot-crop--tl"></div>
+                      <div class="plot-crop plot-crop--tr"></div>
+                      <div class="plot-crop plot-crop--bl"></div>
+                      <div class="plot-crop plot-crop--br"></div>
+                      <!-- Dynamic Frontage Curb Highlight -->
+                      <div class="plot-frontage-curb" id="plot-frontage-curb"></div>
                       <div class="compass-plot-grid"></div>
                       <span class="compass-plot-metric" id="compass-plot-metric">12×18m</span>
+                      <span class="compass-plot-submetric" id="compass-plot-submetric">216 m²</span>
                     </div>
-                    <span class="compass-bearing-readout" id="compass-bearing-readout">000° N</span>
+                    <div class="compass-bearing-badge">
+                      <span class="compass-bearing-readout" id="compass-bearing-readout">000° N</span>
+                    </div>
                   </div>
                 </div>
 
                 <!-- 6. East (090°) -->
-                <label class="dir-radio dir-radio--e" data-val="E">
+                <label class="dir-radio dir-radio--e" data-val="E" title="East (090°) · Indra">
                   <input type="radio" name="road_direction" value="E">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">E</span>
                       <span class="dir-radio__deg">090°</span>
                     </span>
+                    <span class="dir-radio__deva">Indra · Solar</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">East</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="8" x2="14" y2="8"></line><polyline points="10 4 14 8 10 12"></polyline></svg>
@@ -271,13 +341,14 @@
                 </label>
 
                 <!-- 7. South-West (225°) -->
-                <label class="dir-radio dir-radio--sw" data-val="SW">
+                <label class="dir-radio dir-radio--sw" data-val="SW" title="South-West (225°) · Nairrutya">
                   <input type="radio" name="road_direction" value="SW">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">SW</span>
                       <span class="dir-radio__deg">225°</span>
                     </span>
+                    <span class="dir-radio__deva">Nairrutya · Earth</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">South-West</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="13" y1="3" x2="3" y2="13"></line><polyline points="3 7 3 13 9 13"></polyline></svg>
@@ -286,13 +357,14 @@
                 </label>
 
                 <!-- 8. South (180°) -->
-                <label class="dir-radio dir-radio--s" data-val="S">
+                <label class="dir-radio dir-radio--s" data-val="S" title="South (180°) · Yama">
                   <input type="radio" name="road_direction" value="S">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">S</span>
                       <span class="dir-radio__deg">180°</span>
                     </span>
+                    <span class="dir-radio__deva">Yama · Grounding</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">South</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="14"></line><polyline points="12 10 8 14 4 10"></polyline></svg>
@@ -301,13 +373,14 @@
                 </label>
 
                 <!-- 9. South-East (135°) -->
-                <label class="dir-radio dir-radio--se" data-val="SE">
+                <label class="dir-radio dir-radio--se" data-val="SE" title="South-East (135°) · Agneya">
                   <input type="radio" name="road_direction" value="SE">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
                       <span class="dir-radio__code">SE</span>
                       <span class="dir-radio__deg">135°</span>
                     </span>
+                    <span class="dir-radio__deva">Agneya · Fire</span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">South-East</span>
                       <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"></line><polyline points="13 7 13 13 7 13"></polyline></svg>
@@ -317,16 +390,33 @@
 
               </div>
 
-              <!-- Real-Time Architectural Solar & Vastu Telemetry Bar -->
+              <!-- Real-Time Architectural Solar, Climate & Vastu Telemetry Dashboard -->
               <div class="orientation-telemetry" id="orientation-telemetry">
                 <div class="telemetry-cell">
-                  <span class="telemetry-cell__label">Solar Daylight Ingress</span>
-                  <span class="telemetry-cell__value" id="telemetry-daylight">Continuous Diffused North Daylight · Zero Direct Glare</span>
+                  <div class="telemetry-cell__head">
+                    <svg class="telemetry-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                    <span class="telemetry-cell__label">Solar Path & Daylight</span>
+                  </div>
+                  <span class="telemetry-cell__value" id="telemetry-daylight">Continuous Diffused North Light · Zero Direct Glare</span>
+                  <span class="telemetry-cell__meta" id="telemetry-daylight-meta">Lux Potential: 92% · High Consistent Ambient Luminance</span>
                 </div>
                 <div class="telemetry-divider"></div>
                 <div class="telemetry-cell">
-                  <span class="telemetry-cell__label">Vastu Energy Vector</span>
-                  <span class="telemetry-cell__value telemetry-cell__value--gold" id="telemetry-vastu">Kubera (Lord of Wealth) · Highly Auspicious Entrance</span>
+                  <div class="telemetry-cell__head">
+                    <svg class="telemetry-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/></svg>
+                    <span class="telemetry-cell__label">Thermal & Shading Strategy</span>
+                  </div>
+                  <span class="telemetry-cell__value" id="telemetry-climate">Minimal Solar Heat Gain · Optimal Thermal Equilibrium</span>
+                  <span class="telemetry-cell__meta" id="telemetry-climate-meta">Standard 0.6m Overhangs · High Energy Efficiency</span>
+                </div>
+                <div class="telemetry-divider"></div>
+                <div class="telemetry-cell">
+                  <div class="telemetry-cell__head">
+                    <svg class="telemetry-icon telemetry-icon--gold" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <span class="telemetry-cell__label">Vastu Shastra Energy</span>
+                  </div>
+                  <span class="telemetry-cell__value telemetry-cell__value--gold" id="telemetry-vastu">Kubera (Lord of Wealth) · Prime Auspicious Gateway</span>
+                  <span class="telemetry-cell__meta telemetry-cell__meta--gold" id="telemetry-vastu-meta">Ideal for Main Entrance, Foyer, Living & Study</span>
                 </div>
               </div>
             </div>
