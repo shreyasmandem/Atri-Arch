@@ -43,7 +43,6 @@
       </h1>
     </div>
   </div>
-  <button type="button" class="intro-skip" id="intro-skip">Enter Studio →</button>
 </div>
 
 <a class="skip" href="#stage">Skip to the work</a>
@@ -91,73 +90,10 @@
       <p class="studio-hero__lede">
         Specify site boundary, program requirements, and orientation parameters to synthesize compliant floorplans.
       </p>
-
-      <!-- Live Dynamic Architectural HUD Bar -->
-      <div class="studio-hud" id="studio-hud">
-        <div class="hud-item" title="Calculated Ground Footprint">
-          <span class="hud-label">Site Footprint</span>
-          <span class="hud-val" id="plot-area-calc">216 m² · 2,325 sq ft</span>
-        </div>
-        <div class="hud-item" title="Cardinal Orientation">
-          <span class="hud-label">Orientation</span>
-          <span class="hud-val hud-val--gold" id="hud-orientation">North Facing</span>
-        </div>
-        <div class="hud-item" title="Spatial Program">
-          <span class="hud-label">Program</span>
-          <span class="hud-val" id="hud-program">3 BHK Duplex · 3 Baths</span>
-        </div>
-        <div class="hud-item" title="Vastu Alignment">
-          <span class="hud-label">Vastu Stance</span>
-          <span class="hud-val hud-val--indigo" id="hud-vastu">Balanced</span>
-        </div>
-        <div class="hud-item" title="Budget Ceiling">
-          <span class="hud-label">Target Budget</span>
-          <span class="hud-val" id="hud-budget">₹65.00 L · Premium</span>
-        </div>
-      </div>
     </div>
 
     <!-- Master Brief Form -->
     <form id="brief" class="brief-studio-form" novalidate>
-
-      <!-- ── SECTION 0: Design Brief & Presets ── -->
-      <div class="form-card form-card--featured">
-        <div class="form-card__head">
-          <div class="form-card__icon-badge">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-          </div>
-          <div>
-            <h3 class="form-card__title">Design Brief & Architectural Presets</h3>
-            <p class="form-card__subtitle">Describe custom requirements or select a baseline configuration</p>
-          </div>
-        </div>
-
-        <div class="prompt-wrap">
-          <textarea class="studio-prompt" name="client_prompt" id="client-prompt" rows="2"
-            placeholder="e.g. Contemporary 3BHK duplex with open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹75 Lakhs."></textarea>
-        </div>
-
-        <div class="preset-chips-wrap">
-          <span class="preset-chips__label">Configurations:</span>
-          <div class="preset-chips">
-            <button type="button" class="preset-chip is-active" data-preset="vastu-villa">
-              3BHK Villa (Duplex)
-            </button>
-            <button type="button" class="preset-chip" data-preset="compact-urban">
-              2BHK Urban (G+1)
-            </button>
-            <button type="button" class="preset-chip" data-preset="biophilic-retreat">
-              4BHK Courtyard Villa
-            </button>
-            <button type="button" class="preset-chip" data-preset="kerala-vernacular">
-              Kerala Vernacular
-            </button>
-            <button type="button" class="preset-chip" data-preset="modern-studio">
-              Compact Studio
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- ── TWO-COLUMN GRID ── -->
       <div class="studio-grid">
@@ -562,6 +498,30 @@
             </div>
           </fieldset>
 
+        </div>
+      </div>
+
+      <!-- ── LIVE ARCHITECTURAL HUD SUMMARY BAR ── -->
+      <div class="studio-hud studio-hud--bottom" id="studio-hud">
+        <div class="hud-item" title="Calculated Ground Footprint">
+          <span class="hud-label">Site Footprint</span>
+          <span class="hud-val" id="plot-area-calc">216 m² · 2,325 sq ft</span>
+        </div>
+        <div class="hud-item" title="Cardinal Orientation">
+          <span class="hud-label">Orientation</span>
+          <span class="hud-val hud-val--gold" id="hud-orientation">North Facing</span>
+        </div>
+        <div class="hud-item" title="Spatial Program">
+          <span class="hud-label">Program</span>
+          <span class="hud-val" id="hud-program">3 BHK Duplex · 3 Baths</span>
+        </div>
+        <div class="hud-item" title="Vastu Alignment">
+          <span class="hud-label">Vastu Stance</span>
+          <span class="hud-val hud-val--indigo" id="hud-vastu">Balanced</span>
+        </div>
+        <div class="hud-item" title="Target Budget Ceiling">
+          <span class="hud-label">Target Budget</span>
+          <span class="hud-val" id="hud-budget">₹65.00 L · Premium</span>
         </div>
       </div>
 

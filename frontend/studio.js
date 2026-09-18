@@ -463,9 +463,8 @@ function updateStudioHUD() {
   // Cosmic Star-field Engine
   const starField = initStarField();
 
-  // Intro Drawing Screen Controller
+  // Intro Screen Controller
   const curtain = $("intro-curtain");
-  const skipBtn = $("intro-skip");
   const inIframe = window.self !== window.top;
 
   if (curtain) {
@@ -488,18 +487,12 @@ function updateStudioHUD() {
         setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // 1. Trigger Star Blast when silver locks with gold (both visible, 1.25s)
-      const blastTimer = setTimeout(triggerBlast, 1250);
+      // 1. Trigger Star Blast when silver locks with gold (both visible, 1.3s)
+      const blastTimer = setTimeout(triggerBlast, 1300);
 
       // 2. Smoothly transition into home studio after stars settle (3.15s)
       const introTimer = setTimeout(() => dismissIntro(false), 3150);
 
-      skipBtn?.addEventListener("click", (e) => {
-        e.stopPropagation();
-        clearTimeout(blastTimer);
-        clearTimeout(introTimer);
-        dismissIntro(true);
-      });
       curtain.addEventListener("click", () => {
         clearTimeout(blastTimer);
         clearTimeout(introTimer);
