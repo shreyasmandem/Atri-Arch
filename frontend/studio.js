@@ -729,6 +729,17 @@ function readBrief() {
   const stanceIdx = Math.max(0, Math.min(4, Math.round(n("vastu_slider", 2))));
   const vastu = (STANCES[stanceIdx] && STANCES[stanceIdx][1]) || "balanced";
 
+  const amenities = [];
+  if (d.get("amenity_pooja")) amenities.push("pooja");
+  if (d.get("amenity_dining")) amenities.push("dining");
+  if (d.get("amenity_study")) amenities.push("study");
+  if (d.get("amenity_utility")) amenities.push("utility");
+  if (d.get("amenity_balcony")) amenities.push("balcony");
+  if (d.get("amenity_parking")) amenities.push("parking");
+
+  const setbackSide = n("setback_side", 1.2);
+  const elderlyAccess = Boolean(d.get("elderly_access"));
+
   return {
     project_name: "Studio scheme",
     plot_width: Math.max(3, n("plot_width", 12) || 12),
@@ -738,13 +749,22 @@ function readBrief() {
     levels: Math.max(1, Math.min(6, n("levels", 2) || 2)),
     bedrooms: Math.max(1, n("bedrooms", 3) || 3),
     bathrooms: Math.max(1, n("bathrooms", 3) || 3),
-    styles: [String(d.get("styles") || "contemporary")],
+    styles: [String(d.get("styles") || "tropical_modern")],
     budget: Math.max(500000, n("budget", 6500000) || 6500000),
     currency: "INR",
     vastu: vastu,
+    accessibility: elderlyAccess ? "universal" : "basic",
     occupant_adults: Math.max(1, n("occupant_adults", 2) || 2),
     occupant_children: Math.max(0, n("occupant_children", 1)),
     occupant_elders: Math.max(0, n("occupant_elders", 1)),
+    setback_front: Math.max(0.5, n("setback_front", 2.5)),
+    setback_rear: Math.max(0.5, n("setback_rear", 1.5)),
+    setback_left: Math.max(0.5, setbackSide),
+    setback_right: Math.max(0.5, setbackSide),
+    finish_tier: String(d.get("finish_tier") || "premium"),
+    kitchen_type: String(d.get("kitchen_type") || "open_modular"),
+    amenities: amenities,
+    must_haves: amenities,
   };
 }
 
