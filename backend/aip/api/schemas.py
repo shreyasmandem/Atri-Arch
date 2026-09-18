@@ -67,6 +67,10 @@ class SimpleBriefRequest(BaseModel):
     occupant_children: int = Field(default=0, ge=0, le=20)
     occupant_elders: int = Field(default=0, ge=0, le=20)
 
+    finish_tier: str = Field(default="premium", max_length=50)
+    kitchen_type: str = Field(default="open_modular", max_length=50)
+    amenities: list[str] = Field(default_factory=list)
+
     must_haves: list[str] = Field(default_factory=list, max_length=20)
     notes: str = Field(default="", max_length=4000)
 
@@ -126,7 +130,8 @@ class SimpleBriefRequest(BaseModel):
         else:
             requirements.append(RoomRequirement(type=RoomType.LIVING, priority=1.6))
             requirements.append(RoomRequirement(type=RoomType.KITCHEN, priority=1.5))
-            requirements.append(RoomRequirement(type=RoomType.DINING, priority=1.2))
+            if not self.amenities or "dining" in self.amenities:
+                requirements.append(RoomRequirement(type=RoomType.DINING, priority=1.2))
             if self.bedrooms >= 1:
                 requirements.append(
                     RoomRequirement(
@@ -147,14 +152,33 @@ class SimpleBriefRequest(BaseModel):
             requirements.append(
                 RoomRequirement(type=RoomType.FOYER, needs_daylight=False, priority=0.6)
             )
-            if self.vastu.is_constraining:
+            if "pooja" in self.amenities or "puja" in self.amenities or self.vastu.is_constraining:
                 requirements.append(
                     RoomRequirement(
                         type=RoomType.PUJA, preferred_area=3.5,
-                        needs_external_wall=False, priority=0.9,
+                        needs_external_wall=False, priority=1.1 if "pooja" in self.amenities else 0.9,
                     )
                 )
-            requirements.append(RoomRequirement(type=RoomType.UTILITY, priority=0.7))
+            if "study" in self.amenities:
+                requirements.append(
+                    RoomRequirement(
+                        type=RoomType.STUDY, preferred_area=9.0, priority=1.0,
+                    )
+                )
+            if not self.amenities or "utility" in self.amenities:
+                requirements.append(RoomRequirement(type=RoomType.UTILITY, priority=0.8))
+            if "balcony" in self.amenities:
+                requirements.append(
+                    RoomRequirement(
+                        type=RoomType.BALCONY, preferred_area=5.0, priority=0.9,
+                    )
+                )
+            if "parking" in self.amenities or "garage" in self.amenities:
+                requirements.append(
+                    RoomRequirement(
+                        type=RoomType.GARAGE, preferred_area=15.0, priority=1.1,
+                    )
+                )
 
         occupants: list[Occupant] = []
         if self.occupant_adults:
@@ -166,6 +190,25 @@ class SimpleBriefRequest(BaseModel):
                 Occupant(role="elder", count=self.occupant_elders, needs_accessible=True)
             )
 
+        materials = list(self.materials_liked)
+        if self.finish_tier == "luxury" and "italian_marble" not in materials:
+            materials.extend(["italian_marble", "engineered_teak", "low_e_glazing"])
+        elif self.finish_tier == "premium" and "vitrified_tiles" not in materials:
+            materials.extend(["vitrified_tiles", "granite", "teak_wood"])
+
+        must_haves = list(self.must_haves)
+        if self.kitchen_type and f"kitchen:{self.kitchen_type}" not in must_haves:
+            must_haves.append(f"kitchen:{self.kitchen_type}")
+        for am in self.amenities:
+            if am not in must_haves:
+                must_haves.append(am)
+
+        metadata: dict[str, Any] = {
+            "finish_tier": self.finish_tier,
+            "kitchen_type": self.kitchen_type,
+            "amenities": self.amenities,
+        }
+
         return ClientBrief(
             project_name=self.project_name,
             kind=self.kind,
@@ -175,14 +218,15 @@ class SimpleBriefRequest(BaseModel):
             occupants=occupants,
             style=StylePreference(
                 styles=self.styles or [DesignStyle.CONTEMPORARY],
-                materials_liked=self.materials_liked,
+                materials_liked=materials,
                 free_text=self.notes,
             ),
             budget=Budget(amount=self.budget, currency=self.currency),
             vastu=self.vastu,
             accessibility=self.accessibility,
-            must_haves=self.must_haves,
+            must_haves=must_haves,
             free_text=self.notes,
+            metadata=metadata,
         )
 
 

@@ -1,175 +1,616 @@
-<!--
-THESIS: The vastu-purusha-mandala is struck once, at full scale, as the opening
-act - then it steps aside and becomes one diagnostic among many, because the
-architect came for the drawing, not for our metaphor. Refuses the AI-dashboard
-default: near-black with a neon accent, glass cards, a chat rail.
-OWN-WORLD: Swept-earth ground, rice-flour line work, and four Indic pigments
-used as directional semantics - indigo Ishanya/analysis, hingula Agneya/breach,
-ochre Nairutya/cost, orpiment Vayavya/judgement. Lettering built on the grid.
-STORY: State intent. Watch thirteen critics take their stations. Leave able to
-answer "why this scheme?" with a citation.
-FIRST VIEWPORT: The mandala at full height with its centre open, the brief to
-the west, the committee waiting to the east.
-FORM: Vastu-purusha-mandala. Position 4 of 7 on the ordered list. Seed a772e88e.
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
--->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Architect Intelligence — Studio</title>
-<meta name="description" content="Explainable multi-agent architectural design. Thirteen critics, one defensible scheme.">
-<link rel="stylesheet" href="studio.css">
+<title>Atri Arch — Architect Intelligence Studio</title>
+<meta name="description" content="Autonomous multi-agent architectural design. Thirteen independent analytical critics, one defensible scheme.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="studio.css?v=both_visible_v5">
 </head>
-<body data-phase="compose">
+<body class="is-loading" data-phase="compose">
+
+<!-- ══════════════════════ COSMIC UNIVERSE STARS BACKGROUND ══════════════════════ -->
+<canvas id="space-stars" class="space-stars" aria-hidden="true"></canvas>
+
+<!-- ══════════════════════ ARCHITECTURAL DRAFTING INTRO ══════════════════════ -->
+<div class="intro-curtain" id="intro-curtain" aria-label="atri arch loading">
+  <div class="intro-curtain__canvas">
+    <div class="intro-brand-box">
+      <div class="intro-brand-stage">
+        <div class="intro-brand-core">
+          <!-- 1. Gold Part (Appears first, centered) -->
+          <img src="logo_gold.png" alt="Atri Arch Gold" class="intro-logo-gold" />
+
+          <!-- 2. Silver Part (Appears second, overlaps in center; both remain visible) -->
+          <img src="logo_silver.png" alt="Atri Arch Silver" class="intro-logo-silver" />
+        </div>
+      </div>
+
+      <!-- Company Title (Staggered Letter Reveal) -->
+      <h1 class="intro-brand-title" aria-label="atri arch">
+        <span class="intro-char" style="--i:0">a</span>
+        <span class="intro-char" style="--i:1">t</span>
+        <span class="intro-char" style="--i:2">r</span>
+        <span class="intro-char" style="--i:3">i</span>
+        <span class="intro-char intro-char--space">&nbsp;</span>
+        <span class="intro-char intro-char--gold" style="--i:4">a</span>
+        <span class="intro-char intro-char--gold" style="--i:5">r</span>
+        <span class="intro-char intro-char--gold" style="--i:6">c</span>
+        <span class="intro-char intro-char--gold" style="--i:7">h</span>
+      </h1>
+    </div>
+  </div>
+</div>
 
 <a class="skip" href="#stage">Skip to the work</a>
 
-<!-- ══════════════════════ CROWN ══════════════════════ -->
+<!-- ══════════════════════ CROWN / HEADER ══════════════════════ -->
 <header class="crown">
-  <button type="button" class="mark" id="home" title="Back to the brief">
-    <svg viewBox="0 0 36 36" width="26" height="26" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="33" height="33" fill="none" stroke="currentColor" stroke-width="1.1"/>
-      <path d="M12.5 1.5v33M23.5 1.5v33M1.5 12.5h33M1.5 23.5h33" stroke="currentColor" stroke-width=".55" opacity=".5"/>
-      <rect x="12.5" y="12.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"/>
-    </svg>
-    <span class="mark__word">Architect<b>Intelligence</b></span>
-  </button>
+  <div class="crown__inner">
+    <button type="button" class="mark" id="home" title="Back to the brief">
+      <div class="mark__icon">
+        <img src="logo_emblem.png" alt="Atri Arch" class="mark__logo-img" />
+      </div>
+      <div class="mark__text">
+        <span class="mark__title">Atri<b>Arch</b></span>
+        <span class="mark__badge">Studio</span>
+      </div>
+    </button>
 
-  <div class="schemes" id="schemes" role="tablist" aria-label="Candidate schemes"></div>
+    <div class="schemes" id="schemes" role="tablist" aria-label="Candidate schemes"></div>
 
-  <nav class="views" id="views" aria-label="Views">
-    <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
-    <button type="button" class="view-tab" data-view="mandala">Mandala</button>
-    <button type="button" class="view-tab" data-view="vastu">Vastu</button>
-    <button type="button" class="view-tab" data-view="cost">Cost</button>
-    <button type="button" class="view-tab" data-view="interior">Interior</button>
-    <button type="button" class="view-tab" data-view="model">3D</button>
-    <button type="button" class="view-tab" data-view="findings">Findings</button>
-    <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
-    <button type="button" class="view-tab" data-view="audit">Audit</button>
-  </nav>
+    <nav class="views" id="views" aria-label="Views">
+      <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
+      <button type="button" class="view-tab" data-view="mandala">Mandala</button>
+      <button type="button" class="view-tab" data-view="vastu">Vastu</button>
+      <button type="button" class="view-tab" data-view="cost">Cost</button>
+      <button type="button" class="view-tab" data-view="interior">Interior</button>
+      <button type="button" class="view-tab" data-view="model">3D</button>
+      <button type="button" class="view-tab" data-view="findings">Findings</button>
+      <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
+      <button type="button" class="view-tab" data-view="audit">Audit</button>
+    </nav>
 
-  <div class="crown__end">
-    <button type="button" class="ghost-btn" id="restart" hidden>New brief</button>
-    <span class="ledger" id="ledger" title="Model spend this session">
-      <i class="ledger__dot"></i><span>$<b id="ledger-cost">0.00</b></span>
-    </span>
+    <div class="crown__end">
+      <button type="button" class="ghost-btn" id="restart" hidden>New brief</button>
+    </div>
   </div>
 </header>
 
-<!-- ══════════════════════ COMPOSE ══════════════════════ -->
+<!-- ══════════════════════ COMPOSE / MINIMAL ARCHITECTURAL STUDIO ══════════════════════ -->
 <section class="compose" id="compose" aria-label="State the brief">
+  <div class="compose__studio">
 
-  <div class="compose__diagram">
-    <div class="mandala-shell">
-      <svg class="mandala" id="hero-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
-      <div class="mandala__heart">
-        <p class="heart__eyebrow">Vastu-purusha-mandala</p>
-        <p class="heart__line">The centre is kept open.</p>
-        <p class="heart__body">
-          Nine by nine padas. The engine will not build over the Brahmasthan,
-          and neither does this interface.
-        </p>
-      </div>
-      <span class="rose rose--n">N</span><span class="rose rose--e">E</span>
-      <span class="rose rose--s">S</span><span class="rose rose--w">W</span>
-      <span class="rose rose--ne">Ishanya</span><span class="rose rose--se">Agneya</span>
-      <span class="rose rose--sw">Nairutya</span><span class="rose rose--nw">Vayavya</span>
-    </div>
-  </div>
-
-  <div class="compose__brief">
-    <div class="brief-head">
-      <p class="sanskrit">Sankalpa</p>
-      <h1>State the intent</h1>
-      <p class="brief-lede">
-        Thirteen independent critics will review three competing schemes.
-        Ten of them compute daylight factors, air changes, sightlines,
-        building code and quantity takeoff, and cannot be talked round.
+    <!-- Studio Header & Hero -->
+    <div class="studio-hero">
+      <h1 class="studio-hero__title">Architectural Studio</h1>
+      <p class="studio-hero__lede">
+        Specify site boundary, program requirements, and orientation parameters to synthesize compliant floorplans.
       </p>
     </div>
 
-    <form id="brief" class="brief" novalidate>
-      <fieldset>
-        <legend>The plot</legend>
-        <div class="grid-3">
-          <label class="fld"><span>Width</span>
-            <input type="number" name="plot_width" value="12" min="3" max="200" step="0.5"><i>m</i></label>
-          <label class="fld"><span>Depth</span>
-            <input type="number" name="plot_depth" value="18" min="3" max="200" step="0.5"><i>m</i></label>
-          <label class="fld"><span>Floors</span>
-            <input type="number" name="levels" value="1" min="1" max="4"></label>
+    <!-- Master Brief Form -->
+    <form id="brief" class="brief-studio-form" novalidate>
+
+      <!-- ── TWO-COLUMN SYMMETRIC GRID ── -->
+      <div class="studio-grid">
+
+        <!-- ══════ COLUMN 1: SITE & SPECIFICATION ══════ -->
+        <div class="studio-col">
+
+          <!-- Card 1: Site Geometry & Orientation -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3zM9 3v18M15 3v18M3 9h18M3 15h18"/></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Site Geometry & Orientation</span>
+                <span class="form-card__subtitle">Plot dimensions, levels, road frontage & setbacks</span>
+              </div>
+            </legend>
+
+            <div class="grid-3">
+              <label class="fld">
+                <span class="fld-label">Plot Width <i class="fld-hint">(E-W)</i></span>
+                <div class="input-wrap">
+                  <input type="number" id="inp-plot-width" name="plot_width" value="12" min="3" max="200" step="0.5">
+                  <i>m</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Plot Depth <i class="fld-hint">(N-S)</i></span>
+                <div class="input-wrap">
+                  <input type="number" id="inp-plot-depth" name="plot_depth" value="18" min="3" max="200" step="0.5">
+                  <i>m</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Storey Levels</span>
+                <div class="input-wrap select-wrap">
+                  <select name="levels" id="inp-levels">
+                    <option value="1">G (Ground Only)</option>
+                    <option value="2" selected>G+1 (Duplex)</option>
+                    <option value="3">G+2 (Triplex)</option>
+                    <option value="4">Stilt + 3 Floors</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <!-- Architectural Road Frontage Instrument (Simple, Only Directions) -->
+            <div class="fld fld--spacing orientation-module">
+              <div class="orientation-head">
+                <div class="orientation-head__title">
+                  <span class="fld-label">Road Frontage</span>
+                  <span class="orientation-sublabel">Primary street ingress and frontage orientation</span>
+                </div>
+                <div class="orientation-badge" id="orientation-active-badge">
+                  <span class="orientation-badge__radar"></span>
+                  <span class="orientation-badge__val" id="orientation-badge-text">North · 000°</span>
+                </div>
+              </div>
+
+              <!-- 3x3 Cardinal Compass Matrix (Simple With Only Directions) -->
+              <div class="orientation-compass-matrix" id="direction-grid">
+
+                <!-- 1. North-West -->
+                <label class="dir-radio dir-radio--nw" data-val="NW" title="North-West (315°)">
+                  <input type="radio" name="road_direction" value="NW">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">NW</span>
+                      <span class="dir-radio__deg">315°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">North-West</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="13" y1="13" x2="3" y2="3"></line><polyline points="3 9 3 3 9 3"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 2. North -->
+                <label class="dir-radio dir-radio--n is-selected" data-val="N" title="North (000°)">
+                  <input type="radio" name="road_direction" value="N" checked>
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">N</span>
+                      <span class="dir-radio__deg">000°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">North</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="14" x2="8" y2="2"></line><polyline points="4 6 8 2 12 6"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 3. North-East -->
+                <label class="dir-radio dir-radio--ne" data-val="NE" title="North-East (045°)">
+                  <input type="radio" name="road_direction" value="NE">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">NE</span>
+                      <span class="dir-radio__deg">045°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">North-East</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="13" x2="13" y2="3"></line><polyline points="7 3 13 3 13 9"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 4. West -->
+                <label class="dir-radio dir-radio--w" data-val="W" title="West (270°)">
+                  <input type="radio" name="road_direction" value="W">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">W</span>
+                      <span class="dir-radio__deg">270°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">West</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="14" y1="8" x2="2" y2="8"></line><polyline points="6 4 2 8 6 12"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 5. CENTER: Simple Stylish Architectural Compass Dial -->
+                <div class="compass-dial" id="compass-dial" aria-hidden="true">
+                  <svg class="compass-dial__bezel" viewBox="0 0 160 160">
+                    <circle cx="80" cy="80" r="76" class="bezel-ring bezel-ring--outer" />
+                    <circle cx="80" cy="80" r="66" class="bezel-ring bezel-ring--inner" />
+                    <circle cx="80" cy="80" r="50" class="bezel-ring bezel-ring--core" />
+                    <line x1="80" y1="6" x2="80" y2="154" class="bezel-crosshair" />
+                    <line x1="6" y1="80" x2="154" y2="80" class="bezel-crosshair" />
+                    <text x="80" y="18" class="bezel-label bezel-label--n">N</text>
+                    <text x="144" y="83" class="bezel-label">E</text>
+                    <text x="80" y="148" class="bezel-label">S</text>
+                    <text x="16" y="83" class="bezel-label">W</text>
+                  </svg>
+
+                  <!-- Dynamic Rotating Road Frontage Pointer Needle -->
+                  <div class="compass-needle-stage" id="compass-needle-stage">
+                    <div class="compass-needle">
+                      <div class="needle-tip"></div>
+                      <div class="compass-needle__shaft"></div>
+                      <div class="compass-needle__road-arc"></div>
+                    </div>
+                  </div>
+
+                  <!-- Central Architectural Site Footprint -->
+                  <div class="compass-plot-box" id="compass-plot-box">
+                    <div class="compass-plot-frame frontage--n" id="compass-plot-frame">
+                      <div class="plot-frontage-curb"></div>
+                      <div class="compass-plot-grid"></div>
+                      <span class="compass-plot-metric" id="compass-plot-metric">12×18m</span>
+                    </div>
+                    <span class="compass-bearing-readout" id="compass-bearing-readout">000° N</span>
+                  </div>
+                </div>
+
+                <!-- 6. East -->
+                <label class="dir-radio dir-radio--e" data-val="E" title="East (090°)">
+                  <input type="radio" name="road_direction" value="E">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">E</span>
+                      <span class="dir-radio__deg">090°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">East</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="8" x2="14" y2="8"></line><polyline points="10 4 14 8 10 12"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 7. South-West -->
+                <label class="dir-radio dir-radio--sw" data-val="SW" title="South-West (225°)">
+                  <input type="radio" name="road_direction" value="SW">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">SW</span>
+                      <span class="dir-radio__deg">225°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">South-West</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="13" y1="3" x2="3" y2="13"></line><polyline points="3 7 3 13 9 13"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 8. South -->
+                <label class="dir-radio dir-radio--s" data-val="S" title="South (180°)">
+                  <input type="radio" name="road_direction" value="S">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">S</span>
+                      <span class="dir-radio__deg">180°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">South</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="14"></line><polyline points="12 10 8 14 4 10"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+                <!-- 9. South-East -->
+                <label class="dir-radio dir-radio--se" data-val="SE" title="South-East (135°)">
+                  <input type="radio" name="road_direction" value="SE">
+                  <span class="dir-radio__card">
+                    <span class="dir-radio__top">
+                      <span class="dir-radio__code">SE</span>
+                      <span class="dir-radio__deg">135°</span>
+                    </span>
+                    <span class="dir-radio__bottom">
+                      <span class="dir-radio__name">South-East</span>
+                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"></line><polyline points="13 7 13 13 7 13"></polyline></svg>
+                    </span>
+                  </span>
+                </label>
+
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <label class="fld">
+                <span class="fld-label">Location / City</span>
+                <div class="input-wrap">
+                  <input type="text" name="locality" id="inp-locality" value="Bengaluru, Karnataka" maxlength="120" placeholder="e.g. Bengaluru, Mumbai">
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Setbacks (m)</span>
+                <div class="grid-3 mini-inputs">
+                  <div class="input-wrap input-wrap--mini" title="Front Setback">
+                    <input type="number" name="setback_front" value="2.5" step="0.5" min="1"><i>front</i>
+                  </div>
+                  <div class="input-wrap input-wrap--mini" title="Rear Setback">
+                    <input type="number" name="setback_rear" value="1.5" step="0.5" min="1"><i>rear</i>
+                  </div>
+                  <div class="input-wrap input-wrap--mini" title="Side Setback">
+                    <input type="number" name="setback_side" value="1.2" step="0.2" min="1"><i>side</i>
+                  </div>
+                </div>
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Card 2: Budget & Specification -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Budget & Specification</span>
+                <span class="form-card__subtitle">Construction budget ceiling & finish tier</span>
+              </div>
+            </legend>
+
+            <div class="grid-2">
+              <label class="fld">
+                <span class="fld-label">Budget Ceiling</span>
+                <div class="input-wrap">
+                  <input type="number" name="budget" id="inp-budget" value="6500000" min="500000" step="50000">
+                  <i>₹</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Specification Tier</span>
+                <div class="input-wrap select-wrap">
+                  <select name="finish_tier" id="inp-finish-tier">
+                    <option value="standard">Standard</option>
+                    <option value="premium" selected>Premium</option>
+                    <option value="luxury">Luxury Bespoke</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+            <div class="spec-tier-tags">
+              <span class="spec-tier-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> RCC Grade M25</span>
+              <span class="spec-tier-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Premium Vitrified / Marble</span>
+              <span class="spec-tier-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Low-E Double Glazed</span>
+            </div>
+          </fieldset>
+
         </div>
-        <div class="grid-2">
-          <label class="fld"><span>Locality</span>
-            <input type="text" name="locality" value="Chennai, Tamil Nadu" maxlength="120"></label>
-          <label class="fld"><span>Road lies to the</span>
-            <select name="road_direction">
-              <option value="N" selected>North</option><option value="NE">North-east</option>
-              <option value="E">East</option><option value="SE">South-east</option>
-              <option value="S">South</option><option value="SW">South-west</option>
-              <option value="W">West</option><option value="NW">North-west</option>
-            </select></label>
+
+        <!-- ══════ COLUMN 2: SPATIAL PROGRAM & STYLE ══════ -->
+        <div class="studio-col">
+
+          <!-- Card 3: Spatial Programme & Ancillary Spaces -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Spatial Programme</span>
+                <span class="form-card__subtitle">Room counts, circulation & dedicated spaces</span>
+              </div>
+            </legend>
+
+            <div class="grid-3">
+              <label class="fld">
+                <span class="fld-label">Bedrooms</span>
+                <div class="input-wrap">
+                  <input type="number" name="bedrooms" id="inp-bedrooms" value="3" min="1" max="8">
+                  <i>BHK</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Bathrooms</span>
+                <div class="input-wrap">
+                  <input type="number" name="bathrooms" id="inp-bathrooms" value="3" min="1" max="8">
+                  <i>baths</i>
+                </div>
+              </label>
+              <label class="fld">
+                <span class="fld-label">Kitchen Typology</span>
+                <div class="input-wrap select-wrap">
+                  <select name="kitchen_type">
+                    <option value="open_modular" selected>Open Modular</option>
+                    <option value="closed">Traditional Closed</option>
+                    <option value="wet_dry">Dual (Wet + Dry)</option>
+                  </select>
+                </div>
+              </label>
+            </div>
+
+            <!-- Ancillary Spaces (Clean Typography Chips, No Emojis) -->
+            <div class="fld fld--spacing">
+              <span class="fld-label">Dedicated Spaces</span>
+              <div class="amenities-grid">
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_pooja" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__name">Pooja Room</span>
+                    <span class="amenity-chip__zone">Sacred Space</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_dining" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__name">Formal Dining</span>
+                    <span class="amenity-chip__zone">Central Area</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_study" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__name">Study / Office</span>
+                    <span class="amenity-chip__zone">Quiet Zone</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_utility" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__name">Utility & Wash</span>
+                    <span class="amenity-chip__zone">Service Zone</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_balcony" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__name">Balcony / Verandah</span>
+                    <span class="amenity-chip__zone">Exterior Deck</span>
+                  </span>
+                </label>
+                <label class="amenity-chip is-checked">
+                  <input type="checkbox" name="amenity_parking" value="1" checked>
+                  <span class="amenity-chip__box">
+                    <span class="amenity-chip__name">Covered Parking</span>
+                    <span class="amenity-chip__zone">Entry Drive</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Demographics & Accessibility -->
+            <div class="demographics-subcard">
+              <span class="fld-label">Occupancy & Universal Design</span>
+              <div class="grid-3">
+                <label class="fld">
+                  <span class="fld-sublabel">Adults</span>
+                  <div class="input-wrap">
+                    <input type="number" name="occupant_adults" value="2" min="1" max="10">
+                  </div>
+                </label>
+                <label class="fld">
+                  <span class="fld-sublabel">Children</span>
+                  <div class="input-wrap">
+                    <input type="number" name="occupant_children" value="1" min="0" max="8">
+                  </div>
+                </label>
+                <label class="fld">
+                  <span class="fld-sublabel">Senior Citizens</span>
+                  <div class="input-wrap">
+                    <input type="number" name="occupant_elders" value="1" min="0" max="6">
+                  </div>
+                </label>
+              </div>
+              <label class="accessibility-toggle">
+                <input type="checkbox" name="elderly_access" value="1" checked>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                <span class="toggle-text">
+                  <strong>Senior Accessibility</strong>: Ground-floor master bedroom, zero-threshold transitions, and 1.2m wide circulation.
+                </span>
+              </label>
+            </div>
+          </fieldset>
+
+          <!-- Card 4: Architectural Style -->
+          <fieldset class="form-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Architectural Style</span>
+                <span class="form-card__subtitle">Design vocabulary & aesthetic language</span>
+              </div>
+            </legend>
+
+            <label class="fld">
+              <span class="fld-label">Style Vocabulary</span>
+              <div class="input-wrap select-wrap">
+                <select name="styles" id="inp-styles">
+                  <option value="tropical_modern" selected>Tropical Modern</option>
+                  <option value="contemporary">Contemporary Minimal</option>
+                  <option value="biophilic">Biophilic Sanctuary</option>
+                  <option value="kerala_vernacular">Kerala Vernacular</option>
+                  <option value="chettinad">Chettinad Heritage</option>
+                  <option value="modern_minimal">Modern Minimalist</option>
+                  <option value="japandi">Japandi</option>
+                  <option value="industrial">Industrial Loft</option>
+                  <option value="scandinavian">Scandinavian</option>
+                </select>
+              </div>
+            </label>
+            <div class="spec-tier-tags">
+              <span class="spec-tier-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg> Shaded Verandahs</span>
+              <span class="spec-tier-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg> Courtyard Ingress</span>
+              <span class="spec-tier-tag"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg> Natural Terracotta / Teak</span>
+            </div>
+          </fieldset>
+
+        </div>
+
+      </div>
+
+      <!-- ── FULL-WIDTH DOWN: VASTU STANCE ("vast should be down") ── -->
+      <fieldset class="form-card form-card--vastu-down stance-block">
+        <legend class="form-card__head">
+          <div class="form-card__icon-badge form-card__icon-badge--gold">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+          </div>
+          <div>
+            <span class="form-card__title">Vastu Shastra Stance</span>
+            <span class="form-card__subtitle">Harmonize directional principles with functional structural geometry</span>
+          </div>
+        </legend>
+
+        <div class="vastu-down-grid">
+          <div class="stance-read">
+            <div class="stance-header">
+              <span class="stance-badge" id="stance-name">Balanced</span>
+            </div>
+            <p class="stance-desc" id="stance-note">Classical Vastu principles and modern structural science carry equal weight.</p>
+          </div>
+
+          <div class="slider-container">
+            <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+                   aria-label="Vastu stance from modern to orthodox">
+            <div class="stance-scale" aria-hidden="true">
+              <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
+            </div>
+          </div>
         </div>
       </fieldset>
 
-      <fieldset>
-        <legend>The household</legend>
-        <div class="grid-2">
-          <label class="fld"><span>Bedrooms</span>
-            <input type="number" name="bedrooms" value="3" min="0" max="10"></label>
-          <label class="fld"><span>Bathrooms</span>
-            <input type="number" name="bathrooms" value="2" min="0" max="10"></label>
+      <!-- ── LIVE ARCHITECTURAL HUD SUMMARY BAR ── -->
+      <div class="studio-hud studio-hud--bottom" id="studio-hud">
+        <div class="hud-item" title="Calculated Ground Footprint">
+          <span class="hud-label">Site Footprint</span>
+          <span class="hud-val" id="plot-area-calc">216 m² · 2,325 sq ft</span>
         </div>
-        <div class="grid-3">
-          <label class="fld"><span>Adults</span>
-            <input type="number" name="occupant_adults" value="2" min="0" max="12"></label>
-          <label class="fld"><span>Children</span>
-            <input type="number" name="occupant_children" value="1" min="0" max="12"></label>
-          <label class="fld"><span>Elders</span>
-            <input type="number" name="occupant_elders" value="1" min="0" max="12"></label>
+        <div class="hud-item" title="Cardinal Orientation">
+          <span class="hud-label">Orientation</span>
+          <span class="hud-val hud-val--gold" id="hud-orientation">North Facing</span>
         </div>
-      </fieldset>
+        <div class="hud-item" title="Spatial Program">
+          <span class="hud-label">Program</span>
+          <span class="hud-val" id="hud-program">3 BHK Duplex · 3 Baths</span>
+        </div>
+        <div class="hud-item" title="Vastu Alignment">
+          <span class="hud-label">Vastu Stance</span>
+          <span class="hud-val hud-val--indigo" id="hud-vastu">Balanced</span>
+        </div>
+        <div class="hud-item" title="Target Budget Ceiling">
+          <span class="hud-label">Target Budget</span>
+          <span class="hud-val" id="hud-budget">₹65.00 L · Premium</span>
+        </div>
+      </div>
 
-      <fieldset>
-        <legend>The character</legend>
-        <label class="fld fld--full"><span>Style</span>
-          <select name="styles">
-            <option value="tropical_modern" selected>Tropical modern</option>
-            <option value="contemporary">Contemporary</option>
-            <option value="kerala_vernacular">Kerala vernacular</option>
-            <option value="chettinad">Chettinad</option>
-            <option value="modern_minimal">Modern minimal</option>
-            <option value="japandi">Japandi</option>
-            <option value="biophilic">Biophilic</option>
-            <option value="traditional_indian">Traditional Indian</option>
-            <option value="industrial">Industrial</option>
-            <option value="scandinavian">Scandinavian</option>
-          </select></label>
-        <label class="fld fld--full"><span>Budget</span>
-          <input type="number" name="budget" value="6500000" min="0" step="50000"><i>₹</i></label>
-      </fieldset>
+      <!-- ── ACTION CTA ── -->
+      <div class="studio-cta-wrap">
+        <button type="submit" class="convene convene--studio" id="convene">
+          <div class="convene__content">
+            <span class="convene__main">
+              <span>Generate Architectural Schemes</span>
+              <span class="arrow">→</span>
+            </span>
+            <span class="convene__sub" id="convene-sub">
+              Evaluating compliance, daylight, structural grids, Vastu, and material costs across candidate layouts
+            </span>
+          </div>
+        </button>
+        <p class="engine-note" id="engine-note">Connecting to architectural engine…</p>
+      </div>
 
-      <fieldset class="stance-block">
-        <legend>Vastu stance</legend>
-        <div class="stance-read">
-          <b id="stance-name">Balanced</b>
-          <span id="stance-note">Classical rules and modern building science carry equal weight.</span>
-        </div>
-        <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
-               aria-label="Vastu stance from modern to orthodox">
-        <div class="stance-scale" aria-hidden="true">
-          <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
-        </div>
-      </fieldset>
-
-      <button type="submit" class="convene" id="convene">
-        <span class="convene__main">Convene the committee</span>
-        <span class="convene__sub" id="convene-sub">13 critics · 3 schemes · ₹0 to run</span>
-      </button>
-      <p class="engine-note" id="engine-note">Connecting to the engine…</p>
     </form>
   </div>
 </section>

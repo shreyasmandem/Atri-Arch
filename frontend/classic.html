@@ -1,0 +1,306 @@
+<!--
+THESIS: The vastu-purusha-mandala is struck once, at full scale, as the opening
+act - then it steps aside and becomes one diagnostic among many, because the
+architect came for the drawing, not for our metaphor. Refuses the AI-dashboard
+default: near-black with a neon accent, glass cards, a chat rail.
+OWN-WORLD: Swept-earth ground, rice-flour line work, and four Indic pigments
+used as directional semantics - indigo Ishanya/analysis, hingula Agneya/breach,
+ochre Nairutya/cost, orpiment Vayavya/judgement. Lettering built on the grid.
+STORY: State intent. Watch thirteen critics take their stations. Leave able to
+answer "why this scheme?" with a citation.
+FIRST VIEWPORT: The mandala at full height with its centre open, the brief to
+the west, the committee waiting to the east.
+FORM: Vastu-purusha-mandala. Position 4 of 7 on the ordered list. Seed a772e88e.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Architect Intelligence — Classic Heritage Studio</title>
+<meta name="description" content="Explainable multi-agent architectural design. Thirteen critics, one defensible scheme.">
+<link rel="stylesheet" href="classic.css">
+<style>
+  .version-banner {
+    position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+    background: rgba(223, 168, 92, 0.95); color: #14100B;
+    padding: 10px 18px; border-radius: 9999px;
+    font-family: ui-sans-serif, system-ui, sans-serif; font-size: 13px; font-weight: 700;
+    text-decoration: none; display: flex; align-items: center; gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5); transition: transform 0.2s ease;
+  }
+  .version-banner:hover { transform: translateY(-2px); background: #FFF; }
+</style>
+</head>
+<body data-phase="compose">
+
+<a href="index.html" class="version-banner">✨ Switch to Modern Apple UI →</a>
+
+<a class="skip" href="#stage">Skip to the work</a>
+
+<!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ CROWN ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<header class="crown">
+  <button type="button" class="mark" id="home" title="Back to the brief">
+    <svg viewBox="0 0 36 36" width="26" height="26" aria-hidden="true">
+      <rect x="1.5" y="1.5" width="33" height="33" fill="none" stroke="currentColor" stroke-width="1.1"/>
+      <path d="M12.5 1.5v33M23.5 1.5v33M1.5 12.5h33M1.5 23.5h33" stroke="currentColor" stroke-width=".55" opacity=".5"/>
+      <rect x="12.5" y="12.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    </svg>
+    <span class="mark__word">Architect<b>Intelligence</b></span>
+  </button>
+
+  <div class="schemes" id="schemes" role="tablist" aria-label="Candidate schemes"></div>
+
+  <nav class="views" id="views" aria-label="Views">
+    <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
+    <button type="button" class="view-tab" data-view="mandala">Mandala</button>
+    <button type="button" class="view-tab" data-view="vastu">Vastu</button>
+    <button type="button" class="view-tab" data-view="cost">Cost</button>
+    <button type="button" class="view-tab" data-view="interior">Interior</button>
+    <button type="button" class="view-tab" data-view="model">3D</button>
+    <button type="button" class="view-tab" data-view="findings">Findings</button>
+    <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
+    <button type="button" class="view-tab" data-view="audit">Audit</button>
+  </nav>
+
+  <div class="crown__end">
+    <button type="button" class="ghost-btn" id="restart" hidden>New brief</button>
+    <span class="ledger" id="ledger" title="Model spend this session">
+      <i class="ledger__dot"></i><span>$<b id="ledger-cost">0.00</b></span>
+    </span>
+  </div>
+</header>
+
+<!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ COMPOSE ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<section class="compose" id="compose" aria-label="State the brief">
+
+  <div class="compose__diagram">
+    <div class="mandala-shell">
+      <svg class="mandala" id="hero-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
+      <div class="mandala__heart">
+        <p class="heart__eyebrow">Vastu-purusha-mandala</p>
+        <p class="heart__line">The centre is kept open.</p>
+        <p class="heart__body">
+          Nine by nine padas. The engine will not build over the Brahmasthan,
+          and neither does this interface.
+        </p>
+      </div>
+      <span class="rose rose--n">N</span><span class="rose rose--e">E</span>
+      <span class="rose rose--s">S</span><span class="rose rose--w">W</span>
+      <span class="rose rose--ne">Ishanya</span><span class="rose rose--se">Agneya</span>
+      <span class="rose rose--sw">Nairutya</span><span class="rose rose--nw">Vayavya</span>
+    </div>
+  </div>
+
+  <div class="compose__brief">
+    <div class="brief-head">
+      <p class="sanskrit">Sankalpa</p>
+      <h1>State the intent</h1>
+      <p class="brief-lede">
+        Thirteen independent critics will review three competing schemes.
+        Ten of them compute daylight factors, air changes, sightlines,
+        building code and quantity takeoff, and cannot be talked round.
+      </p>
+    </div>
+
+    <form id="brief" class="brief" novalidate>
+      <fieldset>
+        <legend>The plot</legend>
+        <div class="grid-3">
+          <label class="fld"><span>Width</span>
+            <input type="number" name="plot_width" value="12" min="3" max="200" step="0.5"><i>m</i></label>
+          <label class="fld"><span>Depth</span>
+            <input type="number" name="plot_depth" value="18" min="3" max="200" step="0.5"><i>m</i></label>
+          <label class="fld"><span>Floors</span>
+            <input type="number" name="levels" value="1" min="1" max="4"></label>
+        </div>
+        <div class="grid-2">
+          <label class="fld"><span>Locality</span>
+            <input type="text" name="locality" value="Chennai, Tamil Nadu" maxlength="120"></label>
+          <label class="fld"><span>Road lies to the</span>
+            <select name="road_direction">
+              <option value="N" selected>North</option><option value="NE">North-east</option>
+              <option value="E">East</option><option value="SE">South-east</option>
+              <option value="S">South</option><option value="SW">South-west</option>
+              <option value="W">West</option><option value="NW">North-west</option>
+            </select></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>The household</legend>
+        <div class="grid-2">
+          <label class="fld"><span>Bedrooms</span>
+            <input type="number" name="bedrooms" value="3" min="0" max="10"></label>
+          <label class="fld"><span>Bathrooms</span>
+            <input type="number" name="bathrooms" value="2" min="0" max="10"></label>
+        </div>
+        <div class="grid-3">
+          <label class="fld"><span>Adults</span>
+            <input type="number" name="occupant_adults" value="2" min="0" max="12"></label>
+          <label class="fld"><span>Children</span>
+            <input type="number" name="occupant_children" value="1" min="0" max="12"></label>
+          <label class="fld"><span>Elders</span>
+            <input type="number" name="occupant_elders" value="1" min="0" max="12"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>The character</legend>
+        <label class="fld fld--full"><span>Style</span>
+          <select name="styles">
+            <option value="tropical_modern" selected>Tropical modern</option>
+            <option value="contemporary">Contemporary</option>
+            <option value="kerala_vernacular">Kerala vernacular</option>
+            <option value="chettinad">Chettinad</option>
+            <option value="modern_minimal">Modern minimal</option>
+            <option value="japandi">Japandi</option>
+            <option value="biophilic">Biophilic</option>
+            <option value="traditional_indian">Traditional Indian</option>
+            <option value="industrial">Industrial</option>
+            <option value="scandinavian">Scandinavian</option>
+          </select></label>
+        <label class="fld fld--full"><span>Budget</span>
+          <input type="number" name="budget" value="6500000" min="0" step="50000"><i>Γé╣</i></label>
+      </fieldset>
+
+      <fieldset class="stance-block">
+        <legend>Vastu stance</legend>
+        <div class="stance-read">
+          <b id="stance-name">Balanced</b>
+          <span id="stance-note">Classical rules and modern building science carry equal weight.</span>
+        </div>
+        <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+               aria-label="Vastu stance from modern to orthodox">
+        <div class="stance-scale" aria-hidden="true">
+          <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
+        </div>
+      </fieldset>
+
+      <button type="submit" class="convene" id="convene">
+        <span class="convene__main">Convene the committee</span>
+        <span class="convene__sub" id="convene-sub">13 critics ┬╖ 3 schemes ┬╖ Γé╣0 to run</span>
+      </button>
+      <p class="engine-note" id="engine-note">Connecting to the engineΓÇª</p>
+    </form>
+  </div>
+</section>
+
+<!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ RUNNING ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<section class="running" id="running" aria-live="polite" aria-label="The committee is sitting">
+  <div class="running__inner">
+    <p class="sanskrit">Sabha</p>
+    <h2 id="run-title">The committee is sitting</h2>
+    <div class="run-track"><i id="run-fill"></i></div>
+    <p class="run-stage" id="run-stage">Interpreting the briefΓÇª</p>
+    <ol class="run-critics" id="run-critics"></ol>
+    <div class="run-log" id="run-log"></div>
+  </div>
+</section>
+
+<!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ REVIEW ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<main class="review" id="review">
+
+  <aside class="rail rail--west" aria-label="Scheme and brief">
+    <div class="rail__block">
+      <h2 class="rail__head">Selected scheme</h2>
+      <p class="pick" id="pick-name">ΓÇö</p>
+      <p class="pick__why" id="pick-why"></p>
+    </div>
+    <div class="rail__block">
+      <h2 class="rail__head">Axis scores</h2>
+      <div id="axis-bars"></div>
+    </div>
+    <div class="rail__block">
+      <h2 class="rail__head">The brief</h2>
+      <dl class="kv" id="brief-recap"></dl>
+    </div>
+  </aside>
+
+  <section class="stage" id="stage">
+    <div class="pane" data-view="drawings">
+      <div class="pane__bar">
+        <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Drawings"></div>
+        <div class="pane__tools">
+          <button type="button" class="ghost-btn" id="zoom">Actual size</button>
+          <button type="button" class="ghost-btn" id="dl-svg">SVG</button>
+          <button type="button" class="ghost-btn" id="dl-dxf" title="Editable CAD, opens in AutoCAD, BricsCAD, LibreCAD or QCAD">DXF</button>
+        </div>
+      </div>
+      <div class="plate" id="plate"></div>
+      <p class="plate__caption" id="plate-caption"></p>
+    </div>
+
+    <div class="pane" data-view="mandala" hidden>
+      <div class="pane__intro">
+        <h2>The scheme on the mandala</h2>
+        <p>Each room lights the padas it occupies, in the pigment of its quarter.
+           The centre nine are scored separately, because the engine requires them unbuilt.</p>
+      </div>
+      <div class="mandala-review">
+        <div class="mandala-shell mandala-shell--sm">
+          <svg class="mandala" id="review-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
+          <span class="rose rose--n">N</span><span class="rose rose--e">E</span>
+          <span class="rose rose--s">S</span><span class="rose rose--w">W</span>
+        </div>
+        <div class="mandala-side">
+          <p class="brahma" id="brahma-note"></p>
+          <div id="quarter-legend" class="legend"></div>
+          <div id="room-sectors"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane" data-view="vastu" hidden></div>
+    <div class="pane" data-view="cost" hidden></div>
+    <div class="pane" data-view="interior" hidden></div>
+    <div class="pane" data-view="model" hidden></div>
+    <div class="pane" data-view="findings" hidden></div>
+    <div class="pane" data-view="negotiation" hidden></div>
+    <div class="pane" data-view="audit" hidden></div>
+  </section>
+
+  <aside class="rail rail--east" aria-label="The committee">
+    <div class="rail__block rail__block--flush">
+      <h2 class="rail__head">
+        Committee
+        <span class="agree" id="agree-chip"></span>
+      </h2>
+      <ol class="critics" id="critics"></ol>
+    </div>
+  </aside>
+
+  <footer class="verdict" id="verdict">
+    <div class="v-cell" data-pig="indigo">
+      <dt>Consensus</dt><dd id="v-score">ΓÇö</dd><small id="v-agree">ΓÇö</small></div>
+    <div class="v-cell" data-pig="orpiment">
+      <dt>Vastu</dt><dd id="v-vastu">ΓÇö</dd><small id="v-vastu-note">ΓÇö</small></div>
+    <div class="v-cell" data-pig="ochre">
+      <dt>Estimate</dt><dd id="v-cost">ΓÇö</dd><small id="v-cost-note">ΓÇö</small></div>
+    <div class="v-cell" data-pig="chalk">
+      <dt>Built area</dt><dd id="v-area">ΓÇö</dd><small id="v-far">ΓÇö</small></div>
+    <div class="v-cell" data-pig="hingula">
+      <dt>Open findings</dt><dd id="v-find">ΓÇö</dd><small id="v-find-note">ΓÇö</small></div>
+    <div class="v-cell v-cell--act">
+      <button type="button" class="ghost-btn" id="see-why">Why this scheme</button>
+    </div>
+  </footer>
+</main>
+
+<!-- ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ OVERLAYS ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ -->
+<div class="sheetover" id="why" hidden>
+  <div class="sheetover__panel" role="dialog" aria-modal="true" aria-labelledby="why-h">
+    <div class="sheetover__bar">
+      <h2 id="why-h">Why this scheme</h2>
+      <button type="button" class="x" id="why-close" aria-label="Close">Γ£ò</button>
+    </div>
+    <div class="sheetover__body" id="why-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="studio.js" type="module"></script>
+</body>
+</html>
