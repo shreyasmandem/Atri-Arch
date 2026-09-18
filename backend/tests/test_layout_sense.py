@@ -139,9 +139,11 @@ def test_the_core_sequence_holds(plans, brief):
     These four are checked individually rather than through the aggregate score
     because an average can hide the one relationship everybody notices.
     """
+    # Living-to-dining is deliberately not here: with a passage in the plan
+    # the two may be joined through it, which is a legitimate arrangement.
+    # Foyer-to-living and dining-to-kitchen have no such excuse.
     required = [
         (RoomType.FOYER, RoomType.LIVING),
-        (RoomType.LIVING, RoomType.DINING),
         (RoomType.DINING, RoomType.KITCHEN),
     ]
     failures: list[str] = []
@@ -160,6 +162,80 @@ def test_the_core_sequence_holds(plans, brief):
     # One miss across five schemes is a tight plot, not a broken generator;
     # a systematic miss is the defect this whole module exists to prevent.
     assert len(failures) <= 2, "\n".join(failures)
+
+
+# ---------------------------------------------------------------------------
+# Can you walk through it
+# ---------------------------------------------------------------------------
+
+
+def test_every_room_is_reached_the_right_way(plans):
+    """The test the client runs on the plan before any other: how do I get to
+    each room, and what do I walk through to get there.
+
+    A bedroom reached through the kitchen, a kitchen reached through the
+    master bedroom, a bathroom on the route to anything: each is a failure
+    no score should be allowed to hide. One illegal route across five
+    schemes is a tight plot; several is a broken door placer.
+    """
+    from aip.engines.architecture.programme import walkability
+
+    illegal: list[str] = []
+    for seed, plan in zip(SEEDS, plans, strict=True):
+        for route in walkability(plan):
+            if not route.legal:
+                illegal.append(f"seed {seed}: {route.room} via {' > '.join(route.path)}")
+    assert len(illegal) <= 2, "; ".join(illegal)
+
+
+def test_no_route_passes_through_a_bedroom(plans):
+    """Stronger than the count above: nobody's way to anywhere is a bedroom."""
+    from aip.engines.architecture.programme import walkability
+
+    bedrooms = {"Master Bedroom", "Bedroom"}
+    for seed, plan in zip(SEEDS, plans, strict=True):
+        for route in walkability(plan):
+            through = route.path[1:-1]
+            # The attached bath's host is exempt: that is the right door.
+            if route.room == "Bathroom" and through and through[-1] in bedrooms:
+                through = through[:-1]
+            assert not (set(through) & bedrooms), (
+                f"seed {seed}: {route.room} reached via {' > '.join(route.path)}"
+            )
+
+
+def test_through_rooms_form_one_chain(plans):
+    """Foyer, living, dining and the passage must connect without leaving them.
+
+    Two islands of through-rooms means the only bridge runs through a bedroom.
+    """
+    from aip.engines.architecture.programme import walkability
+
+    for seed, plan in zip(SEEDS, plans, strict=True):
+        for route in walkability(plan):
+            if is_through_name(route.room):
+                assert all(is_through_name(x) for x in route.path), (
+                    f"seed {seed}: {route.room} reached via {' > '.join(route.path)}"
+                )
+
+
+def is_through_name(name: str) -> bool:
+    return name in {"Foyer", "Living", "Dining", "Corridor", "Lobby", "Family", "Drawing", "Verandah"}
+
+
+def test_a_passage_is_added_for_multiple_bedrooms(brief):
+    filled = apply_defaults(brief)
+    assert any(r.type is RoomType.CORRIDOR for r in filled.requirements), (
+        "three bedrooms and no passage means a bedroom reached through a bedroom"
+    )
+
+
+def test_attached_bath_and_kitchen_utility_are_legal_routes():
+    """A route through the *host* of a room is the correct route, not a breach."""
+    from aip.engines.architecture.programme import PRIVATE_HOST
+
+    assert RoomType.KITCHEN in PRIVATE_HOST[RoomType.UTILITY]
+    assert RoomType.MASTER_BEDROOM in PRIVATE_HOST[RoomType.WARDROBE]
 
 
 def test_layout_score_is_respectable(plans, brief):

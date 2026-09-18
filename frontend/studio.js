@@ -1062,6 +1062,41 @@ async function renderFindings() {
     if (S.view !== "findings") return;
   }
 
+  // How you get to each room. Shown first, because it is the question a
+  // client asks of a plan before any number: what do I walk through.
+  const lay = a.layout;
+  if (lay?.routes?.length) {
+    s.append(el("h3", "sec", "How you move through it"));
+    const stats = el("div", "stat-row");
+    const illegal = lay.routes.filter((r) => !r.legal).length;
+    for (const [pig, k, v, sub] of [
+      [illegal ? "hingula" : "ochre", "Walkable", `${Math.round(lay.walkable * 100)}%`,
+        illegal ? `${illegal} room(s) reached the wrong way` : "every room reached correctly"],
+      ["indigo", "Adjacency", `${Math.round(lay.adjacency * 100)}%`, "programme honoured"],
+      ["chalk", "Zoning", `${Math.round(lay.zoning * 100)}%`, "front-to-back order"],
+    ]) {
+      const d = el("dl", "stat"); d.dataset.pig = pig;
+      d.append(el("dt", null, k), el("dd", null, v), el("small", null, sub)); stats.append(d);
+    }
+    s.append(stats);
+    const routes = [...lay.routes].sort((x, y) => (x.legal - y.legal) || (x.path.length - y.path.length));
+    for (const r of routes) {
+      const row = el("div", "route"); row.dataset.ok = r.legal ? "y" : "n";
+      row.append(el("b", "route__room", r.room));
+      const chain = el("span", "route__path");
+      r.path.forEach((step, i) => {
+        if (i) chain.append(el("i", "route__arrow", "›"));
+        chain.append(el("span", i === r.path.length - 1 ? "route__end" : "route__step", step));
+      });
+      row.append(chain);
+      if (!r.legal) row.append(el("span", "route__why", r.reason));
+      s.append(row);
+    }
+    if (lay.broken?.length) {
+      s.append(el("p", "note-card", lay.broken[0]));
+    }
+  }
+
   const all = [];
   for (const [axis, rep] of Object.entries(a.metrics || {}))
     for (const f of rep.findings || []) all.push({ ...f, axis });

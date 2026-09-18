@@ -168,6 +168,250 @@ def build_balanced_tree(slots: Sequence[int], rng: random.Random, areas: Sequenc
     )
 
 
+def build_zoned_tree(
+    slots: Sequence[int],
+    requirements: Sequence[RoomRequirement],
+    areas: Sequence[float],
+    rng: random.Random,
+    *,
+    road_along_y: bool,
+    road_at_high_end: bool,
+    bands: int = 3,
+    brief_kind=None,
+) -> Node:
+    """A tree organised the way a real plan is: in bands from the road inward.
+
+    A random tree can place any room anywhere and relies on evolution to find
+    the front-to-back gradient every house has. It rarely does in the time
+    available, and the plans that come out have bedrooms on the street and
+    dining rooms at the back fence. This starts from the gradient instead.
+
+    Rooms are sorted by where they belong along the plot depth, cut into bands
+    across the road axis, and each band is then divided along its length. What
+    evolution then refines is the ratios and the order within a band - the
+    kind of local adjustment it is actually good at - rather than the whole
+    organising idea, which it is not.
+    """
+
+    if len(slots) == 1:
+        return Leaf(slots[0])
+
+    def needs_light(slot: int) -> bool:
+        req = requirements[slot]
+        return req.needs_daylight and not req.type.is_circulation
+
+    # The residential template, stated by role rather than discovered by
+    # packing. This is how a practice lays out a plot: arrival and the
+    # public rooms at the frontage; the dining-kitchen-utility group behind
+    # them; a passage across the seam; the bedrooms beyond it, each with a
+    # bathroom beside it. Packing rooms into bands by area alone put the
+    # dining room in front of the living room and the kitchen behind the
+    # bedrooms, because area does not know what a room is for.
+    front_types = {RoomType.FOYER, RoomType.VERANDAH, RoomType.LIVING,
+                   RoomType.DRAWING, RoomType.PUJA, RoomType.HOME_OFFICE}
+    service_types = {RoomType.DINING, RoomType.KITCHEN, RoomType.UTILITY, RoomType.PANTRY,
+                     RoomType.STORE, RoomType.LAUNDRY, RoomType.FAMILY}
+    wet_types = {RoomType.BATHROOM, RoomType.TOILET, RoomType.POWDER}
+    private_types = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                     RoomType.CHILDREN_BEDROOM, RoomType.STUDY, RoomType.SERVANT}
+    passage_types = {RoomType.CORRIDOR, RoomType.LOBBY}
+
+    def of(kinds: set) -> list[int]:
+        return [s for s in slots if requirements[s].type in kinds]
+
+    passage = of(passage_types)
+    front = of(front_types)
+    service = of(service_types)
+    wet = of(wet_types)
+    private = of(private_types)
+    other = [s for s in slots if s not in front + service + wet + private + passage]
+
+    # Four-band variant: an open living-dining, with the dining room joining
+    # the frontage and the kitchen directly behind it. Both are common; the
+    # search chooses between them on merit.
+    if bands >= 4:
+        dining = [s for s in service if requirements[s].type is RoomType.DINING]
+        front += dining
+        service = [s for s in service if s not in dining]
+
+    # Bathrooms: one beside the master bedroom if it asked for one, the rest
+    # shared out among the bedroom bands.
+    attached: list[int] = []
+    common: list[int] = []
+    wants_attached = any(requirements[m].attached_bathroom for m in private)
+    for w in wet:
+        if requirements[w].type is RoomType.BATHROOM and not attached and wants_attached:
+            attached.append(w)
+        else:
+            common.append(w)
+
+    # Private rooms in bands of at most two daylit rooms, bathrooms as core.
+    private_sorted = sorted(
+        private, key=lambda s: 0 if requirements[s].type is RoomType.MASTER_BEDROOM else 1
+    )
+    private_bands: list[list[int]] = []
+    band: list[int] = []
+    lit_count = 0
+    for slot in private_sorted:
+        if lit_count >= 2:
+            private_bands.append(band)
+            band, lit_count = [], 0
+        band.append(slot)
+        lit_count += needs_light(slot)
+    if band:
+        private_bands.append(band)
+    if private_bands:
+        if attached:
+            private_bands[0] += attached
+        for index, w in enumerate(common):
+            private_bands[index % len(private_bands)].append(w)
+    else:
+        service += common + attached
+
+    groups: list[list[int]] = []
+    if front or other:
+        groups.append(front + other)
+    if service:
+        groups.append(service)
+    groups.extend(private_bands)
+    groups = [g for g in groups if g]
+    # Mild variation so seeded genomes are not clones: shuffle within a band.
+    for g in groups:
+        rng.shuffle(g)
+
+    # Daylit rooms to the two ends of each band; the core between them. And
+    # crucially, a room lands on the *same side* as the room it most wants
+    # to touch in the band in front of it. Bands stack front-to-back, so two
+    # rooms in consecutive bands only meet if they share a side: dining at
+    # the right end of the living band and the kitchen at the left end of
+    # the next one never touch, however well each is placed on its own.
+    from aip.engines.architecture.programme import programme_for
+
+    wanted: dict[RoomType, dict[RoomType, float]] = {}
+    for rel in programme_for(brief_kind):
+        if rel.required and rel.governs_wall():
+            wanted.setdefault(rel.a, {})[rel.b] = rel.weight
+            wanted.setdefault(rel.b, {})[rel.a] = rel.weight
+
+    def arrange(group: list[int], previous: list[int]) -> list[int]:
+        lit = [g for g in group if needs_light(g)]
+        core = [g for g in group if not needs_light(g)]
+        if len(lit) <= 1:
+            return lit[:1] + core + lit[1:]
+
+        def side_of(slot: int) -> float:
+            """-1 wants the left end, +1 the right, 0 no preference."""
+            if not previous:
+                return 0.0
+            best, score = 0.0, 0.0
+            n = len(previous)
+            for position, prev_slot in enumerate(previous):
+                w = wanted.get(requirements[slot].type, {}).get(requirements[prev_slot].type, 0.0)
+                if w > score:
+                    score = w
+                    best = -1.0 if position < n / 2 else 1.0
+            return best
+
+        lit.sort(key=side_of)
+
+        # A core room with a host in this band goes beside that host, not
+        # wherever the middle happens to be. Utility belongs against the
+        # kitchen wall; an attached bathroom against its bedroom. Wedged
+        # between the wrong pair it becomes the only way into one of them.
+        from aip.engines.architecture.programme import PRIVATE_HOST
+
+        left_end, right_end = lit[0], lit[-1]
+        near_left: list[int] = []
+        near_right: list[int] = []
+        middle: list[int] = []
+        for c in core:
+            hosts = PRIVATE_HOST.get(requirements[c].type, ())
+            ctype = requirements[c].type
+            bath_host = ctype is RoomType.BATHROOM
+            if requirements[left_end].type in hosts or (
+                bath_host and requirements[left_end].attached_bathroom
+            ):
+                near_left.append(c)
+            elif requirements[right_end].type in hosts or (
+                bath_host and requirements[right_end].attached_bathroom
+            ):
+                near_right.append(c)
+            else:
+                middle.append(c)
+        return [left_end] + near_left + middle + near_right + lit[1:]
+
+    arranged: list[list[int]] = []
+    for group in groups:
+        arranged.append(arrange(group, arranged[-1] if arranged else []))
+    groups = arranged
+
+    # The passage is not a room in a band; it is a band. A hall is a thin
+    # strip across the whole width of the house with rooms opening off both
+    # sides, and that is the only shape in which it can serve every bedroom
+    # behind it. Packed as one cell among the bathrooms it touches two
+    # neighbours and serves neither.
+    passages = list(passage)
+    if passages:
+        # Insert at the seam: immediately before the first band that holds a
+        # bedroom. Everything the household shares - living, dining, kitchen,
+        # puja, utility - sits on the near side of the passage; everything
+        # private sits beyond it. Placing the seam after the last *public*
+        # room instead would push the kitchen behind the passage with the
+        # bedrooms, which is where it kept ending up.
+        private = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                   RoomType.CHILDREN_BEDROOM}
+        seam = len(groups)
+        for index, group in enumerate(groups):
+            if any(requirements[g].type in private for g in group):
+                seam = index
+                break
+        groups.insert(seam, passages)
+
+    # Within a band, cut along the frontage; between bands, cut across it.
+    # Band order runs from the road inward, so the first group must land on the
+    # road side of the envelope.
+    def band_tree(group: list[int]) -> Node:
+        if len(group) == 1:
+            return Leaf(group[0])
+        order = list(group)
+        # Divide the band by area along its length.
+        gtotal = sum(areas[g] for g in order) or 1.0
+        cut_index = 1
+        acc = 0.0
+        for i, g in enumerate(order):
+            acc += areas[g]
+            if acc >= gtotal / 2:
+                cut_index = max(1, min(len(order) - 1, i + 1))
+                break
+        left, right = order[:cut_index], order[cut_index:]
+        la = sum(areas[g] for g in left) or 1.0
+        ra = sum(areas[g] for g in right) or 1.0
+        return Split(
+            vertical=road_along_y,     # cuts along the frontage
+            ratio=min(0.88, max(0.12, la / (la + ra))),
+            left=band_tree(left),
+            right=band_tree(right),
+        )
+
+    def stack(bands_list: list[list[int]]) -> Node:
+        if len(bands_list) == 1:
+            return band_tree(bands_list[0])
+        first, rest = bands_list[0], bands_list[1:]
+        fa = sum(areas[g] for g in first) or 1.0
+        ra = sum(areas[g] for band in rest for g in band) or 1.0
+        ratio = min(0.88, max(0.12, fa / (fa + ra)))
+        first_tree, rest_tree = band_tree(first), stack(rest)
+        # `left` is the low-coordinate side. When the road is at the high end
+        # the front band must go on the right/top, so the halves swap.
+        if road_at_high_end:
+            return Split(vertical=not road_along_y, ratio=1 - ratio,
+                         left=rest_tree, right=first_tree)
+        return Split(vertical=not road_along_y, ratio=ratio,
+                     left=first_tree, right=rest_tree)
+
+    return stack(groups)
+
+
 # ---------------------------------------------------------------------------
 # Genome
 # ---------------------------------------------------------------------------
@@ -258,6 +502,10 @@ class GeneratorConfig:
     seed: int | None = None
     corridor_share: float = 0.10
     max_stagnation: int = 18
+
+
+#: Rooms that can receive the main entrance, in order of preference.
+_ENTRY_ROOMS = (RoomType.FOYER, RoomType.LOBBY, RoomType.VERANDAH)
 
 
 class LayoutGenerator:
@@ -458,7 +706,31 @@ class LayoutGenerator:
         level_buckets = self._level_assignment()
 
         population: list[Genome] = []
-        for _ in range(cfg.population):
+
+        # Half the population starts from the front-to-back organisation a real
+        # plan has; the other half is random, for diversity. A wholly random
+        # start relies on evolution to rediscover the organising idea of a
+        # house in thirty generations, and it mostly does not.
+        road = self.brief.site.road_directions[0] if self.brief.site.road_directions else None
+        if road is not None:
+            bearing = (road.bearing + self.brief.site.north_angle) % 360
+            # A north or south road means depth runs along Y; east or west, X.
+            depth_along_y = bearing < 45 or bearing >= 315 or 135 <= bearing < 225
+            # North sits at max_y and east at max_x: the high end of their axis.
+            road_at_high_end = bearing < 45 or bearing >= 315 or 45 <= bearing < 135
+            seeded = cfg.population // 2
+            for k in range(seeded):
+                bands = 3 if k % 3 else 4
+                tree = build_zoned_tree(
+                    slots, self.requirements, areas, self.rng,
+                    road_along_y=depth_along_y, road_at_high_end=road_at_high_end,
+                    bands=bands, brief_kind=self.brief.kind,
+                )
+                # The zoned tree already places the right requirement in each
+                # slot, so the assignment is the identity.
+                population.append(Genome(tree, slots[:]))
+
+        while len(population) < cfg.population:
             order = slots[:]
             self.rng.shuffle(order)
             tree = build_balanced_tree(order, self.rng, areas)
@@ -540,15 +812,36 @@ class LayoutGenerator:
                 if genome.assignment[slot] in wanted:
                     slot_to_level[slot] = level_index
 
+        from aip.domain.brief import NBC_MIN_WIDTH
+        from aip.engines.architecture.programme import depth_fit
+
         area_terms: list[float] = []
         shape_terms: list[float] = []
         light_terms: list[float] = []
         orientation_terms: list[float] = []
+        depth_terms: list[float] = []
         penalty = 0.0
 
         centre = envelope.centre
         north = self.brief.site.north_angle
         vastu_weight = self.brief.tradition_weight if self.brief.vastu.is_constraining else 0.0
+
+        # The road-to-rear axis. Depth 0 is the frontage, 1 the back boundary,
+        # measured along whichever axis faces the road.
+        road = self.brief.site.road_directions[0] if self.brief.site.road_directions else None
+
+        def depth_of(box: BoundingBox) -> float:
+            if road is None:
+                return 0.5
+            c = box.centre
+            bearing = (road.bearing + north) % 360
+            if 45 <= bearing < 135:      # road to the east
+                return (envelope.max_x - c.x) / max(envelope.width, 1e-6)
+            if 225 <= bearing < 315:     # road to the west
+                return (c.x - envelope.min_x) / max(envelope.width, 1e-6)
+            if bearing >= 315 or bearing < 45:   # road to the north (+Y)
+                return (envelope.max_y - c.y) / max(envelope.height, 1e-6)
+            return (c.y - envelope.min_y) / max(envelope.height, 1e-6)
 
         placed: list[tuple[int, BoundingBox]] = []
         for slot, box in boxes.items():
@@ -559,6 +852,26 @@ class LayoutGenerator:
             short = min(box.width, box.height)
             if short < MIN_ROOM_DIMENSION:
                 penalty += 0.14 * (MIN_ROOM_DIMENSION - short) / MIN_ROOM_DIMENSION
+
+            # Statutory minimum width for this room type, not merely a generic
+            # floor. A dining room 1.7 m across clears MIN_ROOM_DIMENSION and is
+            # still a corridor with a table in it.
+            floor = NBC_MIN_WIDTH.get(req.type)
+            if floor is not None and short < floor:
+                penalty += 0.20 * (floor - short) / floor
+
+            # Where the room sits between road and rear.
+            depth_terms.append(depth_fit(req.type, depth_of(box)))
+
+            # The room that receives the front door must actually reach the
+            # frontage. A northerly centre is not enough: a foyer with the puja
+            # packed in front of it has no road-facing wall, and the entrance
+            # ends up on the side of the house.
+            if (
+                req.type in _ENTRY_ROOMS and road is not None
+                and not self._touches_road_edge(box, envelope, road)
+            ):
+                penalty += 0.18
 
             # The shape term below saturates at zero around 3:1, which makes an
             # 8:1 room cost exactly as much as a 3:1 one - so once a room is bad
@@ -573,6 +886,19 @@ class LayoutGenerator:
             deviation = abs(math.log(max(ratio, 0.12)))
             area_terms.append(max(0.0, 1.0 - deviation * (1.5 if ratio < 1 else 0.7)))
 
+            # The mean above hides outliers: one room at four times its target
+            # among ten near theirs barely moves the average, which is how a
+            # 22 m2 foyer survived. A gross miss is a penalty in its own right,
+            # unbounded, so the search cannot buy it back with small gains
+            # elsewhere.
+            if ratio > 1.55 or ratio < 0.62:
+                penalty += 0.10 * deviation
+            # Circulation that grows is not generosity but an exploit: a foyer
+            # the size of a living room touches every room and scores perfectly
+            # on adjacency while wasting the floor area that paid for it.
+            if req.type.is_circulation and ratio > 1.25:
+                penalty += 0.22 * (ratio - 1.25)
+
             # Proportion.
             aspect = box.aspect_ratio
             shape_terms.append(1.0 if aspect <= 1.6 else max(0.0, 1.0 - (aspect - 1.6) / 1.5))
@@ -582,6 +908,12 @@ class LayoutGenerator:
             faces = _external_faces(box, envelope)
             if req.needs_daylight or req.needs_external_wall:
                 light_terms.append(0.0 if faces == 0 else (0.72 if faces == 1 else 1.0))
+                # Averaged into light_terms, one landlocked bedroom among ten lit
+                # rooms costs almost nothing. It is a statutory failure with no
+                # local repair - you cannot add a window to a wall that is not
+                # there - so it is priced as one.
+                if faces == 0 and req.needs_daylight:
+                    penalty += 0.30
             elif faces == 0:
                 light_terms.append(1.0)          # interior room correctly interior
 
@@ -597,17 +929,91 @@ class LayoutGenerator:
         # Adjacency: required pairs should touch, forbidden pairs should not.
         adjacency_score = self._surrogate_adjacency(placed, slot_to_level)
 
+        # Walkability. A dead-end room that touches no through-room can only
+        # be entered through another dead end - a bedroom through a bedroom, a
+        # kitchen through the master. That is the failure a client sees before
+        # any other, so each such room is a penalty on its own, not a term
+        # averaged away.
+        penalty += self._surrogate_walkability(placed, slot_to_level)
+
         def mean(values: list[float], default: float = 0.7) -> float:
             return sum(values) / len(values) if values else default
 
         score = (
-            0.20 * mean(area_terms)
-            + 0.21 * mean(shape_terms)
-            + 0.23 * mean(light_terms)
-            + 0.07 * mean(orientation_terms, 0.75)
-            + 0.29 * adjacency_score
+            0.17 * mean(area_terms)
+            + 0.17 * mean(shape_terms)
+            + 0.20 * mean(light_terms)
+            + 0.06 * mean(orientation_terms, 0.75)
+            + 0.22 * adjacency_score
+            + 0.18 * mean(depth_terms)
         )
         return max(0.0, min(1.0, score - penalty))
+
+    def _surrogate_walkability(
+        self, placed: list[tuple[int, BoundingBox]], slot_to_level: dict[int, int]
+    ) -> float:
+        from aip.engines.architecture.programme import is_through, may_enter
+
+        # The same question the door placer will ask, so the search produces
+        # layouts the placer can connect legally. Two rules kept in two places
+        # drift apart, and then the search converges on plans whose doors the
+        # placer has to cut through a bedroom.
+        penalty = 0.0
+        for req_index, box in placed:
+            req = self.requirements[req_index]
+            if is_through(req.type):
+                continue
+            reachable = False
+            for other_index, other_box in placed:
+                if other_index == req_index:
+                    continue
+                if slot_to_level.get(req_index) != slot_to_level.get(other_index):
+                    continue
+                if not _rects_touch(box, other_box, min_overlap=DOOR_WALL):
+                    continue
+                if may_enter(req.type, self.requirements[other_index].type):
+                    reachable = True
+                    break
+            if not reachable:
+                # A bedroom cut off is worse than a store cut off.
+                penalty += 0.30 if req.type.is_habitable else 0.14
+
+        # The through-rooms must form ONE connected chain. Each touching some
+        # other through-room is not enough: foyer-living on one side of the
+        # plot and dining-corridor on the other both pass that test, and the
+        # only bridge between the two islands runs through a bedroom. So this
+        # counts islands, and every island beyond the first is a bedroom
+        # somebody has to walk through.
+        through = [(i, b) for i, b in placed if is_through(self.requirements[i].type)]
+        if len(through) > 1:
+            parent = {i: i for i, _ in through}
+
+            def find(x: int) -> int:
+                while parent[x] != x:
+                    parent[x] = parent[parent[x]]
+                    x = parent[x]
+                return x
+
+            for a_idx, (i, box_i) in enumerate(through):
+                for j, box_j in through[a_idx + 1:]:
+                    if slot_to_level.get(i) != slot_to_level.get(j):
+                        continue
+                    if _rects_touch(box_i, box_j, min_overlap=DOOR_WALL):
+                        parent[find(i)] = find(j)
+            islands = len({find(i) for i, _ in through})
+            penalty += 0.30 * (islands - 1)
+        return penalty
+
+    def _touches_road_edge(self, box: BoundingBox, envelope: BoundingBox, road) -> bool:
+        bearing = (road.bearing + self.brief.site.north_angle) % 360
+        tol = 0.05
+        if bearing < 45 or bearing >= 315:
+            return box.max_y >= envelope.max_y - tol
+        if 45 <= bearing < 135:
+            return box.max_x >= envelope.max_x - tol
+        if 135 <= bearing < 225:
+            return box.min_y <= envelope.min_y + tol
+        return box.min_x <= envelope.min_x + tol
 
     def _surrogate_adjacency(
         self, placed: list[tuple[int, BoundingBox]], slot_to_level: dict[int, int]
@@ -632,7 +1038,7 @@ class LayoutGenerator:
             for other_index, other_box in placed[i + 1:]:
                 if slot_to_level.get(req_index) != slot_to_level.get(other_index):
                     continue
-                if _rects_touch(box, other_box):
+                if _rects_touch(box, other_box, min_overlap=DOOR_WALL):
                     b = self.requirements[other_index].type
                     touching.add((a, b))
                     touching.add((b, a))
@@ -918,6 +1324,7 @@ class LayoutGenerator:
         quality = daylight_quality_by_orientation(plan.site.latitude)
 
         for level in plan.levels:
+            self._repair_circulation(plan, level)
             self._place_doors(plan, level)
             for room in level.rooms:
                 if room.type.is_outdoor or room.type is RoomType.SHAFT:
@@ -974,6 +1381,110 @@ class LayoutGenerator:
                         )
                     )
 
+    @staticmethod
+    def _door_adjacency(plan: FloorPlan, level: Level) -> dict[str, set[str]]:
+        """Adjacency restricted to pairs that share enough wall for a door."""
+        from aip.domain.geometry import shared_edge
+
+        graph: dict[str, set[str]] = {r.id: set() for r in level.rooms}
+        rooms = level.rooms
+        for i, a in enumerate(rooms):
+            for b in rooms[i + 1:]:
+                edge = shared_edge(a.polygon, b.polygon)
+                if edge is not None and edge[0].distance_to(edge[1]) >= DOOR_WALL:
+                    graph[a.id].add(b.id)
+                    graph[b.id].add(a.id)
+        return graph
+
+    def _legally_reachable(self, level: Level, adjacency: dict[str, set[str]]) -> set[str]:
+        """Rooms a legal door tree can reach from the entrance.
+
+        The same walk the door placer performs, without cutting anything: grow
+        only out of through-rooms, enter only where the programme allows.
+        Whatever it cannot reach, the placer will only reach by breaching.
+        """
+        from aip.engines.architecture.programme import is_through, may_enter
+
+        rooms = {r.id: r for r in level.rooms}
+        root = next((r.id for r in level.rooms if r.type in _ENTRY_ROOMS), None)
+        if root is None:
+            root = next((r.id for r in level.rooms if r.type is RoomType.LIVING), None)
+        if root is None:
+            return set(rooms)
+        seen = {root}
+        frontier = [root]
+        while frontier:
+            node = frontier.pop()
+            if not is_through(rooms[node].type):
+                continue
+            for nxt in adjacency.get(node, set()):
+                if nxt in seen or not may_enter(rooms[nxt].type, rooms[node].type):
+                    continue
+                seen.add(nxt)
+                frontier.append(nxt)
+        # Attached rooms hang off hosts that are not through-rooms.
+        changed = True
+        while changed:
+            changed = False
+            for rid, room in rooms.items():
+                if rid in seen:
+                    continue
+                for host in adjacency.get(rid, set()):
+                    if host in seen and may_enter(room.type, rooms[host].type)                             and not is_through(rooms[host].type):
+                        seen.add(rid)
+                        changed = True
+                        break
+        return seen
+
+    def _repair_circulation(self, plan: FloorPlan, level: Level) -> None:
+        """Swap room identities until every room has a legal way in.
+
+        Geometry is left alone: a swap exchanges which room a cell *is*, not
+        where the cell sits, so nothing statutory the search already satisfied
+        is disturbed. It is what an architect does with a plan that is nearly
+        right - "that bedroom and the kitchen should change places" - and it
+        is cheap enough to try every pairing.
+        """
+        adjacency = self._door_adjacency(plan, level)
+        rooms = list(level.rooms)
+        by_id = {r.id: r for r in rooms}
+
+        def unreachable() -> list[str]:
+            reached = self._legally_reachable(level, adjacency)
+            return [r.id for r in rooms if r.id not in reached]
+
+        stuck = unreachable()
+        attempts = 0
+        while stuck and attempts < 12:
+            attempts += 1
+            improved = False
+            for stuck_id in stuck:
+                a = by_id[stuck_id]
+                # Candidates: rooms whose area is close enough that the swap
+                # does not wreck either programme entry.
+                candidates = sorted(
+                    (b for b in rooms if b.id != a.id and a.type is not b.type
+                     and 0.6 <= (b.area / max(a.area, 1e-6)) <= 1.7),
+                    key=lambda b: abs(b.area - a.area),
+                )
+                for b in candidates:
+                    a.type, b.type = b.type, a.type
+                    a.name, b.name = b.name, a.name
+                    after = unreachable()
+                    if len(after) < len(stuck):
+                        stuck = after
+                        improved = True
+                        plan.metadata.setdefault("circulation_repairs", []).append(
+                            f"swapped {a.display_name()} and {b.display_name()}"
+                        )
+                        break
+                    a.type, b.type = b.type, a.type
+                    a.name, b.name = b.name, a.name
+                if improved:
+                    break
+            if not improved:
+                break
+
     def _place_doors(self, plan: FloorPlan, level: Level) -> None:
         """Connect every room via a spanning tree rooted at the entrance."""
         from aip.domain.geometry import shared_edge
@@ -981,7 +1492,7 @@ class LayoutGenerator:
         rooms = {r.id: r for r in level.rooms}
         if not rooms:
             return
-        adjacency = plan.adjacency(level.index)
+        adjacency = self._door_adjacency(plan, level)
 
         # Root at the foyer, else the living room, else the largest room.
         root = next((r.id for r in level.rooms if r.type is RoomType.FOYER), None)
@@ -995,22 +1506,37 @@ class LayoutGenerator:
         connected = {root}
         frontier: list[tuple[float, str, str]] = []
 
-        from aip.engines.architecture.programme import door_cost_factor
+        from aip.engines.architecture.programme import (
+            PRIVATE_HOST,
+            door_cost_factor,
+            is_through,
+            may_enter,
+        )
 
-        def push(node: str) -> None:
+        # A dead-end room is a leaf of the door tree: it can be entered, but the
+        # tree never grows *out* of it. That single rule is what stops a plan
+        # routing the household through a bedroom to reach the kitchen. The
+        # only exception is a room whose correct host is itself private - an
+        # attached bathroom opens from its bedroom, and that is the right door.
+        def may_expand_from(node: str) -> bool:
+            return is_through(rooms[node].type)
+
+        def push(node: str, *, strict: bool = True) -> None:
+            if strict and not may_expand_from(node):
+                return
             for neighbour in adjacency.get(node, set()):
                 if neighbour in connected:
                     continue
                 a, b = rooms[node], rooms[neighbour]
+                # Where may this room's door come from? In the strict pass a
+                # bedroom is not offered a door off the foyer at any price;
+                # only the fallback, which records the breach, may cut one.
+                if strict and not may_enter(b.type, a.type):
+                    continue
                 cost = a.centre.distance_to(b.centre)
 
-                # Circulation is what a plan should hang off: rooms opening from
-                # a hall rather than through each other is the difference between
-                # a house and a set of connected boxes.
                 if a.type.is_circulation or b.type.is_circulation:
                     cost *= 0.35
-                if a.type.is_private and b.type.is_private:
-                    cost *= 1.8      # avoid bedrooms opening into bedrooms
 
                 # Everything else comes from the declared programme rather than
                 # from heuristics maintained separately here, so the doors the
@@ -1018,6 +1544,18 @@ class LayoutGenerator:
                 # same plan is scored against.
                 cost *= door_cost_factor(a.type, b.type, self.brief.kind)
                 frontier.append((cost, node, neighbour))
+
+        # Attached rooms hang off their host regardless of the through-rule.
+        def push_attached(node: str) -> None:
+            for neighbour in adjacency.get(node, set()):
+                if neighbour in connected:
+                    continue
+                hosts = PRIVATE_HOST.get(rooms[neighbour].type, ())
+                if rooms[node].type in hosts:
+                    frontier.append((0.05, node, neighbour))
+                # An attached bathroom: a bathroom whose host asked for one.
+                if rooms[neighbour].type is RoomType.BATHROOM and self._wants_attached(rooms[node]):
+                    frontier.append((0.05, node, neighbour))
 
         push(root)
         while frontier and len(connected) < len(rooms):
@@ -1044,10 +1582,43 @@ class LayoutGenerator:
                 )
             connected.add(target)
             push(target)
+            push_attached(target)
+
+        # Anything still unconnected has no route that obeys the through-rule.
+        # Connect it anyway so the plan is not physically sealed, but record
+        # the breach: the fitness and the report both need to know a bedroom
+        # is only reachable through somewhere it should not be.
+        if len(connected) < len(rooms):
+            for node in list(connected):
+                push(node, strict=False)
+            while frontier and len(connected) < len(rooms):
+                frontier.sort()
+                _cost, source, target = frontier.pop(0)
+                if target in connected:
+                    continue
+                wall = _wall_between(level, source, target)
+                if wall is not None:
+                    wall.openings.append(Opening(
+                        kind=OpeningKind.DOOR, wall_id=wall.id, position=0.5,
+                        width=0.9, height=2.1, sill_height=0.0,
+                        connects=(source, target),
+                    ))
+                    plan.metadata.setdefault("circulation_breaches", []).append(
+                        f"{rooms[target].display_name()} is reached through "
+                        f"{rooms[source].display_name()}"
+                    )
+                connected.add(target)
+                push(target, strict=False)
 
         # The main entrance goes on the exterior wall of the root room, facing
         # the road wherever the site tells us where the road is.
         self._place_main_door(plan, level, rooms[root])
+
+    def _wants_attached(self, room: Room) -> bool:
+        return any(
+            req.type is room.type and req.attached_bathroom
+            for req in self.requirements
+        )
 
     def _place_main_door(self, plan: FloorPlan, level: Level, entry_room: Room) -> None:
         road = plan.site.road_directions[0] if plan.site.road_directions else Direction.N
@@ -1158,13 +1729,29 @@ def _external_faces(box: BoundingBox, envelope: BoundingBox, tol: float = 0.02) 
     return faces
 
 
-def _rects_touch(a: BoundingBox, b: BoundingBox, tol: float = 0.02) -> bool:
-    """True when two cells share a boundary segment of non-zero length."""
+#: Shared wall needed to hang a door: leaf plus frame plus a little tolerance.
+#: Two rooms that share less than this touch, but cannot be connected, and for
+#: circulation purposes that is the same as not touching at all.
+DOOR_WALL = 1.0
+
+
+def _rects_touch(
+    a: BoundingBox, b: BoundingBox, tol: float = 0.02, min_overlap: float = 0.0
+) -> bool:
+    """True when two cells share a boundary segment longer than `min_overlap`.
+
+    The default counts any contact at all, which is right for "do these rooms
+    neighbour each other". For "can a door join them" pass `DOOR_WALL`: a
+    two-centimetre sliver of shared boundary satisfied the old test, the
+    search scored the room as reachable, and the door placer then found no
+    wall it could cut.
+    """
+    need = max(tol, min_overlap)
     vertical = (abs(a.max_x - b.min_x) < tol or abs(a.min_x - b.max_x) < tol) and (
-        min(a.max_y, b.max_y) - max(a.min_y, b.min_y) > tol
+        min(a.max_y, b.max_y) - max(a.min_y, b.min_y) > need
     )
     horizontal = (abs(a.max_y - b.min_y) < tol or abs(a.min_y - b.max_y) < tol) and (
-        min(a.max_x, b.max_x) - max(a.min_x, b.min_x) > tol
+        min(a.max_x, b.max_x) - max(a.min_x, b.min_x) > need
     )
     return vertical or horizontal
 

@@ -402,7 +402,10 @@ def test_negotiation_can_satisfy_a_dimension_breach(plan, brief):
     # tight brief is a legitimate reported trade-off, not a failure to negotiate.
     assert transcript.outcome in {"satisfied", "converged"}
     assert transcript.hard_open == 0
-    assert transcript.final_score > transcript.rounds[0].score_before
+    # The generator may now hand over a plan with nothing left to fix, in
+    # which case the score holds rather than rises. What may never happen is
+    # a fall.
+    assert transcript.final_score >= transcript.rounds[0].score_before - 1e-9
 
 
 def test_repack_is_reproducible(plan, brief):

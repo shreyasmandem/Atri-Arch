@@ -171,6 +171,7 @@ NBC_MIN_AREAS: dict[RoomType, float] = {
 NBC_MIN_WIDTH: dict[RoomType, float] = {
     RoomType.MASTER_BEDROOM: 2.4, RoomType.BEDROOM: 2.4, RoomType.GUEST_BEDROOM: 2.4,
     RoomType.CHILDREN_BEDROOM: 2.4, RoomType.LIVING: 2.4, RoomType.KITCHEN: 1.8,
+    RoomType.DINING: 2.4, RoomType.STUDY: 2.4, RoomType.HOME_OFFICE: 2.4,
     RoomType.BATHROOM: 1.0, RoomType.TOILET: 0.9,
 }
 

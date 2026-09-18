@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from aip.domain.brief import ClientBrief, ProjectKind, RoomRequirement
-from aip.domain.plan import FloorPlan, RoomType
+from aip.domain.plan import FloorPlan, OpeningKind, RoomType
 
 
 class Zone(str, Enum):
@@ -81,6 +81,233 @@ ZONE_OF: dict[RoomType, Zone] = {
     RoomType.POWDER: Zone.SERVICE,
     RoomType.GARAGE: Zone.SERVICE,
 }
+
+
+#: Where each room belongs along the road-to-rear axis, as a fraction of the
+#: plot depth: 0.0 is the road frontage, 1.0 the back boundary.
+#:
+#: This is the gradient every residential plan has whether or not anyone draws
+#: it: you are received at the front, you sleep at the back, and the kitchen
+#: sits between so that food reaches the table without crossing a bedroom. On a
+#: rectangular Indian plot it is the single strongest determinant of whether a
+#: plan reads as a house or as a set of rooms someone packed into a box. Pairwise
+#: adjacency cannot express it - a bedroom can touch the living room at the
+#: front of the plot just as easily as at the back - which is why it is a
+#: separate term rather than more relationships.
+DEPTH_BAND: dict[RoomType, tuple[float, float]] = {
+    RoomType.VERANDAH: (0.00, 0.22),
+    RoomType.FOYER: (0.00, 0.28),
+    RoomType.LOBBY: (0.00, 0.30),
+    RoomType.LIVING: (0.00, 0.48),
+    RoomType.DRAWING: (0.00, 0.45),
+    RoomType.PUJA: (0.00, 0.55),
+    RoomType.HOME_OFFICE: (0.00, 0.50),   # clients may call without entering the house
+    RoomType.CORRIDOR: (0.40, 0.66),   # the seam between public and private
+    RoomType.STUDY: (0.20, 0.80),
+    RoomType.DINING: (0.15, 0.52),     # open to the living room, at its rear edge
+    RoomType.FAMILY: (0.30, 0.80),
+    RoomType.KITCHEN: (0.35, 0.68),    # directly behind the dining room
+    RoomType.PANTRY: (0.35, 0.90),
+    RoomType.STORE: (0.40, 0.75),
+    RoomType.BATHROOM: (0.30, 1.00),
+    RoomType.TOILET: (0.20, 1.00),
+    RoomType.GUEST_BEDROOM: (0.40, 1.00),
+    RoomType.BEDROOM: (0.48, 1.00),
+    RoomType.CHILDREN_BEDROOM: (0.48, 1.00),
+    RoomType.MASTER_BEDROOM: (0.58, 1.00),
+    RoomType.UTILITY: (0.38, 0.72),    # off the kitchen, not among the bedrooms
+    RoomType.LAUNDRY: (0.38, 0.72),
+    RoomType.SERVANT: (0.70, 1.00),
+}
+
+
+def depth_fit(room_type: RoomType, depth: float) -> float:
+    """How well a room's position along the plot suits what it is for.
+
+    1.0 inside its band; falling off linearly outside, reaching zero half a plot
+    away. A room with no band is unconstrained, which is the honest default for
+    a balcony or a shaft rather than an arbitrary preference.
+    """
+    band = DEPTH_BAND.get(room_type)
+    if band is None:
+        return 1.0
+    low, high = band
+    if low <= depth <= high:
+        return 1.0
+    distance = low - depth if depth < low else depth - high
+    return max(0.0, 1.0 - distance / 0.5)
+
+
+#: Rooms you walk *through* to reach somewhere else. Everything not listed is a
+#: dead end: you walk into it and back out, and nobody's route to anywhere
+#: else passes through it.
+#:
+#: This is the distinction that makes a plan walkable, and it is stronger than
+#: adjacency. Two rooms can share a wall and still be wrongly connected: a
+#: kitchen that touches the master bedroom must not have its door there. The
+#: rule that follows is the one every residential plan obeys - each dead-end
+#: room opens off a through-room, and through-rooms chain back to the
+#: entrance - and with two or more bedrooms it forces a passage to exist,
+#: because bedrooms cannot all open off the living room.
+THROUGH_ROOMS: frozenset[RoomType] = frozenset({
+    RoomType.FOYER, RoomType.LOBBY, RoomType.CORRIDOR, RoomType.STAIRCASE,
+    RoomType.LIVING, RoomType.DINING, RoomType.FAMILY, RoomType.DRAWING,
+    RoomType.VERANDAH,
+})
+
+
+def is_through(room_type: RoomType) -> bool:
+    return room_type in THROUGH_ROOMS
+
+
+#: Dead-end rooms that may be entered only from their own private host, never
+#: from circulation: an attached bathroom from its bedroom, a wardrobe from the
+#: bedroom it serves. Listed so the door placer knows the host is the correct
+#: door, not a circulation failure.
+PRIVATE_HOST: dict[RoomType, tuple[RoomType, ...]] = {
+    RoomType.WARDROBE: (RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM),
+    # The wash area, pantry and dry store open off the kitchen. Reaching them
+    # through the kitchen is the correct route, not a breach.
+    RoomType.UTILITY: (RoomType.KITCHEN,),
+    RoomType.PANTRY: (RoomType.KITCHEN,),
+    RoomType.STORE: (RoomType.KITCHEN, RoomType.UTILITY),
+    RoomType.LAUNDRY: (RoomType.KITCHEN, RoomType.UTILITY),
+}
+
+
+#: Which rooms a door into each room may come from. This is the question
+#: "where must the door lead to" answered per room type, and it is stricter
+#: than the through-room rule: the foyer is a through-room, and a bedroom
+#: door opening straight off the entrance vestibule is still wrong.
+#:
+#: Rooms not listed are unconstrained beyond the through-room rule.
+ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
+    RoomType.MASTER_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
+                                        RoomType.FAMILY}),
+    RoomType.BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
+                                 RoomType.FAMILY}),
+    RoomType.GUEST_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
+                                       RoomType.FAMILY, RoomType.FOYER}),
+    RoomType.CHILDREN_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
+                                          RoomType.FAMILY}),
+    RoomType.STUDY: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
+                               RoomType.MASTER_BEDROOM, RoomType.BEDROOM}),
+    RoomType.KITCHEN: frozenset({RoomType.DINING, RoomType.CORRIDOR, RoomType.LIVING,
+                                 RoomType.FAMILY, RoomType.UTILITY}),
+    RoomType.DINING: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
+                                RoomType.FAMILY, RoomType.KITCHEN}),
+    RoomType.PUJA: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
+                              RoomType.DINING, RoomType.FAMILY}),
+    RoomType.UTILITY: frozenset({RoomType.KITCHEN, RoomType.CORRIDOR}),
+    RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR}),
+    RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER}),
+    RoomType.POWDER: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,
+                                RoomType.LIVING}),
+    # A bathroom is entered from the passage, or from the bedroom it is
+    # attached to. Never from the dining room, the kitchen or the entrance.
+    RoomType.BATHROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.MASTER_BEDROOM,
+                                  RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                                  RoomType.CHILDREN_BEDROOM}),
+}
+
+
+def may_enter(room: RoomType, from_room: RoomType) -> bool:
+    """May a door into `room` come from `from_room`?"""
+    allowed = ENTERED_FROM.get(room)
+    if allowed is None:
+        return is_through(from_room) or from_room in PRIVATE_HOST.get(room, ())
+    return from_room in allowed
+
+
+@dataclass(slots=True)
+class Route:
+    """How you get from the front door to one room."""
+
+    room: str
+    path: list[str]
+    legal: bool
+    reason: str = ""
+
+
+def walkability(plan: FloorPlan, level_index: int = 0) -> list[Route]:
+    """Trace the route from the entrance to every room, and judge each one.
+
+    A route is legal when every room it passes *through* is a through-room, or
+    is the private host of the destination (an attached bathroom from its
+    bedroom, the utility from the kitchen). Anything else - a kitchen reached
+    through the master bedroom, a bedroom through a bathroom - is the failure a
+    client finds on their first reading of the plan, before any number.
+
+    This is the question "can I live in it" made computable, and it is what
+    the adjacency score was standing in for and could not answer: two rooms
+    can share a wall and still be connected through the wrong door.
+    """
+    from collections import deque
+
+    level = plan.level_at(level_index)
+    if level is None:
+        return []
+    rooms = {r.id: r for r in level.rooms}
+    doors: dict[str, set[str]] = {}
+    entry: str | None = None
+    for wall in level.walls:
+        for opening in wall.openings:
+            if not opening.kind.is_door or not opening.connects:
+                continue
+            a, b = opening.connects
+            if opening.kind is OpeningKind.MAIN_DOOR:
+                entry = entry or a
+                continue
+            if a in rooms and b in rooms:
+                doors.setdefault(a, set()).add(b)
+                doors.setdefault(b, set()).add(a)
+    if entry is None or entry not in rooms:
+        return [Route(r.display_name(), [], False, "no entrance") for r in level.rooms]
+
+    previous: dict[str, str | None] = {entry: None}
+    queue = deque([entry])
+    while queue:
+        node = queue.popleft()
+        for nxt in doors.get(node, ()):
+            if nxt not in previous:
+                previous[nxt] = node
+                queue.append(nxt)
+
+    out: list[Route] = []
+    for room_id, room in rooms.items():
+        if room_id not in previous:
+            out.append(Route(room.display_name(), [], False, "not reachable by any door"))
+            continue
+        chain: list[str] = []
+        node: str | None = room_id
+        while node is not None:
+            chain.append(node)
+            node = previous[node]
+        chain.reverse()
+
+        legal, reason = True, ""
+        # Everything before the last hop must be a through-room.
+        for mid in chain[1:-1]:
+            if not is_through(rooms[mid].type):
+                legal = False
+                reason = f"passes through {rooms[mid].display_name()}"
+                break
+        # And the door itself must come from somewhere this room may be
+        # entered from: a bedroom from the passage, not the front door.
+        if legal and len(chain) >= 2:
+            came_from = rooms[chain[-2]].type
+            if not may_enter(room.type, came_from):
+                legal = False
+                reason = f"entered from {rooms[chain[-2]].display_name()}"
+        # The hop *before* an attached room is the host, which is not a
+        # through-room; allow it when it is the legitimate host.
+        if not legal and len(chain) >= 3 and reason.startswith("passes through"):
+            host = rooms[chain[-2]].type
+            through_ok = all(is_through(rooms[m].type) for m in chain[1:-2])
+            if through_ok and may_enter(room.type, host):
+                legal, reason = True, ""
+        out.append(Route(room.display_name(), [rooms[c].display_name() for c in chain], legal, reason))
+    return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +362,19 @@ RESIDENCE: tuple[Relation, ...] = (
              "Dry goods are stored beside where they are cooked."),
     Relation(RoomType.KITCHEN, RoomType.PANTRY, 0.8,
              "A pantry that is not beside the kitchen is a cupboard in the wrong room."),
+
+    # -- the passage serves the private rooms ------------------------------
+    Relation(RoomType.CORRIDOR, RoomType.MASTER_BEDROOM, 0.9,
+             "The master bedroom opens off the passage, not off a public room."),
+    Relation(RoomType.CORRIDOR, RoomType.BEDROOM, 0.9,
+             "Each bedroom opens off the passage."),
+    Relation(RoomType.CORRIDOR, RoomType.BATHROOM, 0.8,
+             "The common bathroom opens off the passage, so no one crosses a "
+             "bedroom or the dining room to reach it."),
+    Relation(RoomType.CORRIDOR, RoomType.LIVING, 0.6,
+             "The passage begins at the public rooms."),
+    Relation(RoomType.CORRIDOR, RoomType.DINING, 0.6,
+             "As above; either public room may be the passage's origin."),
 
     # -- sanitation serves sleeping --------------------------------------
     Relation(RoomType.MASTER_BEDROOM, RoomType.BATHROOM, 0.9,
@@ -244,6 +484,48 @@ def apply_defaults(brief: ClientBrief) -> ClientBrief:
         copy.must_not_be_adjacent_to = list(dict.fromkeys(unwanted.get(req.type, [])))
         updated.append(copy)
 
+    # With two or more bedrooms a passage exists in every real plan, because
+    # they cannot all open off the living room and the alternative is a
+    # bedroom reached through another bedroom. Inject one when the client has
+    # not thought to ask; it is the architect's decision, not theirs.
+    private_count = sum(
+        req.count for req in updated
+        if req.type in (RoomType.MASTER_BEDROOM, RoomType.BEDROOM,
+                        RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM)
+    )
+    has_passage = any(req.type in (RoomType.CORRIDOR, RoomType.LOBBY) for req in updated)
+    if private_count >= 2 and not has_passage:
+        # A passage runs the full width of the house at a walkable width, so
+        # its area is fixed by the plot, not by a fraction of the programme.
+        # Sized as a fraction it comes out at half a metre wide, which draws
+        # as a line and walks as a gap.
+        site = brief.site
+        box = site.bbox
+        if site.road_directions and site.road_directions[0].value in ("E", "W"):
+            span = box.height - site.setback_front - site.setback_rear
+        else:
+            span = box.width - site.setback_left - site.setback_right
+        passage_width = 1.1
+        updated.append(RoomRequirement(
+            type=RoomType.CORRIDOR,
+            preferred_area=round(max(3.5, span * passage_width), 1),
+            needs_daylight=False,
+            needs_external_wall=False,
+            priority=1.2,
+            notes="Passage serving the bedrooms; added by the programme.",
+        ))
+
+    # The entrance faces the road. Stated here as an orientation preference on
+    # whichever room receives the front door, because the door placer can only
+    # choose among the walls that room actually has: a foyer packed at the rear
+    # of the plot has no road-facing wall to give it, and the entrance ends up
+    # opening onto the back garden.
+    if brief.site.road_directions:
+        road = brief.site.road_directions[0]
+        for req in updated:
+            if req.type in (RoomType.FOYER, RoomType.LOBBY, RoomType.VERANDAH)                     and req.preferred_direction is None:
+                req.preferred_direction = road
+
     out = brief.model_copy(deep=True)
     out.requirements = updated
     return out
@@ -263,14 +545,21 @@ class ProgrammeReport:
     zoning: float = 0.0
     honoured: list[str] = field(default_factory=list)
     broken: list[str] = field(default_factory=list)
+    walkable: float = 1.0
+    routes: list[Route] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "score": round(self.score, 4),
             "adjacency": round(self.adjacency, 4),
             "zoning": round(self.zoning, 4),
+            "walkable": round(self.walkable, 4),
             "honoured": self.honoured,
             "broken": self.broken,
+            "routes": [
+                {"room": r.room, "path": r.path, "legal": r.legal, "reason": r.reason}
+                for r in self.routes
+            ],
         }
 
 
@@ -385,11 +674,73 @@ def evaluate(plan: FloorPlan, brief: ClientBrief, level_index: int = 0) -> Progr
             report.broken.append(
                 f"{rel.a.label} must not open into {rel.b.label} - {rel.reason}"
             )
-    report.zoning = _zoning_score(level, graph, by_id)
-    # Adjacency carries the weight: a broken pair is a concrete defect a client
-    # can point at, while poor zoning is a diffuse quality of the plan.
-    report.score = round(0.7 * report.adjacency + 0.3 * report.zoning, 5)
+    # The door placer records every room it could only reach by going
+    # through a dead end. Each is a walkability failure a client will find on
+    # the first read of the plan, and it costs more than a missing adjacency.
+    breaches = list(plan.metadata.get("circulation_breaches", []))
+    for breach in breaches:
+        report.broken.append(
+            f"{breach} - a bedroom, bathroom or kitchen must open off a hall, "
+            f"passage or public room, never through another private room."
+        )
+    if breaches:
+        report.adjacency = round(
+            report.adjacency * max(0.0, 1.0 - 0.25 * len(breaches)), 5
+        )
+
+    neighbourhood = _zoning_score(level, graph, by_id)
+    depth = _depth_score(plan, level)
+    # Depth is weighted above neighbourhood: which rooms touch which is a local
+    # question, whereas front-to-back is the organising idea of the whole plan.
+    report.zoning = round(0.4 * neighbourhood + 0.6 * depth, 5)
+
+    # Walk to every room. This is the check that adjacency could never make:
+    # two rooms may share a wall and still be joined by the wrong door.
+    report.routes = walkability(plan, level_index)
+    illegal = [r for r in report.routes if not r.legal]
+    report.walkable = 1.0 - len(illegal) / max(len(report.routes), 1)
+    for r in illegal:
+        report.broken.append(
+            f"{r.room} is reached {r.reason or 'illegally'} "
+            f"({' > '.join(r.path) if r.path else 'no route'}) - a room is entered "
+            f"from a hall, passage or public room, never through another private one."
+        )
+
+    # Walkability dominates. A plan you cannot move through correctly is not
+    # improved by good adjacency; it is a plan whose adjacencies are connected
+    # by the wrong doors.
+    report.score = round(
+        0.45 * report.walkable + 0.35 * report.adjacency + 0.20 * report.zoning, 5
+    )
     return report
+
+
+def _depth_score(plan: FloorPlan, level) -> float:
+    """Area-weighted depth fit across the level."""
+    if not plan.site.road_directions:
+        return 1.0
+    road = plan.site.road_directions[0]
+    env = level.envelope()
+    bearing = (road.bearing + plan.site.north_angle) % 360
+
+    def depth_of(room) -> float:
+        c = room.centre
+        if 45 <= bearing < 135:
+            return (env.max_x - c.x) / max(env.width, 1e-6)
+        if 225 <= bearing < 315:
+            return (c.x - env.min_x) / max(env.width, 1e-6)
+        if bearing >= 315 or bearing < 45:
+            return (env.max_y - c.y) / max(env.height, 1e-6)
+        return (c.y - env.min_y) / max(env.height, 1e-6)
+
+    weighted = total = 0.0
+    for room in level.rooms:
+        if room.type not in DEPTH_BAND:
+            continue
+        w = max(room.area, 1.0)
+        weighted += depth_fit(room.type, depth_of(room)) * w
+        total += w
+    return weighted / total if total else 1.0
 
 
 def _zoning_score(level, graph: dict[str, set[str]], by_id: dict) -> float:

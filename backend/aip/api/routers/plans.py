@@ -262,8 +262,17 @@ async def get_analysis(
     plan = _load(plan_id, principal)
     reports = analyse_all(plan)
     compliance = compliance_analysis(plan)
+
+    # How the plan is walked: the route from the front door to every room,
+    # and whether each one is legal. This is the check a client makes on the
+    # plan before reading a single number, so it is returned beside them.
+    from aip.domain.brief import default_residence_brief
+    from aip.engines.architecture.programme import evaluate as evaluate_programme
+
+    layout = evaluate_programme(plan, default_residence_brief())
     return {
         "plan_id": plan.id,
+        "layout": layout.to_dict(),
         "metrics": {
             axis: {
                 "score": report.score,
