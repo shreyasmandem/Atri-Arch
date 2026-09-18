@@ -395,6 +395,110 @@ const DIR_LABELS = {
   NW: "North-West Facing"
 };
 
+const ORIENTATION_DATA = {
+  N: {
+    azimuth: "000°",
+    angle: 0,
+    label: "North Facing",
+    daylight: "Continuous Diffused North Light · Zero Direct Glare",
+    vastu: "Kubera (Lord of Wealth) · Highly Auspicious Entrance"
+  },
+  NE: {
+    azimuth: "045°",
+    angle: 45,
+    label: "North-East Facing",
+    daylight: "Sacred Morning Ingress · Optimal Light for Living & Study",
+    vastu: "Ishanya (Supreme Spiritual Axis) · Purest Flow of Prana"
+  },
+  E: {
+    azimuth: "090°",
+    angle: 90,
+    label: "East Facing",
+    daylight: "Direct Solar Dawn Exposure · Circadian Awakening",
+    vastu: "Indra (Solar Clarity & Health) · Prime Auspicious Gateway"
+  },
+  SE: {
+    azimuth: "135°",
+    angle: 135,
+    label: "South-East Facing",
+    daylight: "Early Morning Thermal Ingress · Culinary Zone Warming",
+    vastu: "Agneya (Fire Element) · Optimal Kitchen Placement"
+  },
+  S: {
+    azimuth: "180°",
+    angle: 180,
+    label: "South Facing",
+    daylight: "High Zenith Solar Radiation · Deep Shading Overhangs Advised",
+    vastu: "Yama (Stability & Justice) · Thickened Thermal Massing Buffer"
+  },
+  SW: {
+    azimuth: "225°",
+    angle: 225,
+    label: "South-West Facing",
+    daylight: "Intense Afternoon Heat · Shielding & Structural Massing",
+    vastu: "Nairrutya (Earth & Master Anchor) · Master Suite Stronghold"
+  },
+  W: {
+    azimuth: "270°",
+    angle: 270,
+    label: "West Facing",
+    daylight: "Low-Angle Golden Sunset Heat · Vertical Louvers Needed",
+    vastu: "Varuna (Rain & Prosperity) · Evening Gathering & Balconies"
+  },
+  NW: {
+    azimuth: "315°",
+    angle: 315,
+    label: "North-West Facing",
+    daylight: "Prevailing Breezeway Ingress · Optimal Cross-Ventilation",
+    vastu: "Vayavya (Air & Movement) · Ideal for Guest Rooms & Services"
+  }
+};
+
+function updateOrientationDial(dir = "N") {
+  const data = ORIENTATION_DATA[dir] || ORIENTATION_DATA.N;
+
+  // 1. Rotate Needle Vector
+  const needle = $("compass-needle-stage");
+  if (needle) {
+    needle.style.transform = `rotate(${data.angle}deg)`;
+  }
+
+  // 2. Bearing Digital Readout
+  const bearing = $("compass-bearing-readout");
+  if (bearing) {
+    bearing.textContent = `${data.azimuth} ${dir}`;
+  }
+
+  // 3. Top Orientation Badge
+  const badgeVal = $("orientation-badge-text");
+  if (badgeVal) {
+    badgeVal.textContent = `${DIR_LABELS[dir] || dir} · ${data.azimuth}`;
+  }
+
+  // 4. Telemetry Bar
+  const dayVal = $("telemetry-daylight");
+  if (dayVal) {
+    dayVal.textContent = data.daylight;
+  }
+  const vastuVal = $("telemetry-vastu");
+  if (vastuVal) {
+    vastuVal.textContent = data.vastu;
+  }
+
+  // 5. Update Center Plot Dimensions
+  const w = parseFloat($("inp-plot-width")?.value || 12);
+  const d = parseFloat($("inp-plot-depth")?.value || 18);
+  const metric = $("compass-plot-metric");
+  if (metric) {
+    metric.textContent = `${w}×${d}m`;
+  }
+  const frame = $("compass-plot-frame");
+  if (frame) {
+    const ratio = Math.max(0.65, Math.min(1.4, d / w));
+    frame.style.height = `${Math.round(36 * ratio)}px`;
+  }
+}
+
 const PRESETS = {
   "vastu-villa": {
     prompt: "Contemporary 3BHK duplex with open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
@@ -438,6 +542,7 @@ function updateStudioHUD() {
   const dir = checkedRadio?.value || "N";
   const hudOri = $("hud-orientation");
   if (hudOri) hudOri.textContent = DIR_LABELS[dir] || `${dir} Facing`;
+  updateOrientationDial(dir);
 
   // Program
   const bhk = $("inp-bedrooms")?.value || "3";
@@ -511,13 +616,7 @@ function updateStudioHUD() {
   $("inp-bedrooms")?.addEventListener("input", updateStudioHUD);
   $("inp-bathrooms")?.addEventListener("input", updateStudioHUD);
   $("inp-levels")?.addEventListener("change", updateStudioHUD);
-  $("inp-budget")?.addEventListener("input", () => {
-    const val = parseFloat($("inp-budget")?.value || 0);
-    document.querySelectorAll(".budget-chip").forEach(b => {
-      b.classList.toggle("is-active", parseFloat(b.dataset.amt) === val);
-    });
-    updateStudioHUD();
-  });
+  $("inp-budget")?.addEventListener("input", updateStudioHUD);
   $("inp-finish-tier")?.addEventListener("change", updateStudioHUD);
 
   // Direction grid radios
@@ -525,6 +624,7 @@ function updateStudioHUD() {
     radio.addEventListener("change", () => {
       document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
       radio.closest(".dir-radio")?.classList.add("is-selected");
+      updateOrientationDial(radio.value);
       updateStudioHUD();
     });
   });
@@ -533,20 +633,6 @@ function updateStudioHUD() {
   document.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => {
     chk.addEventListener("change", () => {
       chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
-    });
-  });
-
-  // Budget quick chips
-  document.querySelectorAll(".budget-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const amt = btn.dataset.amt;
-      const inp = $("inp-budget");
-      if (inp && amt) {
-        inp.value = amt;
-        document.querySelectorAll(".budget-chip").forEach((b) => b.classList.remove("is-active"));
-        btn.classList.add("is-active");
-        updateStudioHUD();
-      }
     });
   });
 
@@ -585,12 +671,8 @@ function updateStudioHUD() {
         radio.checked = true;
         document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
         radio.closest(".dir-radio")?.classList.add("is-selected");
+        updateOrientationDial(p.dir);
       }
-
-      // Update Budget Chip
-      document.querySelectorAll(".budget-chip").forEach((b) => {
-        b.classList.toggle("is-active", parseFloat(b.dataset.amt) === p.budget);
-      });
 
       updateStudioHUD();
     });
