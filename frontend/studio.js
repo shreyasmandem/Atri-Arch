@@ -751,17 +751,32 @@ function seatCritics() {
 /* ═══ RUN ════════════════════════════════════════════════════════════ */
 
 function readBrief() {
-  const d = new FormData($("brief")); const n = (k) => Number(d.get(k) || 0);
+  const d = new FormData($("brief"));
+  const n = (k, def = 0) => {
+    const raw = d.get(k);
+    if (raw === null || raw === undefined || raw === "") return def;
+    const val = Number(raw);
+    return isNaN(val) ? def : val;
+  };
+  const stanceIdx = Math.max(0, Math.min(4, Math.round(n("vastu_slider", 2))));
+  const vastu = (STANCES[stanceIdx] && STANCES[stanceIdx][1]) || "balanced";
+
   return {
     project_name: "Studio scheme",
-    plot_width: n("plot_width"), plot_depth: n("plot_depth"),
-    locality: String(d.get("locality") || ""), road_direction: String(d.get("road_direction") || "N"),
-    levels: n("levels") || 1, bedrooms: n("bedrooms"), bathrooms: n("bathrooms"),
+    plot_width: Math.max(3, n("plot_width", 12) || 12),
+    plot_depth: Math.max(3, n("plot_depth", 18) || 18),
+    locality: String(d.get("locality") || "Bengaluru, Karnataka"),
+    road_direction: String(d.get("road_direction") || "N"),
+    levels: Math.max(1, Math.min(6, n("levels", 2) || 2)),
+    bedrooms: Math.max(1, n("bedrooms", 3) || 3),
+    bathrooms: Math.max(1, n("bathrooms", 3) || 3),
     styles: [String(d.get("styles") || "contemporary")],
-    budget: n("budget"), currency: "INR",
-    vastu: STANCES[n("vastu_slider")][1],
-    occupant_adults: n("occupant_adults"), occupant_children: n("occupant_children"),
-    occupant_elders: n("occupant_elders"),
+    budget: Math.max(500000, n("budget", 6500000) || 6500000),
+    currency: "INR",
+    vastu: vastu,
+    occupant_adults: Math.max(1, n("occupant_adults", 2) || 2),
+    occupant_children: Math.max(0, n("occupant_children", 1)),
+    occupant_elders: Math.max(0, n("occupant_elders", 1)),
   };
 }
 
