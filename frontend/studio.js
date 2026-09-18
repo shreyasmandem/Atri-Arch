@@ -550,25 +550,6 @@ function updateStudioHUD() {
     });
   });
 
-  // Style option chips
-  document.querySelectorAll(".style-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const st = btn.dataset.style;
-      const sel = $("inp-styles");
-      if (sel && st) {
-        sel.value = st;
-        document.querySelectorAll(".style-chip").forEach((b) => b.classList.toggle("is-active", b === btn));
-      }
-    });
-  });
-
-  $("inp-styles")?.addEventListener("change", () => {
-    const val = $("inp-styles").value;
-    document.querySelectorAll(".style-chip").forEach((b) => {
-      b.classList.toggle("is-active", b.dataset.style === val);
-    });
-  });
-
   // Architectural presets
   document.querySelectorAll(".preset-chip").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -590,12 +571,7 @@ function updateStudioHUD() {
       }
       if ($("inp-budget")) $("inp-budget").value = p.budget;
       if ($("inp-finish-tier")) $("inp-finish-tier").value = p.finish;
-      if ($("inp-styles")) {
-        $("inp-styles").value = p.style;
-        document.querySelectorAll(".style-chip").forEach((b) => {
-          b.classList.toggle("is-active", b.dataset.style === p.style);
-        });
-      }
+      if ($("inp-styles")) $("inp-styles").value = p.style;
       if ($("stance")) {
         $("stance").value = p.stance;
         const [n, , note] = STANCES[p.stance];
