@@ -118,6 +118,9 @@ DEPTH_BAND: dict[RoomType, tuple[float, float]] = {
     RoomType.UTILITY: (0.38, 0.72),    # off the kitchen, not among the bedrooms
     RoomType.LAUNDRY: (0.38, 0.72),
     RoomType.SERVANT: (0.70, 1.00),
+    RoomType.GARAGE: (0.00, 0.30),
+    RoomType.BALCONY: (0.45, 1.00),
+    RoomType.TERRACE: (0.45, 1.00),
 }
 
 
@@ -170,6 +173,11 @@ PRIVATE_HOST: dict[RoomType, tuple[RoomType, ...]] = {
     # through the kitchen is the correct route, not a breach.
     RoomType.UTILITY: (RoomType.KITCHEN,),
     RoomType.PANTRY: (RoomType.KITCHEN,),
+    RoomType.BALCONY: (RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                       RoomType.LIVING, RoomType.DINING, RoomType.FAMILY),
+    RoomType.TERRACE: (RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.LIVING,
+                       RoomType.FAMILY, RoomType.STAIRCASE),
+    RoomType.GARAGE: (RoomType.FOYER, RoomType.UTILITY, RoomType.LOBBY),
     RoomType.STORE: (RoomType.KITCHEN, RoomType.UTILITY),
     RoomType.LAUNDRY: (RoomType.KITCHEN, RoomType.UTILITY),
 }
@@ -199,6 +207,13 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
     RoomType.PUJA: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
                               RoomType.DINING, RoomType.FAMILY}),
     RoomType.UTILITY: frozenset({RoomType.KITCHEN, RoomType.CORRIDOR}),
+    RoomType.BALCONY: frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                                 RoomType.CHILDREN_BEDROOM, RoomType.LIVING, RoomType.DINING,
+                                 RoomType.FAMILY}),
+    RoomType.TERRACE: frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.LIVING,
+                                 RoomType.FAMILY, RoomType.STAIRCASE, RoomType.CORRIDOR}),
+    RoomType.GARAGE: frozenset({RoomType.FOYER, RoomType.UTILITY, RoomType.LOBBY,
+                                RoomType.CORRIDOR}),
     RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR}),
     RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER}),
     RoomType.POWDER: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,

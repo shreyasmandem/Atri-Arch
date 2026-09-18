@@ -151,9 +151,20 @@ class DesignPipeline:
     # ------------------------------------------------------------- public --
 
     async def run(
-        self, brief: ClientBrief, *, on_progress: ProgressCallback = None
+        self,
+        brief: ClientBrief,
+        *,
+        on_progress: ProgressCallback = None,
+        plans: list[FloorPlan] | None = None,
     ) -> DesignResult:
-        """Execute the full pipeline."""
+        """Execute the full pipeline.
+
+        Pass `plans` to review schemes that already exist - an uploaded
+        drawing, a saved project - instead of generating new ones. Every
+        stage after generation runs unchanged: the committee critiques the
+        upload exactly as it would its own work, the negotiation repairs
+        what it legally can, and the rationale explains what it found.
+        """
         started = time.perf_counter()
         with trace_context() as trace_id:
             result = DesignResult(trace_id=trace_id, brief_summary=brief.summary_text())
@@ -169,7 +180,16 @@ class DesignPipeline:
 
             await self._stage_interpret(brief, ctx, emit)
             await self._stage_retrieve(brief, ctx, emit)
-            plans = await self._stage_generate(brief, ctx, emit)
+            if plans:
+                emit(
+                    "generate", "skipped",
+                    f"Reviewing {len(plans)} uploaded scheme(s) rather than generating.",
+                    0.34,
+                    schemes=[{"id": p.id, "name": p.name, "area": p.total_built_area}
+                             for p in plans],
+                )
+            else:
+                plans = await self._stage_generate(brief, ctx, emit)
             result.plans = plans
 
             candidates = await self._stage_critique(plans, ctx, emit)
@@ -260,7 +280,7 @@ class DesignPipeline:
             return result
 
     async def stream(
-        self, brief: ClientBrief
+        self, brief: ClientBrief, *, plans: list[FloorPlan] | None = None
     ) -> AsyncIterator[tuple[ProgressEvent | None, DesignResult | None]]:
         """Async generator yielding progress, then the final result.
 
@@ -273,7 +293,7 @@ class DesignPipeline:
         def on_progress(event: ProgressEvent) -> None:
             queue.put_nowait(event)
 
-        task = asyncio.create_task(self.run(brief, on_progress=on_progress))
+        task = asyncio.create_task(self.run(brief, on_progress=on_progress, plans=plans))
 
         while True:
             drain = asyncio.create_task(queue.get())

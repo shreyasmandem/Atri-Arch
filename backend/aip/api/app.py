@@ -20,7 +20,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from aip import __version__
-from aip.api.routers import admin, design, plans, system
+from aip.api.routers import admin, design, imports, plans, system
 from aip.core.config import get_settings
 from aip.core.llm import shutdown_router
 from aip.core.logging import configure_logging, get_logger, log_event, set_trace_id
@@ -163,6 +163,9 @@ def create_app() -> FastAPI:
     prefix = settings.api_prefix
     app.include_router(system.router, prefix=prefix)
     app.include_router(design.router, prefix=prefix)
+    # Before plans: its fixed path /plans/import must not be swallowed by
+    # the /plans/{plan_id} route.
+    app.include_router(imports.router, prefix=prefix)
     app.include_router(plans.router, prefix=prefix)
     app.include_router(admin.router, prefix=prefix)
 

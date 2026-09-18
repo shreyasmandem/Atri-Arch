@@ -206,27 +206,27 @@ def _c_no_critical_breach(plan: FloorPlan, brief: ClientBrief):
 
 
 def _c_all_rooms_reachable(plan: FloorPlan, brief: ClientBrief):
-    from collections import deque
+    """Every room reached, and reached the right way.
 
-    unreachable: list[str] = []
+    Connectivity alone let a bedroom be "reachable" through the kitchen. The
+    programme's route tracer judges each path the way a client would: through
+    living space and passages, never through another private room. It is a
+    hard constraint so that no soft gain - a Vastu swap that moves the foyer
+    to the back - can ever buy its way past a house nobody can walk through.
+    """
+    from aip.engines.architecture.programme import walkability
+
+    wrong: list[str] = []
+    total = 0
     for level in plan.levels:
-        graph = plan.connectivity(level.index)
         if len(level.rooms) <= 1:
             continue
-        start = next(iter(graph), None)
-        if start is None:
-            continue
-        seen, queue = {start}, deque([start])
-        while queue:
-            node = queue.popleft()
-            for nxt in graph.get(node, set()):
-                if nxt not in seen:
-                    seen.add(nxt)
-                    queue.append(nxt)
-        unreachable += [r.display_name() for r in level.rooms if r.id not in seen]
-    ratio = 1.0 - len(unreachable) / max(1, len(plan.all_rooms))
-    return (not unreachable, ratio,
-            f"unreachable: {', '.join(unreachable[:4])}" if unreachable else "all rooms reachable")
+        routes = walkability(plan, level.index)
+        total += len(routes)
+        wrong += [f"{r.room} ({r.reason})" for r in routes if not r.legal]
+    ratio = 1.0 - len(wrong) / max(1, total)
+    return (not wrong, ratio,
+            f"reached the wrong way: {'; '.join(wrong[:3])}" if wrong else "every room reached properly")
 
 
 def _c_habitable_daylight(plan: FloorPlan, brief: ClientBrief):
@@ -512,10 +512,21 @@ class VastuCompliance(Worker):
         # *identities* between two cells keeps the geometry - and therefore every
         # hard constraint the architect just satisfied - completely intact, which
         # is why the Vastu worker is allowed to act after the architect.
+        # Circulation rooms are the skeleton every route hangs on. Swapping a
+        # foyer to the back of the house or a corridor into a bedroom keeps
+        # the geometry and breaks every route through it; the manager would
+        # reject it, but a worker should not spend a round finding that out.
+        from aip.engines.architecture.programme import THROUGH_ROOMS, walkability
+
+        fixed = THROUGH_ROOMS | {RoomType.BATHROOM, RoomType.TOILET, RoomType.UTILITY}
+        legal_now = sum(1 for r in walkability(plan) if r.legal)
+
         best: tuple[float, str, str] | None = None
         for i, a in enumerate(level.rooms):
             for b in level.rooms[i + 1:]:
                 if a.type is b.type:
+                    continue
+                if a.type in fixed or b.type in fixed:
                     continue
                 da = plan.direction_of_room(a)
                 db = plan.direction_of_room(b)
@@ -542,6 +553,18 @@ class VastuCompliance(Worker):
                         or NBC_MIN_WIDTH.get(a.type, 0.0) > min(b.bbox.width, b.bbox.height)):
                     continue
                 if best is None or gain > best[0]:
+                    # The swap must leave every route as legal as it found it:
+                    # a guest bedroom entered from the passage is still a
+                    # bedroom entered from the passage, but a study swapped
+                    # into a cell only reachable through the master bedroom is
+                    # not, and the tracer is the only judge of that.
+                    trial = plan.clone()
+                    ta, tb = trial.room_by_id(a.id), trial.room_by_id(b.id)
+                    if ta is None or tb is None:
+                        continue
+                    ta.type, tb.type = tb.type, ta.type
+                    if sum(1 for r in walkability(trial) if r.legal) < legal_now:
+                        continue
                     best = (gain, a.id, b.id)
 
         if best is None:

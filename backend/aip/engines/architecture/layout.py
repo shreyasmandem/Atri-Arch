@@ -197,8 +197,15 @@ def build_zoned_tree(
         return Leaf(slots[0])
 
     def needs_light(slot: int) -> bool:
+        """Does this room need one of a band's two windowed end positions?
+
+        Only the rooms the code calls habitable. A utility, a store or a puja
+        niche wants a ventilator, not a window, and counting them as lit
+        split the kitchen band and put the utility across the whole plan as
+        a strip between the dining room and the passage.
+        """
         req = requirements[slot]
-        return req.needs_daylight and not req.type.is_circulation
+        return req.needs_daylight and req.type.is_habitable
 
     # The residential template, stated by role rather than discovered by
     # packing. This is how a practice lays out a plot: arrival and the
@@ -207,11 +214,18 @@ def build_zoned_tree(
     # bathroom beside it. Packing rooms into bands by area alone put the
     # dining room in front of the living room and the kitchen behind the
     # bedrooms, because area does not know what a room is for.
+    # The garage is at the road, with the arrival; it is entered from outside
+    # and from the foyer, never from the house's interior. A balcony belongs
+    # to a bedroom or to the living room and is reached only through it, so
+    # it rides with the private bands as an attached room rather than taking
+    # a slot of its own at the frontage, where it became a thoroughfare.
     front_types = {RoomType.FOYER, RoomType.VERANDAH, RoomType.LIVING,
-                   RoomType.DRAWING, RoomType.PUJA, RoomType.HOME_OFFICE}
+                   RoomType.DRAWING, RoomType.PUJA, RoomType.HOME_OFFICE,
+                   RoomType.GARAGE}
     service_types = {RoomType.DINING, RoomType.KITCHEN, RoomType.UTILITY, RoomType.PANTRY,
                      RoomType.STORE, RoomType.LAUNDRY, RoomType.FAMILY}
-    wet_types = {RoomType.BATHROOM, RoomType.TOILET, RoomType.POWDER}
+    wet_types = {RoomType.BATHROOM, RoomType.TOILET, RoomType.POWDER,
+                 RoomType.BALCONY, RoomType.TERRACE}
     private_types = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
                      RoomType.CHILDREN_BEDROOM, RoomType.STUDY, RoomType.SERVANT}
     passage_types = {RoomType.CORRIDOR, RoomType.LOBBY}
@@ -244,6 +258,9 @@ def build_zoned_tree(
             attached.append(w)
         else:
             common.append(w)
+    # Outdoor rooms go last in the distribution so they land at the far end
+    # of a rear band, where a balcony actually sits.
+    common.sort(key=lambda w: requirements[w].type.is_outdoor)
 
     # Private rooms in bands of at most two daylit rooms, bathrooms as core.
     private_sorted = sorted(
@@ -268,11 +285,26 @@ def build_zoned_tree(
     else:
         service += common + attached
 
+    def split_lit(group: list[int]) -> list[list[int]]:
+        """Bands hold at most two daylit rooms; overflow starts a new band."""
+        out: list[list[int]] = []
+        current: list[int] = []
+        lit = 0
+        for slot in group:
+            if lit >= 2 and needs_light(slot):
+                out.append(current)
+                current, lit = [], 0
+            current.append(slot)
+            lit += needs_light(slot)
+        if current:
+            out.append(current)
+        return out
+
     groups: list[list[int]] = []
     if front or other:
-        groups.append(front + other)
+        groups.extend(split_lit(front + other))
     if service:
-        groups.append(service)
+        groups.extend(split_lit(service))
     groups.extend(private_bands)
     groups = [g for g in groups if g]
     # Mild variation so seeded genomes are not clones: shuffle within a band.
@@ -408,6 +440,122 @@ def build_zoned_tree(
                          left=rest_tree, right=first_tree)
         return Split(vertical=not road_along_y, ratio=ratio,
                      left=first_tree, right=rest_tree)
+
+    # Two rear bands cannot both open off a horizontal hall: the second sits
+    # behind the first with no contact. Every real plan with three or more
+    # bedrooms solves this the same way - the passage turns to run
+    # front-to-back through the private zone with rooms on both sides, a
+    # central spine rather than a cross-strip. So when the bedrooms need more
+    # than one band, the passage becomes a column, the private rooms are
+    # dealt into a left and a right column beside it, and the spine's near
+    # end meets the dining band, which is its legal way in.
+    if passages and len(private_bands) > 1:
+        # The spine plan. The passage runs straight back from the living room
+        # with rooms on both sides. Dining, kitchen and utility stack at the
+        # head of one column - dining against the living room and the spine,
+        # kitchen behind it, utility behind that - and the bedrooms fill the
+        # rest of both columns with their bathrooms between them. The spine's
+        # near end therefore meets the living room, which is its legal way in;
+        # a spine that ends against the kitchen or the utility has none.
+        def is_private_band(group: list[int]) -> bool:
+            return any(requirements[g].type in private_types for g in group)
+
+        # Pull the service rooms out of whatever band they sit in and keep
+        # the remainder of that band. Dropping a band because it contained
+        # one service room is how the living room, the foyer and the puja
+        # vanished from the plan whenever the open-plan variant put the
+        # dining room at the front with them.
+        front_groups: list[list[int]] = []
+        service_rooms: list[int] = []
+        for g in groups:
+            if g is passages or is_private_band(g):
+                continue
+            keep = [x for x in g if requirements[x].type not in service_types]
+            service_rooms += [x for x in g if requirements[x].type in service_types]
+            if keep:
+                front_groups.append(keep)
+        rear = [g for g in groups if g is not passages and is_private_band(g)]
+
+        # Service block in its natural order: dining at the head.
+        order = {RoomType.DINING: 0, RoomType.FAMILY: 0, RoomType.KITCHEN: 1,
+                 RoomType.PANTRY: 2, RoomType.UTILITY: 3, RoomType.LAUNDRY: 3,
+                 RoomType.STORE: 4}
+        service_rooms.sort(key=lambda x: order.get(requirements[x].type, 5))
+
+        columns: list[list[int]] = [list(service_rooms), []]
+        totals = [sum(areas[x] for x in service_rooms), 0.0]
+
+        anchors = [g for band in rear for g in band if requirements[g].type in private_types]
+        served = [g for band in rear for g in band if requirements[g].type not in private_types]
+        # Master first, to the lighter column; then the rest, balancing area.
+        anchors.sort(key=lambda g: (requirements[g].type is not RoomType.MASTER_BEDROOM, -areas[g]))
+        for g in anchors:
+            side = 0 if totals[0] <= totals[1] else 1
+            columns[side].append(g)
+            totals[side] += areas[g]
+
+        from aip.engines.architecture.programme import PRIVATE_HOST as _HOSTS
+
+        bath_count = [0, 0]
+        for g in served:
+            kind = requirements[g].type
+            hosts = _HOSTS.get(kind, ())
+            side = None
+            # An attached bathroom goes beside the room that asked for it.
+            if kind is RoomType.BATHROOM:
+                for candidate in (0, 1):
+                    if any(requirements[a].attached_bathroom and requirements[a].type in private_types
+                           and a in columns[candidate] for a in columns[candidate]) and bath_count[candidate] == 0:
+                        side = candidate
+                        break
+            if side is None:
+                for candidate in (0, 1):
+                    if any(requirements[a].type in hosts for a in columns[candidate]):
+                        side = candidate
+                        break
+            if side is None:
+                # Spread the common bathrooms so each column has one.
+                side = 0 if bath_count[0] <= bath_count[1] else 1
+            if kind is RoomType.BATHROOM:
+                bath_count[side] += 1
+            # Insert after the first private room in that column, so the
+            # bathroom sits between bedrooms rather than at the far end.
+            col = columns[side]
+            first_private = next((i for i, x in enumerate(col) if requirements[x].type in private_types), None)
+            col.insert(first_private + 1 if first_private is not None else len(col), g)
+            totals[side] += areas[g]
+
+        def column(rooms_in: list[int]) -> Node:
+            if len(rooms_in) == 1:
+                return Leaf(rooms_in[0])
+            return stack([[g] for g in rooms_in])
+
+        spine_area = sum(areas[g] for g in passages)
+        body_area = totals[0] + totals[1] + spine_area
+        w_spine = min(0.22, max(0.09, spine_area / body_area))
+        w_left = (1 - w_spine) * (totals[0] / (totals[0] + totals[1]) if (totals[0] + totals[1]) else 0.5)
+        w_right = 1 - w_spine - w_left
+
+        if columns[1]:
+            inner = Split(vertical=road_along_y,
+                          ratio=min(0.9, max(0.1, w_spine / (w_spine + w_right))),
+                          left=band_tree(passages), right=column(columns[1]))
+        else:
+            inner = band_tree(passages)
+        if columns[0]:
+            body = Split(vertical=road_along_y, ratio=min(0.9, max(0.1, w_left)),
+                         left=column(columns[0]), right=inner)
+        else:
+            body = inner
+
+        if not front_groups:
+            return body
+        fa = sum(areas[x] for g in front_groups for x in g) or 1.0
+        ratio = min(0.88, max(0.12, fa / (fa + body_area)))
+        front_tree = stack(front_groups)
+        if road_at_high_end:
+            return Split(vertical=not road_along_y, ratio=1 - ratio, left=body, right=front_tree)
+        return Split(vertical=not road_along_y, ratio=ratio, left=front_tree, right=body)
 
     return stack(groups)
 
@@ -1001,7 +1149,27 @@ class LayoutGenerator:
                     if _rects_touch(box_i, box_j, min_overlap=DOOR_WALL):
                         parent[find(i)] = find(j)
             islands = len({find(i) for i, _ in through})
-            penalty += 0.30 * (islands - 1)
+            # Steep on purpose. With fifteen rooms the other terms sum to a
+            # lot, and at 0.3 the search happily paid it to buy a better area
+            # fit - leaving the passage reachable only through the kitchen.
+            penalty += 0.55 * (islands - 1)
+
+            # The passage in particular must meet the public rooms directly:
+            # a hall reached from the living or dining room is a hall; one
+            # reached from anywhere else is a breach waiting to be cut.
+            public = {RoomType.LIVING, RoomType.DINING, RoomType.FOYER,
+                      RoomType.FAMILY, RoomType.LOBBY}
+            for i, box_i in through:
+                if self.requirements[i].type is not RoomType.CORRIDOR:
+                    continue
+                met = any(
+                    self.requirements[j].type in public
+                    and slot_to_level.get(i) == slot_to_level.get(j)
+                    and _rects_touch(box_i, box_j, min_overlap=DOOR_WALL)
+                    for j, box_j in through if j != i
+                )
+                if not met:
+                    penalty += 0.40
         return penalty
 
     def _touches_road_edge(self, box: BoundingBox, envelope: BoundingBox, road) -> bool:
@@ -1309,7 +1477,9 @@ class LayoutGenerator:
 
     # ---------------------------------------------------------- openings ---
 
-    def _place_openings(self, plan: FloorPlan, envelope: BoundingBox) -> None:
+    def _place_openings(
+        self, plan: FloorPlan, envelope: BoundingBox, *, repair: bool = True
+    ) -> None:
         """Place the main door, internal doors and windows.
 
         Doors are placed on a spanning tree of the adjacency graph rooted at the
@@ -1324,7 +1494,8 @@ class LayoutGenerator:
         quality = daylight_quality_by_orientation(plan.site.latitude)
 
         for level in plan.levels:
-            self._repair_circulation(plan, level)
+            if repair:
+                self._repair_circulation(plan, level)
             self._place_doors(plan, level)
             for room in level.rooms:
                 if room.type.is_outdoor or room.type is RoomType.SHAFT:
@@ -1453,6 +1624,8 @@ class LayoutGenerator:
             reached = self._legally_reachable(level, adjacency)
             return [r.id for r in rooms if r.id not in reached]
 
+        from aip.engines.architecture.programme import is_through
+
         stuck = unreachable()
         attempts = 0
         while stuck and attempts < 12:
@@ -1460,10 +1633,18 @@ class LayoutGenerator:
             improved = False
             for stuck_id in stuck:
                 a = by_id[stuck_id]
-                # Candidates: rooms whose area is close enough that the swap
-                # does not wreck either programme entry.
+                # A through-room is the spine: never swap one out of its place
+                # and never swap a dead end into it. The first version of this
+                # traded the living room into the rear of the house to make a
+                # bedroom "reachable", which made every count go up and the
+                # plan unusable.
+                if is_through(a.type):
+                    continue
+                # Candidates: dead-end rooms whose area is close enough that
+                # the swap does not wreck either programme entry.
                 candidates = sorted(
                     (b for b in rooms if b.id != a.id and a.type is not b.type
+                     and not is_through(b.type)
                      and 0.6 <= (b.area / max(a.area, 1e-6)) <= 1.7),
                     key=lambda b: abs(b.area - a.area),
                 )

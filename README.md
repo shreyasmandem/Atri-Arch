@@ -251,6 +251,24 @@ unaffected; only generated commentary degrades, and it is labelled `degraded` in
 the API payload and in the UI. See [docs/API_SETUP.md](docs/API_SETUP.md) for
 which free accounts to create and why.
 
+## Bring your own plan
+
+The studio has two ways in. State a brief and the committee designs; or upload
+a plan you already have, and the same committee reviews it. `POST
+/api/v1/plans/import` reads a **DXF** (rooms from closed outlines and their
+labels, at the drawing's own units), an **SVG** (shapes and the text inside
+them), a **photo or scan** (a free vision model lists the rooms, each with a
+confidence the studio shows you), or a plan JSON this studio exported. Then
+`POST /api/v1/plans/{id}/review/stream` runs every critic, the Vastu graph, the
+cost takeoff, the airflow solve and the negotiation on it, streamed over the
+same events the design run uses.
+
+Nothing about an upload is silent. The response says what was read, what was
+assumed about scale, which labels could not be classified, whether doors and
+windows had to be placed, and - when no plot was given - what plot was assumed.
+The round trip is the test: a scheme the platform drew, exported as DXF and
+uploaded, comes back with every room's type and area identical.
+
 ## Embedding into a practice's website
 
 One tag:
@@ -259,7 +277,7 @@ One tag:
 <script src="https://your-aip-host/embed/aip-widget.js"
         data-key="aip_pk_your_public_key"
         data-practice="Kalpa Studio"
-        data-accent="#8a5a2b"
+        data-accent="#7FA3D4"
         defer></script>
 ```
 
@@ -331,8 +349,8 @@ real and what is not:
 **Real:** the generator, all ten analytical critics, the consensus procedure,
 the manager–worker negotiation protocol, the Vastu engine with both its rule
 corpus and its knowledge graph, quantity takeoff and pricing, the interior
-solver, drawing, DXF and 3D generation, the API, tenancy, the learning loop, and
-the evaluation harness. All tested.
+solver, drawing, DXF and 3D generation, the plan importer, the API, tenancy,
+the learning loop, and the evaluation harness. All tested.
 
 **Indicative, needs a practice's own data:** the rate schedule is benchmarked to
 CPWD conventions and market levels but is not a tendered schedule. Load your own

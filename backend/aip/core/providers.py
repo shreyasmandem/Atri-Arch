@@ -203,7 +203,15 @@ OPENROUTER = ProviderSpec(
         ModelSpec("nvidia/nemotron-3-super-120b-a12b:free", "openrouter",
                   frozenset({Capability.REASONING, Capability.LONG_CONTEXT, Capability.STRUCTURED}), 262144, 0.87, 20, 50,
                   notes="Reasons out loud before answering; the router strips the trace.", typical_latency_ms=6500),
-        ModelSpec("google/gemma-4-26b-a4b-it:free", "openrouter", _TEXT_LONG, 262144, 0.79, 20, 50, typical_latency_ms=6000),
+        # Multimodal, verified against OpenRouter's own model metadata
+        # (input_modalities includes "image"). These are what reads an
+        # uploaded floor-plan image; Groq offers no vision model at all.
+        ModelSpec("google/gemma-4-26b-a4b-it:free", "openrouter", _TEXT_VISION | {Capability.LONG_CONTEXT},
+                  262144, 0.79, 20, 50, typical_latency_ms=6000),
+        ModelSpec("google/gemma-4-31b-it:free", "openrouter", _TEXT_VISION | {Capability.LONG_CONTEXT},
+                  262144, 0.82, 20, 50, typical_latency_ms=8000),
+        ModelSpec("qwen/qwen3.8-27b:free", "openrouter", _TEXT_VISION | {Capability.LONG_CONTEXT},
+                  262144, 0.80, 20, 50, typical_latency_ms=7000),
     ),
 )
 

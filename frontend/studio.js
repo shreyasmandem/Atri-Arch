@@ -17,6 +17,11 @@ const API = (() => {
 })();
 
 const $ = (id) => document.getElementById(id);
+// Write text to an element that a redesign may have removed. The boot sequence
+// runs inside one try/catch whose failure message is "cannot reach the engine",
+// so a null-reference on a retired element is reported to the user as a dead
+// backend - which is what a removed cost ledger did.
+const setText = (id, value) => { const n = $(id); if (n) n.textContent = value; };
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const frag = () => document.createDocumentFragment();
 
@@ -53,6 +58,8 @@ const S = {
   negotiation: null, negotiationOutcome: "", exportUrls: {},
   candidateId: null,   // the scheme the committee voted for, before negotiation changed it
   projectId: null, sessionId: null, briefSent: null,
+  imported: null,     // { file, source, rooms_read, rooms_kept, unrecognised, warnings, scale_note } for an uploaded plan
+  mode: "brief",      // "brief" | "upload"
   plans: {},          // id -> { plan, vastu, cost, interior, analysis, drawing }
   sheet: "plan_level_0",
 };
@@ -652,6 +659,10 @@ function updateStudioHUD() {
     updateStudioHUD();
   });
   $("brief").addEventListener("submit", onSubmit);
+  $("upload")?.addEventListener("submit", onUpload);
+  document.querySelectorAll(".mode-tab").forEach((t) =>
+    t.addEventListener("click", () => setMode(t.dataset.mode)));
+  initDropzone();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
   $("restart").addEventListener("click", () => phase("compose"));
   $("see-why").addEventListener("click", openWhy);
@@ -678,7 +689,7 @@ function updateStudioHUD() {
       fetch(`${API}/capabilities`).then((r) => r.json()),
     ]);
     S.committee = c.committee || [];
-    $("ledger-cost").textContent = (h.total_model_cost_usd || 0).toFixed(2);
+    setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
     $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
 
     const note = $("engine-note");
@@ -773,11 +784,99 @@ async function onSubmit(e) {
   if (S.phase === "running") return;
 
   S.briefSent = readBrief();
-  S.plans = {}; S.planIds = []; S.activeId = null;
+  S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
   phase("running");
+  resetRunScreen("The committee is sitting", "Interpreting the brief…");
+
+  try {
+    await stream(`${API}/design/stream`, S.briefSent);
+  } catch (err) {
+    toast(`The engine could not complete this design: ${err.message}`);
+    $("run-title").textContent = "The run failed";
+    $("restart").hidden = false;
+  }
+}
+
+/* ═══ UPLOAD ═════════════════════════════════════════════════════════ */
+
+function setMode(mode) {
+  S.mode = mode === "upload" ? "upload" : "brief";
+  document.querySelectorAll(".mode-tab").forEach((t) =>
+    t.setAttribute("aria-selected", String(t.dataset.mode === S.mode)));
+  $("brief").hidden = S.mode !== "brief";
+  $("upload").hidden = S.mode !== "upload";
+  document.body.dataset.mode = S.mode;
+}
+
+function initDropzone() {
+  const zone = $("dropzone"), input = $("inp-file");
+  if (!zone || !input) return;
+  const show = () => {
+    const f = input.files?.[0];
+    zone.classList.toggle("has-file", Boolean(f));
+    $("drop-file").hidden = !f;
+    if (f) {
+      $("drop-file").textContent = `${f.name} · ${(f.size / 1024).toFixed(0)} KB`;
+      $("drop-title").textContent = "Ready to review";
+      $("drop-sub").textContent = describeUpload(f);
+    }
+    $("import-report").hidden = true;
+  };
+  input.addEventListener("change", show);
+  for (const ev of ["dragenter", "dragover"]) {
+    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("is-over"); });
+  }
+  for (const ev of ["dragleave", "drop"]) {
+    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove("is-over"); });
+  }
+  zone.addEventListener("drop", (e) => {
+    if (e.dataTransfer?.files?.length) { input.files = e.dataTransfer.files; show(); }
+  });
+}
+
+function describeUpload(f) {
+  const ext = (f.name.split(".").pop() || "").toLowerCase();
+  if (ext === "dxf") return "A CAD drawing. Rooms are read from closed outlines and their labels, at the drawing's own scale.";
+  if (ext === "svg") return "A vector drawing. Rooms are read from shapes and the text inside them; the plot size sets the scale.";
+  if (ext === "json") return "A plan exported from this studio. It is loaded exactly as saved.";
+  return "An image. A vision model reads the rooms; it can take a minute, and every room it names is listed for you to check.";
+}
+
+function renderImportReport(imp, rooms, error) {
+  const box = $("import-report"); box.innerHTML = ""; box.hidden = false;
+  box.classList.toggle("is-error", Boolean(error));
+  if (error) {
+    box.append(el("h4", null, "The plan could not be read"), el("p", "bad", error));
+    return;
+  }
+  const src = { dxf: "DXF", svg: "SVG", image: "image (vision model)", json: "plan JSON" }[imp.source] || imp.source;
+  box.append(el("h4", null, `Read ${imp.rooms_kept} room${imp.rooms_kept === 1 ? "" : "s"} from the ${src}`));
+  if (imp.rooms_read !== imp.rooms_kept) {
+    box.append(el("p", "note", `${imp.rooms_read} outlines were found; ${imp.rooms_read - imp.rooms_kept} were too small to be rooms or could not be placed.`));
+  }
+  if (imp.scale_note) box.append(el("p", "note", imp.scale_note));
+  if (imp.unrecognised?.length) {
+    box.append(el("p", "warn", `Labels not recognised as rooms (kept as "other"): ${imp.unrecognised.join(", ")}.`));
+  }
+  for (const w of imp.warnings || []) box.append(el("p", "warn", w));
+  if (rooms?.length) {
+    const wrap = el("div", "import-rooms");
+    for (const r of rooms) {
+      const chip = el("span", "import-room");
+      if ((r.confidence ?? 1) < 0.6) chip.dataset.low = "1";
+      chip.append(el("b", null, r.name), document.createTextNode(` ${r.area.toFixed(1)} m²`));
+      chip.title = (r.confidence ?? 1) < 1 ? `Read with ${Math.round(r.confidence * 100)}% confidence` : cap(r.type);
+      wrap.append(chip);
+    }
+    box.append(wrap);
+  }
+}
+
+function resetRunScreen(title, stage) {
   $("run-log").innerHTML = "";
   $("run-fill").style.transform = "scaleX(0)";
-  $("run-title").textContent = "The committee is sitting";
+  $("run-title").textContent = title;
+  $("run-stage").textContent = stage;
   document.querySelectorAll(".rc").forEach((r) => {
     r.classList.remove("is-in"); r.querySelector(".rc__s").textContent = "—";
   });
@@ -786,20 +885,80 @@ async function onSubmit(e) {
     r.querySelector(".cr__s").textContent = "—";
     r.querySelector(".cr__b i").style.transform = "scaleX(0)";
   });
+}
 
+async function onUpload(e) {
+  e.preventDefault();
+  if (S.phase === "running") return;
+  const file = $("inp-file").files?.[0];
+  if (!file) { toast("Choose a plan file first."); return; }
+
+  const f = new FormData($("upload"));
+  const num = (k) => { const v = Number(f.get(k)); return Number.isFinite(v) && v > 0 ? v : null; };
+  const budget = num("budget") || 0;
+  const vastu = String(f.get("vastu") || "balanced");
+  const body = new FormData();
+  body.append("file", file);
+  if (num("plot_width")) body.append("plot_width", String(num("plot_width")));
+  if (num("plot_depth")) body.append("plot_depth", String(num("plot_depth")));
+  body.append("road_direction", String(f.get("road_direction") || "N"));
+  if (f.get("name")) body.append("name", String(f.get("name")));
+
+  S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
+  phase("running");
+  resetRunScreen("Reading the plan", `Reading ${file.name}…`);
+
+  let up;
   try {
-    await stream(S.briefSent);
+    const res = await fetch(`${API}/plans/import`, { method: "POST", body });
+    const text = await res.text();
+    let data = {}; try { data = JSON.parse(text); } catch { /* not json */ }
+    if (!res.ok) throw new Error(data.detail || `${res.status} ${text.slice(0, 160)}`);
+    up = data;
   } catch (err) {
-    toast(`The engine could not complete this design: ${err.message}`);
-    $("run-title").textContent = "The run failed";
+    phase("compose"); setMode("upload");
+    renderImportReport(null, null, err.message);
+    toast("The plan could not be read.");
+    return;
+  }
+
+  S.imported = { file: file.name, ...up.import };
+  renderImportReport(up.import, up.rooms, null);
+  const site = up.plan?.site || {};
+  // Points serialise as [x, y] pairs.
+  const pt = (p) => (Array.isArray(p) ? p : [p.x, p.y]);
+  const xs = (site.boundary || []).map((p) => pt(p)[0]), ys = (site.boundary || []).map((p) => pt(p)[1]);
+  S.briefSent = {
+    project_name: up.plan?.name || file.name,
+    plot_width: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+    plot_depth: ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
+    road_direction: site.road_direction || String(f.get("road_direction") || "N"),
+    levels: up.plan?.levels?.length || 1,
+    bedrooms: up.rooms.filter((r) => /bedroom/.test(r.type)).length,
+    bathrooms: up.rooms.filter((r) => /bathroom|toilet/.test(r.type)).length,
+    budget, vastu, locality: "—", styles: [],
+  };
+  const p = el("p");
+  p.append(el("b", null, "import "), document.createTextNode(
+    `${up.import.rooms_kept} rooms read from ${up.import.source}. ${up.import.scale_note || ""}`.trim()));
+  $("run-log").append(p);
+  $("run-title").textContent = "The committee is sitting";
+  $("run-stage").textContent = "Reviewing the uploaded plan…";
+
+  const q = new URLSearchParams({ vastu, budget: String(budget), include_generative_critics: "true" });
+  try {
+    await stream(`${API}/plans/${up.plan_id}/review/stream?${q}`, null);
+  } catch (err) {
+    toast(`The engine could not review this plan: ${err.message}`);
+    $("run-title").textContent = "The review failed";
     $("restart").hidden = false;
   }
 }
 
-async function stream(simple) {
-  const res = await fetch(`${API}/design/stream`, {
+async function stream(url, simple) {
+  const res = await fetch(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ simple, candidates: 3, include_generative_critics: true }),
+    body: simple ? JSON.stringify({ simple, candidates: 3, include_generative_critics: true }) : undefined,
   });
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
 
@@ -898,7 +1057,7 @@ async function applyResult(d) {
   S.projectId = d.project_id; S.sessionId = d.trace_id;
 
   S.plans[d.winner_plan_id] = { plan: d.plan, vastu: d.vastu, cost: d.cost };
-  $("ledger-cost").textContent = (d.model_cost_usd || 0).toFixed(2);
+  setText("ledger-cost", (d.model_cost_usd || 0).toFixed(2));
   if (d.degraded) toast(d.degraded_reason || "Some critics ran in degraded mode.");
 
   phase("review");
@@ -918,7 +1077,8 @@ function buildSchemeTabs() {
     const row = ranked.find((r) => r.candidate_id === id);
     const b = el("button", "scheme-tab"); b.type = "button"; b.setAttribute("role", "tab");
     b.setAttribute("aria-selected", String(id === activeCandidate()));
-    b.append(document.createTextNode(`Scheme ${String.fromCharCode(65 + i)}`));
+    b.append(document.createTextNode(S.imported && i === 0 ? "Uploaded plan" : `Scheme ${String.fromCharCode(65 + i)}`));
+    if (S.imported && i === 0) b.dataset.imported = "1";
 
     // A scheme with no score was not merely last - it was disqualified for a
     // critical finding and never entered the ranking. Leaving the score blank
@@ -982,15 +1142,19 @@ function renderAll() {
 function renderRail() {
   const { plan } = cur();
   const idx = S.planIds.indexOf(activeCandidate());
-  $("pick-name").textContent = idx >= 0
-    ? `Scheme ${String.fromCharCode(65 + idx)}`
-    : "Selected scheme";
+  $("pick-name").textContent = S.imported
+    ? (S.briefSent?.project_name || "Uploaded plan")
+    : idx >= 0 ? `Scheme ${String.fromCharCode(65 + idx)}` : "Selected scheme";
   const dq = (S.consensus?.disqualified || []).find((d) => d.candidate_id === activeCandidate());
   $("pick-why").textContent = dq
     ? `Disqualified. ${dq.reasons[0] || "It carries a critical finding."} A statutory or physical breach removes a scheme regardless of how it scores elsewhere.`
-    : S.activeId === S.winnerId
-      ? "Selected by the committee as the best trade-off across every measured axis."
-      : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
+    : S.imported
+      ? (S.negotiationOutcome && S.negotiationOutcome !== "unchanged"
+        ? "Your drawing, reviewed as drawn, then adjusted by the committee where it could satisfy a finding without redrawing the plan."
+        : "Your drawing, reviewed as drawn. Every critic, the Vastu graph, the cost takeoff and the airflow solve ran on it unchanged.")
+      : S.activeId === S.winnerId
+        ? "Selected by the committee as the best trade-off across every measured axis."
+        : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
 
   const row = rankingRow();
   const bars = $("axis-bars"); bars.innerHTML = "";
@@ -1007,7 +1171,16 @@ function renderRail() {
 
   const b = S.briefSent || {};
   const recap = $("brief-recap"); recap.innerHTML = "";
-  const rows = [
+  const rows = S.imported ? [
+    ["Source", `${S.imported.file} (${S.imported.source})`],
+    ["Rooms read", `${S.imported.rooms_kept} of ${S.imported.rooms_read} outlines`],
+    ["Plot", `${(+b.plot_width).toFixed(1)} × ${(+b.plot_depth).toFixed(1)} m`],
+    ["Road", b.road_direction],
+    ["Bedrooms", b.bedrooms], ["Bathrooms", b.bathrooms],
+    ["Floors", b.levels],
+    ["Budget", b.budget ? inr(b.budget) : "not set"], ["Vastu", cap(b.vastu || "")],
+    ["Openings", S.imported.openings_added ? "placed by the studio" : "as drawn"],
+  ] : [
     ["Plot", `${b.plot_width} × ${b.plot_depth} m`],
     ["Locality", b.locality], ["Road", b.road_direction],
     ["Bedrooms", b.bedrooms], ["Bathrooms", b.bathrooms],

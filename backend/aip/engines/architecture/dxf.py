@@ -229,6 +229,11 @@ def _emit_rooms(w: DxfWriter, plan: FloorPlan, level: Level) -> None:
     for room in level.rooms:
         centre = room.centre
         box = room.bbox
+        # The room boundary itself, as a closed polyline on the area layer.
+        # This is what area takeoff and space schedules read in a practice's
+        # own workflow, and it is also what makes the file re-importable:
+        # walls alone do not say where one room stops and the next begins.
+        w.polyline(list(room.polygon), "A-AREA", closed=True)
         if min(box.width, box.height) < 1.0:
             continue
         w.text(Vec2(centre.x, centre.y + 0.18), room.display_name().upper(),

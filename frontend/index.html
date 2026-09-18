@@ -89,8 +89,105 @@
       <h1 class="studio-hero__title">Architectural Studio</h1>
       <p class="studio-hero__lede">
         Specify site boundary, program requirements, and orientation parameters to synthesize compliant floorplans.
+        Or bring a plan you already have, and put it in front of the same committee.
       </p>
+      <div class="mode-switch" id="mode-switch" role="tablist" aria-label="How to begin">
+        <button type="button" class="mode-tab" role="tab" data-mode="brief" aria-selected="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+          Design from a brief
+        </button>
+        <button type="button" class="mode-tab" role="tab" data-mode="upload" aria-selected="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Review an existing plan
+        </button>
+      </div>
     </div>
+
+    <!-- Upload an existing floor plan -->
+    <form id="upload" class="upload-studio" hidden novalidate>
+      <fieldset class="form-card form-card--upload">
+        <legend class="form-card__head">
+          <div class="form-card__icon-badge">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          </div>
+          <div>
+            <span class="form-card__title">Upload a floor plan</span>
+            <span class="form-card__subtitle">DXF, SVG, a photo or scan, or a plan JSON exported from this studio</span>
+          </div>
+        </legend>
+
+        <label class="dropzone" id="dropzone" for="inp-file">
+          <input type="file" id="inp-file" name="file" accept=".dxf,.svg,.png,.jpg,.jpeg,.webp,.json,image/*,application/json">
+          <span class="dropzone__icon" aria-hidden="true">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3h18v18H3zM3 12h9M12 3v9M12 12h9M12 12v9"/></svg>
+          </span>
+          <span class="dropzone__title" id="drop-title">Drop a plan here, or click to choose one</span>
+          <span class="dropzone__sub" id="drop-sub">
+            DXF and SVG are read exactly, room by room. A photo or scan is read by a vision model and every room it names is listed for you to check.
+          </span>
+          <span class="dropzone__file" id="drop-file" hidden></span>
+        </label>
+
+        <div class="grid-3 upload-grid">
+          <label class="fld">
+            <span class="fld-label">Plot Width <i class="fld-hint">(m)</i></span>
+            <input type="number" id="up-plot-width" name="plot_width" placeholder="from drawing" min="3" max="200" step="0.5">
+          </label>
+          <label class="fld">
+            <span class="fld-label">Plot Depth <i class="fld-hint">(m)</i></span>
+            <input type="number" id="up-plot-depth" name="plot_depth" placeholder="from drawing" min="3" max="200" step="0.5">
+          </label>
+          <label class="fld">
+            <span class="fld-label">Road Frontage</span>
+            <select name="road_direction" id="up-road">
+              <option value="N">North</option><option value="NE">North-East</option>
+              <option value="E">East</option><option value="SE">South-East</option>
+              <option value="S">South</option><option value="SW">South-West</option>
+              <option value="W">West</option><option value="NW">North-West</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid-3 upload-grid">
+          <label class="fld">
+            <span class="fld-label">Budget <i class="fld-hint">(₹, optional)</i></span>
+            <input type="number" id="up-budget" name="budget" placeholder="e.g. 6500000" min="0" step="50000">
+          </label>
+          <label class="fld">
+            <span class="fld-label">Vastu Stance</span>
+            <select name="vastu" id="up-vastu">
+              <option value="ignore">Modern</option>
+              <option value="advisory">Advisory</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="strict">Strict</option>
+              <option value="orthodox">Orthodox</option>
+            </select>
+          </label>
+          <label class="fld">
+            <span class="fld-label">Plan Name <i class="fld-hint">(optional)</i></span>
+            <input type="text" id="up-name" name="name" maxlength="80" placeholder="from file name">
+          </label>
+        </div>
+        <p class="upload-hint">
+          Leave the plot blank for a drawing with real units (DXF); for an image or unitless SVG, the plot size is what sets the scale.
+        </p>
+
+        <div class="import-report" id="import-report" hidden></div>
+
+        <div class="studio-cta-wrap studio-cta-wrap--upload">
+          <button type="submit" class="convene convene--studio" id="review-btn">
+            <div class="convene__content">
+              <span class="convene__main">
+                <span>Review this plan</span>
+                <span class="arrow">→</span>
+              </span>
+              <span class="convene__sub">
+                Reads the rooms, adds doors and windows where none are drawn, then runs every critic, the Vastu graph, cost, airflow and negotiation on it
+              </span>
+            </div>
+          </button>
+        </div>
+      </fieldset>
+    </form>
 
     <!-- Master Brief Form -->
     <form id="brief" class="brief-studio-form" novalidate>
@@ -439,7 +536,7 @@
                   </span>
                 </label>
                 <label class="amenity-chip is-checked">
-                  <input type="checkbox" name="amenity_study" value="1" checked>
+                  <input type="checkbox" name="amenity_study" value="1">
                   <span class="amenity-chip__box">
                     <span class="amenity-chip__name">Study / Office</span>
                     <span class="amenity-chip__zone">Quiet Zone</span>
@@ -453,14 +550,14 @@
                   </span>
                 </label>
                 <label class="amenity-chip is-checked">
-                  <input type="checkbox" name="amenity_balcony" value="1" checked>
+                  <input type="checkbox" name="amenity_balcony" value="1">
                   <span class="amenity-chip__box">
                     <span class="amenity-chip__name">Balcony / Verandah</span>
                     <span class="amenity-chip__zone">Exterior Deck</span>
                   </span>
                 </label>
                 <label class="amenity-chip is-checked">
-                  <input type="checkbox" name="amenity_parking" value="1" checked>
+                  <input type="checkbox" name="amenity_parking" value="1">
                   <span class="amenity-chip__box">
                     <span class="amenity-chip__name">Covered Parking</span>
                     <span class="amenity-chip__zone">Entry Drive</span>

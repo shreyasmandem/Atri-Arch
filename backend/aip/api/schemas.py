@@ -167,16 +167,22 @@ class SimpleBriefRequest(BaseModel):
                 )
             if not self.amenities or "utility" in self.amenities:
                 requirements.append(RoomRequirement(type=RoomType.UTILITY, priority=0.8))
+            # A balcony is outdoors and a garage is a shed: neither needs a
+            # window, and marking them as daylit made each one claim one of
+            # the two lit positions in its band, squeezing a bedroom or the
+            # kitchen into the dark middle.
             if "balcony" in self.amenities:
                 requirements.append(
                     RoomRequirement(
                         type=RoomType.BALCONY, preferred_area=5.0, priority=0.9,
+                        needs_daylight=False,
                     )
                 )
             if "parking" in self.amenities or "garage" in self.amenities:
                 requirements.append(
                     RoomRequirement(
                         type=RoomType.GARAGE, preferred_area=15.0, priority=1.1,
+                        needs_daylight=False,
                     )
                 )
 
