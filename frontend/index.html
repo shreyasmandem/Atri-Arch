@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=claude_ultra_v5">
+<link rel="stylesheet" href="studio.css?v=claude_ultra_v7">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -694,38 +694,46 @@
 
       <!-- ── ACTION CTA ── -->
       <div class="studio-cta-wrap">
+        <!-- Ambient Breathing Golden Aura -->
+        <div class="convene-aura" aria-hidden="true"></div>
+
         <button type="submit" class="convene convene--studio" id="convene">
+          <!-- Claude Code Ultra Dual Orbiting Perimeter Laser Beam -->
+          <div class="convene-beam" aria-hidden="true"></div>
+
+          <!-- Architectural CAD Precision Reticles -->
+          <span class="cad-reticle cad-reticle--tl" aria-hidden="true"></span>
+          <span class="cad-reticle cad-reticle--tr" aria-hidden="true"></span>
+          <span class="cad-reticle cad-reticle--bl" aria-hidden="true"></span>
+          <span class="cad-reticle cad-reticle--br" aria-hidden="true"></span>
+
+          <!-- Blueprint Grid & Light Sweep Shimmer -->
+          <div class="convene-grid-bg" aria-hidden="true"></div>
+          <div class="convene-shimmer" aria-hidden="true"></div>
+
+          <!-- Button Content: Sleek Compact Dual Line -->
           <div class="convene__content">
-            <!-- Eyebrow: Telemetry Badge -->
-            <div class="convene__eyebrow">
-              <span class="convene__badge">
-                <span class="convene__badge-spark">✦</span>
-                <span class="convene__badge-text">ATRI GENERATIVE ENGINE</span>
-              </span>
-              <span class="convene__telemetry">
-                <span class="telemetry-beacon"></span>
-                <span id="convene-critics-status">13 PARALLEL CRITICS ARMED</span>
-              </span>
-            </div>
-
-            <!-- Main Heading & Concentric Action Portal -->
-            <div class="convene__main">
-              <span class="convene__title-text">Generate Architectural Schemes</span>
-              <div class="convene__action-portal" aria-hidden="true">
-                <span class="convene__portal-ring"></span>
-                <svg class="convene__arrow-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                  <polyline points="12 5 19 12 12 19"></polyline>
-                </svg>
+            <div class="convene__body">
+              <div class="convene__title-row">
+                <span class="convene__spark">✦</span>
+                <span class="convene__title-text">Generate Architectural Schemes</span>
               </div>
+              <span class="convene__sub" id="convene-sub">13 critics · 3 schemes · ₹0 to run</span>
             </div>
 
-            <!-- Live Subtitle -->
-            <span class="convene__sub" id="convene-sub">
-              Evaluating compliance, daylight, structural grids, Vastu, and material costs across candidate layouts
-            </span>
+            <!-- Concentric Action Portal -->
+            <div class="convene__action-portal" aria-hidden="true">
+              <span class="convene__portal-ring"></span>
+              <svg class="convene__arrow-svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </div>
           </div>
         </button>
+
+        <!-- Hidden slot for JS critic telemetry compatibility -->
+        <span id="convene-critics-status" style="display:none;" aria-hidden="true"></span>
 
         <!-- Ultra Engine Status Capsule -->
         <div class="engine-status-capsule" id="engine-status-capsule">
@@ -738,46 +746,15 @@
   </div>
 </section>
 
-<!-- ══════════════════════ RUNNING (CLAUDE CODE ULTRA LOADING REACTOR) ══════════════════════ -->
+<!-- ══════════════════════ RUNNING ══════════════════════ -->
 <section class="running" id="running" aria-live="polite" aria-label="The committee is sitting">
-  <!-- Ambient Breathing Cosmic Halo -->
-  <div class="running-aura" aria-hidden="true"></div>
-
   <div class="running__inner">
-    <!-- Claude Code Ultra Dual Orbiting Perimeter Laser Beam -->
-    <div class="running-beam" aria-hidden="true"></div>
-
-    <!-- CAD Precision Reticle Corners -->
-    <span class="cad-reticle cad-reticle--tl" aria-hidden="true"></span>
-    <span class="cad-reticle cad-reticle--tr" aria-hidden="true"></span>
-    <span class="cad-reticle cad-reticle--bl" aria-hidden="true"></span>
-    <span class="cad-reticle cad-reticle--br" aria-hidden="true"></span>
-
-    <!-- Blueprint Coordinate Grid & Light Shimmer Sweep -->
-    <div class="running-grid-bg" aria-hidden="true"></div>
-    <div class="running-shimmer" aria-hidden="true"></div>
-
-    <div class="running__content">
-      <!-- Top Eyebrow Badge & Live Telemetry -->
-      <div class="running__eyebrow">
-        <span class="running__pill">
-          <span class="running__pill-spark">✦</span>
-          <span>ATRI SYNTHESIS MATRIX</span>
-        </span>
-        <span class="running__telemetry">
-          <span class="telemetry-beacon"></span>
-          <span class="sanskrit">Sabha</span>
-          <span class="telemetry-sep">·</span>
-          <span>13 ANALYTICAL CRITICS DELIBERATING</span>
-        </span>
-      </div>
-
-      <h2 id="run-title">The committee is sitting</h2>
-      <div class="run-track"><i id="run-fill"></i></div>
-      <p class="run-stage" id="run-stage">Interpreting the brief…</p>
-      <ol class="run-critics" id="run-critics"></ol>
-      <div class="run-log" id="run-log"></div>
-    </div>
+    <p class="sanskrit">Sabha</p>
+    <h2 id="run-title">The committee is sitting</h2>
+    <div class="run-track"><i id="run-fill"></i></div>
+    <p class="run-stage" id="run-stage">Interpreting the brief…</p>
+    <ol class="run-critics" id="run-critics"></ol>
+    <div class="run-log" id="run-log"></div>
   </div>
 </section>
 
