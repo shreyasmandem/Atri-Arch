@@ -815,8 +815,20 @@ async function onSubmit(e) {
   e.preventDefault();
   if (S.phase === "running") return;
 
+  const btn = $("convene");
+  if (btn) {
+    btn.classList.add("is-loading");
+    btn.disabled = true;
+    const txt = btn.querySelector(".convene__title-text");
+    if (txt) txt.textContent = "✦ Synthesizing Schemes…";
+  }
+
   S.briefSent = readBrief();
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
+
+  // 400ms ultra laser ignition transition
+  await new Promise((r) => setTimeout(r, 400));
+
   phase("running");
   resetRunScreen("The committee is sitting", "Interpreting the brief…");
 
@@ -826,6 +838,13 @@ async function onSubmit(e) {
     toast(`The engine could not complete this design: ${err.message}`);
     $("run-title").textContent = "The run failed";
     $("restart").hidden = false;
+  } finally {
+    if (btn) {
+      btn.classList.remove("is-loading");
+      btn.disabled = false;
+      const txt = btn.querySelector(".convene__title-text");
+      if (txt) txt.textContent = "Generate Architectural Schemes";
+    }
   }
 }
 
