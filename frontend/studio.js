@@ -707,12 +707,18 @@ function updateStudioHUD() {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const [h, c] = await Promise.all([
-          fetch(`${API}/health`).then((r) => r.json()),
-          fetch(`${API}/capabilities`).then((r) => r.json()),
+          fetch(`${API}/health`).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }),
+          fetch(`${API}/capabilities`).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }),
         ]);
         S.committee = c.committee || [];
-        $("ledger-cost").textContent = (h.total_model_cost_usd || 0).toFixed(2);
-        $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
+        setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
+        setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
         const critStat = $("convene-critics-status");
         if (critStat) {
           critStat.textContent = `${S.committee.length} PARALLEL CRITICS ARMED`;
@@ -721,11 +727,12 @@ function updateStudioHUD() {
         if (h.degraded_mode) {
           updateEngineStatus("ok", "Engine ready · Analytical judgment mode · Vastu & structural active");
         } else {
-          updateEngineStatus("ok", `Engine ready · ${h.providers_configured.length} provider(s) · ${h.corpus.total} passages · $0.00 spent`);
+          updateEngineStatus("ok", `Engine ready · ${h.providers_configured?.length || 1} provider(s) · ${h.corpus?.total || 30} passages · $0.00 spent`);
         }
         seatCritics();
         return;
-      } catch {
+      } catch (err) {
+        console.warn(`Health check attempt ${attempt} failed:`, err);
         if (attempt < retries) {
           updateEngineStatus("bad", `Connecting to engine (attempt ${attempt}/${retries})…`);
           await new Promise((res) => setTimeout(res, 1200));
@@ -740,22 +747,26 @@ function updateStudioHUD() {
 })();
 
 function seatCritics() {
-  const run = $("run-critics"); run.innerHTML = "";
-  const rail = $("critics"); rail.innerHTML = "";
+  const run = $("run-critics"); if (run) run.innerHTML = "";
+  const rail = $("critics"); if (rail) rail.innerHTML = "";
   for (const c of S.committee) {
     const pig = CRITIC_PIG[c.id] || "chalk";
 
-    const li = el("li", "rc"); li.dataset.critic = c.id; li.dataset.pig = pig;
-    li.append(el("i", "rc__g"), el("span", "rc__n", c.name), el("span", "rc__s", "—"));
-    run.append(li);
+    if (run) {
+      const li = el("li", "rc"); li.dataset.critic = c.id; li.dataset.pig = pig;
+      li.append(el("i", "rc__g"), el("span", "rc__n", c.name), el("span", "rc__s", "—"));
+      run.append(li);
+    }
 
-    const row = el("li", "cr"); row.dataset.critic = c.id; row.dataset.pig = pig;
-    row.title = c.charter || "";
-    const bar = el("span", "cr__b"); bar.append(el("i"));
-    row.append(el("i", "cr__g"), el("span", "cr__n", c.name),
-      el("span", "cr__k", c.analytical ? "computed" : "judged"),
-      el("span", "cr__s", "—"), bar);
-    rail.append(row);
+    if (rail) {
+      const row = el("li", "cr"); row.dataset.critic = c.id; row.dataset.pig = pig;
+      row.title = c.charter || "";
+      const bar = el("span", "cr__b"); bar.append(el("i"));
+      row.append(el("i", "cr__g"), el("span", "cr__n", c.name),
+        el("span", "cr__k", c.analytical ? "computed" : "judged"),
+        el("span", "cr__s", "—"), bar);
+      rail.append(row);
+    }
   }
 }
 
@@ -813,37 +824,60 @@ function readBrief() {
 
 async function onSubmit(e) {
   e.preventDefault();
-  if (S.phase === "running") return;
+  if (S.isGenerating) return;
 
+  S.isGenerating = true;
   const btn = $("convene");
+  const fill = $("convene-fill");
+  const progTrack = $("convene-progress");
+  const dot = $("engine-dot");
+  const note = $("engine-note");
+
   if (btn) {
     btn.classList.add("is-loading");
     btn.disabled = true;
     const txt = btn.querySelector(".convene__title-text");
     if (txt) txt.textContent = "✦ Synthesizing Schemes…";
+    setText("convene-sub", "Arming 13 analytical critics · Initializing layout matrix…");
+  }
+  if (progTrack) progTrack.style.opacity = "1";
+  if (fill) fill.style.transform = "scaleX(0.08)";
+  if (dot) dot.dataset.tone = "running";
+  if (note) {
+    note.dataset.tone = "running";
+    note.textContent = "✦ The committee is deliberating candidate layouts…";
   }
 
   S.briefSent = readBrief();
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
 
-  // 400ms ultra laser ignition transition
-  await new Promise((r) => setTimeout(r, 400));
-
-  phase("running");
+  // IMPORTANT: DO NOT switch to 2nd page! The user stays on the first photo (form page)
   resetRunScreen("The committee is sitting", "Interpreting the brief…");
 
   try {
     await stream(`${API}/design/stream`, S.briefSent);
   } catch (err) {
     toast(`The engine could not complete this design: ${err.message}`);
-    $("run-title").textContent = "The run failed";
-    $("restart").hidden = false;
+    if (dot) dot.dataset.tone = "bad";
+    if (note) {
+      note.dataset.tone = "bad";
+      note.textContent = `Run failed: ${err.message}`;
+    }
   } finally {
-    if (btn) {
+    S.isGenerating = false;
+    if (S.phase !== "review" && btn) {
       btn.classList.remove("is-loading");
       btn.disabled = false;
       const txt = btn.querySelector(".convene__title-text");
       if (txt) txt.textContent = "Generate Architectural Schemes";
+      setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
+      if (progTrack) progTrack.style.opacity = "0";
+      if (fill) fill.style.transform = "scaleX(0)";
+      if (dot) dot.dataset.tone = "ok";
+      if (note) {
+        note.dataset.tone = "ok";
+        note.textContent = "Engine ready · Analytical judgment mode · Vastu & structural active";
+      }
     }
   }
 }
@@ -924,25 +958,40 @@ function renderImportReport(imp, rooms, error) {
 }
 
 function resetRunScreen(title, stage) {
-  $("run-log").innerHTML = "";
-  $("run-fill").style.transform = "scaleX(0)";
-  $("run-title").textContent = title;
-  $("run-stage").textContent = stage;
+  const log = $("run-log"); if (log) log.innerHTML = "";
+  const fill = $("run-fill"); if (fill) fill.style.transform = "scaleX(0)";
+  const rt = $("run-title"); if (rt) rt.textContent = title;
+  const rs = $("run-stage"); if (rs) rs.textContent = stage;
   document.querySelectorAll(".rc").forEach((r) => {
-    r.classList.remove("is-in"); r.querySelector(".rc__s").textContent = "—";
+    r.classList.remove("is-in");
+    const s = r.querySelector(".rc__s"); if (s) s.textContent = "—";
   });
   document.querySelectorAll(".cr").forEach((r) => {
     r.classList.remove("is-low");
-    r.querySelector(".cr__s").textContent = "—";
-    r.querySelector(".cr__b i").style.transform = "scaleX(0)";
+    const s = r.querySelector(".cr__s"); if (s) s.textContent = "—";
+    const b = r.querySelector(".cr__b i"); if (b) b.style.transform = "scaleX(0)";
   });
 }
 
 async function onUpload(e) {
   e.preventDefault();
-  if (S.phase === "running") return;
+  if (S.isGenerating) return;
   const file = $("inp-file").files?.[0];
   if (!file) { toast("Choose a plan file first."); return; }
+
+  S.isGenerating = true;
+  const upBtn = $("review-btn");
+  if (upBtn) {
+    upBtn.classList.add("is-loading");
+    upBtn.disabled = true;
+  }
+  const dot = $("engine-dot");
+  const note = $("engine-note");
+  if (dot) dot.dataset.tone = "running";
+  if (note) {
+    note.dataset.tone = "running";
+    note.textContent = `✦ Reading ${file.name}…`;
+  }
 
   const f = new FormData($("upload"));
   const num = (k) => { const v = Number(f.get(k)); return Number.isFinite(v) && v > 0 ? v : null; };
@@ -956,7 +1005,6 @@ async function onUpload(e) {
   if (f.get("name")) body.append("name", String(f.get("name")));
 
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
-  phase("running");
   resetRunScreen("Reading the plan", `Reading ${file.name}…`);
 
   let up;
@@ -967,7 +1015,9 @@ async function onUpload(e) {
     if (!res.ok) throw new Error(data.detail || `${res.status} ${text.slice(0, 160)}`);
     up = data;
   } catch (err) {
-    phase("compose"); setMode("upload");
+    S.isGenerating = false;
+    if (upBtn) { upBtn.classList.remove("is-loading"); upBtn.disabled = false; }
+    setMode("upload");
     renderImportReport(null, null, err.message);
     toast("The plan could not be read.");
     return;
@@ -989,20 +1039,27 @@ async function onUpload(e) {
     bathrooms: up.rooms.filter((r) => /bathroom|toilet/.test(r.type)).length,
     budget, vastu, locality: "—", styles: [],
   };
-  const p = el("p");
-  p.append(el("b", null, "import "), document.createTextNode(
-    `${up.import.rooms_kept} rooms read from ${up.import.source}. ${up.import.scale_note || ""}`.trim()));
-  $("run-log").append(p);
-  $("run-title").textContent = "The committee is sitting";
-  $("run-stage").textContent = "Reviewing the uploaded plan…";
+  const log = $("run-log");
+  if (log) {
+    const p = el("p");
+    p.append(el("b", null, "import "), document.createTextNode(
+      `${up.import.rooms_kept} rooms read from ${up.import.source}. ${up.import.scale_note || ""}`.trim()));
+    log.append(p);
+  }
 
   const q = new URLSearchParams({ vastu, budget: String(budget), include_generative_critics: "true" });
   try {
     await stream(`${API}/plans/${up.plan_id}/review/stream?${q}`, null);
   } catch (err) {
     toast(`The engine could not review this plan: ${err.message}`);
-    $("run-title").textContent = "The review failed";
-    $("restart").hidden = false;
+    if (dot) dot.dataset.tone = "bad";
+    if (note) { note.dataset.tone = "bad"; note.textContent = `Review failed: ${err.message}`; }
+  } finally {
+    S.isGenerating = false;
+    if (upBtn && S.phase !== "review") {
+      upBtn.classList.remove("is-loading");
+      upBtn.disabled = false;
+    }
   }
 }
 
@@ -1025,11 +1082,11 @@ async function stream(url, simple) {
   const kick = () => {
     clearTimeout(idle);
     idle = setTimeout(() => {
-      if (sawResult || S.phase !== "running") return;
-      $("run-title").textContent = "The engine stopped responding";
-      $("run-stage").textContent =
-        "No update for three minutes. The run may still be finishing on the server; check its log, or start again.";
-      $("restart").hidden = false;
+      if (sawResult || (!S.isGenerating && S.phase !== "running")) return;
+      const rt = $("run-title"); if (rt) rt.textContent = "The engine stopped responding";
+      const rs = $("run-stage");
+      if (rs) rs.textContent = "No update for three minutes. The run may still be finishing on the server; check its log, or start again.";
+      const restart = $("restart"); if (restart) restart.hidden = false;
     }, 180000);
   };
   kick();
@@ -1047,11 +1104,11 @@ async function stream(url, simple) {
     window.removeEventListener("aip:result", seen);
   }
 
-  if (!sawResult && S.phase === "running") {
-    $("run-title").textContent = "The run ended without a scheme";
-    $("run-stage").textContent =
-      "The engine closed the connection before returning a design. Check the server log, then try again.";
-    $("restart").hidden = false;
+  if (!sawResult && (S.isGenerating || S.phase === "running")) {
+    const rt = $("run-title"); if (rt) rt.textContent = "The run ended without a scheme";
+    const rs = $("run-stage");
+    if (rs) rs.textContent = "The engine closed the connection before returning a design. Check the server log, then try again.";
+    const restart = $("restart"); if (restart) restart.hidden = false;
   }
 }
 
@@ -1065,12 +1122,48 @@ function handle(frame) {
   let d; try { d = JSON.parse(raw); } catch { return; }
 
   if (name === "progress") {
-    if (d.status !== "running" || d.stage === "critique") {
-      const p = el("p"); p.append(el("b", null, `${d.stage} `), document.createTextNode(d.message));
-      $("run-log").append(p); $("run-log").scrollTop = $("run-log").scrollHeight;
+    // 1. Update Down Button in place on first photo (Compose Studio)
+    const btn = $("convene");
+    if (btn && btn.classList.contains("is-loading")) {
+      const txt = btn.querySelector(".convene__title-text");
+      if (txt && d.message) txt.textContent = `✦ ${d.message}`;
+      const sub = $("convene-sub");
+      if (sub) {
+        const stageLabel = d.stage ? cap(d.stage) : "Synthesis";
+        const pct = Math.round((d.percent || 0) * 100);
+        sub.textContent = `${stageLabel} · ${pct}% · 13 critics active`;
+      }
+      const fill = $("convene-fill");
+      if (fill) fill.style.transform = `scaleX(${Math.max(0.08, d.percent || 0)})`;
     }
-    $("run-stage").textContent = d.message;
-    $("run-fill").style.transform = `scaleX(${d.percent || 0})`;
+
+    // 2. Update Engine Status Capsule
+    const note = $("engine-note");
+    if (note) {
+      note.dataset.tone = "running";
+      note.textContent = `✦ ${d.message}`;
+    }
+    const dot = $("engine-dot");
+    if (dot) dot.dataset.tone = "running";
+
+    // 3. Update Upload Button if active
+    const upBtn = $("review-btn");
+    if (upBtn && upBtn.classList.contains("is-loading")) {
+      const txt = upBtn.querySelector(".convene__title-text") || upBtn.querySelector(".convene__main");
+      if (txt && d.message) txt.textContent = `✦ ${d.message}`;
+      const sub = upBtn.querySelector(".convene__sub");
+      if (sub) sub.textContent = `${d.stage ? cap(d.stage) : "Review"} · ${Math.round((d.percent || 0) * 100)}%`;
+    }
+
+    if (d.status !== "running" || d.stage === "critique") {
+      const log = $("run-log");
+      if (log) {
+        const p = el("p"); p.append(el("b", null, `${d.stage} `), document.createTextNode(d.message));
+        log.append(p); log.scrollTop = log.scrollHeight;
+      }
+    }
+    const stage = $("run-stage"); if (stage) stage.textContent = d.message;
+    const runFill = $("run-fill"); if (runFill) runFill.style.transform = `scaleX(${d.percent || 0})`;
     if (d.detail?.scores) markScores(d.detail.scores);
   } else if (name === "result") {
     applyResult(d);
@@ -1091,6 +1184,12 @@ function markScores(scores) {
 
 async function applyResult(d) {
   window.dispatchEvent(new Event("aip:result"));
+  S.isGenerating = false;
+  const btn = $("convene");
+  if (btn) {
+    btn.classList.remove("is-loading");
+    btn.disabled = false;
+  }
   S.planIds = d.plan_ids || [];
   S.winnerId = d.winner_plan_id;
   S.activeId = d.winner_plan_id;

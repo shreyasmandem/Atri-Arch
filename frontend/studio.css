@@ -1664,6 +1664,17 @@ body[data-phase="review"]  .review  { display: grid; }
 }
 
 /* ─── LOADING STATE: SUPERCHARGED HYPER LASER ─── */
+.convene.is-loading,
+.convene[disabled] {
+  cursor: progress;
+  border-color: rgba(245, 215, 127, 0.9) !important;
+  background: linear-gradient(145deg, rgba(28, 22, 34, 0.98) 0%, rgba(16, 13, 22, 0.99) 55%, rgba(26, 18, 30, 0.98) 100%) !important;
+  box-shadow: 
+    0 24px 60px -8px rgba(0, 0, 0, 0.92),
+    0 8px 30px -2px rgba(229, 169, 88, 0.42),
+    inset 0 1px 2px 0 rgba(255, 255, 255, 0.6) !important;
+}
+
 .convene.is-loading .convene-beam,
 .convene[disabled] .convene-beam {
   opacity: 1 !important;
@@ -1672,17 +1683,44 @@ body[data-phase="review"]  .review  { display: grid; }
 
 .convene.is-loading .convene-beam::before,
 .convene[disabled] .convene-beam::before {
-  animation-duration: 1.3s !important;
+  animation: conveneBeamOrbit 1.2s linear infinite !important;
 }
 
-.convene.is-loading,
-.convene[disabled] {
-  cursor: progress;
-  border-color: rgba(245, 215, 127, 0.85) !important;
-  box-shadow: 
-    0 24px 60px -8px rgba(0, 0, 0, 0.9),
-    0 8px 24px -2px rgba(229, 169, 88, 0.35),
-    inset 0 1px 2px 0 rgba(255, 255, 255, 0.5) !important;
+.convene.is-loading ~ .convene-aura,
+.studio-cta-wrap:has(.convene.is-loading) .convene-aura {
+  opacity: 1 !important;
+  filter: blur(28px) !important;
+  animation: conveneAuraBreathe 1.6s ease-in-out infinite alternate !important;
+}
+
+/* Laser Progress Bar Track inside Down Button */
+.convene__progress-track {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  z-index: 4;
+  border-radius: 0 0 12px 12px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.convene.is-loading .convene__progress-track {
+  opacity: 1;
+}
+
+.convene__progress-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #7FA3D4 0%, #DFA85C 45%, #F5D77F 80%, #FFFFFF 100%);
+  box-shadow: 0 0 10px rgba(245, 215, 127, 0.95);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* 4. CAD Precision Reticles */
@@ -1927,6 +1965,17 @@ body[data-phase="review"]  .review  { display: grid; }
   box-shadow: 0 0 8px #E4694C;
 }
 
+.engine-dot[data-tone="running"] {
+  background: #F5D77F;
+  box-shadow: 0 0 8px #F5D77F, 0 0 16px rgba(245, 215, 127, 0.7);
+  animation: engineDotPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes engineDotPulse {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  100% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 12px #FFFFFF, 0 0 22px #F5D77F; }
+}
+
 .engine-note {
   margin: 0;
   font-family: var(--num);
@@ -1934,6 +1983,7 @@ body[data-phase="review"]  .review  { display: grid; }
   color: var(--chalk-3);
   letter-spacing: 0.02em;
   text-align: center;
+  transition: color 0.3s ease;
 }
 
 .engine-note[data-tone="ok"] {
@@ -1944,115 +1994,16 @@ body[data-phase="review"]  .review  { display: grid; }
   color: var(--hingula);
 }
 
-/* ═══ RUNNING ═════════════════════════════════════════════════════════ */
-
-.running {
-  position: fixed;
-  inset: var(--crown-h) 0 0 0;
-  place-items: center;
-  padding: 5vh 5vw;
-  overflow-y: auto;
-  background: var(--bg-base);
-  z-index: 5;
+.engine-note[data-tone="running"] {
+  color: #F5D77F;
+  font-weight: 550;
 }
 
-.running__inner {
-  width: min(760px, 100%);
+/* ═══ RUNNING (DISABLED: Loading is 100% inline on down button, no 2nd page) ═══ */
+.running,
+body[data-phase="running"] .running {
+  display: none !important;
 }
-
-.running .sanskrit {
-  margin: 0 0 6px;
-  font-size: 13px;
-  color: var(--ochre);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-}
-
-.running h2 {
-  margin: 0 0 22px;
-  font-size: clamp(22px, 2.4vw, 30px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--chalk);
-}
-
-.run-track {
-  height: 4px;
-  border-radius: 4px;
-  background: var(--rule);
-  margin-bottom: 14px;
-  overflow: hidden;
-}
-
-.run-track i {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--indigo) 0%, var(--ochre) 100%);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform .5s var(--ease);
-}
-
-.run-stage {
-  margin: 0 0 24px;
-  font-family: var(--num);
-  font-size: 13px;
-  color: var(--chalk-2);
-}
-
-.run-critics {
-  list-style: none;
-  margin: 0 0 24px;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 6px;
-  background: transparent;
-}
-
-.rc {
-  background: var(--bg-card);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-sm);
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  opacity: .35;
-  transition: opacity .45s var(--ease), background .3s var(--ease);
-}
-
-.rc.is-in {
-  opacity: 1;
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.rc__g {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  border: 1px solid currentColor;
-  flex: 0 0 auto;
-}
-
-.rc.is-in .rc__g {
-  background: currentColor;
-  box-shadow: 0 0 8px currentColor;
-}
-
-.run-log {
-  font-family: var(--num);
-  font-size: 12px;
-  line-height: 1.8;
-  color: var(--chalk-3);
-  max-height: 28vh;
-  overflow-y: auto;
-  border-top: 1px solid var(--rule);
-  padding-top: 14px;
-}
-
-.run-log p { margin: 0 0 4px; }
-.run-log b { color: var(--chalk); font-weight: 500; }
 
 /* ═══ REVIEW ═════════════════════════════════════════════════════════ */
 
