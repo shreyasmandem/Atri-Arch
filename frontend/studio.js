@@ -998,38 +998,15 @@ function stopAstroAnimation() {
 function updateAstroTrack(pct) {
   const percent = Math.min(1, Math.max(0, pct || 0));
   const fill = $("run-fill");
-  if (fill) fill.style.width = `${(percent * 100).toFixed(1)}%`;
-  const thumb = $("astro-thumb");
-  if (thumb) thumb.style.left = `${(percent * 100).toFixed(1)}%`;
-
-  // 5 discrete steps: 0: BRIEF, 1: GEOMETRY, 2: VASTU, 3: CRITIQUE, 4: CONSENSUS
-  let curStep = 0;
-  if (percent >= 0.85) curStep = 4;
-  else if (percent >= 0.62) curStep = 3;
-  else if (percent >= 0.38) curStep = 2;
-  else if (percent >= 0.15) curStep = 1;
-
-  document.querySelectorAll(".astro-station").forEach((st) => {
-    const s = Number(st.dataset.step);
-    st.classList.toggle("is-active", s === curStep);
-    st.classList.toggle("is-passed", s < curStep);
-  });
-
-  document.querySelectorAll(".astro-pip").forEach((pip) => {
-    const s = Number(pip.dataset.step);
-    pip.classList.toggle("is-active", s === curStep);
-    pip.classList.toggle("is-passed", s < curStep);
-  });
+  if (fill) fill.style.transform = `scaleX(${percent})`;
 }
 
 function resetRunScreen(title, stage) {
   const log = $("run-log"); if (log) log.innerHTML = "";
+  const fill = $("run-fill"); if (fill) fill.style.transform = "scaleX(0)";
   const rt = $("run-title"); if (rt) rt.textContent = title;
   const rs = $("run-stage"); if (rs) rs.textContent = stage;
-  const sub = $("run-sub");
-  if (sub) sub.textContent = "Evaluating compliance, daylight, structural grids, and Vastu across candidate layouts";
   const restart = $("restart"); if (restart) restart.hidden = true;
-  updateAstroTrack(0);
   document.querySelectorAll(".rc").forEach((r) => {
     r.classList.remove("is-in");
     const s = r.querySelector(".rc__s"); if (s) s.textContent = "—";

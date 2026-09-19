@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=claude_astro_v1">
+<link rel="stylesheet" href="studio.css?v=claude_astro_v2">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -782,65 +782,14 @@
 
       <h2 id="run-title">The committee is sitting</h2>
 
-      <!-- Claude Code Style Golden Astrology Spinner & Live Status Row -->
-      <div class="claude-astro-hero">
-        <div class="astro-glyph-wrap" aria-hidden="true">
-          <div class="astro-spinner-ring"></div>
-          <span class="astro-glyph-spinner" id="astro-glyph">☉</span>
-        </div>
-        <div class="claude-code-stage-info">
-          <div class="claude-code-stage-title">
-            <span class="run-stage" id="run-stage">Interpreting the brief…</span>
-            <span class="claude-code-timer" id="run-timer">0.0s</span>
-          </div>
-          <div class="claude-code-stage-sub" id="run-sub">
-            Evaluating compliance, daylight, structural grids, and Vastu across candidate layouts
-          </div>
-        </div>
-      </div>
+      <!-- The SAME OLD SIZE BAR: 3px sleek progress line with radiant golden gradient -->
+      <div class="run-track"><i id="run-fill"></i></div>
 
-      <!-- 5-Station Deliberation Track (Matching media_1789834613483.png) -->
-      <div class="astro-track-container" id="astro-track-container">
-        <div class="astro-rail">
-          <div class="astro-rail-bg"></div>
-          <div class="astro-rail-fill" id="run-fill"></div>
-          <!-- Sliding glowing white bead thumb (from uploaded photo) -->
-          <div class="astro-thumb" id="astro-thumb">
-            <span class="astro-thumb-core"></span>
-            <span class="astro-thumb-halo"></span>
-          </div>
-          <!-- Station Checkpoint Pips on Rail -->
-          <div class="astro-pips" aria-hidden="true">
-            <span class="astro-pip is-active" data-step="0" style="left: 0%;"></span>
-            <span class="astro-pip" data-step="1" style="left: 25%;"></span>
-            <span class="astro-pip" data-step="2" style="left: 50%;"></span>
-            <span class="astro-pip" data-step="3" style="left: 75%;"></span>
-            <span class="astro-pip" data-step="4" style="left: 100%;"></span>
-          </div>
-        </div>
-        <!-- 5 Discrete Station Labels Below Rail -->
-        <div class="astro-stations">
-          <div class="astro-station is-active" data-step="0">
-            <span class="astro-station-sym">☉</span>
-            <span class="astro-station-name">BRIEF</span>
-          </div>
-          <div class="astro-station" data-step="1">
-            <span class="astro-station-sym">☿</span>
-            <span class="astro-station-name">GEOMETRY</span>
-          </div>
-          <div class="astro-station" data-step="2">
-            <span class="astro-station-sym">☽</span>
-            <span class="astro-station-name">VASTU</span>
-          </div>
-          <div class="astro-station" data-step="3">
-            <span class="astro-station-sym">♃</span>
-            <span class="astro-station-name">CRITIQUE</span>
-          </div>
-          <div class="astro-station" data-step="4">
-            <span class="astro-station-sym">✦</span>
-            <span class="astro-station-name">CONSENSUS</span>
-          </div>
-        </div>
+      <!-- Claude Code Style Golden Astrology Live Stage Line -->
+      <div class="astro-stage-row">
+        <span class="astro-glyph-spinner" id="astro-glyph" aria-hidden="true">☉</span>
+        <span class="run-stage" id="run-stage">Interpreting the brief…</span>
+        <span class="claude-code-timer" id="run-timer">0.0s</span>
       </div>
 
       <!-- 13 Parallel Critics Deliberation Matrix -->
@@ -959,6 +908,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js?v=claude_astro_v1" type="module"></script>
+<script src="studio.js?v=claude_astro_v2" type="module"></script>
 </body>
 </html>
