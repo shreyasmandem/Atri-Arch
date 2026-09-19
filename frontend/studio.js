@@ -643,9 +643,7 @@ function updateStudioHUD() {
       if ($("inp-styles")) $("inp-styles").value = p.style;
       if ($("stance")) {
         $("stance").value = p.stance;
-        const [n, , note] = STANCES[p.stance];
-        if ($("stance-name")) $("stance-name").textContent = n;
-        if ($("stance-note")) $("stance-note").textContent = note;
+        updateStanceDisplay(p.stance);
       }
 
       // Update Direction Radio
@@ -661,11 +659,51 @@ function updateStudioHUD() {
     });
   });
 
-  $("stance").addEventListener("input", (e) => {
-    const [n, , note] = STANCES[+e.target.value];
-    $("stance-name").textContent = n; $("stance-note").textContent = note;
-    updateStudioHUD();
+  function updateStanceDisplay(val) {
+    const stanceIdx = Math.max(0, Math.min(4, Math.round(+val || 0)));
+    const s = STANCES[stanceIdx] || STANCES[2];
+    const nameEl = $("stance-name");
+    if (nameEl) {
+      nameEl.innerHTML = `<span class="stance-spark">✦</span> ${s[0]}`;
+    }
+    const noteEl = $("stance-note");
+    if (noteEl) {
+      noteEl.textContent = s[2];
+    }
+    document.querySelectorAll("#stance-scale span").forEach((span) => {
+      const sVal = +span.dataset.val;
+      if (sVal === stanceIdx) {
+        span.classList.add("is-active");
+      } else {
+        span.classList.remove("is-active");
+      }
+    });
+    const hudVastu = $("hud-vastu");
+    if (hudVastu) hudVastu.textContent = s[0];
+  }
+
+  const stanceInput = $("stance");
+  if (stanceInput) {
+    stanceInput.addEventListener("input", (e) => {
+      updateStanceDisplay(+e.target.value);
+      updateStudioHUD();
+    });
+  }
+
+  document.querySelectorAll("#stance-scale span").forEach((span) => {
+    span.addEventListener("click", () => {
+      const val = +span.dataset.val;
+      if (stanceInput) {
+        stanceInput.value = val;
+        updateStanceDisplay(val);
+        updateStudioHUD();
+      }
+    });
   });
+
+  // Initialize stance display on load
+  updateStanceDisplay(stanceInput ? +stanceInput.value : 2);
+
   $("brief").addEventListener("submit", onSubmit);
   $("upload")?.addEventListener("submit", onUpload);
   document.querySelectorAll(".mode-tab").forEach((t) =>

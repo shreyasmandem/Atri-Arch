@@ -1381,46 +1381,135 @@ body[data-phase="review"]  .review  { display: grid; }
   background-size: 12px; background-repeat: no-repeat; padding-right: 32px;
 }
 
-/* Stance Slider */
+/* Stance Slider (Claude Code Aesthetic) */
 .stance-block { margin-bottom: 24px; }
 .stance-read {
-  display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px;
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px;
+}
+.stance-header {
+  display: flex; align-items: center; justify-content: space-between;
 }
 .stance-badge {
-  display: inline-block; font-size: 12px; font-weight: 600; color: var(--ochre);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(229, 169, 88, 0.12);
+  border: 1px solid rgba(229, 169, 88, 0.35);
+  font-size: 12px;
+  font-weight: 600;
+  color: #F5D77F;
   letter-spacing: -0.01em;
+  box-shadow: 0 0 12px rgba(229, 169, 88, 0.15);
+  width: fit-content;
+  transition: all 0.25s ease;
+}
+.stance-spark {
+  color: #FFE680;
+  font-size: 11px;
+  animation: sparkleTwinkle 2.4s ease-in-out infinite alternate;
 }
 .stance-desc {
   margin: 0; color: var(--chalk-3); font-size: 12px; line-height: 1.5;
 }
 
-.slider-container { padding: 4px 0; }
-.stance { appearance: none; width: 100%; height: 28px; background: none; cursor: pointer; outline: none; }
-.stance::-webkit-slider-runnable-track {
-  height: 4px; border-radius: 4px;
-  background: linear-gradient(90deg, var(--indigo) 0%, var(--ochre) 100%);
+.slider-container { padding: 8px 0 4px; }
+.stance { appearance: none; width: 100%; height: 26px; background: none; cursor: pointer; outline: none; }
+
+/* Claude Code Glowing Gradient Rail */
+.stance::-webkit-slider-runnable-track,
+.stance.stance--claude::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 25%, #E5A958 65%, #F5D77F 100%);
+  box-shadow: 0 0 10px rgba(229, 169, 88, 0.25), inset 0 1px 1px rgba(0, 0, 0, 0.4);
 }
-.stance::-moz-range-track {
-  height: 4px; border-radius: 4px;
-  background: linear-gradient(90deg, var(--indigo) 0%, var(--ochre) 100%);
+.stance::-moz-range-track,
+.stance.stance--claude::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 25%, #E5A958 65%, #F5D77F 100%);
+  box-shadow: 0 0 10px rgba(229, 169, 88, 0.25);
 }
-.stance::-webkit-slider-thumb {
-  appearance: none; width: 18px; height: 18px; margin-top: -7px;
+
+/* Claude Code Floating Bead Thumb with Radiant Halo Glow */
+.stance::-webkit-slider-thumb,
+.stance.stance--claude::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
   border-radius: 50%;
   background: #FFFFFF;
-  border: 2px solid var(--earth-2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.4);
-  transition: transform .15s var(--ease-spring);
+  border: 2.5px solid #141118;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 0 10px rgba(255, 255, 255, 0.9),
+    0 0 18px rgba(245, 215, 127, 0.75),
+    0 2px 6px rgba(0, 0, 0, 0.8);
+  cursor: grab;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
 }
-.stance::-webkit-slider-thumb:hover { transform: scale(1.15); }
-.stance::-moz-range-thumb {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: #FFFFFF; border: 2px solid var(--earth-2);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+.stance::-webkit-slider-thumb:hover,
+.stance.stance--claude::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  box-shadow:
+    0 0 0 1.5px rgba(255, 255, 255, 1),
+    0 0 14px rgba(255, 255, 255, 1),
+    0 0 24px rgba(245, 215, 127, 0.95),
+    0 3px 8px rgba(0, 0, 0, 0.9);
 }
+.stance::-webkit-slider-thumb:active,
+.stance.stance--claude::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.1);
+}
+.stance::-moz-range-thumb,
+.stance.stance--claude::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 2.5px solid #141118;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 0 10px rgba(255, 255, 255, 0.9),
+    0 0 18px rgba(245, 215, 127, 0.75),
+    0 2px 6px rgba(0, 0, 0, 0.8);
+  cursor: grab;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+/* Claude Code 5-Station Scales */
 .stance-scale {
-  display: flex; justify-content: space-between; margin-top: 6px;
-  font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--chalk-4);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-family: var(--num);
+  font-size: 9.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.38);
+  user-select: none;
+}
+.stance-scale span {
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+.stance-scale span:hover {
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.04);
+}
+.stance-scale span.is-active {
+  color: #F5D77F;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(245, 215, 127, 0.75);
+  background: rgba(229, 169, 88, 0.08);
+  transform: translateY(-1px);
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */
@@ -1495,272 +1584,78 @@ body[data-phase="review"]  .review  { display: grid; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   CLAUDE CODE ULTRA ANIMATION: ATRI GENERATIVE SYNTHESIS CTA
+   ATRI GENERATIVE SYNTHESIS CTA (Refined, Sleek Obsidian Glass)
    ═══════════════════════════════════════════════════════════════════════ */
-
-/* ═══════════════════════════════════════════════════════════════════════
-   CLAUDE CODE ULTRA ANIMATION: ATRI GENERATIVE SYNTHESIS CTA
-   (Compact Sleek Height · Laser Animation Only When Loading)
-   ═══════════════════════════════════════════════════════════════════════ */
-
-.studio-cta-wrap {
-  position: relative;
-  margin-top: 10px;
-  width: 100%;
-}
-
-/* ══════════════════════ CLAUDE CODE ULTRA CTA BUTTON ══════════════════════ */
 
 .studio-cta-wrap {
   position: relative;
   width: 100%;
   max-width: 680px;
-  margin: 24px auto 0;
+  margin: 22px auto 0;
 }
 
-/* 1. Ambient Breathing Golden Aura */
-.convene-aura {
-  position: absolute;
-  inset: -4px -8px;
-  background: radial-gradient(ellipse 70% 60% at 50% 50%, rgba(245, 215, 127, 0.3) 0%, rgba(229, 169, 88, 0.16) 45%, rgba(228, 105, 76, 0.05) 70%, transparent 85%);
-  filter: blur(20px);
-  border-radius: 20px;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.75;
-  animation: conveneAuraBreathe 3.6s ease-in-out infinite alternate;
-  transition: opacity 0.35s ease, filter 0.35s ease;
-}
-
-@keyframes conveneAuraBreathe {
-  0% {
-    opacity: 0.55;
-    transform: scale(0.985);
-    filter: blur(16px);
-  }
-  100% {
-    opacity: 0.95;
-    transform: scale(1.02);
-    filter: blur(24px);
-  }
-}
-
-.convene:hover:not([disabled]) ~ .convene-aura,
-.studio-cta-wrap:has(.convene:hover:not([disabled])) .convene-aura {
-  opacity: 1;
-  filter: blur(26px);
-}
-
-.convene.is-loading ~ .convene-aura,
-.convene[disabled] ~ .convene-aura,
-.studio-cta-wrap:has(.convene.is-loading) .convene-aura,
-.studio-cta-wrap:has(.convene[disabled]) .convene-aura {
-  opacity: 1 !important;
-  animation: conveneAuraBreathe 1.8s ease-in-out infinite alternate;
-  filter: blur(30px);
-}
-
-/* 2. Core CTA Button: Compact Obsidian Luxury Glass */
-.convene {
+/* Core CTA Button: Clean Obsidian Luxury Glass */
+.convene,
+.convene--refined {
   position: relative;
   width: 100%;
   cursor: pointer;
   text-align: left;
-  background: linear-gradient(145deg, rgba(22, 19, 26, 0.96) 0%, rgba(13, 12, 16, 0.98) 55%, rgba(20, 16, 22, 0.96) 100%) !important;
+  background: linear-gradient(145deg, rgba(20, 18, 26, 0.95) 0%, rgba(12, 11, 16, 0.98) 100%) !important;
   color: var(--chalk) !important;
-  border: 1px solid rgba(229, 169, 88, 0.38) !important;
+  border: 1px solid rgba(229, 169, 88, 0.32) !important;
   border-radius: 12px;
-  padding: 11px 20px 10px;
+  padding: 13px 22px;
   box-shadow: 
-    0 16px 36px -8px rgba(0, 0, 0, 0.8),
-    0 4px 14px -4px rgba(229, 169, 88, 0.15),
-    inset 0 1px 1px 0 rgba(255, 240, 200, 0.3);
+    0 12px 28px -6px rgba(0, 0, 0, 0.75),
+    0 2px 8px -2px rgba(229, 169, 88, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 0.25s ease,
-              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              background 0.25s ease;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease,
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.22s ease;
   overflow: hidden;
   isolation: isolate;
   z-index: 1;
 }
 
-/* Idle Hover */
-.convene:hover:not([disabled]):not(.is-loading) {
+/* Clean Hover */
+.convene:hover:not([disabled]):not(.is-loading),
+.convene--refined:hover:not([disabled]):not(.is-loading) {
   transform: translateY(-1.5px);
-  border-color: rgba(245, 215, 127, 0.8) !important;
+  border-color: rgba(245, 215, 127, 0.65) !important;
   box-shadow: 
-    0 20px 42px -6px rgba(0, 0, 0, 0.85),
-    0 6px 20px -4px rgba(229, 169, 88, 0.3),
-    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.5);
-  background: linear-gradient(145deg, rgba(26, 22, 32, 0.97) 0%, rgba(15, 13, 19, 0.98) 55%, rgba(24, 18, 27, 0.97) 100%) !important;
+    0 16px 36px -6px rgba(0, 0, 0, 0.85),
+    0 4px 16px -2px rgba(229, 169, 88, 0.24),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  background: linear-gradient(145deg, rgba(25, 22, 32, 0.96) 0%, rgba(14, 13, 19, 0.98) 100%) !important;
 }
 
-.convene:active:not([disabled]) {
+.convene:active:not([disabled]),
+.convene--refined:active:not([disabled]) {
   transform: translateY(0.5px) scale(0.994);
   box-shadow: 
-    0 12px 28px -6px rgba(0, 0, 0, 0.9),
-    0 4px 12px -2px rgba(229, 169, 88, 0.2);
+    0 8px 20px -4px rgba(0, 0, 0, 0.85),
+    0 2px 6px -1px rgba(229, 169, 88, 0.15);
 }
 
-/* 3. Claude Code Ultra Perimeter Border Beam (Dual Orbiting Radiant Laser) */
-.convene-beam {
-  position: absolute;
-  inset: -1.5px;
-  border-radius: inherit;
-  padding: 1.5px;
-  pointer-events: none;
-  z-index: 2;
-  overflow: hidden;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 7px rgba(245, 215, 127, 0.85));
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  transition: opacity 0.3s ease, filter 0.3s ease;
-}
-
-.convene-beam::before {
-  content: '';
-  position: absolute;
-  top: -150%;
-  left: -150%;
-  width: 400%;
-  height: 400%;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    transparent 55deg,
-    rgba(229, 169, 88, 0.3) 85deg,
-    #E5A958 110deg,
-    #FFF2B2 140deg,
-    #FFFFFF 158deg,
-    transparent 164deg,
-    transparent 235deg,
-    rgba(229, 169, 88, 0.3) 265deg,
-    #E5A958 290deg,
-    #FFF2B2 320deg,
-    #FFFFFF 338deg,
-    transparent 344deg
-  );
-  animation: conveneBeamOrbit 3.8s linear infinite;
-  transform-origin: center center;
-}
-
-@keyframes conveneBeamOrbit {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.convene:hover:not([disabled]) .convene-beam {
-  opacity: 1;
-  filter: drop-shadow(0 0 10px rgba(245, 215, 127, 1)) drop-shadow(0 0 4px #FFFFFF);
-}
-
-.convene:hover:not([disabled]) .convene-beam::before {
-  animation-duration: 2.2s;
-}
-
-/* ─── LOADING STATE: SUPERCHARGED HYPER LASER ─── */
+/* Loading State */
 .convene.is-loading,
 .convene[disabled] {
   cursor: progress;
-  border-color: rgba(245, 215, 127, 0.9) !important;
-  background: linear-gradient(145deg, rgba(28, 22, 34, 0.98) 0%, rgba(16, 13, 22, 0.99) 55%, rgba(26, 18, 30, 0.98) 100%) !important;
+  border-color: rgba(245, 215, 127, 0.6) !important;
+  background: linear-gradient(145deg, rgba(24, 20, 30, 0.96) 0%, rgba(15, 13, 20, 0.98) 100%) !important;
   box-shadow: 
-    0 24px 60px -8px rgba(0, 0, 0, 0.92),
-    0 8px 30px -2px rgba(229, 169, 88, 0.42),
-    inset 0 1px 2px 0 rgba(255, 255, 255, 0.6) !important;
+    0 14px 32px -6px rgba(0, 0, 0, 0.8),
+    0 4px 14px -2px rgba(229, 169, 88, 0.2);
 }
 
-.convene.is-loading .convene-beam,
-.convene[disabled] .convene-beam {
-  opacity: 1 !important;
-  filter: drop-shadow(0 0 14px rgba(245, 215, 127, 1)) drop-shadow(0 0 6px #FFFFFF);
-}
-
-.convene.is-loading .convene-beam::before,
-.convene[disabled] .convene-beam::before {
-  animation: conveneBeamOrbit 1.2s linear infinite !important;
-}
-
-.convene.is-loading ~ .convene-aura,
-.studio-cta-wrap:has(.convene.is-loading) .convene-aura {
-  opacity: 1 !important;
-  filter: blur(28px) !important;
-  animation: conveneAuraBreathe 1.6s ease-in-out infinite alternate !important;
-}
-
-
-/* 4. CAD Precision Reticles */
-.cad-reticle {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  pointer-events: none;
-  z-index: 3;
-  opacity: 0.5;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.cad-reticle--tl { top: 5px; left: 5px; border-top: 1.5px solid #F5D77F; border-left: 1.5px solid #F5D77F; }
-.cad-reticle--tr { top: 5px; right: 5px; border-top: 1.5px solid #F5D77F; border-right: 1.5px solid #F5D77F; }
-.cad-reticle--bl { bottom: 5px; left: 5px; border-bottom: 1.5px solid #F5D77F; border-left: 1.5px solid #F5D77F; }
-.cad-reticle--br { bottom: 5px; right: 5px; border-bottom: 1.5px solid #F5D77F; border-right: 1.5px solid #F5D77F; }
-
-.convene:hover:not([disabled]) .cad-reticle,
-.convene.is-loading .cad-reticle {
-  opacity: 1;
-  filter: drop-shadow(0 0 5px #F5D77F);
-}
-
-.convene:hover:not([disabled]) .cad-reticle--tl { transform: translate(-1px, -1px); }
-.convene:hover:not([disabled]) .cad-reticle--tr { transform: translate(1px, -1px); }
-.convene:hover:not([disabled]) .cad-reticle--bl { transform: translate(-1px, 1px); }
-.convene:hover:not([disabled]) .cad-reticle--br { transform: translate(1px, 1px); }
-
-/* 5. Architectural Blueprint Grid & Shimmer */
-.convene-grid-bg {
-  position: absolute;
-  inset: 0;
-  background-image: 
-    radial-gradient(rgba(229, 169, 88, 0.1) 1px, transparent 1px),
-    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 14px 14px, 28px 28px, 28px 28px;
-  opacity: 0.35;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.convene-shimmer {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    115deg,
-    transparent 20%,
-    rgba(255, 235, 180, 0.03) 35%,
-    rgba(255, 255, 255, 0.1) 50%,
-    rgba(255, 235, 180, 0.03) 65%,
-    transparent 80%
-  );
-  background-size: 250% 100%;
-  pointer-events: none;
-  z-index: 1;
-  animation: conveneShimmerSweep 4.8s infinite cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes conveneShimmerSweep {
-  0% { background-position: -250% 0; }
-  40%, 100% { background-position: 250% 0; }
-}
-
-/* 6. Content Elements: Compact & Sleek Height */
+/* Content Elements */
 .convene__content {
   position: relative;
-  z-index: 3;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1772,108 +1667,76 @@ body[data-phase="review"]  .review  { display: grid; }
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 3px;
 }
 
 .convene__title-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .convene__spark {
   color: #FFE680;
-  font-size: 12px;
-  filter: drop-shadow(0 0 4px #FFE680);
-  animation: sparkleTwinkle 2.4s ease-in-out infinite alternate;
-}
-
-@keyframes sparkleTwinkle {
-  0% { transform: scale(0.8) rotate(0deg); opacity: 0.7; }
-  100% { transform: scale(1.2) rotate(45deg); opacity: 1; filter: drop-shadow(0 0 5px #FFE680); }
+  font-size: 13px;
+  filter: drop-shadow(0 0 4px rgba(245, 215, 127, 0.6));
 }
 
 .convene__title-text {
-  font-size: 15.5px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 650;
   letter-spacing: -0.01em;
-  background: linear-gradient(120deg, #FFFFFF 0%, #FFF2CC 25%, #E5A958 50%, #F5D77F 75%, #FFFFFF 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: conveneTextShine 5s ease-in-out infinite;
-  transition: all 0.3s ease;
-}
-
-@keyframes conveneTextShine {
-  0%, 65% { background-position: 0% center; }
-  100% { background-position: 200% center; }
+  color: #FFF6DE;
+  transition: color 0.2s ease;
 }
 
 .convene:hover:not([disabled]) .convene__title-text {
-  text-shadow: 0 0 24px rgba(245, 215, 127, 0.45);
-}
-
-.convene.is-loading .convene__title-text {
-  animation: conveneTextShine 2s ease-in-out infinite;
+  color: #FFFFFF;
+  text-shadow: 0 0 16px rgba(245, 215, 127, 0.35);
 }
 
 .convene__sub {
   font-family: var(--num);
   font-size: 11px;
   line-height: 1.35;
-  color: rgba(255, 255, 255, 0.58);
+  color: rgba(255, 255, 255, 0.52);
   font-weight: 450;
   transition: color 0.25s ease;
 }
 
 .convene:hover:not([disabled]) .convene__sub {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.78);
 }
 
-/* Compact Concentric Action Portal */
+/* Sleek Circular Action Arrow Portal */
 .convene__action-portal {
   position: relative;
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, rgba(245, 215, 127, 0.22) 0%, rgba(20, 18, 24, 0.85) 80%);
-  border: 1px solid rgba(229, 169, 88, 0.45);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(229, 169, 88, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #F5D77F;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 240, 200, 0.3);
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
 }
 
-.convene__portal-ring {
-  position: absolute;
-  inset: -3.5px;
-  border-radius: 50%;
-  border: 1px dashed rgba(229, 169, 88, 0.35);
-  animation: convenePortalSpin 14s linear infinite;
-  pointer-events: none;
-}
-
-@keyframes convenePortalSpin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .convene__arrow-svg {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), stroke 0.2s ease;
+  width: 15px;
+  height: 15px;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), stroke 0.2s ease;
 }
 
 .convene:hover:not([disabled]):not(.is-loading) .convene__action-portal {
+  background: rgba(229, 169, 88, 0.15);
   border-color: #F5D77F;
   color: #FFFFFF;
-  box-shadow: 0 0 14px rgba(245, 215, 127, 0.6);
-  transform: scale(1.08);
+  box-shadow: 0 0 12px rgba(229, 169, 88, 0.4);
+  transform: scale(1.06);
 }
 
 .convene:hover:not([disabled]):not(.is-loading) .convene__arrow-svg {
@@ -1883,20 +1746,12 @@ body[data-phase="review"]  .review  { display: grid; }
 
 .convene.is-loading .convene__action-portal,
 .convene[disabled] .convene__action-portal {
-  background: linear-gradient(135deg, #F5D77F 0%, #E5A958 100%);
-  border-color: #FFFFFF;
-  color: #07080B;
-  transform: scale(1.06);
-  box-shadow: 0 0 18px rgba(245, 215, 127, 0.7);
+  background: rgba(229, 169, 88, 0.2);
+  border-color: #F5D77F;
+  color: #F5D77F;
 }
 
-.convene.is-loading .convene__portal-ring,
-.convene[disabled] .convene__portal-ring {
-  animation-duration: 3s;
-  border-color: rgba(255, 255, 255, 0.7);
-}
-
-/* 7. Compact Ultra Engine Status Capsule */
+/* Engine Status Capsule */
 .engine-status-capsule {
   margin-top: 6px;
   display: flex;
