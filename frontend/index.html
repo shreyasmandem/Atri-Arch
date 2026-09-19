@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=both_visible_v5">
+<link rel="stylesheet" href="studio.css?v=basic_screen_v1">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -599,7 +599,39 @@
             </div>
           </fieldset>
 
-          <!-- Card 4: Architectural Style -->
+          <!-- Card 4: Vastu Stance (Claude Code Side Slider) -->
+          <fieldset class="form-card stance-block" id="vastu-card">
+            <legend class="form-card__head">
+              <div class="form-card__icon-badge form-card__icon-badge--gold">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+              </div>
+              <div>
+                <span class="form-card__title">Vastu Stance</span>
+                <span class="form-card__subtitle">Harmonize directional principles with functional structural geometry</span>
+              </div>
+            </legend>
+
+            <div class="stance-read">
+              <div class="stance-header">
+                <span class="stance-badge" id="stance-name"><span class="stance-spark">✦</span> Balanced</span>
+              </div>
+              <p class="stance-desc" id="stance-note">Classical Vastu principles and modern structural science carry equal weight.</p>
+            </div>
+
+            <div class="slider-container">
+              <input type="range" class="stance stance--claude" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+                     aria-label="Vastu stance from modern to orthodox">
+              <div class="stance-scale" id="stance-scale" aria-hidden="true">
+                <span data-val="0">Modern</span>
+                <span data-val="1">Advisory</span>
+                <span data-val="2" class="is-active">Balanced</span>
+                <span data-val="3">Strict</span>
+                <span data-val="4">Orthodox</span>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Card 5: Architectural Style -->
           <fieldset class="form-card">
             <legend class="form-card__head">
               <div class="form-card__icon-badge">
@@ -638,36 +670,6 @@
 
       </div>
 
-      <!-- ── FULL-WIDTH DOWN: VASTU STANCE ("vast should be down") ── -->
-      <fieldset class="form-card form-card--vastu-down stance-block">
-        <legend class="form-card__head">
-          <div class="form-card__icon-badge form-card__icon-badge--gold">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
-          </div>
-          <div>
-            <span class="form-card__title">Vastu Shastra Stance</span>
-            <span class="form-card__subtitle">Harmonize directional principles with functional structural geometry</span>
-          </div>
-        </legend>
-
-        <div class="vastu-down-grid">
-          <div class="stance-read">
-            <div class="stance-header">
-              <span class="stance-badge" id="stance-name">Balanced</span>
-            </div>
-            <p class="stance-desc" id="stance-note">Classical Vastu principles and modern structural science carry equal weight.</p>
-          </div>
-
-          <div class="slider-container">
-            <input type="range" class="stance" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
-                   aria-label="Vastu stance from modern to orthodox">
-            <div class="stance-scale" aria-hidden="true">
-              <span>Modern</span><span>Advisory</span><span>Balanced</span><span>Strict</span><span>Orthodox</span>
-            </div>
-          </div>
-        </div>
-      </fieldset>
-
       <!-- ── LIVE ARCHITECTURAL HUD SUMMARY BAR ── -->
       <div class="studio-hud studio-hud--bottom" id="studio-hud">
         <div class="hud-item" title="Calculated Ground Footprint">
@@ -692,35 +694,54 @@
         </div>
       </div>
 
-      <!-- ── ACTION CTA ── -->
+      <!-- ── ACTION CTA (Sleek, A Lil Less Designed) ── -->
       <div class="studio-cta-wrap">
-        <button type="submit" class="convene convene--studio" id="convene">
+        <button type="submit" class="convene convene--studio convene--refined" id="convene">
           <div class="convene__content">
-            <span class="convene__main">
-              <span>Generate Architectural Schemes</span>
-              <span class="arrow">→</span>
-            </span>
-            <span class="convene__sub" id="convene-sub">
-              Evaluating compliance, daylight, structural grids, Vastu, and material costs across candidate layouts
-            </span>
+            <div class="convene__body">
+              <div class="convene__title-row">
+                <span class="convene__spark">✦</span>
+                <span class="convene__title-text">Generate Architectural Schemes</span>
+              </div>
+              <span class="convene__sub" id="convene-sub">13 critics · 3 schemes · ₹0 to run</span>
+            </div>
+
+            <!-- Sleek Concentric Action Portal -->
+            <div class="convene__action-portal" aria-hidden="true">
+              <svg class="convene__arrow-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </div>
           </div>
         </button>
-        <p class="engine-note" id="engine-note">Connecting to architectural engine…</p>
+
+        <!-- Hidden slot for JS critic telemetry compatibility -->
+        <span id="convene-critics-status" style="display:none;" aria-hidden="true"></span>
+
+        <!-- Engine Status Capsule -->
+        <div class="engine-status-capsule" id="engine-status-capsule">
+          <span class="engine-dot" id="engine-dot"></span>
+          <p class="engine-note" id="engine-note">Connecting to architectural engine…</p>
+        </div>
       </div>
 
     </form>
   </div>
 </section>
 
-<!-- ══════════════════════ RUNNING ══════════════════════ -->
+<!-- ══════════════════════ RUNNING (BASIC CLEAN COMMITTEE SCREEN) ══════════════════════ -->
 <section class="running" id="running" aria-live="polite" aria-label="The committee is sitting">
   <div class="running__inner">
     <p class="sanskrit">Sabha</p>
     <h2 id="run-title">The committee is sitting</h2>
     <div class="run-track"><i id="run-fill"></i></div>
     <p class="run-stage" id="run-stage">Interpreting the brief…</p>
-    <ol class="run-critics" id="run-critics"></ol>
+    <ol class="run-critics" id="run-critics" hidden></ol>
     <div class="run-log" id="run-log"></div>
+    <div class="run-actions" id="restart" hidden>
+      <button type="button" class="ghost-btn" id="run-restart-btn">← Return to Studio</button>
+    </div>
   </div>
 </section>
 
@@ -826,6 +847,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js" type="module"></script>
+<script src="studio.js?v=basic_screen_v1" type="module"></script>
 </body>
 </html>
