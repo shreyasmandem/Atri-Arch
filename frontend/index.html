@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=both_visible_v5">
+<link rel="stylesheet" href="studio.css?v=claude_ultra_v1">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -694,18 +694,61 @@
 
       <!-- ── ACTION CTA ── -->
       <div class="studio-cta-wrap">
-        <button type="submit" class="convene convene--studio" id="convene">
+        <!-- Ambient Ultra Aura Glow -->
+        <div class="convene-aura" aria-hidden="true"></div>
+
+        <button type="submit" class="convene convene--studio convene--ultra" id="convene">
+          <!-- Animated Border Beam Runner (Continuous perimeter light loop) -->
+          <div class="convene-beam" aria-hidden="true"></div>
+
+          <!-- CAD Precision Reticle Corners -->
+          <span class="cad-reticle cad-reticle--tl" aria-hidden="true"></span>
+          <span class="cad-reticle cad-reticle--tr" aria-hidden="true"></span>
+          <span class="cad-reticle cad-reticle--bl" aria-hidden="true"></span>
+          <span class="cad-reticle cad-reticle--br" aria-hidden="true"></span>
+
+          <!-- Blueprint Coordinate Grid & Light Shimmer Wave -->
+          <div class="convene-grid-bg" aria-hidden="true"></div>
+          <div class="convene-shimmer" aria-hidden="true"></div>
+
           <div class="convene__content">
-            <span class="convene__main">
-              <span>Generate Architectural Schemes</span>
-              <span class="arrow">→</span>
-            </span>
+            <!-- Eyebrow: Claude Code Ultra Telemetry Badge -->
+            <div class="convene__eyebrow">
+              <span class="convene__badge">
+                <span class="convene__badge-spark">✦</span>
+                <span class="convene__badge-text">ATRI GENERATIVE ENGINE</span>
+              </span>
+              <span class="convene__telemetry">
+                <span class="telemetry-beacon"></span>
+                <span id="convene-critics-status">13 PARALLEL CRITICS ARMED</span>
+              </span>
+            </div>
+
+            <!-- Main Heading & Concentric Action Portal -->
+            <div class="convene__main">
+              <span class="convene__title-text">Generate Architectural Schemes</span>
+              <div class="convene__action-portal" aria-hidden="true">
+                <span class="convene__portal-ring"></span>
+                <span class="convene__portal-compass"></span>
+                <svg class="convene__arrow-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                  <polyline points="12 5 19 12 12 19"></polyline>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Live Subtitle -->
             <span class="convene__sub" id="convene-sub">
               Evaluating compliance, daylight, structural grids, Vastu, and material costs across candidate layouts
             </span>
           </div>
         </button>
-        <p class="engine-note" id="engine-note">Connecting to architectural engine…</p>
+
+        <!-- Ultra Engine Status Capsule -->
+        <div class="engine-status-capsule" id="engine-status-capsule">
+          <span class="engine-dot" id="engine-dot"></span>
+          <p class="engine-note" id="engine-note">Connecting to architectural engine…</p>
+        </div>
       </div>
 
     </form>
@@ -826,6 +869,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js" type="module"></script>
+<script src="studio.js?v=claude_ultra_v1" type="module"></script>
 </body>
 </html>

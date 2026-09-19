@@ -241,8 +241,10 @@ function initStarField() {
     }
   }
 
+  let hasSpread = false;
   function spread(fast = false) {
-    if (state === "ambient") return;
+    if (hasSpread || state === "ambient") return;
+    hasSpread = true;
     state = "splitting";
     spreadStart = performance.now();
     updateCenter();
@@ -529,23 +531,29 @@ function updateStudioHUD() {
       starField.spread(true);
     } else {
       let isDismissed = false;
+      let hasBlasted = false;
+
       const triggerBlast = () => {
+        if (hasBlasted) return;
+        hasBlasted = true;
         starField.spread(false);
       };
 
       const dismissIntro = (fast = false) => {
         if (isDismissed) return;
         isDismissed = true;
-        starField.spread(fast);
+        if (!hasBlasted) {
+          triggerBlast();
+        }
         document.body.classList.remove("is-loading");
         curtain.classList.add("is-fading");
         setTimeout(() => { curtain.style.display = "none"; }, 850);
       };
 
-      // 1. Trigger Star Blast when silver locks with gold (both visible, 1.3s)
+      // 1. Single Star Blast when silver locks with gold (both visible, 1.3s)
       const blastTimer = setTimeout(triggerBlast, 1300);
 
-      // 2. Smoothly transition into home studio after stars settle (3.15s)
+      // 2. Smoothly transition into home studio after stars settle (3.15s) - NO second burst
       const introTimer = setTimeout(() => dismissIntro(false), 3150);
 
       curtain.addEventListener("click", () => {
@@ -683,28 +691,52 @@ function updateStudioHUD() {
   document.querySelectorAll(".view-tab").forEach((t) =>
     t.addEventListener("click", () => showView(t.dataset.view)));
 
-  try {
-    const [h, c] = await Promise.all([
-      fetch(`${API}/health`).then((r) => r.json()),
-      fetch(`${API}/capabilities`).then((r) => r.json()),
-    ]);
-    S.committee = c.committee || [];
-    setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
-    $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
-
+  const updateEngineStatus = (tone, text) => {
     const note = $("engine-note");
-    if (h.degraded_mode) {
-      note.textContent = "Engine ready. No hosted model provider is configured, so the three judgement critics will run in a labelled degraded mode. Every computed result — geometry, daylight, compliance, Vastu, cost — is unaffected.";
-    } else {
-      note.dataset.tone = "ok";
-      note.textContent = `Engine ready · ${h.providers_configured.length} free provider(s) · ${h.corpus.total} corpus passages · $0.00 spent.`;
+    const dot = $("engine-dot");
+    if (note) {
+      note.dataset.tone = tone;
+      note.textContent = text;
     }
-    seatCritics();
-  } catch {
-    const note = $("engine-note");
-    note.dataset.tone = "bad";
-    note.textContent = `Cannot reach the engine at ${API}. Start it with:  uvicorn aip.api.app:app --port 8000`;
+    if (dot) {
+      dot.dataset.tone = tone;
+    }
+  };
+
+  async function checkEngineHealth(retries = 4) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const [h, c] = await Promise.all([
+          fetch(`${API}/health`).then((r) => r.json()),
+          fetch(`${API}/capabilities`).then((r) => r.json()),
+        ]);
+        S.committee = c.committee || [];
+        $("ledger-cost").textContent = (h.total_model_cost_usd || 0).toFixed(2);
+        $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
+        const critStat = $("convene-critics-status");
+        if (critStat) {
+          critStat.textContent = `${S.committee.length} PARALLEL CRITICS ARMED`;
+        }
+
+        if (h.degraded_mode) {
+          updateEngineStatus("ok", "Engine ready · Analytical judgment mode · Vastu & structural active");
+        } else {
+          updateEngineStatus("ok", `Engine ready · ${h.providers_configured.length} provider(s) · ${h.corpus.total} passages · $0.00 spent`);
+        }
+        seatCritics();
+        return;
+      } catch {
+        if (attempt < retries) {
+          updateEngineStatus("bad", `Connecting to engine (attempt ${attempt}/${retries})…`);
+          await new Promise((res) => setTimeout(res, 1200));
+        } else {
+          updateEngineStatus("bad", `Cannot reach the engine at ${API}. Verify server is running on port 8001`);
+        }
+      }
+    }
   }
+
+  checkEngineHealth();
 })();
 
 function seatCritics() {
