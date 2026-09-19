@@ -1544,16 +1544,16 @@ body[data-phase="review"]  .review  { display: grid; }
   width: 100%;
   cursor: pointer;
   text-align: left;
-  background: linear-gradient(145deg, rgba(22, 19, 26, 0.95) 0%, rgba(13, 12, 16, 0.98) 55%, rgba(20, 16, 22, 0.96) 100%);
-  color: var(--chalk);
-  border: 1px solid rgba(229, 169, 88, 0.38);
+  background: linear-gradient(145deg, rgba(22, 19, 26, 0.96) 0%, rgba(13, 12, 16, 0.98) 55%, rgba(20, 16, 22, 0.96) 100%) !important;
+  color: var(--chalk) !important;
+  border: 1px solid rgba(229, 169, 88, 0.4) !important;
   border-radius: var(--r-lg);
   padding: 24px 28px 22px;
   box-shadow: 
-    0 24px 60px -10px rgba(0, 0, 0, 0.82),
-    0 8px 24px -4px rgba(229, 169, 88, 0.16),
+    0 24px 60px -10px rgba(0, 0, 0, 0.85),
+    0 8px 24px -4px rgba(229, 169, 88, 0.18),
     inset 0 1px 1px 0 rgba(255, 240, 200, 0.35),
-    inset 0 0 28px 0 rgba(229, 169, 88, 0.05);
+    inset 0 0 28px 0 rgba(229, 169, 88, 0.06);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
@@ -1567,13 +1567,13 @@ body[data-phase="review"]  .review  { display: grid; }
 
 .convene:hover:not([disabled]) {
   transform: translateY(-2.5px);
-  border-color: rgba(245, 215, 127, 0.75);
+  border-color: rgba(245, 215, 127, 0.85) !important;
   box-shadow: 
-    0 32px 75px -10px rgba(0, 0, 0, 0.88),
-    0 16px 36px -4px rgba(229, 169, 88, 0.32),
-    inset 0 1px 2px 0 rgba(255, 255, 255, 0.6),
-    inset 0 0 32px 0 rgba(229, 169, 88, 0.12);
-  background: linear-gradient(145deg, rgba(26, 22, 32, 0.97) 0%, rgba(15, 13, 19, 0.98) 55%, rgba(24, 18, 27, 0.97) 100%);
+    0 32px 75px -10px rgba(0, 0, 0, 0.9),
+    0 16px 36px -4px rgba(229, 169, 88, 0.38),
+    inset 0 1px 2px 0 rgba(255, 255, 255, 0.65),
+    inset 0 0 32px 0 rgba(229, 169, 88, 0.15);
+  background: linear-gradient(145deg, rgba(28, 23, 34, 0.97) 0%, rgba(16, 14, 21, 0.98) 55%, rgba(26, 20, 30, 0.97) 100%) !important;
 }
 
 .convene:active:not([disabled]) {
@@ -1589,19 +1589,21 @@ body[data-phase="review"]  .review  { display: grid; }
   cursor: progress;
 }
 
-/* 3. Claude Code Ultra Perimeter Border Beam */
+/* 3. Claude Code Ultra Perimeter Border Beam (Dual Orbiting Radiant Laser) */
 .convene-beam {
   position: absolute;
-  inset: -1.5px;
+  inset: -2px;
   border-radius: inherit;
-  padding: 1.5px;
+  padding: 2.2px;
   pointer-events: none;
   z-index: 2;
   overflow: hidden;
+  filter: drop-shadow(0 0 6px rgba(245, 215, 127, 0.65));
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
+  transition: filter 0.3s ease;
 }
 
 .convene-beam::before {
@@ -1614,13 +1616,18 @@ body[data-phase="review"]  .review  { display: grid; }
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
-    transparent 265deg,
-    rgba(229, 169, 88, 0.25) 290deg,
-    #DFA85C 315deg,
-    #F5D77F 335deg,
-    #FFFCE6 350deg,
-    #FFFFFF 356deg,
-    transparent 360deg
+    transparent 70deg,
+    rgba(229, 169, 88, 0.25) 95deg,
+    #E5A958 120deg,
+    #FCE082 145deg,
+    #FFFFFF 160deg,
+    transparent 165deg,
+    transparent 250deg,
+    rgba(229, 169, 88, 0.25) 275deg,
+    #E5A958 300deg,
+    #FCE082 325deg,
+    #FFFFFF 340deg,
+    transparent 345deg
   );
   animation: conveneBeamOrbit 4.5s linear infinite;
   transform-origin: center center;
@@ -1631,17 +1638,27 @@ body[data-phase="review"]  .review  { display: grid; }
   100% { transform: rotate(360deg); }
 }
 
+.convene:hover:not([disabled]) .convene-beam {
+  filter: drop-shadow(0 0 10px rgba(255, 235, 160, 0.95));
+}
+
 .convene:hover:not([disabled]) .convene-beam::before {
-  animation-duration: 2.2s;
+  animation-duration: 2s;
   background: conic-gradient(
     from 0deg,
     transparent 0deg,
+    transparent 60deg,
+    rgba(229, 169, 88, 0.35) 90deg,
+    #E5A958 115deg,
+    #FFF2B2 145deg,
+    #FFFFFF 160deg,
+    transparent 165deg,
     transparent 240deg,
-    rgba(229, 169, 88, 0.35) 280deg,
-    #E5A958 310deg,
-    #F5D77F 335deg,
-    #FFFFFF 355deg,
-    transparent 360deg
+    rgba(229, 169, 88, 0.35) 270deg,
+    #E5A958 295deg,
+    #FFF2B2 325deg,
+    #FFFFFF 340deg,
+    transparent 345deg
   );
 }
 
