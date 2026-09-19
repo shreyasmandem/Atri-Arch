@@ -1954,50 +1954,311 @@ body[data-phase="review"]  .review  { display: grid; }
   color: var(--hingula);
 }
 
-/* ═══ RUNNING ════════════════════════════════════════════════════════ */
+/* ═══ RUNNING (CLAUDE CODE ULTRA ARCHITECTURAL REACTOR) ══════════════════ */
 
 .running {
-  position: fixed; inset: var(--crown-h) 0 0 0;
-  place-items: center; padding: 5vh 5vw; overflow-y: auto;
-  background: var(--bg-base);
-}
-.running__inner { width: min(760px, 100%); }
-.running h2 {
-  margin: 6px 0 22px; font-size: clamp(22px, 2.4vw, 30px);
-  font-weight: 600; letter-spacing: -0.02em;
+  position: fixed;
+  inset: var(--crown-h) 0 0 0;
+  display: grid;
+  place-items: center;
+  padding: 4vh 4vw;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 45%, rgba(20, 16, 26, 0.85) 0%, var(--bg-base) 80%);
+  z-index: 5;
 }
 
-.run-track { height: 3px; border-radius: 3px; background: var(--rule); margin-bottom: 12px; overflow: hidden; }
+/* 1. Ambient Breathing Cosmic Halo behind the Reactor Card */
+.running-aura {
+  position: absolute;
+  width: min(840px, 94vw);
+  height: min(620px, 86vh);
+  background: radial-gradient(ellipse 65% 55% at 50% 50%, rgba(245, 215, 127, 0.32) 0%, rgba(229, 169, 88, 0.2) 40%, rgba(228, 105, 76, 0.08) 65%, transparent 80%);
+  filter: blur(52px);
+  border-radius: 48px;
+  pointer-events: none;
+  z-index: 0;
+  animation: runningAuraBreathe 4s ease-in-out infinite alternate;
+}
+
+@keyframes runningAuraBreathe {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.97);
+    filter: blur(44px);
+  }
+  100% {
+    opacity: 0.95;
+    transform: scale(1.03);
+    filter: blur(60px);
+  }
+}
+
+/* 2. Core Synthesis Card: Obsidian Luxury Glass */
+.running__inner {
+  position: relative;
+  width: min(800px, 94vw);
+  background: linear-gradient(150deg, rgba(22, 18, 28, 0.96) 0%, rgba(12, 11, 17, 0.98) 50%, rgba(18, 14, 24, 0.96) 100%);
+  border: 1px solid rgba(229, 169, 88, 0.4);
+  border-radius: 20px;
+  padding: 34px 40px;
+  box-shadow: 
+    0 32px 80px -12px rgba(0, 0, 0, 0.92),
+    0 12px 32px -4px rgba(229, 169, 88, 0.2),
+    inset 0 1px 2px 0 rgba(255, 240, 200, 0.45),
+    inset 0 0 36px 0 rgba(229, 169, 88, 0.06);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  overflow: hidden;
+  isolation: isolate;
+  z-index: 1;
+}
+
+/* 3. Claude Code Ultra Perimeter Border Beam (Dual Orbiting Radiant Laser) */
+.running-beam {
+  position: absolute;
+  inset: -2.5px;
+  border-radius: inherit;
+  padding: 2.5px;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+  filter: drop-shadow(0 0 10px rgba(245, 215, 127, 0.95));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.running-beam::before {
+  content: '';
+  position: absolute;
+  top: -150%;
+  left: -150%;
+  width: 400%;
+  height: 400%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 60deg,
+    rgba(229, 169, 88, 0.35) 90deg,
+    #E5A958 115deg,
+    #FFF2B2 145deg,
+    #FFFFFF 160deg,
+    transparent 165deg,
+    transparent 240deg,
+    rgba(229, 169, 88, 0.35) 270deg,
+    #E5A958 295deg,
+    #FFF2B2 325deg,
+    #FFFFFF 340deg,
+    transparent 345deg
+  );
+  animation: conveneBeamOrbit 3s linear infinite;
+  transform-origin: center center;
+}
+
+/* 4. CAD Precision Reticles on the 4 Corners */
+.running__inner .cad-reticle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 6px #F5D77F);
+}
+.running__inner .cad-reticle--tl { top: 10px; left: 10px; border-top: 2px solid #F5D77F; border-left: 2px solid #F5D77F; }
+.running__inner .cad-reticle--tr { top: 10px; right: 10px; border-top: 2px solid #F5D77F; border-right: 2px solid #F5D77F; }
+.running__inner .cad-reticle--bl { bottom: 10px; left: 10px; border-bottom: 2px solid #F5D77F; border-left: 2px solid #F5D77F; }
+.running__inner .cad-reticle--br { bottom: 10px; right: 10px; border-bottom: 2px solid #F5D77F; border-right: 2px solid #F5D77F; }
+
+/* 5. Architectural Blueprint Grid Overlay & Surface Shimmer */
+.running-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(rgba(229, 169, 88, 0.12) 1px, transparent 1px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 16px 16px, 32px 32px, 32px 32px;
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.running-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(255, 235, 180, 0.04) 35%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 235, 180, 0.04) 65%,
+    transparent 80%
+  );
+  background-size: 250% 100%;
+  animation: conveneShimmerSweep 4.5s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 6. Content Elements & Typography */
+.running__content {
+  position: relative;
+  z-index: 3;
+}
+
+.running__eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.running__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(229, 169, 88, 0.15);
+  border: 1px solid rgba(229, 169, 88, 0.4);
+  font-family: var(--num);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #F5D77F;
+  text-transform: uppercase;
+}
+
+.running__pill-spark {
+  color: #FFE680;
+  animation: sparkleTwinkle 2s ease-in-out infinite alternate;
+}
+
+.running__telemetry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--num);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.06em;
+  font-weight: 550;
+}
+
+.running__telemetry .sanskrit {
+  margin: 0;
+  font-size: 12px;
+  color: #E5A958;
+  font-weight: 600;
+}
+
+.telemetry-sep {
+  opacity: 0.4;
+}
+
+.running h2 {
+  margin: 0 0 16px;
+  font-size: clamp(24px, 2.6vw, 32px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, #FFFFFF 0%, #FFF2CC 25%, #E5A958 50%, #F5D77F 75%, #FFFFFF 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: conveneTextShine 4s ease-in-out infinite;
+  text-shadow: 0 0 32px rgba(245, 215, 127, 0.4);
+}
+
+/* 7. Laser Beam Progress Track */
+.run-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 14px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
 .run-track i {
-  display: block; height: 100%; background: linear-gradient(90deg, var(--indigo), var(--ochre));
-  transform: scaleX(0); transform-origin: left;
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7FA3D4 0%, #DFA85C 50%, #F5D77F 85%, #FFFFFF 100%);
+  box-shadow: 0 0 14px rgba(245, 215, 127, 0.85);
+  transform: scaleX(0);
+  transform-origin: left;
   transition: transform .5s var(--ease);
 }
-.run-stage { margin: 0 0 26px; font-family: var(--num); font-size: 12.5px; color: var(--chalk-2); }
 
+.run-stage {
+  margin: 0 0 24px;
+  font-family: var(--num);
+  font-size: 13px;
+  color: #E5A958;
+  font-weight: 550;
+  letter-spacing: 0.02em;
+}
+
+/* 8. Critics Matrix & Log Terminal */
 .run-critics {
-  list-style: none; margin: 0 0 24px; padding: 0;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px;
-  background: transparent;
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px;
 }
-.rc {
-  background: var(--bg-card); border: 1px solid var(--rule); border-radius: var(--r-sm);
-  padding: 12px 14px; display: flex; align-items: center; gap: 10px;
-  opacity: .35; transition: opacity .45s var(--ease), background .3s var(--ease);
-}
-.rc.is-in { opacity: 1; border-color: rgba(255,255,255,0.18); }
-.rc__g { width: 7px; height: 7px; border-radius: 50%; border: 1px solid currentColor; flex: 0 0 auto; }
-.rc.is-in .rc__g { background: currentColor; box-shadow: 0 0 8px currentColor; }
 
-.rc__n { font-size: 12px; color: var(--chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rc__s { margin-left: auto; font-family: var(--num); font-size: 12px; font-weight: 600; color: var(--chalk); }
-.rc[data-pig=indigo]{color:var(--indigo)} .rc[data-pig=hingula]{color:var(--hingula)}
-.rc[data-pig=ochre]{color:var(--ochre)} .rc[data-pig=orpiment]{color:var(--orpiment)}
+.rc {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: .38;
+  transition: all .35s var(--ease);
+}
+
+.rc.is-in {
+  opacity: 1;
+  background: rgba(229, 169, 88, 0.08);
+  border-color: rgba(245, 215, 127, 0.35);
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.5);
+}
+
+.rc__g {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  flex: 0 0 auto;
+}
+
+.rc.is-in .rc__g {
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
 
 .run-log {
-  font-family: var(--num); font-size: 11.5px; line-height: 1.85; color: var(--chalk-3);
-  max-height: 26vh; overflow-y: auto; border-top: 1px solid var(--rule); padding-top: 14px;
+  font-family: var(--num);
+  font-size: 11.5px;
+  line-height: 1.85;
+  color: rgba(255, 255, 255, 0.62);
+  max-height: 24vh;
+  overflow-y: auto;
+  border-top: 1px solid rgba(229, 169, 88, 0.2);
+  padding-top: 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--r-sm);
+  padding: 12px 16px;
 }
+
 .run-log p { margin: 0; }
 .run-log b { color: var(--chalk-2); font-weight: 600; }
 
