@@ -1693,35 +1693,6 @@ body[data-phase="review"]  .review  { display: grid; }
   animation: conveneAuraBreathe 1.6s ease-in-out infinite alternate !important;
 }
 
-/* Laser Progress Bar Track inside Down Button */
-.convene__progress-track {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  z-index: 4;
-  border-radius: 0 0 12px 12px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.convene.is-loading .convene__progress-track {
-  opacity: 1;
-}
-
-.convene__progress-fill {
-  display: block;
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(90deg, #7FA3D4 0%, #DFA85C 45%, #F5D77F 80%, #FFFFFF 100%);
-  box-shadow: 0 0 10px rgba(245, 215, 127, 0.95);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
 
 /* 4. CAD Precision Reticles */
 .cad-reticle {
@@ -1999,10 +1970,544 @@ body[data-phase="review"]  .review  { display: grid; }
   font-weight: 550;
 }
 
-/* ═══ RUNNING (DISABLED: Loading is 100% inline on down button, no 2nd page) ═══ */
-.running,
-body[data-phase="running"] .running {
-  display: none !important;
+/* ═══ RUNNING (CLAUDE CODE ULTRA GOLDEN ASTROLOGY SYNTHESIS REACTOR) ═══ */
+
+.running {
+  position: fixed;
+  inset: var(--crown-h) 0 0 0;
+  display: grid;
+  place-items: center;
+  padding: 4vh 4vw;
+  overflow-y: auto;
+  background: radial-gradient(circle at 50% 45%, rgba(20, 16, 26, 0.85) 0%, var(--bg-base) 80%);
+  z-index: 5;
+}
+
+/* 1. Ambient Breathing Cosmic Halo */
+.running-aura {
+  position: absolute;
+  width: min(860px, 94vw);
+  height: min(640px, 88vh);
+  background: radial-gradient(ellipse 65% 55% at 50% 50%, rgba(245, 215, 127, 0.32) 0%, rgba(229, 169, 88, 0.2) 40%, rgba(228, 105, 76, 0.08) 65%, transparent 80%);
+  filter: blur(52px);
+  border-radius: 48px;
+  pointer-events: none;
+  z-index: 0;
+  animation: runningAuraBreathe 4s ease-in-out infinite alternate;
+}
+
+@keyframes runningAuraBreathe {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.97);
+    filter: blur(44px);
+  }
+  100% {
+    opacity: 0.95;
+    transform: scale(1.03);
+    filter: blur(60px);
+  }
+}
+
+/* 2. Core Synthesis Card: Obsidian Luxury Glass */
+.running__inner {
+  position: relative;
+  width: min(840px, 94vw);
+  background: linear-gradient(150deg, rgba(22, 18, 28, 0.96) 0%, rgba(12, 11, 17, 0.98) 50%, rgba(18, 14, 24, 0.96) 100%);
+  border: 1px solid rgba(229, 169, 88, 0.4);
+  border-radius: 20px;
+  padding: 34px 40px;
+  box-shadow: 
+    0 32px 80px -12px rgba(0, 0, 0, 0.92),
+    0 12px 32px -4px rgba(229, 169, 88, 0.2),
+    inset 0 1px 2px 0 rgba(255, 240, 200, 0.45),
+    inset 0 0 36px 0 rgba(229, 169, 88, 0.06);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  overflow: hidden;
+  isolation: isolate;
+  z-index: 1;
+}
+
+/* 3. Claude Code Ultra Perimeter Border Beam (Dual Orbiting Radiant Laser) */
+.running-beam {
+  position: absolute;
+  inset: -2.5px;
+  border-radius: inherit;
+  padding: 2.5px;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+  filter: drop-shadow(0 0 10px rgba(245, 215, 127, 0.95));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.running-beam::before {
+  content: '';
+  position: absolute;
+  top: -150%;
+  left: -150%;
+  width: 400%;
+  height: 400%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 60deg,
+    rgba(229, 169, 88, 0.35) 90deg,
+    #E5A958 115deg,
+    #FFF2B2 145deg,
+    #FFFFFF 160deg,
+    transparent 165deg,
+    transparent 240deg,
+    rgba(229, 169, 88, 0.35) 270deg,
+    #E5A958 295deg,
+    #FFF2B2 325deg,
+    #FFFFFF 340deg,
+    transparent 345deg
+  );
+  animation: conveneBeamOrbit 3s linear infinite;
+  transform-origin: center center;
+}
+
+/* 4. CAD Precision Reticles on the 4 Corners */
+.running__inner .cad-reticle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 6px #F5D77F);
+}
+.running__inner .cad-reticle--tl { top: 10px; left: 10px; border-top: 2px solid #F5D77F; border-left: 2px solid #F5D77F; }
+.running__inner .cad-reticle--tr { top: 10px; right: 10px; border-top: 2px solid #F5D77F; border-right: 2px solid #F5D77F; }
+.running__inner .cad-reticle--bl { bottom: 10px; left: 10px; border-bottom: 2px solid #F5D77F; border-left: 2px solid #F5D77F; }
+.running__inner .cad-reticle--br { bottom: 10px; right: 10px; border-bottom: 2px solid #F5D77F; border-right: 2px solid #F5D77F; }
+
+/* 5. Blueprint Grid & Light Shimmer */
+.running-grid-bg {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(rgba(229, 169, 88, 0.12) 1px, transparent 1px),
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 16px 16px, 32px 32px, 32px 32px;
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.running-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgba(255, 235, 180, 0.04) 35%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 235, 180, 0.04) 65%,
+    transparent 80%
+  );
+  background-size: 250% 100%;
+  animation: conveneShimmerSweep 4.5s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 6. Header Typography & Eyebrow */
+.running__content {
+  position: relative;
+  z-index: 3;
+}
+
+.running__eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.running__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(229, 169, 88, 0.15);
+  border: 1px solid rgba(229, 169, 88, 0.4);
+  font-family: var(--num);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #F5D77F;
+  text-transform: uppercase;
+}
+
+.running__pill-spark {
+  color: #FFE680;
+  animation: sparkleTwinkle 2s ease-in-out infinite alternate;
+}
+
+.running__telemetry {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--num);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: 0.06em;
+  font-weight: 550;
+}
+
+.running__telemetry .sanskrit {
+  margin: 0;
+  font-size: 12px;
+  color: #E5A958;
+  font-weight: 600;
+}
+
+.running h2 {
+  margin: 0 0 16px;
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, #FFFFFF 0%, #FFF2CC 25%, #E5A958 50%, #F5D77F 75%, #FFFFFF 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: conveneTextShine 4s ease-in-out infinite;
+  text-shadow: 0 0 32px rgba(245, 215, 127, 0.4);
+}
+
+/* 7. Claude Code Style Golden Astrology Spinner Hero */
+.claude-astro-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(229, 169, 88, 0.22);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.05), 0 4px 16px rgba(0, 0, 0, 0.35);
+  margin-bottom: 20px;
+}
+
+.astro-glyph-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 40%, rgba(245, 215, 127, 0.22) 0%, rgba(18, 14, 24, 0.85) 75%);
+  box-shadow: 0 0 16px rgba(229, 169, 88, 0.25);
+}
+
+.astro-spinner-ring {
+  position: absolute;
+  inset: -3.5px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(245, 215, 127, 0.55);
+  animation: convenePortalSpin 6s linear infinite;
+  pointer-events: none;
+}
+
+.astro-glyph-spinner {
+  font-size: 22px;
+  line-height: 1;
+  color: #F5D77F;
+  filter: drop-shadow(0 0 8px rgba(245, 215, 127, 0.95)) drop-shadow(0 0 2px #FFFFFF);
+  display: inline-block;
+  user-select: none;
+  transition: transform 0.15s ease, filter 0.15s ease;
+  animation: astroGlyphPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes astroGlyphPulse {
+  0% { transform: scale(0.95); filter: drop-shadow(0 0 6px rgba(245, 215, 127, 0.8)); }
+  100% { transform: scale(1.08); filter: drop-shadow(0 0 12px rgba(245, 215, 127, 1)) drop-shadow(0 0 3px #FFFFFF); }
+}
+
+.claude-code-stage-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.claude-code-stage-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.run-stage {
+  margin: 0;
+  font-family: var(--num);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #FFFFFF;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.claude-code-timer {
+  font-family: var(--num);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(229, 169, 88, 0.12);
+  border: 1px solid rgba(229, 169, 88, 0.32);
+  color: #F5D77F;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.claude-code-stage-sub {
+  font-size: 11.5px;
+  color: var(--chalk-3);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 8. 5-Station Deliberation Track (Matching media_1789834613483.png) */
+.astro-track-container {
+  margin: 18px 0 24px;
+  position: relative;
+  padding: 8px 4px;
+}
+
+.astro-rail {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.astro-rail-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.astro-rail-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7FA3D4 0%, #AEC5EB 25%, #E5A958 65%, #F5D77F 100%);
+  box-shadow: 0 0 14px rgba(245, 215, 127, 0.7);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Sliding Glowing White Bead Thumb (Exact match to media_1789834613483.png) */
+.astro-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 2px solid #0E111A;
+  box-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.95),
+    0 0 20px rgba(245, 215, 127, 0.85);
+  transition: left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.astro-thumb-core {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #FFFFFF;
+}
+
+.astro-thumb-halo {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 215, 127, 0.4) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Station Checkpoint Pips */
+.astro-pips {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.astro-pip {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.35s ease;
+}
+
+.astro-pip.is-active,
+.astro-pip.is-passed {
+  background: #F5D77F;
+  box-shadow: 0 0 8px #F5D77F, 0 0 14px rgba(245, 215, 127, 0.8);
+}
+
+/* 5 Discrete Station Labels Below Rail */
+.astro-stations {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+
+.astro-station {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--num);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--chalk-4);
+  transition: all 0.3s ease;
+  user-select: none;
+}
+
+.astro-station-sym {
+  font-size: 12px;
+  color: var(--chalk-4);
+  transition: all 0.3s ease;
+}
+
+.astro-station-name {
+  font-weight: 550;
+}
+
+.astro-station.is-active {
+  color: #F5D77F;
+  text-shadow: 0 0 12px rgba(245, 215, 127, 0.8);
+  font-weight: 700;
+}
+
+.astro-station.is-active .astro-station-sym {
+  color: #F5D77F;
+  filter: drop-shadow(0 0 8px #F5D77F);
+  transform: scale(1.25);
+}
+
+.astro-station.is-passed {
+  color: #E5A958;
+  font-weight: 600;
+}
+
+.astro-station.is-passed .astro-station-sym {
+  color: #E5A958;
+  filter: drop-shadow(0 0 4px #E5A958);
+}
+
+/* 9. 13 Critics Deliberation Matrix */
+.run-critics {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px;
+}
+
+.rc {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: .35;
+  transition: all .35s var(--ease);
+}
+
+.rc.is-in {
+  opacity: 1;
+  background: rgba(229, 169, 88, 0.08);
+  border-color: rgba(245, 215, 127, 0.35);
+  box-shadow: 0 4px 14px -2px rgba(0, 0, 0, 0.5);
+}
+
+.rc__g {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  flex: 0 0 auto;
+}
+
+.rc.is-in .rc__g {
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.rc__n {
+  font-size: 11.5px;
+  color: var(--chalk);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rc__s {
+  font-family: var(--num);
+  font-size: 13px;
+  font-weight: 600;
+  color: #F5D77F;
+}
+
+/* 10. Live Stream Log Terminal */
+.run-log {
+  font-family: var(--num);
+  font-size: 11px;
+  line-height: 1.75;
+  color: rgba(255, 255, 255, 0.65);
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid rgba(229, 169, 88, 0.18);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.run-log p { margin: 0; }
+.run-log b { color: #F5D77F; font-weight: 600; text-transform: uppercase; }
+
+/* 11. Actions */
+.run-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 /* ═══ REVIEW ═════════════════════════════════════════════════════════ */

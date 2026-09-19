@@ -672,8 +672,14 @@ function updateStudioHUD() {
     t.addEventListener("click", () => setMode(t.dataset.mode)));
   initDropzone();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
-  $("restart").addEventListener("click", () => phase("compose"));
-  $("see-why").addEventListener("click", openWhy);
+  $("see-why")?.addEventListener("click", openWhy);
+  $("restart")?.addEventListener("click", () => {
+    stopAstroAnimation();
+    S.isGenerating = false;
+    const btn = $("convene");
+    if (btn) { btn.classList.remove("is-loading"); btn.disabled = false; }
+    phase("compose");
+  });
   $("why-close").addEventListener("click", () => { $("why").hidden = true; });
   $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
   document.addEventListener("keydown", (e) => {
@@ -828,8 +834,6 @@ async function onSubmit(e) {
 
   S.isGenerating = true;
   const btn = $("convene");
-  const fill = $("convene-fill");
-  const progTrack = $("convene-progress");
   const dot = $("engine-dot");
   const note = $("engine-note");
 
@@ -837,11 +841,8 @@ async function onSubmit(e) {
     btn.classList.add("is-loading");
     btn.disabled = true;
     const txt = btn.querySelector(".convene__title-text");
-    if (txt) txt.textContent = "✦ Synthesizing Schemes…";
-    setText("convene-sub", "Arming 13 analytical critics · Initializing layout matrix…");
+    if (txt) txt.textContent = "✦ Convening Committee…";
   }
-  if (progTrack) progTrack.style.opacity = "1";
-  if (fill) fill.style.transform = "scaleX(0.08)";
   if (dot) dot.dataset.tone = "running";
   if (note) {
     note.dataset.tone = "running";
@@ -851,18 +852,21 @@ async function onSubmit(e) {
   S.briefSent = readBrief();
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
 
-  // IMPORTANT: DO NOT switch to 2nd page! The user stays on the first photo (form page)
+  phase("running");
   resetRunScreen("The committee is sitting", "Interpreting the brief…");
+  startAstroAnimation();
 
   try {
     await stream(`${API}/design/stream`, S.briefSent);
   } catch (err) {
     toast(`The engine could not complete this design: ${err.message}`);
+    stopAstroAnimation();
     if (dot) dot.dataset.tone = "bad";
     if (note) {
       note.dataset.tone = "bad";
       note.textContent = `Run failed: ${err.message}`;
     }
+    const restart = $("restart"); if (restart) restart.hidden = false;
   } finally {
     S.isGenerating = false;
     if (S.phase !== "review" && btn) {
@@ -871,8 +875,6 @@ async function onSubmit(e) {
       const txt = btn.querySelector(".convene__title-text");
       if (txt) txt.textContent = "Generate Architectural Schemes";
       setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
-      if (progTrack) progTrack.style.opacity = "0";
-      if (fill) fill.style.transform = "scaleX(0)";
       if (dot) dot.dataset.tone = "ok";
       if (note) {
         note.dataset.tone = "ok";
@@ -957,11 +959,77 @@ function renderImportReport(imp, rooms, error) {
   }
 }
 
+const ASTRO_GLYPHS = [
+  "☉", "☽", "☿", "♀", "♂", "♃", "♄", "✦", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "☸"
+];
+
+let astroTimer = null;
+let astroIndex = 0;
+let runStartMs = 0;
+let runTimerInterval = null;
+
+function startAstroAnimation() {
+  stopAstroAnimation();
+  const glyphEl = $("astro-glyph");
+  const timerEl = $("run-timer");
+  runStartMs = Date.now();
+  if (timerEl) timerEl.textContent = "0.0s";
+
+  runTimerInterval = setInterval(() => {
+    if (timerEl) {
+      const elapsed = ((Date.now() - runStartMs) / 1000).toFixed(1);
+      timerEl.textContent = `${elapsed}s`;
+    }
+  }, 100);
+
+  astroTimer = setInterval(() => {
+    if (glyphEl) {
+      astroIndex = (astroIndex + 1) % ASTRO_GLYPHS.length;
+      glyphEl.textContent = ASTRO_GLYPHS[astroIndex];
+    }
+  }, 110);
+}
+
+function stopAstroAnimation() {
+  if (astroTimer) { clearInterval(astroTimer); astroTimer = null; }
+  if (runTimerInterval) { clearInterval(runTimerInterval); runTimerInterval = null; }
+}
+
+function updateAstroTrack(pct) {
+  const percent = Math.min(1, Math.max(0, pct || 0));
+  const fill = $("run-fill");
+  if (fill) fill.style.width = `${(percent * 100).toFixed(1)}%`;
+  const thumb = $("astro-thumb");
+  if (thumb) thumb.style.left = `${(percent * 100).toFixed(1)}%`;
+
+  // 5 discrete steps: 0: BRIEF, 1: GEOMETRY, 2: VASTU, 3: CRITIQUE, 4: CONSENSUS
+  let curStep = 0;
+  if (percent >= 0.85) curStep = 4;
+  else if (percent >= 0.62) curStep = 3;
+  else if (percent >= 0.38) curStep = 2;
+  else if (percent >= 0.15) curStep = 1;
+
+  document.querySelectorAll(".astro-station").forEach((st) => {
+    const s = Number(st.dataset.step);
+    st.classList.toggle("is-active", s === curStep);
+    st.classList.toggle("is-passed", s < curStep);
+  });
+
+  document.querySelectorAll(".astro-pip").forEach((pip) => {
+    const s = Number(pip.dataset.step);
+    pip.classList.toggle("is-active", s === curStep);
+    pip.classList.toggle("is-passed", s < curStep);
+  });
+}
+
 function resetRunScreen(title, stage) {
   const log = $("run-log"); if (log) log.innerHTML = "";
-  const fill = $("run-fill"); if (fill) fill.style.transform = "scaleX(0)";
   const rt = $("run-title"); if (rt) rt.textContent = title;
   const rs = $("run-stage"); if (rs) rs.textContent = stage;
+  const sub = $("run-sub");
+  if (sub) sub.textContent = "Evaluating compliance, daylight, structural grids, and Vastu across candidate layouts";
+  const restart = $("restart"); if (restart) restart.hidden = true;
+  updateAstroTrack(0);
   document.querySelectorAll(".rc").forEach((r) => {
     r.classList.remove("is-in");
     const s = r.querySelector(".rc__s"); if (s) s.textContent = "—";
@@ -1005,7 +1073,9 @@ async function onUpload(e) {
   if (f.get("name")) body.append("name", String(f.get("name")));
 
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
+  phase("running");
   resetRunScreen("Reading the plan", `Reading ${file.name}…`);
+  startAstroAnimation();
 
   let up;
   try {
@@ -1016,7 +1086,9 @@ async function onUpload(e) {
     up = data;
   } catch (err) {
     S.isGenerating = false;
+    stopAstroAnimation();
     if (upBtn) { upBtn.classList.remove("is-loading"); upBtn.disabled = false; }
+    phase("compose");
     setMode("upload");
     renderImportReport(null, null, err.message);
     toast("The plan could not be read.");
@@ -1052,8 +1124,10 @@ async function onUpload(e) {
     await stream(`${API}/plans/${up.plan_id}/review/stream?${q}`, null);
   } catch (err) {
     toast(`The engine could not review this plan: ${err.message}`);
+    stopAstroAnimation();
     if (dot) dot.dataset.tone = "bad";
     if (note) { note.dataset.tone = "bad"; note.textContent = `Review failed: ${err.message}`; }
+    const restart = $("restart"); if (restart) restart.hidden = false;
   } finally {
     S.isGenerating = false;
     if (upBtn && S.phase !== "review") {
@@ -1083,6 +1157,7 @@ async function stream(url, simple) {
     clearTimeout(idle);
     idle = setTimeout(() => {
       if (sawResult || (!S.isGenerating && S.phase !== "running")) return;
+      stopAstroAnimation();
       const rt = $("run-title"); if (rt) rt.textContent = "The engine stopped responding";
       const rs = $("run-stage");
       if (rs) rs.textContent = "No update for three minutes. The run may still be finishing on the server; check its log, or start again.";
@@ -1105,6 +1180,7 @@ async function stream(url, simple) {
   }
 
   if (!sawResult && (S.isGenerating || S.phase === "running")) {
+    stopAstroAnimation();
     const rt = $("run-title"); if (rt) rt.textContent = "The run ended without a scheme";
     const rs = $("run-stage");
     if (rs) rs.textContent = "The engine closed the connection before returning a design. Check the server log, then try again.";
@@ -1122,22 +1198,7 @@ function handle(frame) {
   let d; try { d = JSON.parse(raw); } catch { return; }
 
   if (name === "progress") {
-    // 1. Update Down Button in place on first photo (Compose Studio)
-    const btn = $("convene");
-    if (btn && btn.classList.contains("is-loading")) {
-      const txt = btn.querySelector(".convene__title-text");
-      if (txt && d.message) txt.textContent = `✦ ${d.message}`;
-      const sub = $("convene-sub");
-      if (sub) {
-        const stageLabel = d.stage ? cap(d.stage) : "Synthesis";
-        const pct = Math.round((d.percent || 0) * 100);
-        sub.textContent = `${stageLabel} · ${pct}% · 13 critics active`;
-      }
-      const fill = $("convene-fill");
-      if (fill) fill.style.transform = `scaleX(${Math.max(0.08, d.percent || 0)})`;
-    }
-
-    // 2. Update Engine Status Capsule
+    // 1. Update Engine Status Capsule
     const note = $("engine-note");
     if (note) {
       note.dataset.tone = "running";
@@ -1146,15 +1207,19 @@ function handle(frame) {
     const dot = $("engine-dot");
     if (dot) dot.dataset.tone = "running";
 
-    // 3. Update Upload Button if active
-    const upBtn = $("review-btn");
-    if (upBtn && upBtn.classList.contains("is-loading")) {
-      const txt = upBtn.querySelector(".convene__title-text") || upBtn.querySelector(".convene__main");
-      if (txt && d.message) txt.textContent = `✦ ${d.message}`;
-      const sub = upBtn.querySelector(".convene__sub");
-      if (sub) sub.textContent = `${d.stage ? cap(d.stage) : "Review"} · ${Math.round((d.percent || 0) * 100)}%`;
+    // 2. Update Running Screen Stage & Subtitle
+    const stage = $("run-stage"); if (stage) stage.textContent = d.message;
+    const sub = $("run-sub");
+    if (sub) {
+      const stageName = d.stage ? cap(d.stage) : "Synthesis";
+      const pct = Math.round((d.percent || 0) * 100);
+      sub.textContent = `${stageName} · ${pct}% · 13 critics active`;
     }
 
+    // 3. Update Golden Astrology Deliberation Track (Matching media_1789834613483.png)
+    updateAstroTrack(d.percent || 0);
+
+    // 4. Update Log Stream
     if (d.status !== "running" || d.stage === "critique") {
       const log = $("run-log");
       if (log) {
@@ -1162,8 +1227,6 @@ function handle(frame) {
         log.append(p); log.scrollTop = log.scrollHeight;
       }
     }
-    const stage = $("run-stage"); if (stage) stage.textContent = d.message;
-    const runFill = $("run-fill"); if (runFill) runFill.style.transform = `scaleX(${d.percent || 0})`;
     if (d.detail?.scores) markScores(d.detail.scores);
   } else if (name === "result") {
     applyResult(d);
@@ -1184,11 +1247,18 @@ function markScores(scores) {
 
 async function applyResult(d) {
   window.dispatchEvent(new Event("aip:result"));
+  stopAstroAnimation();
+  updateAstroTrack(1);
   S.isGenerating = false;
   const btn = $("convene");
   if (btn) {
     btn.classList.remove("is-loading");
     btn.disabled = false;
+  }
+  const upBtn = $("review-btn");
+  if (upBtn) {
+    upBtn.classList.remove("is-loading");
+    upBtn.disabled = false;
   }
   S.planIds = d.plan_ids || [];
   S.winnerId = d.winner_plan_id;
