@@ -61,6 +61,30 @@ from aip.domain.plan import (
 logger = get_logger("aip.layout")
 
 MIN_ROOM_DIMENSION = 1.5          # m - below this nothing is buildable
+
+
+def _min_clear_widths() -> dict[RoomType, float]:
+    """The narrowest each kind of room may be and still be that room.
+
+    NBC 2016 gives the habitable rooms; the rest are what a practice holds
+    to: a passage a person walks along, a bathroom a door can open in, a
+    stair with two flights side by side, a foyer that is not a slot.
+    """
+    from aip.domain.brief import NBC_MIN_WIDTH
+
+    widths = dict(NBC_MIN_WIDTH)
+    widths.update({
+        RoomType.CORRIDOR: 1.0, RoomType.LOBBY: 1.2,
+        RoomType.BATHROOM: 1.2, RoomType.TOILET: 0.9, RoomType.POWDER: 0.9,
+        RoomType.PUJA: 1.2, RoomType.STORE: 1.2, RoomType.UTILITY: 1.2,
+        RoomType.PANTRY: 1.2, RoomType.LAUNDRY: 1.2,
+        RoomType.FOYER: 1.5, RoomType.STAIRCASE: 2.0,
+        RoomType.VERANDAH: 1.0, RoomType.BALCONY: 1.0, RoomType.TERRACE: 1.0,
+    })
+    return widths
+
+
+MIN_CLEAR_WIDTH: dict[RoomType, float] = _min_clear_widths()
 WALL_THICKNESS_EXTERIOR = 0.23
 WALL_THICKNESS_INTERIOR = 0.115
 
@@ -173,11 +197,38 @@ def build_zoned_tree(
     requirements: Sequence[RoomRequirement],
     areas: Sequence[float],
     rng: random.Random,
+    **kwargs,
+) -> Node:
+    """`_zoned_tree`, checked: every slot exactly once, or a balanced tree.
+
+    A slicing tree that names a slot twice draws one of them and leaves a
+    hole where the other was; one that omits a slot loses the room. Either
+    is a bug in the template, and the failsafe is to fall back to the plain
+    partition and say so, never to hand a plan with a hole to the search.
+    """
+    tree = _zoned_tree(slots, requirements, areas, rng, **kwargs)
+    leaves = sorted(leaf.slot for leaf in tree.leaves())
+    if leaves != sorted(slots):
+        log_event(
+            logger, "layout.zoned_tree_invalid", level=40,
+            expected=len(slots), got=len(leaves),
+            kinds=[requirements[s].type.value for s in slots],
+        )
+        return build_balanced_tree(list(slots), rng, areas)
+    return tree
+
+
+def _zoned_tree(
+    slots: Sequence[int],
+    requirements: Sequence[RoomRequirement],
+    areas: Sequence[float],
+    rng: random.Random,
     *,
     road_along_y: bool,
     road_at_high_end: bool,
     bands: int = 3,
     brief_kind=None,
+    frontage: float | None = None,
 ) -> Node:
     """A tree organised the way a real plan is: in bands from the road inward.
 
@@ -238,7 +289,11 @@ def build_zoned_tree(
     service = of(service_types)
     wet = of(wet_types)
     private = of(private_types)
-    other = [s for s in slots if s not in front + service + wet + private + passage]
+    # The staircase is a core cell against the passage - the landing upstairs,
+    # the stair hall downstairs - never a band of its own. As a band it came
+    # out as a strip the width of the house and a metre deep.
+    stairs = [s for s in slots if requirements[s].type is RoomType.STAIRCASE]
+    other = [s for s in slots if s not in front + service + wet + private + passage + stairs]
 
     # Four-band variant: an open living-dining, with the dining room joining
     # the frontage and the kitchen directly behind it. Both are common; the
@@ -277,11 +332,16 @@ def build_zoned_tree(
         lit_count += needs_light(slot)
     if band:
         private_bands.append(band)
+    # Wet rooms with no bedroom to serve: off the hall when there is one
+    # (the ground floor of a two-storey house), else in the service band.
+    hall_core: list[int] = list(stairs)
     if private_bands:
         if attached:
             private_bands[0] += attached
         for index, w in enumerate(common):
             private_bands[index % len(private_bands)].append(w)
+    elif passage:
+        hall_core += common + attached
     else:
         service += common + attached
 
@@ -383,7 +443,15 @@ def build_zoned_tree(
     # behind it. Packed as one cell among the bathrooms it touches two
     # neighbours and serves neither.
     passages = list(passage)
-    if passages:
+    # A single bedroom band deeper than a room should be is not a band but
+    # a row of slots eight metres long; it is planned as a spine instead.
+    deep_band = bool(frontage) and any(
+        sum(areas[g] for g in band) / frontage > 5.0 for band in private_bands
+    )
+    use_spine = bool(passages) and (
+        len(private_bands) > 1 or (not private_bands and bool(service)) or deep_band
+    )
+    if passages and not use_spine:
         # Insert at the seam: immediately before the first band that holds a
         # bedroom. Everything the household shares - living, dining, kitchen,
         # puja, utility - sits on the near side of the passage; everything
@@ -397,33 +465,124 @@ def build_zoned_tree(
             if any(requirements[g].type in private for g in group):
                 seam = index
                 break
-        groups.insert(seam, passages)
+        groups.insert(seam, list(passages))
+        # The stair and any toilet the floor keeps go into the band beyond
+        # the passage as core cells, between its lit ends. Put beside the
+        # passage in its own band they shortened it, and the bedroom under
+        # the stair cell had to be entered through the stair.
+        if hall_core:
+            if seam + 1 < len(groups):
+                band = groups[seam + 1]
+                groups[seam + 1] = band[:1] + hall_core + band[1:]
+            else:
+                groups.append(list(hall_core))
+    elif not passages and hall_core:
+        groups[0] = groups[0][:1] + hall_core + groups[0][1:] if groups else [list(hall_core)]
 
     # Within a band, cut along the frontage; between bands, cut across it.
     # Band order runs from the road inward, so the first group must land on the
     # road side of the envelope.
     def band_tree(group: list[int]) -> Node:
+        """One band: cells side by side along the frontage.
+
+        A small core room in a deep band comes out as a slot - a bathroom
+        0.8 m wide and 4.6 m long, a foyer a metre across - because a band
+        cell is as deep as the band. Two such rooms next to each other are
+        stacked instead, one behind the other in the band's depth, which is
+        how a practice draws two bathrooms between two bedrooms.
+        """
         if len(group) == 1:
             return Leaf(group[0])
         order = list(group)
-        # Divide the band by area along its length.
-        gtotal = sum(areas[g] for g in order) or 1.0
-        cut_index = 1
-        acc = 0.0
-        for i, g in enumerate(order):
-            acc += areas[g]
-            if acc >= gtotal / 2:
-                cut_index = max(1, min(len(order) - 1, i + 1))
-                break
-        left, right = order[:cut_index], order[cut_index:]
-        la = sum(areas[g] for g in left) or 1.0
-        ra = sum(areas[g] for g in right) or 1.0
-        return Split(
-            vertical=road_along_y,     # cuts along the frontage
-            ratio=min(0.88, max(0.12, la / (la + ra))),
-            left=band_tree(left),
-            right=band_tree(right),
-        )
+        depth_est = (sum(areas[g] for g in order) / frontage) if frontage else None
+
+        def too_narrow(g: int) -> bool:
+            if depth_est is None or depth_est <= 0:
+                return False
+            width = areas[g] / depth_est
+            floor = MIN_CLEAR_WIDTH.get(requirements[g].type, MIN_ROOM_DIMENSION)
+            return width < floor or depth_est / max(width, 1e-6) > 2.8
+
+        from aip.engines.architecture.programme import is_through, may_enter
+
+        bedroom_types = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM,
+                         RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM}
+
+        def can_pair(i: int) -> bool:
+            """May order[i+1] sit behind order[i], away from the passage?
+
+            Only if its door can come from the room in front of it, or it is
+            a bathroom with a bedroom beside the pair to be attached to. A
+            bathroom stacked behind the staircase is a bathroom nobody can
+            reach except through the stair.
+            """
+            a, b = order[i], order[i + 1]
+            if needs_light(a) or needs_light(b):
+                return False
+            if requirements[b].type is RoomType.STAIRCASE:
+                return False        # the stair meets the passage, always
+            if not (too_narrow(a) or too_narrow(b)):
+                return False
+            if is_through(requirements[a].type) and may_enter(requirements[b].type, requirements[a].type):
+                return True
+            if requirements[b].type is RoomType.BATHROOM:
+                beside = [order[j] for j in (i - 1, i + 2) if 0 <= j < len(order)]
+                return any(requirements[x].type in bedroom_types for x in beside)
+            return False
+
+        units: list[list[int]] = []
+        i = 0
+        while i < len(order):
+            # Two small rooms that can pair with each other do, rather than
+            # one of them pairing with the stair and the other standing
+            # alone as a slot.
+            leave_stair = (
+                requirements[order[i]].type is RoomType.STAIRCASE
+                and i + 2 < len(order) and can_pair(i + 1)
+            )
+            if i + 1 < len(order) and can_pair(i) and not leave_stair:
+                units.append([order[i], order[i + 1]])
+                i += 2
+            else:
+                units.append([order[i]])
+                i += 1
+
+        def unit_area(u: list[int]) -> float:
+            return sum(areas[g] for g in u)
+
+        def unit_tree(u: list[int]) -> Node:
+            if len(u) == 1:
+                return Leaf(u[0])
+            a, b = u
+            ratio = min(0.85, max(0.15, areas[a] / (areas[a] + areas[b])))
+            # The first of the pair takes the road side: the foyer in front
+            # of the puja, the stair in front of the store.
+            if road_at_high_end:
+                return Split(vertical=not road_along_y, ratio=1 - ratio, left=Leaf(b), right=Leaf(a))
+            return Split(vertical=not road_along_y, ratio=ratio, left=Leaf(a), right=Leaf(b))
+
+        def along(us: list[list[int]]) -> Node:
+            if len(us) == 1:
+                return unit_tree(us[0])
+            total = sum(unit_area(u) for u in us) or 1.0
+            cut_index = 1
+            acc = 0.0
+            for i, u in enumerate(us):
+                acc += unit_area(u)
+                if acc >= total / 2:
+                    cut_index = max(1, min(len(us) - 1, i + 1))
+                    break
+            left, right = us[:cut_index], us[cut_index:]
+            la = sum(unit_area(u) for u in left) or 1.0
+            ra = sum(unit_area(u) for u in right) or 1.0
+            return Split(
+                vertical=road_along_y,     # cuts along the frontage
+                ratio=min(0.88, max(0.12, la / (la + ra))),
+                left=along(left),
+                right=along(right),
+            )
+
+        return along(units)
 
     def stack(bands_list: list[list[int]]) -> Node:
         if len(bands_list) == 1:
@@ -449,7 +608,7 @@ def build_zoned_tree(
     # than one band, the passage becomes a column, the private rooms are
     # dealt into a left and a right column beside it, and the spine's near
     # end meets the dining band, which is its legal way in.
-    if passages and len(private_bands) > 1:
+    if use_spine:
         # The spine plan. The passage runs straight back from the living room
         # with rooms on both sides. Dining, kitchen and utility stack at the
         # head of one column - dining against the living room and the spine,
@@ -468,7 +627,9 @@ def build_zoned_tree(
         front_groups: list[list[int]] = []
         service_rooms: list[int] = []
         for g in groups:
-            if g is passages or is_private_band(g):
+            if g is passages or is_private_band(g) or (
+                g and all(x in hall_core or x in passages for x in g)
+            ):
                 continue
             keep = [x for x in g if requirements[x].type not in service_types]
             service_rooms += [x for x in g if requirements[x].type in service_types]
@@ -482,21 +643,41 @@ def build_zoned_tree(
                  RoomType.STORE: 4}
         service_rooms.sort(key=lambda x: order.get(requirements[x].type, 5))
 
-        columns: list[list[int]] = [list(service_rooms), []]
-        totals = [sum(areas[x] for x in service_rooms), 0.0]
+        # The stair heads the second column, against the living band and the
+        # spine, where it stacks over the floor below. A downstairs toilet
+        # sits behind it, off the hall.
+        columns: list[list[int]] = [list(service_rooms), list(hall_core)]
+        totals = [sum(areas[x] for x in service_rooms), sum(areas[x] for x in hall_core)]
+        # Two columns and a passage need about 7 m of frontage: two rooms
+        # at the statutory 2.4 m, a metre of passage, and walls. Narrower
+        # than that the passage runs down one side with every room off it,
+        # which is how a row house is planned.
+        single_loaded = frontage is not None and frontage < 7.0
+        if single_loaded:
+            # Only the private zone sits beside the passage. The service
+            # rooms stay a band across the house in front of it, with the
+            # dining room at the passage's end so the passage has its legal
+            # way in; nine rooms in one column made every one a strip.
+            if service_rooms:
+                band = [x for x in service_rooms if requirements[x].type is not RoomType.DINING]
+                band += [x for x in service_rooms if requirements[x].type is RoomType.DINING]
+                front_groups.append(band)
+            columns = [list(hall_core), []]
+            totals = [sum(areas[x] for x in hall_core), 0.0]
 
         anchors = [g for band in rear for g in band if requirements[g].type in private_types]
         served = [g for band in rear for g in band if requirements[g].type not in private_types]
         # Master first, to the lighter column; then the rest, balancing area.
         anchors.sort(key=lambda g: (requirements[g].type is not RoomType.MASTER_BEDROOM, -areas[g]))
         for g in anchors:
-            side = 0 if totals[0] <= totals[1] else 1
+            side = 0 if single_loaded or totals[0] <= totals[1] else 1
             columns[side].append(g)
             totals[side] += areas[g]
 
         from aip.engines.architecture.programme import PRIVATE_HOST as _HOSTS
 
         bath_count = [0, 0]
+        inserted = [0, 0]
         for g in served:
             kind = requirements[g].type
             hosts = _HOSTS.get(kind, ())
@@ -516,35 +697,150 @@ def build_zoned_tree(
             if side is None:
                 # Spread the common bathrooms so each column has one.
                 side = 0 if bath_count[0] <= bath_count[1] else 1
+            if single_loaded:
+                side = 0
             if kind is RoomType.BATHROOM:
                 bath_count[side] += 1
             # Insert after the first private room in that column, so the
             # bathroom sits between bedrooms rather than at the far end.
+            # Later insertions go after earlier ones, so the en-suite stays
+            # against its bedroom instead of being pushed off by the balcony.
             col = columns[side]
             first_private = next((i for i, x in enumerate(col) if requirements[x].type in private_types), None)
-            col.insert(first_private + 1 if first_private is not None else len(col), g)
+            at = first_private + 1 if first_private is not None else len(col)
+            at += inserted[side]
+            col.insert(min(at, len(col)), g)
+            inserted[side] += 1
             totals[side] += areas[g]
 
-        def column(rooms_in: list[int]) -> Node:
+        from aip.engines.architecture.programme import is_through as _is_through
+        from aip.engines.architecture.programme import may_enter as _may_enter
+
+        def column(rooms_in: list[int], width_est: float | None, spine_on_low_side: bool) -> Node:
+            """One column beside the spine, its rooms stacked front to back.
+
+            A small room the full width of the column is a slot: a bathroom
+            5 m wide and a metre deep. Two such rooms in a row share it
+            instead, side by side, the one that meets the spine on the
+            inside. The stair always takes the spine side; a bathroom on the
+            outside is then the bathroom of the bedroom in the next row.
+            """
             if len(rooms_in) == 1:
                 return Leaf(rooms_in[0])
-            return stack([[g] for g in rooms_in])
+
+            def shallow(g: int) -> bool:
+                if not width_est or width_est <= 0:
+                    return False
+                floor = MIN_CLEAR_WIDTH.get(requirements[g].type, MIN_ROOM_DIMENSION)
+                return areas[g] / width_est < floor
+
+            def row_pair(i: int) -> tuple[int, int] | None:
+                """(inner, outer) when rooms i and i+1 may share a row."""
+                a, b = rooms_in[i], rooms_in[i + 1]
+                ta, tb = requirements[a].type, requirements[b].type
+                if needs_light(a) or needs_light(b):
+                    return None
+                if not (shallow(a) or shallow(b)):
+                    return None
+                if ta is RoomType.STAIRCASE and tb is RoomType.STAIRCASE:
+                    return None
+                inner, outer = (a, b) if ta is RoomType.STAIRCASE or (
+                    tb is not RoomType.STAIRCASE and areas[a] >= areas[b]) else (b, a)
+                ti, to = requirements[inner].type, requirements[outer].type
+                if not _may_enter(ti, RoomType.CORRIDOR):
+                    return None
+                if _is_through(ti) and _may_enter(to, ti):
+                    return (inner, outer)
+                if to is RoomType.BATHROOM:
+                    beside = [rooms_in[j] for j in (i - 1, i + 2) if 0 <= j < len(rooms_in)]
+                    if any(requirements[x].type in _BEDROOMS for x in beside):
+                        return (inner, outer)
+                return None
+
+            # A shallow bathroom with the stair in the column but not beside
+            # it moves next to the stair, so the two share a row: the stair
+            # on the spine, the bathroom outside it against the bedroom in
+            # the next row. That is the classic stair-and-bath core.
+            rooms_in = list(rooms_in)
+            shallow_baths = [g for g in rooms_in
+                             if requirements[g].type is RoomType.BATHROOM and shallow(g)]
+            stair_at = next((i for i, g in enumerate(rooms_in)
+                             if requirements[g].type is RoomType.STAIRCASE), None)
+            if len(shallow_baths) >= 2:
+                # Two shallow bathrooms share a row with each other: the
+                # inner one off the passage, the outer one attached to the
+                # bedroom in the next row.
+                first, second = shallow_baths[0], shallow_baths[1]
+                rooms_in.remove(second)
+                rooms_in.insert(rooms_in.index(first) + 1, second)
+            elif shallow_baths and stair_at is not None:
+                g = shallow_baths[0]
+                if abs(rooms_in.index(g) - stair_at) > 1:
+                    rooms_in.remove(g)
+                    stair_at = next(i for i, x in enumerate(rooms_in)
+                                    if requirements[x].type is RoomType.STAIRCASE)
+                    rooms_in.insert(stair_at + 1, g)
+
+            rows: list[Node] = []
+            row_areas: list[float] = []
+            i = 0
+            while i < len(rooms_in):
+                pair = row_pair(i) if i + 1 < len(rooms_in) else None
+                if pair is None:
+                    g = rooms_in[i]
+                    rows.append(Leaf(g))
+                    # A room alone in a row is as deep as its area allows
+                    # at the column's width - and no shallower than its
+                    # clear width. A 9 m2 study in a 4.6 m column is drawn
+                    # 2.4 m deep and a little larger, not 2.0 m and a slot.
+                    floor = MIN_CLEAR_WIDTH.get(requirements[g].type, MIN_ROOM_DIMENSION)
+                    row_areas.append(max(areas[g], floor * width_est) if width_est else areas[g])
+                    i += 1
+                    continue
+                inner, outer = pair
+                ratio = min(0.85, max(0.15, areas[inner] / (areas[inner] + areas[outer])))
+                # `left` is the low-coordinate side; the inner cell goes
+                # wherever the spine is.
+                if spine_on_low_side:
+                    rows.append(Split(vertical=road_along_y, ratio=ratio,
+                                      left=Leaf(inner), right=Leaf(outer)))
+                else:
+                    rows.append(Split(vertical=road_along_y, ratio=1 - ratio,
+                                      left=Leaf(outer), right=Leaf(inner)))
+                row_areas.append(areas[inner] + areas[outer])
+                i += 2
+
+            def pile(nodes: list[Node], sizes: list[float]) -> Node:
+                if len(nodes) == 1:
+                    return nodes[0]
+                fa = sizes[0] or 1.0
+                ra = sum(sizes[1:]) or 1.0
+                ratio = min(0.88, max(0.12, fa / (fa + ra)))
+                rest = pile(nodes[1:], sizes[1:])
+                if road_at_high_end:
+                    return Split(vertical=not road_along_y, ratio=1 - ratio, left=rest, right=nodes[0])
+                return Split(vertical=not road_along_y, ratio=ratio, left=nodes[0], right=rest)
+
+            return pile(rows, row_areas)
 
         spine_area = sum(areas[g] for g in passages)
         body_area = totals[0] + totals[1] + spine_area
         w_spine = min(0.22, max(0.09, spine_area / body_area))
+        if frontage:
+            w_spine = max(w_spine, min(0.3, 1.15 / frontage))
         w_left = (1 - w_spine) * (totals[0] / (totals[0] + totals[1]) if (totals[0] + totals[1]) else 0.5)
         w_right = 1 - w_spine - w_left
+        col_w = [(w_left * frontage) if frontage else None, (w_right * frontage) if frontage else None]
 
         if columns[1]:
             inner = Split(vertical=road_along_y,
                           ratio=min(0.9, max(0.1, w_spine / (w_spine + w_right))),
-                          left=band_tree(passages), right=column(columns[1]))
+                          left=band_tree(passages), right=column(columns[1], col_w[1], True))
         else:
             inner = band_tree(passages)
         if columns[0]:
             body = Split(vertical=road_along_y, ratio=min(0.9, max(0.1, w_left)),
-                         left=column(columns[0]), right=inner)
+                         left=column(columns[0], col_w[0], False), right=inner)
         else:
             body = inner
 
@@ -654,6 +950,8 @@ class GeneratorConfig:
 
 #: Rooms that can receive the main entrance, in order of preference.
 _ENTRY_ROOMS = (RoomType.FOYER, RoomType.LOBBY, RoomType.VERANDAH)
+_BEDROOMS = frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM,
+                       RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM})
 
 
 class LayoutGenerator:
@@ -671,7 +969,16 @@ class LayoutGenerator:
         self.brief = apply_defaults(brief)
         self.config = config or GeneratorConfig()
         self.rng = random.Random(self.config.seed)
-        self.requirements = self._prepare_requirements()
+        # The programme and its split across levels are fixed here, once.
+        # They used to be recomputed on every realisation, and each pass
+        # appended another staircase: thirteen stair cells on one floor was
+        # the visible symptom. Nothing below may add to either again.
+        self.requirements, self.level_buckets = self._prepare_requirements()
+        self._envelope = self._buildable_envelope()
+        # Set on a per-level worker: which floor it lays out, and the stair
+        # footprint on the floor below that its own stair must stack over.
+        self._level_index = 0
+        self._anchor: BoundingBox | None = None
 
     # ------------------------------------------------------------- public --
 
@@ -698,6 +1005,10 @@ class LayoutGenerator:
         Diversity is enforced rather than hoped for: independent runs seed from
         different random states, and near-identical schemes are filtered out. A
         committee reviewing three copies of the same plan learns nothing.
+
+        Every candidate then passes the guardrail: a plan with a room nobody
+        can walk to properly, a floor with two passages or two staircases, or
+        a cell too narrow to be a room is not offered, however it scored.
         """
         fitness_fn = fitness_fn or self._default_fitness
         scored: list[tuple[float, dict[str, float], FloorPlan]] = []
@@ -705,19 +1016,31 @@ class LayoutGenerator:
 
         runs = max(3, count + 1)
         for run in range(runs):
-            self.rng = random.Random(
-                None if self.config.seed is None else self.config.seed + run * 7919
-            )
-            for genome in self._evolve(elite_out=max(3, self.config.elite // 2)):
-                plan = self._to_plan(genome)
+            seed = None if self.config.seed is None else self.config.seed + run * 7919
+            for plan in self._candidates(seed):
                 signature = self._signature(plan)
                 if signature in signatures:
                     continue
                 signatures.add(signature)
+                plan.metadata["guardrail"] = self._sanity(plan)
                 exact, breakdown = fitness_fn(plan)
                 scored.append((exact, breakdown, plan))
 
-        selected = self._select_diverse(scored, count)
+        clean = [item for item in scored if not item[2].metadata["guardrail"]]
+        flawed = [item for item in scored if item[2].metadata["guardrail"]]
+        selected = self._select_diverse(clean, count)
+        if len(selected) < count and flawed:
+            # Nothing clean is left to offer. Offer the least-broken rather than
+            # nothing, but say so on the plan and in the log: a silent fallback
+            # is how a bad plan reaches a client looking like a good one.
+            flawed.sort(key=lambda item: (len(item[2].metadata["guardrail"]), -item[0]))
+            for item in flawed[: count - len(selected)]:
+                selected.append(item)
+                log_event(
+                    logger, "layout.guardrail", level=30,
+                    problems=item[2].metadata["guardrail"][:6],
+                )
+
         plans: list[FloorPlan] = []
         for index, (exact, breakdown, plan) in enumerate(selected):
             plan.metadata["fitness"] = round(exact, 4)
@@ -728,14 +1051,113 @@ class LayoutGenerator:
         log_event(
             logger, "layout.generated",
             requested=count, evaluated=len(scored), produced=len(plans),
+            rejected=len(flawed),
             best=max((p.metadata.get("fitness", 0.0) for p in plans), default=0.0),
         )
         return plans
 
+    def _candidates(self, seed: int | None) -> Iterator[FloorPlan]:
+        """One run of the search: the elite plans it converged on.
+
+        A single-level brief evolves one partition. A multi-level brief evolves
+        each floor as its own partition of the same footprint: the ground
+        floor first, then every upper floor against it, with its staircase
+        pulled onto the footprint of the one below. One tree for the whole
+        house, realised on the ground and then thinned to the ground-floor
+        rooms, is what left holes in the plan where the bedrooms had been.
+        """
+        elite_out = max(3, self.config.elite // 2)
+        if len(self.level_buckets) == 1:
+            self.rng = random.Random(seed)
+            for genome in self._evolve(elite_out=elite_out):
+                yield self._assemble([self._realise_level(genome, 0)])
+            return
+
+        ground = self._worker(0, seed)
+        for k, genome in enumerate(ground._evolve(elite_out=elite_out)):
+            rooms_by_level = [ground._realise_level(genome, 0)]
+            stair = next((r.bbox for r in rooms_by_level[0] if r.type is RoomType.STAIRCASE), None)
+            for level_index in range(1, len(self.level_buckets)):
+                worker = self._worker(
+                    level_index,
+                    None if seed is None else seed + 31 * level_index + 7 * k,
+                    anchor=stair, budget=0.75,
+                )
+                best = worker._evolve(elite_out=1)[0]
+                rooms = worker._realise_level(best, level_index)
+                rooms_by_level.append(rooms)
+                stair = next((r.bbox for r in rooms if r.type is RoomType.STAIRCASE), stair)
+            yield self._assemble(rooms_by_level)
+
+    def _worker(
+        self, level_index: int, seed: int | None, *,
+        anchor: BoundingBox | None = None, budget: float = 1.0,
+    ) -> LayoutGenerator:
+        """A generator for one floor: this floor's rooms in the shared footprint."""
+        worker = object.__new__(LayoutGenerator)
+        worker.brief = self.brief
+        cfg = self.config
+        worker.config = GeneratorConfig(
+            population=max(12, int(cfg.population * budget)),
+            generations=max(10, int(cfg.generations * budget)),
+            elite=cfg.elite, tournament=cfg.tournament, mutation_rate=cfg.mutation_rate,
+            seed=seed, corridor_share=cfg.corridor_share, max_stagnation=cfg.max_stagnation,
+        )
+        worker.rng = random.Random(seed)
+        worker.requirements = [self.requirements[i] for i in self.level_buckets[level_index]]
+        worker.level_buckets = [list(range(len(worker.requirements)))]
+        worker._envelope = self._envelope
+        worker._level_index = level_index
+        worker._anchor = anchor
+        return worker
+
+    # ------------------------------------------------------------ guardrail --
+
+    def _sanity(self, plan: FloorPlan) -> list[str]:
+        """What is wrong with a plan that no score should be allowed to excuse.
+
+        These are the failures a client sees in the first ten seconds - a
+        bedroom reached through the kitchen, three passages, a room a metre
+        wide - and a fitness function that trades them against daylight has
+        already lost the argument. A plan that lists anything here is not
+        offered while a clean one exists.
+        """
+        from collections import Counter
+
+        from aip.engines.architecture.programme import walkability
+
+        problems: list[str] = []
+        multi = len(plan.levels) > 1
+        for level in plan.levels:
+            kinds = Counter(r.type for r in level.rooms)
+            tag = f"level {level.index}"
+            if multi and kinds[RoomType.STAIRCASE] != 1:
+                problems.append(f"{tag}: {kinds[RoomType.STAIRCASE]} staircases")
+            passages = kinds[RoomType.CORRIDOR] + kinds[RoomType.LOBBY]
+            if passages > 1:
+                problems.append(f"{tag}: {passages} passages")
+            for room in level.rooms:
+                short = min(room.bbox.width, room.bbox.height)
+                floor = MIN_CLEAR_WIDTH.get(room.type, MIN_ROOM_DIMENSION)
+                if short < floor - 0.05:
+                    problems.append(f"{tag}: {room.display_name()} is {short:.1f} m wide")
+                elif (not room.type.is_circulation and not room.type.is_outdoor
+                      and room.bbox.aspect_ratio > 4.0):
+                    problems.append(f"{tag}: {room.display_name()} is a {room.bbox.aspect_ratio:.0f}:1 slot")
+            if len(level.rooms) > 1:
+                for route in walkability(plan, level.index):
+                    if not route.legal:
+                        problems.append(f"{tag}: {route.room} {route.reason}")
+        return problems
+
     # -------------------------------------------------------- preparation --
 
-    def _prepare_requirements(self) -> list[RoomRequirement]:
-        """Expand the brief and insert the circulation the client never asks for."""
+    def _prepare_requirements(self) -> tuple[list[RoomRequirement], list[list[int]]]:
+        """Expand the brief, add the circulation nobody asks for, split by floor.
+
+        Returns the room list and, per level, the indices of the rooms on it.
+        Both are computed exactly once; see `__init__`.
+        """
         reqs = self.brief.expanded_requirements()
         if not reqs:
             reqs = [RoomRequirement(type=RoomType.LIVING, preferred_area=20.0)]
@@ -753,17 +1175,100 @@ class LayoutGenerator:
                     priority=0.8,
                 )
             )
-        if self.brief.levels > 1 and not any(r.type is RoomType.STAIRCASE for r in reqs):
-            reqs.append(
-                RoomRequirement(
-                    type=RoomType.STAIRCASE,
-                    preferred_area=9.0,
-                    needs_external_wall=False,
-                    needs_daylight=False,
-                    priority=1.4,
-                )
+
+        levels = self.brief.levels
+        if levels <= 1:
+            return reqs, [list(range(len(reqs)))]
+
+        def stair() -> RoomRequirement:
+            return RoomRequirement(
+                type=RoomType.STAIRCASE, preferred_area=9.0,
+                needs_external_wall=False, needs_daylight=False, priority=1.4,
             )
-        return reqs
+
+        # Public and service functions stay on the entrance level; bedrooms
+        # move up. Anything the brief pinned to a level is honoured exactly.
+        ground_types = {
+            RoomType.LIVING, RoomType.DRAWING, RoomType.DINING, RoomType.KITCHEN,
+            RoomType.FOYER, RoomType.PUJA, RoomType.UTILITY, RoomType.PANTRY,
+            RoomType.STORE, RoomType.GARAGE, RoomType.POWDER, RoomType.SERVANT,
+            RoomType.VERANDAH, RoomType.STAIRCASE, RoomType.LAUNDRY,
+        }
+        private_types = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM,
+                         RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM}
+        passage_types = {RoomType.CORRIDOR, RoomType.LOBBY}
+        buckets: list[list[int]] = [[] for _ in range(levels)]
+        passages: list[int] = []
+        # A house with two or more bathrooms keeps one downstairs: a guest
+        # should not be sent up through the bedrooms to wash their hands.
+        ground_baths = 1 if sum(1 for r in reqs if r.type is RoomType.BATHROOM) >= 2 else 0
+        upper = 1
+        for idx, req in enumerate(reqs):
+            if req.level is not None and 0 <= req.level < levels:
+                buckets[req.level].append(idx)
+            elif req.type in passage_types:
+                passages.append(idx)
+            elif req.type is RoomType.BATHROOM and ground_baths:
+                buckets[0].append(idx)
+                ground_baths -= 1
+            elif req.type in ground_types:
+                buckets[0].append(idx)
+            else:
+                buckets[upper].append(idx)
+                upper = 1 + (upper % max(1, levels - 1))
+
+        # Every level needs at least one room.
+        for bucket in buckets:
+            if not bucket:
+                donor = max(buckets, key=len)
+                if len(donor) > 1:
+                    bucket.append(donor.pop())
+
+        # The passage the programme added goes where the bedrooms are; the
+        # old rule filed it under "ground" and left the bedrooms upstairs
+        # opening into each other. Then every floor gets what it lacks: a
+        # staircase to arrive by, and a hall to walk along.
+        def private_count(bucket: list[int]) -> int:
+            return sum(1 for i in bucket if reqs[i].type in private_types)
+
+        order = sorted(range(levels), key=lambda i: (-private_count(buckets[i]), i))
+        for level_index, idx in zip(order, passages, strict=False):
+            buckets[level_index].append(idx)
+        for idx in passages[levels:]:
+            buckets[0].append(idx)
+
+        site = self.brief.site
+        box = site.bbox
+        # `span` runs along the frontage.
+        if site.road_directions and site.road_directions[0].value in ("E", "W"):
+            span = box.height - site.setback_front - site.setback_rear
+        else:
+            span = box.width - site.setback_left - site.setback_right
+        for level_index, bucket in enumerate(buckets):
+            has_passage = any(reqs[i].type in passage_types for i in bucket)
+            if not has_passage:
+                # Ground: a hall running back from the living room that the
+                # stair, the toilet and the service rooms open off. Upper: a
+                # passage across the bedrooms, or with a single bedroom just
+                # a landing - a bedroom door straight off a flight of stairs
+                # is not a door anyone would draw.
+                if level_index == 0:
+                    kind, area = RoomType.CORRIDOR, span * 0.45 * 1.1
+                elif private_count(bucket) >= 2:
+                    kind, area = RoomType.CORRIDOR, span * 1.1
+                else:
+                    kind, area = RoomType.LOBBY, 3.5
+                reqs.append(RoomRequirement(
+                    type=kind,
+                    preferred_area=round(max(3.5, area), 1),
+                    needs_daylight=False, needs_external_wall=False, priority=1.2,
+                    notes="Passage added by the generator.",
+                ))
+                bucket.append(len(reqs) - 1)
+            if not any(reqs[i].type is RoomType.STAIRCASE for i in bucket):
+                reqs.append(stair())
+                bucket.append(len(reqs) - 1)
+        return reqs, buckets
 
     def _buildable_envelope(self) -> BoundingBox:
         """The rectangle the building may occupy, after setbacks and coverage."""
@@ -784,9 +1289,14 @@ class LayoutGenerator:
             box = BoundingBox(0.0, 0.0, side * 1.25, side / 1.25 * 1.0)
 
         # Respect ground coverage by shrinking the footprint proportionally.
+        # The footprint is stacked, so it is sized for the largest floor's
+        # programme, not for the average: dividing the whole house by the
+        # number of floors starved the ground floor.
         max_footprint = site.max_footprint if site.plot_area else box.area
-        per_level_target = self.brief.target_built_area / max(1, self.brief.levels)
-        target = min(box.area, max_footprint if max_footprint > 0 else box.area, per_level_target * 1.06)
+        per_level_target = max(
+            sum(self.requirements[i].target_area for i in bucket) for bucket in self.level_buckets
+        )
+        target = min(box.area, max_footprint if max_footprint > 0 else box.area, per_level_target * 1.08)
         if target > 0 and box.area > target:
             scale = math.sqrt(target / box.area)
             new_w = box.width * scale
@@ -799,49 +1309,8 @@ class LayoutGenerator:
         return box
 
     def _level_assignment(self) -> list[list[int]]:
-        """Distribute requirement indices across levels.
-
-        Public and service functions stay on the entrance level; bedrooms move
-        up when there is an upper floor. Anything the brief pinned to a level is
-        honoured exactly.
-        """
-        levels = self.brief.levels
-        buckets: list[list[int]] = [[] for _ in range(levels)]
-        if levels == 1:
-            buckets[0] = list(range(len(self.requirements)))
-            return buckets
-
-        ground_types = {
-            RoomType.LIVING, RoomType.DRAWING, RoomType.DINING, RoomType.KITCHEN,
-            RoomType.FOYER, RoomType.LOBBY, RoomType.PUJA, RoomType.UTILITY,
-            RoomType.STORE, RoomType.GARAGE, RoomType.POWDER, RoomType.SERVANT,
-            RoomType.VERANDAH, RoomType.CORRIDOR, RoomType.STAIRCASE,
-        }
-        upper_index = 1
-        for idx, req in enumerate(self.requirements):
-            if req.level is not None and 0 <= req.level < levels:
-                buckets[req.level].append(idx)
-            elif req.type in ground_types:
-                buckets[0].append(idx)
-            else:
-                buckets[upper_index].append(idx)
-                upper_index = 1 + (upper_index % max(1, levels - 1))
-
-        # Every level needs vertical circulation and at least one room.
-        for i, bucket in enumerate(buckets):
-            if not bucket:
-                donor = max(buckets, key=len)
-                if len(donor) > 1:
-                    bucket.append(donor.pop())
-            if i > 0 and not any(self.requirements[j].type is RoomType.STAIRCASE for j in bucket):
-                self.requirements.append(
-                    RoomRequirement(
-                        type=RoomType.STAIRCASE, preferred_area=9.0,
-                        needs_external_wall=False, needs_daylight=False, priority=1.4,
-                    )
-                )
-                bucket.append(len(self.requirements) - 1)
-        return buckets
+        """Per level, the indices of the requirements on it. Fixed at construction."""
+        return self.level_buckets
 
     # ---------------------------------------------------------- evolution --
 
@@ -850,7 +1319,7 @@ class LayoutGenerator:
         cfg = self.config
         slots = list(range(len(self.requirements)))
         areas = [r.target_area for r in self.requirements]
-        envelope = self._buildable_envelope()
+        envelope = self._envelope
         level_buckets = self._level_assignment()
 
         population: list[Genome] = []
@@ -873,6 +1342,7 @@ class LayoutGenerator:
                     slots, self.requirements, areas, self.rng,
                     road_along_y=depth_along_y, road_at_high_end=road_at_high_end,
                     bands=bands, brief_kind=self.brief.kind,
+                    frontage=envelope.width if depth_along_y else envelope.height,
                 )
                 # The zoned tree already places the right requirement in each
                 # slot, so the assignment is the identity.
@@ -960,7 +1430,6 @@ class LayoutGenerator:
                 if genome.assignment[slot] in wanted:
                     slot_to_level[slot] = level_index
 
-        from aip.domain.brief import NBC_MIN_WIDTH
         from aip.engines.architecture.programme import depth_fit
 
         area_terms: list[float] = []
@@ -1004,9 +1473,9 @@ class LayoutGenerator:
             # Statutory minimum width for this room type, not merely a generic
             # floor. A dining room 1.7 m across clears MIN_ROOM_DIMENSION and is
             # still a corridor with a table in it.
-            floor = NBC_MIN_WIDTH.get(req.type)
-            if floor is not None and short < floor:
-                penalty += 0.20 * (floor - short) / floor
+            floor = MIN_CLEAR_WIDTH.get(req.type, MIN_ROOM_DIMENSION)
+            if short < floor:
+                penalty += (0.9 if req.type.is_habitable else 0.45) * (floor - short) / floor
 
             # Where the room sits between road and rear.
             depth_terms.append(depth_fit(req.type, depth_of(box)))
@@ -1016,10 +1485,17 @@ class LayoutGenerator:
             # packed in front of it has no road-facing wall, and the entrance
             # ends up on the side of the house.
             if (
-                req.type in _ENTRY_ROOMS and road is not None
+                self._level_index == 0
+                and req.type in _ENTRY_ROOMS and road is not None
                 and not self._touches_road_edge(box, envelope, road)
             ):
                 penalty += 0.18
+
+            # An upper floor's staircase stacks over the one below or it is
+            # not a staircase. Priced like a landlocked bedroom, because it
+            # has the same property: no local repair can fix it.
+            if self._anchor is not None and req.type is RoomType.STAIRCASE:
+                penalty += 0.60 * (1.0 - _overlap_fraction(box, self._anchor))
 
             # The shape term below saturates at zero around 3:1, which makes an
             # 8:1 room cost exactly as much as a 3:1 one - so once a room is bad
@@ -1028,6 +1504,11 @@ class LayoutGenerator:
             # like corridors.
             if req.type.is_habitable and box.aspect_ratio > 2.4:
                 penalty += 0.09 * (box.aspect_ratio - 2.4)
+            elif not req.type.is_circulation and not req.type.is_outdoor and box.aspect_ratio > 3.0:
+                # A bathroom or a puja room five times as long as it is wide
+                # is a slot, not a room. Passages and balconies are allowed
+                # to be long; nothing else is.
+                penalty += 0.06 * (box.aspect_ratio - 3.0)
 
             # Area fidelity: undersize is a defect, oversize merely costs money.
             ratio = box.area / max(req.target_area, 0.5)
@@ -1100,7 +1581,7 @@ class LayoutGenerator:
     def _surrogate_walkability(
         self, placed: list[tuple[int, BoundingBox]], slot_to_level: dict[int, int]
     ) -> float:
-        from aip.engines.architecture.programme import is_through, may_enter
+        from aip.engines.architecture.programme import PRIVATE_HOST, is_through, may_enter
 
         # The same question the door placer will ask, so the search produces
         # layouts the placer can connect legally. Two rules kept in two places
@@ -1119,7 +1600,18 @@ class LayoutGenerator:
                     continue
                 if not _rects_touch(box, other_box, min_overlap=DOOR_WALL):
                     continue
-                if may_enter(req.type, self.requirements[other_index].type):
+                other = self.requirements[other_index]
+                if not may_enter(req.type, other.type):
+                    continue
+                # The door must come from somewhere the door tree reaches on
+                # its own: a through-room, or this room's private host. A
+                # kitchen whose only legal neighbour is the utility passed
+                # this test and was then doored from the staircase.
+                host = (
+                    other.type in PRIVATE_HOST.get(req.type, ())
+                    or (req.type is RoomType.BATHROOM and other.attached_bathroom)
+                )
+                if is_through(other.type) or host:
                     reachable = True
                     break
             if not reachable:
@@ -1287,7 +1779,11 @@ class LayoutGenerator:
         """Does the plan work as a building, not just as a set of rooms?"""
         from aip.engines.architecture.programme import evaluate
 
-        return evaluate(plan, self.brief).score
+        scores = [
+            evaluate(plan, self.brief, level.index).score
+            for level in plan.levels if len(level.rooms) > 1
+        ]
+        return sum(scores) / len(scores) if scores else 0.0
 
     def _programme_fit(self, plan: FloorPlan) -> float:
         """How closely realised room areas match what the brief asked for."""
@@ -1308,66 +1804,47 @@ class LayoutGenerator:
     # ------------------------------------------------------- realisation ---
 
     def _to_plan(self, genome: Genome) -> FloorPlan:
-        """Convert a genome into a fully-detailed FloorPlan."""
-        envelope = self._buildable_envelope()
-        level_buckets = self._level_assignment()
-        site = self.brief.site
+        """Convert a single-level genome into a fully-detailed FloorPlan."""
+        return self._assemble([self._realise_level(genome, self._level_index)])
 
+    def _realise_level(self, genome: Genome, level_index: int) -> list[Room]:
+        """The rooms of one floor: the genome's partition of the footprint."""
+        boxes = realise(genome.tree, self._envelope)
+        rooms: list[Room] = []
+        for slot, box in sorted(boxes.items()):
+            req = self.requirements[genome.assignment[slot]]
+            polygon = rectangle(Vec2(box.min_x, box.min_y), box.width, box.height)
+            rooms.append(Room(
+                name=req.type.label,
+                type=req.type,
+                polygon=polygon,
+                level=level_index,
+                ceiling_height=3.0,
+                metadata={"target_area": req.target_area, "slot": slot},
+            ))
+        return rooms
+
+    def _assemble(self, rooms_by_level: list[list[Room]]) -> FloorPlan:
+        """Walls, stairs, structure and openings for realised floors."""
+        envelope = self._envelope
         levels: list[Level] = []
-        for level_index, requirement_indices in enumerate(level_buckets):
-            if not requirement_indices:
+        for level_index, rooms in enumerate(rooms_by_level):
+            if not rooms:
                 continue
-            sub_slots = [s for s in range(len(genome.assignment)) if genome.assignment[s] in requirement_indices]
-            if not sub_slots:
-                sub_slots = list(range(min(len(requirement_indices), len(genome.assignment))))
-
-            areas = [self.requirements[genome.assignment[s]].target_area for s in range(len(genome.assignment))]
-            if level_index == 0:
-                boxes = realise(genome.tree, envelope)
-                boxes = {s: b for s, b in boxes.items() if s in set(sub_slots)}
-                if not boxes:
-                    boxes = realise(build_balanced_tree(sub_slots, self.rng, areas), envelope)
-            else:
-                # Upper floors reuse the footprint but get their own partition,
-                # which keeps the structural envelope stackable while letting the
-                # upper programme differ.
-                tree = build_balanced_tree(sub_slots, random.Random(level_index * 104729), areas)
-                boxes = realise(tree, envelope)
-
-            rooms: list[Room] = []
-            for slot, box in sorted(boxes.items()):
-                req = self.requirements[genome.assignment[slot]]
-                if box.width < MIN_ROOM_DIMENSION or box.height < MIN_ROOM_DIMENSION:
-                    # Degenerate cell - the optimiser is penalised for this via
-                    # spatial quality rather than the room being silently dropped.
-                    pass
-                polygon = rectangle(Vec2(box.min_x, box.min_y), box.width, box.height)
-                room = Room(
-                    name=req.type.label,
-                    type=req.type,
-                    polygon=polygon,
-                    level=level_index,
-                    ceiling_height=3.0,
-                    metadata={"target_area": req.target_area, "slot": slot},
-                )
-                rooms.append(room)
-
-            walls = self._build_walls(rooms, envelope, level_index)
-            staircases = self._build_stairs(rooms, level_index)
             levels.append(
                 Level(
                     index=level_index,
                     elevation=level_index * 3.15,
                     floor_to_floor=3.15,
                     rooms=rooms,
-                    walls=walls,
-                    staircases=staircases,
+                    walls=self._build_walls(rooms, envelope, level_index),
+                    staircases=self._build_stairs(rooms, level_index),
                 )
             )
 
         plan = FloorPlan(
             name="Generated Scheme",
-            site=site,
+            site=self.brief.site,
             levels=levels,
             structural_system=StructuralSystem.RCC_FRAME,
             style=self.brief.style.primary.value,
@@ -1577,11 +2054,9 @@ class LayoutGenerator:
         from aip.engines.architecture.programme import is_through, may_enter
 
         rooms = {r.id: r for r in level.rooms}
-        root = next((r.id for r in level.rooms if r.type in _ENTRY_ROOMS), None)
-        if root is None:
-            root = next((r.id for r in level.rooms if r.type is RoomType.LIVING), None)
-        if root is None:
-            return set(rooms)
+        if not rooms:
+            return set()
+        root = self._entry_room(level).id
         seen = {root}
         frontier = [root]
         while frontier:
@@ -1675,12 +2150,7 @@ class LayoutGenerator:
             return
         adjacency = self._door_adjacency(plan, level)
 
-        # Root at the foyer, else the living room, else the largest room.
-        root = next((r.id for r in level.rooms if r.type is RoomType.FOYER), None)
-        if root is None:
-            root = next((r.id for r in level.rooms if r.type is RoomType.LIVING), None)
-        if root is None:
-            root = max(level.rooms, key=lambda r: r.area).id
+        root = self._entry_room(level).id
 
         # Prim-style traversal preferring links through circulation space, which
         # yields a plan where rooms open off a hall rather than through each other.
@@ -1702,11 +2172,29 @@ class LayoutGenerator:
         def may_expand_from(node: str) -> bool:
             return is_through(rooms[node].type)
 
+        # A bedroom that asked for an attached bathroom claims the bathroom
+        # beside it before the passage can. Offered from the passage first -
+        # it is nearer the passage's centre - the en-suite became a common
+        # bathroom with the master's door bricked up.
+        reserved: dict[str, str] = {}
+        for host in sorted(level.rooms, key=lambda r: r.type is not RoomType.MASTER_BEDROOM):
+            if not self._wants_attached(host):
+                continue
+            candidates = [
+                n for n in adjacency.get(host.id, set())
+                if rooms[n].type is RoomType.BATHROOM and n not in reserved
+            ]
+            if candidates:
+                best = max(candidates, key=lambda n: _shared_length(rooms[host.id], rooms[n]))
+                reserved[best] = host.id
+
         def push(node: str, *, strict: bool = True) -> None:
             if strict and not may_expand_from(node):
                 return
             for neighbour in adjacency.get(node, set()):
                 if neighbour in connected:
+                    continue
+                if strict and reserved.get(neighbour, node) != node:
                     continue
                 a, b = rooms[node], rooms[neighbour]
                 # Where may this room's door come from? In the strict pass a
@@ -1734,9 +2222,22 @@ class LayoutGenerator:
                 hosts = PRIVATE_HOST.get(rooms[neighbour].type, ())
                 if rooms[node].type in hosts:
                     frontier.append((0.05, node, neighbour))
-                # An attached bathroom: a bathroom whose host asked for one.
-                if rooms[neighbour].type is RoomType.BATHROOM and self._wants_attached(rooms[node]):
+                # An attached bathroom: the one reserved for this host.
+                if reserved.get(neighbour) == node:
                     frontier.append((0.05, node, neighbour))
+                # A bathroom no passage reaches, beside a bedroom, is that
+                # bedroom's bathroom. The alternative is a door from the
+                # kitchen or nothing.
+                elif (
+                    rooms[neighbour].type is RoomType.BATHROOM
+                    and rooms[node].type in _BEDROOMS
+                    and neighbour not in reserved
+                    and not any(
+                        is_through(rooms[n].type) and may_enter(RoomType.BATHROOM, rooms[n].type)
+                        for n in adjacency.get(neighbour, set())
+                    )
+                ):
+                    frontier.append((0.08, node, neighbour))
 
         push(root)
         while frontier and len(connected) < len(rooms):
@@ -1792,8 +2293,29 @@ class LayoutGenerator:
                 push(target, strict=False)
 
         # The main entrance goes on the exterior wall of the root room, facing
-        # the road wherever the site tells us where the road is.
-        self._place_main_door(plan, level, rooms[root])
+        # the road wherever the site tells us where the road is. An upper
+        # floor has no front door; you arrive by the stair.
+        if level.index == 0:
+            self._place_main_door(plan, level, rooms[root])
+
+    @staticmethod
+    def _entry_room(level: Level) -> Room:
+        """Where a person arrives on this floor: the door tree grows from here.
+
+        Ground: the foyer, else the living room. Upstairs: the staircase, else
+        the landing. Rooting the upper floor at its largest room - the master
+        bedroom - is how every other bedroom came to be entered through it.
+        """
+        order = (
+            (RoomType.STAIRCASE, RoomType.LOBBY, RoomType.CORRIDOR)
+            if level.index > 0 else
+            (RoomType.FOYER, RoomType.LOBBY, RoomType.VERANDAH, RoomType.LIVING)
+        )
+        for kind in order:
+            room = next((r for r in level.rooms if r.type is kind), None)
+            if room is not None:
+                return room
+        return max(level.rooms, key=lambda r: r.area)
 
     def _wants_attached(self, room: Room) -> bool:
         return any(
@@ -1892,6 +2414,23 @@ class LayoutGenerator:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _shared_length(a: Room, b: Room) -> float:
+    """Length of wall two rooms share, 0 when they do not touch."""
+    from aip.domain.geometry import shared_edge
+
+    edge = shared_edge(a.polygon, b.polygon)
+    return edge[0].distance_to(edge[1]) if edge is not None else 0.0
+
+
+def _overlap_fraction(box: BoundingBox, anchor: BoundingBox) -> float:
+    """How much of `anchor` the box covers, 0 to 1."""
+    dx = min(box.max_x, anchor.max_x) - max(box.min_x, anchor.min_x)
+    dy = min(box.max_y, anchor.max_y) - max(box.min_y, anchor.min_y)
+    if dx <= 0 or dy <= 0 or anchor.area <= 0:
+        return 0.0
+    return min(1.0, (dx * dy) / anchor.area)
 
 
 def _external_faces(box: BoundingBox, envelope: BoundingBox, tol: float = 0.02) -> int:

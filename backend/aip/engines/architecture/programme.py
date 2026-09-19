@@ -276,6 +276,13 @@ def walkability(plan: FloorPlan, level_index: int = 0) -> list[Route]:
             if a in rooms and b in rooms:
                 doors.setdefault(a, set()).add(b)
                 doors.setdefault(b, set()).add(a)
+    if (entry is None or entry not in rooms) and level_index > 0:
+        # An upper floor has no front door: you arrive by the stair, or on
+        # the landing it opens onto.
+        for kind in (RoomType.STAIRCASE, RoomType.LOBBY, RoomType.CORRIDOR):
+            entry = next((r.id for r in level.rooms if r.type is kind), None)
+            if entry is not None:
+                break
     if entry is None or entry not in rooms:
         return [Route(r.display_name(), [], False, "no entrance") for r in level.rooms]
 

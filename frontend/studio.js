@@ -1156,6 +1156,13 @@ function renderRail() {
         ? "Selected by the committee as the best trade-off across every measured axis."
         : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
 
+  // A scheme the generator could not make clean says so, in the words of
+  // the rule it broke. It is offered only when nothing clean was left.
+  const guard = plan?.metadata?.guardrail || [];
+  if (guard.length) {
+    $("pick-why").textContent += ` Offered with reservations: ${guard.slice(0, 3).join("; ")}.`;
+  }
+
   const row = rankingRow();
   const bars = $("axis-bars"); bars.innerHTML = "";
   const axes = Object.entries(row?.axis_scores || {}).sort((a, b) => a[1] - b[1]);
