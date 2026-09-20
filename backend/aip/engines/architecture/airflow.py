@@ -15,10 +15,17 @@ from where its openings actually are:
   the room is never flushed. That dead zone is shaded, and it is sized from the
   BS 5925 effective-depth rule rather than drawn for effect.
 
-The animation is SMIL inside the SVG, which means the file is self-contained:
-no script, no runtime, no dependency. It animates in a browser, sits still and
-still reads correctly in a PDF or a printed sheet, and can be dropped into a
-client report as a single file.
+The field itself moves too, not just the particles riding on it: an animated
+feDisplacementMap warps the coloured raster continuously, masked by the
+image's own brightness so a fast cell churns and a still one stays still. That
+mask is what keeps the animation honest rather than merely pretty - it cannot
+show life in a dead zone the solve says has none.
+
+Everything here - the streamlines, the recirculation shading, and now the warp
+- is SMIL and SVG filters inside the file itself: no script, no runtime, no
+dependency. It animates in a browser, sits still and still reads correctly in
+a PDF or a printed sheet, and can be dropped into a client report as a single
+file.
 
 Nothing here invents physics. Every streamline is placed from the opening
 positions and the mode the analysis already assigned, so the picture cannot
@@ -144,20 +151,79 @@ def _seed_points(field, room: Room, openings: list[tuple[Vec2, Vec2]]) -> list[V
     return seeds
 
 
+def _ripple_filter(fid: str, room: Room, width_px: float, height_px: float) -> str:
+    """A native SVG filter that makes the field itself breathe.
+
+    A still heatmap reads as a diagram; the reference asked for something that
+    looks like a live solve, with the coloured field continuously churning the
+    way real air does. Rather than pre-render dozens of raster frames - heavy,
+    and the compression artefacts show on a field this smooth - this warps the
+    *one* static image with an animated feDisplacementMap. It is pure SMIL, so
+    it costs nothing beyond the single PNG already being drawn, animates in a
+    browser, and simply holds still in a PDF or a print.
+
+    The warp is masked by the image's own brightness, and this is the point
+    that matters, not a decoration: this diagram's colours already encode
+    speed, so a bright, fast-moving cell is pushed by the noise field and a
+    dark, still one is not. The animation cannot show motion the solve did not
+    compute - it can only make the motion that *is* there easier to feel.
+    """
+    long_side = max(width_px, height_px, 1.0)
+    short_side = max(min(width_px, height_px, long_side), 1.0)
+    # A stable per-room seed and period, so neighbouring rooms churn out of
+    # phase with each other rather than breathing in lockstep.
+    h = hash(room.id) & 0xFFFF
+    seed = h % 40 + 1
+    period = round(8.5 + (h % 7) * 0.55, 2)
+    freq = round(4.2 / long_side, 5)
+    freq_lo = max(freq * 0.6, 0.0006)
+    freq_hi = freq * 1.7
+    scale = round(min(70.0, max(6.0, short_side * 0.16)), 1)
+
+    return (
+        f'<filter id="{fid}" x="-30%" y="-30%" width="160%" height="160%" '
+        f'color-interpolation-filters="sRGB">'
+        f'<feTurbulence type="fractalNoise" numOctaves="2" seed="{seed}" '
+        f'stitchTiles="stitch" result="noise">'
+        f'<animate attributeName="baseFrequency" dur="{period}s" '
+        f'repeatCount="indefinite" values='
+        f'"{freq_lo:.5f} {freq_hi:.5f};{freq_hi:.5f} {freq_lo:.5f};'
+        f'{freq_lo:.5f} {freq_hi:.5f}"/>'
+        f'</feTurbulence>'
+        # The source's own luminance, broadcast into every channel: bright
+        # (fast) pixels drive a full-strength warp, dark (still) ones damp it
+        # toward zero. This is what keeps a sealed dead zone visibly calm.
+        f'<feColorMatrix in="SourceGraphic" type="luminanceToAlpha" result="lum"/>'
+        f'<feComponentTransfer in="lum" result="lumboost">'
+        f'<feFuncA type="gamma" amplitude="1" exponent="0.6" offset="0"/>'
+        f'</feComponentTransfer>'
+        f'<feColorMatrix in="lumboost" type="matrix" '
+        f'values="0 0 0 1 0  0 0 0 1 0  0 0 0 1 0  0 0 0 1 0" result="mask"/>'
+        f'<feComposite in="noise" in2="mask" operator="arithmetic" '
+        f'k1="1" k2="0" k3="0" k4="0" result="modnoise"/>'
+        f'<feDisplacementMap in="SourceGraphic" in2="modnoise" scale="{scale}" '
+        f'xChannelSelector="R" yChannelSelector="G"/>'
+        f'</filter>'
+    )
+
+
 def _draw_field(canvas: _Canvas, room: Room, field, seq: int) -> int:
-    """Paint the solved field, then run particles along its own streamlines."""
+    """Paint the solved field, animated, then run particles along its streamlines."""
 
     box = room.bbox
     x0, y0 = canvas.px(Vec2(box.min_x, box.max_y))
     x1, y1 = canvas.px(Vec2(box.max_x, box.min_y))
+    width, height = abs(x1 - x0), abs(y1 - y0)
     clip = f"clip{seq}"
+    ripple = f"ripple{seq}"
 
     points = " ".join(f"{x},{y}" for x, y in (canvas.px(p) for p in room.polygon))
     canvas.add(
-        f'<clipPath id="{clip}"><polygon points="{points}"/></clipPath>'
-        f'<image x="{x0:.1f}" y="{y0:.1f}" width="{abs(x1 - x0):.1f}" '
-        f'height="{abs(y1 - y0):.1f}" clip-path="url(#{clip})" opacity="0.92" '
-        f'preserveAspectRatio="none" '
+        f'<defs><clipPath id="{clip}"><polygon points="{points}"/></clipPath>'
+        f'{_ripple_filter(ripple, room, width, height)}</defs>'
+        f'<image x="{x0:.1f}" y="{y0:.1f}" width="{width:.1f}" '
+        f'height="{height:.1f}" clip-path="url(#{clip})" filter="url(#{ripple})" '
+        f'opacity="0.92" preserveAspectRatio="none" '
         f'href="data:image/png;base64,{_field_image(field, room)}"/>'
     )
     return seq + 1

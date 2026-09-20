@@ -9,6 +9,8 @@ three, which is exactly what it used to do.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from aip.domain.brief import default_residence_brief
@@ -403,6 +405,34 @@ def test_airflow_paints_a_solved_field():
     """The colour is a solved velocity field, not a gradient chosen by hand."""
     svg = airflow_svg(_deep_room_plan(9.0, openings_on="one"), 0)
     assert "data:image/png;base64," in svg, "no field raster was produced"
+
+
+def test_airflow_field_itself_breathes(plans):
+    """The colour field animates, not only the particles riding on it.
+
+    A still heatmap with moving dots reads as a diagram; asked for something
+    that looks like a live solve, the field itself has to move. This checks
+    the mechanism is really there - an animated feDisplacementMap warping the
+    field raster - and that the warp is derived from the field's own
+    brightness rather than bolted on as an unrelated decoration.
+    """
+    svg = airflow_svg(plans[0], 0)
+    assert svg.count("<feDisplacementMap") >= 1, "the field raster is not warped"
+    assert "<animate attributeName=\"baseFrequency\"" in svg
+    # The mask chain reads the source image's own luminance, so a fast (bright)
+    # cell churns and a still (dark) one does not - the animation cannot show
+    # motion the solve did not compute.
+    assert "luminanceToAlpha" in svg
+    # Every ripple filter must actually be applied to an image.
+    filter_ids = re.findall(r'<filter id="(ripple\d+)"', svg)
+    assert filter_ids, "no ripple filter was defined"
+    for fid in filter_ids:
+        assert f'filter="url(#{fid})"' in svg
+    # Distinct rooms get distinct filters (and therefore independent phase),
+    # not one filter silently reused everywhere.
+    assert len(set(filter_ids)) == len(filter_ids)
+    # Still self-contained.
+    assert "<script" not in svg
 
 
 def test_the_solver_conserves_mass_and_respects_walls():
