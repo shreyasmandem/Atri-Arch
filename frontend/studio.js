@@ -342,10 +342,31 @@ function initStarField() {
 
   function seed() {
     stars.length = 0;
-    updateCenter();
-    birthTime = performance.now();
-    for (let i = 0; i < INTRO_STAR_COUNT; i++) {
-      stars.push(createIntroStar(i));
+    state = "ambient";
+    const count = 160;
+    for (let i = 0; i < count; i++) {
+      const isHero = Math.random() < 0.12;
+      const radius = isHero ? Math.random() * 0.9 + 1.6 : Math.random() * 0.8 + 0.6;
+      const col = COLORS[Math.floor(Math.random() * COLORS.length)];
+      stars.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        targetX: Math.random() * window.innerWidth,
+        targetY: Math.random() * window.innerHeight,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.15,
+        r: radius,
+        isHero,
+        introAlpha: 0,
+        ambientAlpha: Math.random() * 0.16 + 0.14,
+        color: col,
+        phase: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * 0.002 + 0.001,
+        driftX: (Math.random() - 0.5) * 0.08,
+        driftY: (Math.random() - 0.5) * 0.08,
+        popDelay: 0,
+        popDuration: 0,
+      });
     }
   }
 
@@ -628,53 +649,11 @@ function updateStudioHUD() {
   // Cosmic Star-field Engine
   const starField = initStarField();
 
-  // Intro Screen Controller
+  // Intro Screen Controller (Instant Full Site Studio)
   const curtain = $("intro-curtain");
-  const inIframe = window.self !== window.top;
-  const skipIntro = inIframe || new URLSearchParams(location.search).has("studio");
-
-  if (curtain) {
-    if (skipIntro) {
-      curtain.style.display = "none";
-      document.body.classList.remove("is-loading");
-      starField.spread(true);
-    } else {
-      let isDismissed = false;
-      let hasBlasted = false;
-
-      const triggerBlast = () => {
-        if (hasBlasted) return;
-        hasBlasted = true;
-        starField.spread(false);
-      };
-
-      const dismissIntro = (fast = false) => {
-        if (isDismissed) return;
-        isDismissed = true;
-        if (!hasBlasted) {
-          triggerBlast();
-        }
-        document.body.classList.remove("is-loading");
-        curtain.classList.add("is-fading");
-        setTimeout(() => { curtain.style.display = "none"; }, 850);
-      };
-
-      // 1. Single Star Blast when silver locks with gold (both visible, 1.3s)
-      const blastTimer = setTimeout(triggerBlast, 1300);
-
-      // 2. Smoothly transition into home studio after stars settle (3.15s) - NO second burst
-      const introTimer = setTimeout(() => dismissIntro(false), 3150);
-
-      curtain.addEventListener("click", () => {
-        clearTimeout(blastTimer);
-        clearTimeout(introTimer);
-        dismissIntro(true);
-      });
-      window.addEventListener("keydown", () => dismissIntro(true), { once: true });
-      window.addEventListener("click", () => dismissIntro(true), { once: true });
-      setTimeout(() => dismissIntro(false), 3400);
-    }
-  }
+  if (curtain) curtain.style.display = "none";
+  document.body.classList.remove("is-loading");
+  if (starField && starField.spread) starField.spread(true);
 
   strike($("hero-mandala"));
   strike($("review-mandala"));
@@ -786,6 +765,20 @@ function updateStudioHUD() {
     if (idxEl) idxEl.textContent = `0${stanceIdx} // 04`;
     const trackFill = $("stance-track-fill");
     if (trackFill) trackFill.style.width = pct + "%";
+    
+    // Animate covered ticks with golden phosphor luminescence
+    document.querySelectorAll(".stance-tick").forEach((tick, i) => {
+      tick.classList.toggle("is-covered", i <= stanceIdx);
+    });
+
+    // Pop the status pill with smooth elastic micro-bounce
+    const pill = $("stance-status-pill");
+    if (pill) {
+      pill.classList.remove("is-popping");
+      void pill.offsetWidth;
+      pill.classList.add("is-popping");
+    }
+
     document.querySelectorAll("#stance-scale .stance-station").forEach((btn) => {
       const sVal = +btn.dataset.val;
       if (sVal === stanceIdx) {
@@ -799,7 +792,12 @@ function updateStudioHUD() {
       stanceInput.style.setProperty("--stance-pct", `${pct}%`);
     }
     const hudVastu = $("hud-vastu");
-    if (hudVastu) hudVastu.textContent = s[0];
+    if (hudVastu) {
+      hudVastu.textContent = s[0];
+      hudVastu.classList.remove("is-popping");
+      void hudVastu.offsetWidth;
+      hudVastu.classList.add("is-popping");
+    }
   }
 
   const stanceInput = $("stance");
