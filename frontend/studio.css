@@ -1415,15 +1415,15 @@ body[data-phase="review"]  .review  { display: grid; }
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(217, 119, 6, 0.08);
-  border: 1px solid rgba(217, 119, 6, 0.28);
-  font-family: var(--num), ui-monospace, "SF Mono", monospace;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  background: rgba(229, 169, 88, 0.08);
+  border: 1px solid rgba(229, 169, 88, 0.28);
+  font-family: var(--num);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(8px);
   transition: all 0.25s ease;
 }
@@ -1431,18 +1431,18 @@ body[data-phase="review"]  .review  { display: grid; }
   display: inline-block;
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: #F59E0B;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.85);
+  background: #E5A958;
+  box-shadow: 0 0 8px rgba(229, 169, 88, 0.85);
   animation: stance-dot-pulse 2.2s ease-in-out infinite;
 }
 @keyframes stance-dot-pulse {
-  0%, 100% { opacity: 0.5; box-shadow: 0 0 4px rgba(245, 158, 11, 0.4); transform: scale(0.92); }
-  50%      { opacity: 1;   box-shadow: 0 0 10px rgba(245, 158, 11, 1);    transform: scale(1.1); }
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 4px rgba(229, 169, 88, 0.4); transform: scale(0.92); }
+  50%      { opacity: 1;   box-shadow: 0 0 10px rgba(229, 169, 88, 1);    transform: scale(1.08); }
 }
 .stance-status-name {
-  color: #FDE68A;
+  color: #F5D77F;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   font-weight: 700;
 }
 .stance-status-weight {
@@ -1452,180 +1452,123 @@ body[data-phase="review"]  .review  { display: grid; }
   border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* Claude Code Telemetry Header Bar */
-.stance-telemetry-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
-  margin-bottom: 10px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-.telemetry-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--num), ui-monospace, "SF Mono", monospace;
-  line-height: 1;
-}
-.telemetry-k {
-  color: rgba(255, 255, 255, 0.32);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.telemetry-v {
-  color: #F59E0B;
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-
-/* Insight Prompt Row */
-.stance-insight-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  border-left: 2px solid #D97706;
-  background: rgba(217, 119, 6, 0.05);
-  border-radius: 0 4px 4px 0;
-}
-.stance-insight-prefix {
-  font-family: var(--num), ui-monospace, "SF Mono", monospace;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #D97706;
-  line-height: 1.5;
-  user-select: none;
-}
-.stance-desc {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 11.5px;
-  line-height: 1.5;
-  font-style: normal;
-}
-
 /* Slider Chassis */
-.slider-container { padding: 4px 0 2px; }
+.slider-container { padding: 8px 0 4px; }
 .stance-slider-chassis { position: relative; padding: 12px 0 6px; }
 .stance-track-backdrop {
   position: relative;
   width: 100%;
-  height: 8px;
-  border-radius: 4px;
-  background: #09090C;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   margin-top: 10px;
   pointer-events: none;
   overflow: visible;
 }
 .stance-track-fill {
   position: absolute;
-  top: 1px; left: 1px; bottom: 1px;
+  top: 0; left: 0; bottom: 0;
   width: 50%;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #92400E 0%, #D97706 60%, #F59E0B 100%);
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
-  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #9E7432 0%, #D89F48 50%, #F5D77F 100%);
+  box-shadow: 0 0 12px rgba(229, 169, 88, 0.45);
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
 }
+
+/* Claude Code Animated Shimmer Beam */
+.stance-claude-beam {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 60px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.75) 50%, transparent 100%);
+  animation: claudeTrackBeam 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes claudeTrackBeam {
+  0%   { transform: translateX(-60px); opacity: 0; }
+  15%  { opacity: 0.9; }
+  85%  { opacity: 0.9; }
+  100% { transform: translateX(500px); opacity: 0; }
+}
+
 .stance-tick {
   position: absolute;
+  top: -3px;
+  width: 1px; height: 12px;
+  background: rgba(255, 255, 255, 0.15);
   transform: translateX(-50%);
   pointer-events: none;
-}
-.stance-tick--major {
-  top: -4px;
-  width: 1.5px; height: 16px;
-  background: rgba(255, 255, 255, 0.22);
-  border-radius: 1px;
-}
-.stance-tick--sub {
-  top: 0px;
-  width: 1px; height: 8px;
-  background: rgba(255, 255, 255, 0.08);
 }
 
 /* Range Input */
 .stance {
   appearance: none;
   width: 100%;
-  height: 28px;
+  height: 26px;
   background: none;
   cursor: pointer;
   outline: none;
-  margin-top: -18px;
+  margin-top: -16px;
   position: relative;
   z-index: 2;
 }
 .stance::-webkit-slider-runnable-track {
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 999px;
   background: transparent;
 }
 .stance::-moz-range-track {
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 999px;
   background: transparent;
 }
 
-/* Claude Code Terminal Machined Thumb */
+/* Machined Luxury Champagne Thumb */
 .stance::-webkit-slider-thumb {
   appearance: none;
-  width: 20px; height: 20px;
+  width: 18px; height: 18px;
   margin-top: -6px;
-  border-radius: 4px;
-  background: #141417;
-  border: 2px solid #F59E0B;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #FFF6DA 0%, #F5D77F 45%, #B88536 100%);
+  border: 2px solid rgba(18, 16, 22, 0.9);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.9),
-    0 2px 8px rgba(0, 0, 0, 0.7),
-    0 0 10px rgba(245, 158, 11, 0.45),
-    inset 0 0 0 2px #0B0B0E;
+    0 0 0 1px rgba(229, 169, 88, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.6),
+    0 0 10px rgba(245, 215, 127, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
   cursor: grab;
-  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.16s ease,
-              border-color 0.16s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.18s ease;
 }
 .stance::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  border-color: #FDE68A;
+  transform: scale(1.2);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.9),
-    0 2px 10px rgba(0, 0, 0, 0.8),
-    0 0 16px rgba(245, 158, 11, 0.7),
-    inset 0 0 0 2px #0B0B0E;
+    0 0 0 2px rgba(229, 169, 88, 0.7),
+    0 0 16px rgba(245, 215, 127, 0.65),
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6);
 }
 .stance::-webkit-slider-thumb:active {
   cursor: grabbing;
-  transform: scale(1.04);
+  transform: scale(1.05);
 }
 .stance::-moz-range-thumb {
-  width: 20px; height: 20px;
-  border-radius: 4px;
-  background: #141417;
-  border: 2px solid #F59E0B;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #FFF6DA 0%, #F5D77F 45%, #B88536 100%);
+  border: 2px solid rgba(18, 16, 22, 0.9);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.9),
-    0 2px 8px rgba(0, 0, 0, 0.7),
-    0 0 10px rgba(245, 158, 11, 0.45),
-    inset 0 0 0 2px #0B0B0E;
+    0 0 0 1px rgba(229, 169, 88, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.6),
+    0 0 10px rgba(245, 215, 127, 0.4),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
   cursor: grab;
-  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.16s ease,
-              border-color 0.16s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.18s ease;
 }
 
-/* 5-Station Tactical Push Switchers */
+/* 5 Minimal Clean Stations */
 .stance-scale {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1639,14 +1582,12 @@ body[data-phase="review"]  .review  { display: grid; }
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 9px 4px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 22, 0.75);
+  padding: 8px 4px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
   position: relative;
   overflow: hidden;
-  font-family: var(--num), ui-monospace, "SF Mono", monospace;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 6px rgba(0, 0, 0, 0.3);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .stance-station::before {
@@ -1655,65 +1596,54 @@ body[data-phase="review"]  .review  { display: grid; }
   top: 0; left: 0; right: 0;
   height: 2px;
   background: transparent;
+  border-radius: 2px 2px 0 0;
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
-.station-idx {
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: rgba(255, 255, 255, 0.25);
-  line-height: 1;
-  transition: color 0.2s ease;
-}
 .station-name {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--sans);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.02em;
   line-height: 1.1;
   transition: all 0.2s ease;
 }
-.station-sub {
-  font-size: 9px;
+.station-pct {
+  font-family: var(--num);
+  font-size: 9.5px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.28);
   line-height: 1;
   transition: color 0.2s ease;
 }
 
 /* Station Hover */
 .stance-station:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
   transform: translateY(-1px);
 }
-.stance-station:hover .station-idx { color: rgba(255, 255, 255, 0.6); }
-.stance-station:hover .station-name { color: #FFF; }
-.stance-station:hover .station-sub { color: rgba(255, 255, 255, 0.55); }
+.stance-station:hover .station-name { color: rgba(255, 255, 255, 0.8); }
+.stance-station:hover .station-pct { color: rgba(255, 255, 255, 0.6); }
 
-/* Station Active State (Claude Amber Terminal Highlight) */
+/* Station Active State (Golden Celestial Highlight) */
 .stance-station.is-active {
-  background: rgba(217, 119, 6, 0.12);
-  border-color: rgba(245, 158, 11, 0.55);
-  box-shadow:
-    0 2px 14px rgba(217, 119, 6, 0.22),
-    inset 0 1px 0 rgba(254, 243, 199, 0.15);
+  background: rgba(229, 169, 88, 0.1);
+  border-color: rgba(229, 169, 88, 0.45);
+  box-shadow: 0 2px 12px rgba(229, 169, 88, 0.16);
   transform: translateY(-1px);
 }
 .stance-station.is-active::before {
-  background: #F59E0B;
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.9);
-}
-.stance-station.is-active .station-idx {
-  color: #F59E0B;
+  background: linear-gradient(90deg, #C49A4C, #F5D77F);
+  box-shadow: 0 0 6px rgba(229, 169, 88, 0.7);
 }
 .stance-station.is-active .station-name {
-  color: #FFFFFF;
-  text-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+  color: #F5D77F;
+  font-weight: 700;
+  text-shadow: 0 0 8px rgba(245, 215, 127, 0.35);
 }
-.stance-station.is-active .station-sub {
-  color: #FDE68A;
+.stance-station.is-active .station-pct {
+  color: rgba(245, 215, 127, 0.85);
   font-weight: 600;
 }
 
