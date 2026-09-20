@@ -1406,153 +1406,170 @@ body[data-phase="review"]  .review  { display: grid; }
   background-size: 12px; background-repeat: no-repeat; padding-right: 32px;
 }
 
-/* Stance Slider (Claude Code Aesthetic) */
+/* ═══ Vastu Stance — Precision Segmented Calibration ═══ */
 .stance-block { margin-bottom: 24px; }
-.stance-read {
-  display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px;
-}
-.stance-header {
-  display: flex; align-items: center; justify-content: space-between;
-}
-.stance-badge {
+
+/* Status Pill in legend */
+.stance-badge-wrap { margin-left: auto; }
+.stance-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: 7px;
+  padding: 4px 12px;
   border-radius: 9999px;
-  background: rgba(229, 169, 88, 0.12);
-  border: 1px solid rgba(229, 169, 88, 0.35);
-  font-size: 12px;
-  font-weight: 600;
-  color: #F5D77F;
-  letter-spacing: -0.01em;
-  box-shadow: 0 0 12px rgba(229, 169, 88, 0.15);
-  width: fit-content;
-  transition: all 0.25s ease;
-}
-.stance-spark {
-  color: #FFE680;
+  background: rgba(229, 169, 88, 0.08);
+  border: 1px solid rgba(229, 169, 88, 0.28);
+  font-family: var(--num);
   font-size: 11px;
-  animation: sparkleTwinkle 2.4s ease-in-out infinite alternate;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(6px);
+  transition: all 0.3s ease;
+}
+.stance-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #E5A958;
+  box-shadow: 0 0 6px rgba(229, 169, 88, 0.7);
+  animation: stance-dot-pulse 2.4s ease-in-out infinite;
+}
+@keyframes stance-dot-pulse {
+  0%, 100% { opacity: 0.6; box-shadow: 0 0 4px rgba(229, 169, 88, 0.5); }
+  50%      { opacity: 1;   box-shadow: 0 0 10px rgba(229, 169, 88, 0.9); }
+}
+.stance-status-name {
+  color: #F5D77F;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.stance-status-weight {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 500;
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Insight Row */
+.stance-insight-row {
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  border-left: 2px solid rgba(229, 169, 88, 0.4);
+  background: rgba(229, 169, 88, 0.04);
+  border-radius: 0 6px 6px 0;
 }
 .stance-desc {
-  margin: 0; color: var(--chalk-3); font-size: 12px; line-height: 1.5;
+  margin: 0;
+  color: var(--chalk-3);
+  font-size: 12px;
+  line-height: 1.55;
+  font-style: italic;
 }
 
+/* Slider Chassis */
 .slider-container { padding: 8px 0 4px; }
-.stance { appearance: none; width: 100%; height: 26px; background: none; cursor: pointer; outline: none; }
-
-/* Claude Code Glowing Gradient Rail with Continuous Shimmer Wave */
-.stance::-webkit-slider-runnable-track,
-.stance.stance--claude::-webkit-slider-runnable-track {
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 20%, #E5A958 45%, #FFF3C4 55%, #E5A958 65%, #F5D77F 100%);
-  background-size: 200% 100%;
-  animation: vastu-rail-shimmer 3.2s ease-in-out infinite;
-  box-shadow: 0 0 12px rgba(229, 169, 88, 0.32), inset 0 1px 1px rgba(0, 0, 0, 0.4);
-}
-.stance::-moz-range-track,
-.stance.stance--claude::-moz-range-track {
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 20%, #E5A958 45%, #FFF3C4 55%, #E5A958 65%, #F5D77F 100%);
-  background-size: 200% 100%;
-  animation: vastu-rail-shimmer 3.2s ease-in-out infinite;
-  box-shadow: 0 0 12px rgba(229, 169, 88, 0.32);
-}
-
-@keyframes vastu-rail-shimmer {
-  0% { background-position: 100% 0; }
-  50% { background-position: 0% 0; }
-  100% { background-position: 100% 0; }
-}
-
-/* Traveling Laser Beam Particle beneath Rail */
-.vastu-beam-track {
+.stance-slider-chassis { position: relative; padding: 14px 0 8px; }
+.stance-track-backdrop {
   position: relative;
-  height: 2px;
   width: 100%;
-  margin-top: -15px;
-  margin-bottom: 12px;
-  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 10px;
+  pointer-events: none;
+  overflow: visible;
+}
+.stance-track-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 50%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #C49A4C 0%, #E5C063 50%, #F5D77F 100%);
+  box-shadow: 0 0 10px rgba(229, 169, 88, 0.35);
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.stance-tick {
+  position: absolute;
+  top: -3px;
+  width: 1px; height: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
-.vastu-beam-particle {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 80px;
-  background: linear-gradient(90deg, transparent 0%, rgba(245, 215, 127, 0.3) 30%, #FFFFFF 50%, #FFE680 70%, transparent 100%);
-  filter: drop-shadow(0 0 6px #FFE680);
-  animation: vastu-beam-sweep 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-@keyframes vastu-beam-sweep {
-  0% { left: -80px; opacity: 0; }
-  15% { opacity: 1; }
-  85% { opacity: 1; }
-  100% { left: 100%; opacity: 0; }
-}
-
-/* Claude Code Floating Bead Thumb with Radiant Breathing Halo Glow */
-.stance::-webkit-slider-thumb,
-.stance.stance--claude::-webkit-slider-thumb {
+/* Range Input */
+.stance {
   appearance: none;
-  width: 16px;
-  height: 16px;
-  margin-top: -5.5px;
+  width: 100%;
+  height: 26px;
+  background: none;
+  cursor: pointer;
+  outline: none;
+  margin-top: -16px;
+  position: relative;
+  z-index: 2;
+}
+.stance::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+.stance::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+/* Machined Gold Thumb */
+.stance::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px; height: 18px;
+  margin-top: -6px;
   border-radius: 50%;
-  background: #FFFFFF;
-  border: 2.5px solid #141118;
-  animation: vastu-bead-halo 2.4s ease-in-out infinite;
+  background: radial-gradient(circle at 40% 35%, #FFF8E1 0%, #F5D77F 40%, #C49A4C 100%);
+  border: 2px solid rgba(20, 17, 24, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(229, 169, 88, 0.4),
+    0 1px 4px rgba(0, 0, 0, 0.6),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.18s ease;
 }
-.stance::-webkit-slider-thumb:hover,
-.stance.stance--claude::-webkit-slider-thumb:hover {
-  transform: scale(1.25);
+.stance::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow:
+    0 0 0 2px rgba(229, 169, 88, 0.6),
+    0 0 12px rgba(245, 215, 127, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.5),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
 }
-.stance::-webkit-slider-thumb:active,
-.stance.stance--claude::-webkit-slider-thumb:active {
+.stance::-webkit-slider-thumb:active {
   cursor: grabbing;
-  transform: scale(1.1);
+  transform: scale(1.05);
 }
-.stance::-moz-range-thumb,
-.stance.stance--claude::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+.stance::-moz-range-thumb {
+  width: 18px; height: 18px;
   border-radius: 50%;
-  background: #FFFFFF;
-  border: 2.5px solid #141118;
-  animation: vastu-bead-halo 2.4s ease-in-out infinite;
+  background: radial-gradient(circle at 40% 35%, #FFF8E1 0%, #F5D77F 40%, #C49A4C 100%);
+  border: 2px solid rgba(20, 17, 24, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(229, 169, 88, 0.4),
+    0 1px 4px rgba(0, 0, 0, 0.6),
+    inset 0 1px 2px rgba(255, 255, 255, 0.5);
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.18s ease;
 }
 
-@keyframes vastu-bead-halo {
-  0%, 100% {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.8),
-      0 0 8px rgba(255, 255, 255, 0.9),
-      0 0 16px rgba(245, 215, 127, 0.6),
-      0 2px 6px rgba(0, 0, 0, 0.8);
-  }
-  50% {
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 1),
-      0 0 14px rgba(255, 255, 255, 1),
-      0 0 24px rgba(245, 215, 127, 0.95),
-      0 2px 6px rgba(0, 0, 0, 0.8);
-  }
-}
-
-/* Claude Code 5-Station Scales */
+/* 5-Segment Station Switcher */
 .stance-scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 14px;
   user-select: none;
 }
 .stance-station {
@@ -1560,64 +1577,70 @@ body[data-phase="review"]  .review  { display: grid; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 8px 4px 7px;
   border-radius: 6px;
-  border: 1px solid transparent;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.station-glyph {
-  font-style: normal;
+.stance-station::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: transparent;
+  border-radius: 2px 2px 0 0;
+  transition: background 0.22s ease;
+}
+.station-pct {
+  font-family: var(--num);
   font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.32);
   line-height: 1;
-  color: rgba(255, 255, 255, 0.35);
-  transition: all 0.2s ease;
+  transition: all 0.22s ease;
 }
 .station-name {
   font-family: var(--num);
-  font-size: 9px;
-  font-weight: 550;
+  font-size: 8.5px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.38);
-  transition: all 0.2s ease;
-}
-.stance-station:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-.stance-station:hover .station-glyph {
-  color: #FFE680;
-  transform: translateY(-1px);
-}
-.stance-station:hover .station-name {
-  color: rgba(255, 255, 255, 0.85);
-}
-.stance-station.is-active {
-  background: rgba(229, 169, 88, 0.16);
-  border-color: rgba(229, 169, 88, 0.6);
-  box-shadow: 0 0 16px rgba(229, 169, 88, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  animation: active-station-breathe 2.8s ease-in-out infinite;
-  transform: translateY(-1px);
-}
-.stance-station.is-active .station-glyph {
-  color: #FFE680;
-  text-shadow: 0 0 12px rgba(245, 215, 127, 0.95);
-  transform: scale(1.18);
-}
-.stance-station.is-active .station-name {
-  color: #F5D77F;
-  font-weight: 700;
-  text-shadow: 0 0 8px rgba(245, 215, 127, 0.5);
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.28);
+  line-height: 1;
+  transition: all 0.22s ease;
 }
 
-@keyframes active-station-breathe {
-  0%, 100% {
-    box-shadow: 0 0 14px rgba(229, 169, 88, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  }
-  50% {
-    box-shadow: 0 0 24px rgba(245, 215, 127, 0.65), inset 0 0 8px rgba(229, 169, 88, 0.25);
-  }
+/* Hover */
+.stance-station:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+.stance-station:hover .station-pct { color: rgba(255, 255, 255, 0.7); }
+.stance-station:hover .station-name { color: rgba(255, 255, 255, 0.55); }
+
+/* Active */
+.stance-station.is-active {
+  background: rgba(229, 169, 88, 0.1);
+  border-color: rgba(229, 169, 88, 0.45);
+  box-shadow: 0 2px 12px rgba(229, 169, 88, 0.18);
+  transform: translateY(-1px);
+}
+.stance-station.is-active::before {
+  background: linear-gradient(90deg, #C49A4C, #F5D77F);
+}
+.stance-station.is-active .station-pct {
+  color: #F5D77F;
+  text-shadow: 0 0 8px rgba(245, 215, 127, 0.4);
+}
+.stance-station.is-active .station-name {
+  color: rgba(245, 215, 127, 0.85);
+  font-weight: 700;
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */

@@ -609,37 +609,70 @@
             </div>
           </fieldset>
 
-          <!-- Card 4: Vastu Stance (Claude Code Side Slider) -->
+          <!-- Card 4: Vastu Stance (Precision Segmented Calibration) -->
           <fieldset class="form-card stance-block" id="vastu-card">
             <legend class="form-card__head">
               <div class="form-card__icon-badge form-card__icon-badge--gold">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="2" x2="12" y2="6"></line>
+                  <line x1="12" y1="18" x2="12" y2="22"></line>
+                  <line x1="2" y1="12" x2="6" y2="12"></line>
+                  <line x1="18" y1="12" x2="22" y2="12"></line>
+                  <circle cx="12" cy="12" r="2.5"></circle>
+                </svg>
               </div>
-              <div>
+              <div class="form-card__head-info">
                 <span class="form-card__title">Vastu Stance</span>
                 <span class="form-card__subtitle">Harmonize directional principles with functional structural geometry</span>
               </div>
+              <div class="stance-badge-wrap">
+                <div class="stance-status-pill">
+                  <span class="stance-dot"></span>
+                  <span class="stance-status-name" id="stance-name">Balanced</span>
+                  <span class="stance-status-weight" id="stance-weight">50% Weight</span>
+                </div>
+              </div>
             </legend>
 
-            <div class="stance-read">
-              <div class="stance-header">
-                <span class="stance-badge" id="stance-name"><span class="stance-spark">✦</span> Balanced</span>
-              </div>
-              <p class="stance-desc" id="stance-note">Classical Vastu principles and modern structural science carry equal weight.</p>
+            <div class="stance-insight-row">
+              <p class="stance-desc" id="stance-note">Classical rules and modern building science carry equal weight.</p>
             </div>
 
-            <div class="slider-container">
-              <input type="range" class="stance stance--claude" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
-                     aria-label="Vastu stance from modern to orthodox">
-              <div class="vastu-beam-track" aria-hidden="true">
-                <div class="vastu-beam-particle"></div>
+            <div class="slider-container stance-slider-chassis">
+              <div class="stance-track-backdrop" aria-hidden="true">
+                <div class="stance-track-fill" id="stance-track-fill"></div>
+                <div class="stance-tick" style="left: 0%"></div>
+                <div class="stance-tick" style="left: 25%"></div>
+                <div class="stance-tick" style="left: 50%"></div>
+                <div class="stance-tick" style="left: 75%"></div>
+                <div class="stance-tick" style="left: 100%"></div>
               </div>
-              <div class="stance-scale" id="stance-scale" aria-hidden="true">
-                <span data-val="0" class="stance-station"><i class="station-glyph">☉</i><b class="station-name">Modern</b></span>
-                <span data-val="1" class="stance-station"><i class="station-glyph">☿</i><b class="station-name">Advisory</b></span>
-                <span data-val="2" class="stance-station is-active"><i class="station-glyph">✦</i><b class="station-name">Balanced</b></span>
-                <span data-val="3" class="stance-station"><i class="station-glyph">♄</i><b class="station-name">Strict</b></span>
-                <span data-val="4" class="stance-station"><i class="station-glyph">☸</i><b class="station-name">Orthodox</b></span>
+
+              <input type="range" class="stance stance--luxury" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
+                     aria-label="Vastu stance calibration from modern to orthodox">
+
+              <div class="stance-scale" id="stance-scale" aria-label="Vastu Calibration Stations">
+                <button type="button" data-val="0" class="stance-station" aria-label="Modern: 0% Vastu weight">
+                  <span class="station-pct">0%</span>
+                  <span class="station-name">Modern</span>
+                </button>
+                <button type="button" data-val="1" class="stance-station" aria-label="Advisory: 25% Vastu weight">
+                  <span class="station-pct">25%</span>
+                  <span class="station-name">Advisory</span>
+                </button>
+                <button type="button" data-val="2" class="stance-station is-active" aria-label="Balanced: 50% Vastu weight">
+                  <span class="station-pct">50%</span>
+                  <span class="station-name">Balanced</span>
+                </button>
+                <button type="button" data-val="3" class="stance-station" aria-label="Strict: 75% Vastu weight">
+                  <span class="station-pct">75%</span>
+                  <span class="station-name">Strict</span>
+                </button>
+                <button type="button" data-val="4" class="stance-station" aria-label="Orthodox: 100% Vastu weight">
+                  <span class="station-pct">100%</span>
+                  <span class="station-name">Orthodox</span>
+                </button>
               </div>
             </div>
           </fieldset>

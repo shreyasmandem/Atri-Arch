@@ -766,27 +766,26 @@ function updateStudioHUD() {
   function updateStanceDisplay(val) {
     const stanceIdx = Math.max(0, Math.min(4, Math.round(+val || 0)));
     const s = STANCES[stanceIdx] || STANCES[2];
-    const GLYPHS = ["☉", "☿", "✦", "♄", "☸"];
-    const glyph = GLYPHS[stanceIdx] || "✦";
+    const pct = (stanceIdx / 4) * 100;
+    const weight = stanceIdx * 25;
     const nameEl = $("stance-name");
-    if (nameEl) {
-      nameEl.innerHTML = `<span class="stance-spark">${glyph}</span> ${s[0]}`;
-    }
+    if (nameEl) nameEl.textContent = s[0];
+    const weightEl = $("stance-weight");
+    if (weightEl) weightEl.textContent = `${weight}% Weight`;
     const noteEl = $("stance-note");
-    if (noteEl) {
-      noteEl.textContent = s[2];
-    }
-    document.querySelectorAll("#stance-scale .stance-station").forEach((span) => {
-      const sVal = +span.dataset.val;
+    if (noteEl) noteEl.textContent = s[2];
+    const trackFill = $("stance-track-fill");
+    if (trackFill) trackFill.style.width = pct + "%";
+    document.querySelectorAll("#stance-scale .stance-station").forEach((btn) => {
+      const sVal = +btn.dataset.val;
       if (sVal === stanceIdx) {
-        span.classList.add("is-active");
+        btn.classList.add("is-active");
       } else {
-        span.classList.remove("is-active");
+        btn.classList.remove("is-active");
       }
     });
     const stanceInput = $("stance");
     if (stanceInput) {
-      const pct = (stanceIdx / 4) * 100;
       stanceInput.style.setProperty("--stance-pct", `${pct}%`);
     }
     const hudVastu = $("hud-vastu");
@@ -801,9 +800,9 @@ function updateStudioHUD() {
     });
   }
 
-  document.querySelectorAll("#stance-scale span").forEach((span) => {
-    span.addEventListener("click", () => {
-      const val = +span.dataset.val;
+  document.querySelectorAll("#stance-scale .stance-station").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = +btn.dataset.val;
       if (stanceInput) {
         stanceInput.value = val;
         updateStanceDisplay(val);
