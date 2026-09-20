@@ -1442,48 +1442,77 @@ body[data-phase="review"]  .review  { display: grid; }
 .slider-container { padding: 8px 0 4px; }
 .stance { appearance: none; width: 100%; height: 26px; background: none; cursor: pointer; outline: none; }
 
-/* Claude Code Glowing Gradient Rail */
+/* Claude Code Glowing Gradient Rail with Continuous Shimmer Wave */
 .stance::-webkit-slider-runnable-track,
 .stance.stance--claude::-webkit-slider-runnable-track {
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 25%, #E5A958 65%, #F5D77F 100%);
-  box-shadow: 0 0 10px rgba(229, 169, 88, 0.25), inset 0 1px 1px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 20%, #E5A958 45%, #FFF3C4 55%, #E5A958 65%, #F5D77F 100%);
+  background-size: 200% 100%;
+  animation: vastu-rail-shimmer 3.2s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(229, 169, 88, 0.32), inset 0 1px 1px rgba(0, 0, 0, 0.4);
 }
 .stance::-moz-range-track,
 .stance.stance--claude::-moz-range-track {
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 25%, #E5A958 65%, #F5D77F 100%);
-  box-shadow: 0 0 10px rgba(229, 169, 88, 0.25);
+  background: linear-gradient(90deg, #7FA3D4 0%, #A8A2A0 20%, #E5A958 45%, #FFF3C4 55%, #E5A958 65%, #F5D77F 100%);
+  background-size: 200% 100%;
+  animation: vastu-rail-shimmer 3.2s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(229, 169, 88, 0.32);
 }
 
-/* Claude Code Floating Bead Thumb with Radiant Halo Glow */
+@keyframes vastu-rail-shimmer {
+  0% { background-position: 100% 0; }
+  50% { background-position: 0% 0; }
+  100% { background-position: 100% 0; }
+}
+
+/* Traveling Laser Beam Particle beneath Rail */
+.vastu-beam-track {
+  position: relative;
+  height: 2px;
+  width: 100%;
+  margin-top: -15px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.vastu-beam-particle {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 80px;
+  background: linear-gradient(90deg, transparent 0%, rgba(245, 215, 127, 0.3) 30%, #FFFFFF 50%, #FFE680 70%, transparent 100%);
+  filter: drop-shadow(0 0 6px #FFE680);
+  animation: vastu-beam-sweep 2.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes vastu-beam-sweep {
+  0% { left: -80px; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+/* Claude Code Floating Bead Thumb with Radiant Breathing Halo Glow */
 .stance::-webkit-slider-thumb,
 .stance.stance--claude::-webkit-slider-thumb {
   appearance: none;
   width: 16px;
   height: 16px;
-  margin-top: -6px;
+  margin-top: -5.5px;
   border-radius: 50%;
   background: #FFFFFF;
   border: 2.5px solid #141118;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.8),
-    0 0 10px rgba(255, 255, 255, 0.9),
-    0 0 18px rgba(245, 215, 127, 0.75),
-    0 2px 6px rgba(0, 0, 0, 0.8);
+  animation: vastu-bead-halo 2.4s ease-in-out infinite;
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .stance::-webkit-slider-thumb:hover,
 .stance.stance--claude::-webkit-slider-thumb:hover {
   transform: scale(1.25);
-  box-shadow:
-    0 0 0 1.5px rgba(255, 255, 255, 1),
-    0 0 14px rgba(255, 255, 255, 1),
-    0 0 24px rgba(245, 215, 127, 0.95),
-    0 3px 8px rgba(0, 0, 0, 0.9);
 }
 .stance::-webkit-slider-thumb:active,
 .stance.stance--claude::-webkit-slider-thumb:active {
@@ -1497,13 +1526,26 @@ body[data-phase="review"]  .review  { display: grid; }
   border-radius: 50%;
   background: #FFFFFF;
   border: 2.5px solid #141118;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.8),
-    0 0 10px rgba(255, 255, 255, 0.9),
-    0 0 18px rgba(245, 215, 127, 0.75),
-    0 2px 6px rgba(0, 0, 0, 0.8);
+  animation: vastu-bead-halo 2.4s ease-in-out infinite;
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes vastu-bead-halo {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.8),
+      0 0 8px rgba(255, 255, 255, 0.9),
+      0 0 16px rgba(245, 215, 127, 0.6),
+      0 2px 6px rgba(0, 0, 0, 0.8);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 1),
+      0 0 14px rgba(255, 255, 255, 1),
+      0 0 24px rgba(245, 215, 127, 0.95),
+      0 2px 6px rgba(0, 0, 0, 0.8);
+  }
 }
 
 /* Claude Code 5-Station Scales */
@@ -1552,20 +1594,30 @@ body[data-phase="review"]  .review  { display: grid; }
   color: rgba(255, 255, 255, 0.85);
 }
 .stance-station.is-active {
-  background: rgba(229, 169, 88, 0.14);
-  border-color: rgba(229, 169, 88, 0.45);
-  box-shadow: 0 0 16px rgba(229, 169, 88, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  background: rgba(229, 169, 88, 0.16);
+  border-color: rgba(229, 169, 88, 0.6);
+  box-shadow: 0 0 16px rgba(229, 169, 88, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  animation: active-station-breathe 2.8s ease-in-out infinite;
   transform: translateY(-1px);
 }
 .stance-station.is-active .station-glyph {
   color: #FFE680;
-  text-shadow: 0 0 10px rgba(245, 215, 127, 0.85);
-  transform: scale(1.15);
+  text-shadow: 0 0 12px rgba(245, 215, 127, 0.95);
+  transform: scale(1.18);
 }
 .stance-station.is-active .station-name {
   color: #F5D77F;
   font-weight: 700;
-  text-shadow: 0 0 8px rgba(245, 215, 127, 0.4);
+  text-shadow: 0 0 8px rgba(245, 215, 127, 0.5);
+}
+
+@keyframes active-station-breathe {
+  0%, 100% {
+    box-shadow: 0 0 14px rgba(229, 169, 88, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(245, 215, 127, 0.65), inset 0 0 8px rgba(229, 169, 88, 0.25);
+  }
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */
@@ -1646,37 +1698,34 @@ body[data-phase="review"]  .review  { display: grid; }
 .studio-cta-wrap {
   position: relative;
   width: 100%;
-  max-width: 680px;
-  margin: 24px auto 0;
+  max-width: 480px;
+  margin: 28px auto 0;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-/* Bespoke Hardware Button Chassis */
+/* Sleek Bespoke Hardware Instrument Pill */
 .convene,
 .convene--hardware {
   position: relative;
   width: 100%;
   cursor: pointer;
-  text-align: left;
-  background: linear-gradient(180deg, #201c25 0%, #121016 55%, #0a090d 100%) !important;
+  background: linear-gradient(180deg, #221d28 0%, #141118 60%, #0a090e 100%) !important;
   color: var(--chalk) !important;
   border: 1px solid rgba(229, 169, 88, 0.35) !important;
-  border-radius: 14px;
-  padding: 14px 18px;
+  border-radius: 9999px;
+  padding: 10px 14px 10px 22px;
   box-shadow: 
     0 20px 48px -8px rgba(0, 0, 0, 0.9),
     0 2px 10px -2px rgba(229, 169, 88, 0.15),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 35px -5px rgba(229, 169, 88, 0.12);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
+    0 0 30px -5px rgba(229, 169, 88, 0.12);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
               border-color 0.22s ease,
-              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-              background 0.22s ease;
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
   isolation: isolate;
   z-index: 1;
@@ -1693,7 +1742,7 @@ body[data-phase="review"]  .review  { display: grid; }
 
 .convene__specular-edge {
   position: absolute;
-  top: -14px;
+  top: -10px;
   left: 0;
   right: 0;
   height: 1.5px;
@@ -1710,96 +1759,53 @@ body[data-phase="review"]  .review  { display: grid; }
 .convene__lead-col {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
-.convene__emblem-badge {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at center, rgba(229, 169, 88, 0.2) 0%, rgba(14, 12, 18, 0.9) 100%);
-  border: 1px solid rgba(229, 169, 88, 0.4);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4);
+.convene__spark {
   color: #F5D77F;
-  flex-shrink: 0;
-  transition: all 0.22s ease;
-}
-
-.convene:hover:not([disabled]) .convene__emblem-badge {
-  border-color: #F5D77F;
-  box-shadow: 0 0 14px rgba(229, 169, 88, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: scale(1.05);
-}
-
-.convene__text-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  font-size: 14px;
+  line-height: 1;
+  animation: sparkleTwinkle 2s ease-in-out infinite alternate;
 }
 
 .convene__title-text {
-  font-size: 15.5px;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: #FFFBF2;
   transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 
 .convene:hover:not([disabled]) .convene__title-text {
   color: #FFFFFF;
-  text-shadow: 0 0 16px rgba(245, 215, 127, 0.4);
+  text-shadow: 0 0 14px rgba(245, 215, 127, 0.5);
 }
 
 .convene__sub {
-  font-family: var(--num);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(229, 169, 88, 0.8);
-  transition: color 0.25s ease;
+  display: none !important;
 }
 
-.convene:hover:not([disabled]) .convene__sub {
-  color: rgba(255, 255, 255, 0.88);
-}
-
-/* Precision Lathe-Machined Rotary Dial Action Portal */
+/* Precision Rotary Dial Action */
 .convene__lathe-dial {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: 
-    repeating-radial-gradient(circle at center, rgba(255, 255, 255, 0.05) 0px, rgba(255, 255, 255, 0.05) 1px, transparent 1px, transparent 3px),
-    linear-gradient(145deg, #282430 0%, #131117 100%);
+  background: linear-gradient(145deg, #2c2636 0%, #15121a 100%);
   border: 1.5px solid rgba(229, 169, 88, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #F5D77F;
-  box-shadow: 
-    0 4px 14px rgba(0, 0, 0, 0.6),
-    inset 0 1px 1px rgba(255, 255, 255, 0.28);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.25);
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
 }
 
-.dial-concentric-rings {
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  border: 1px dashed rgba(229, 169, 88, 0.25);
-  pointer-events: none;
-}
-
 .dial-arrow-svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   stroke: #F5D77F;
   transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), stroke 0.2s ease;
 }
@@ -1810,26 +1816,22 @@ body[data-phase="review"]  .review  { display: grid; }
   box-shadow: 
     0 24px 54px -8px rgba(0, 0, 0, 0.95),
     0 4px 20px -2px rgba(229, 169, 88, 0.3),
-    inset 0 1px 1px rgba(255, 255, 255, 0.25),
     0 0 45px rgba(229, 169, 88, 0.2);
 }
 
 .convene:hover:not([disabled]):not(.is-loading) .convene__lathe-dial {
-  background-color: #2e2838;
   border-color: #F5D77F;
-  color: #FFFFFF;
-  box-shadow: 0 0 18px rgba(229, 169, 88, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4);
-  transform: scale(1.06) rotate(15deg);
+  box-shadow: 0 0 16px rgba(229, 169, 88, 0.55);
+  transform: scale(1.08);
 }
 
 .convene:hover:not([disabled]):not(.is-loading) .dial-arrow-svg {
-  transform: translateX(3px);
+  transform: translateX(2.5px);
   stroke: #FFFFFF;
 }
 
 .convene:active:not([disabled]) {
   transform: translateY(0.5px) scale(0.992);
-  box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.85);
 }
 
 .convene.is-loading,
@@ -1839,21 +1841,9 @@ body[data-phase="review"]  .review  { display: grid; }
   background: linear-gradient(180deg, #24202a 0%, #15131a 100%) !important;
 }
 
-/* Precision Hardware Telemetry Bay */
+/* Remove and hide down-most engine ready telemetry bay */
 .hardware-telemetry-bay {
-  margin-top: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 4px 16px;
-  border-radius: 9999px;
-  background: rgba(14, 12, 18, 0.88);
-  border: 1px solid rgba(229, 169, 88, 0.2);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  transition: all 0.3s ease;
+  display: none !important;
 }
 
 .telemetry-laser-diode {
@@ -1932,6 +1922,10 @@ body[data-phase="review"]  .review  { display: grid; }
 
 body[data-phase="running"] .running {
   display: grid !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+  transition: none !important;
 }
 
 body:not([data-phase="running"]) .running {
@@ -1939,76 +1933,29 @@ body:not([data-phase="running"]) .running {
 }
 
 .running__inner {
-  width: min(720px, 100%);
+  width: min(580px, 94vw);
+  position: relative;
+  z-index: 10;
 }
 
-.claude-console-card {
-  background: linear-gradient(180deg, rgba(20, 18, 28, 0.95) 0%, rgba(10, 9, 14, 0.98) 100%);
-  border: 1px solid rgba(229, 169, 88, 0.3);
-  border-radius: 18px;
-  padding: 26px 30px;
-  box-shadow: 
-    0 24px 60px -12px rgba(0, 0, 0, 0.9),
-    0 0 40px rgba(229, 169, 88, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.claude-console-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.claude-console-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 9999px;
-  background: rgba(229, 169, 88, 0.12);
+.claude-minimal-card {
+  background: rgba(18, 15, 24, 0.94);
   border: 1px solid rgba(229, 169, 88, 0.35);
-  font-family: var(--num);
-  font-size: 11px;
-  font-weight: 600;
-  color: #F5D77F;
-  letter-spacing: 0.02em;
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: 
+    0 24px 64px -12px rgba(0, 0, 0, 0.95),
+    0 0 40px rgba(229, 169, 88, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
-.claude-console-spark {
-  color: #FFE680;
-  font-size: 10px;
-  animation: sparkleTwinkle 2s ease-in-out infinite alternate;
-}
-
-.claude-console-timer {
-  font-family: var(--num);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--ochre);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 3px 9px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.claude-console-title {
-  margin: 0 0 16px;
-  font-size: clamp(22px, 2.4vw, 28px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--chalk);
-}
-
-/* Status Line with Spinning Planetary Glyph */
-.claude-status-line {
+/* Status Line with Spinning Astrological Glyph */
+.claude-minimal-status {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  gap: 12px;
   margin-bottom: 14px;
 }
 
@@ -2026,15 +1973,17 @@ body:not([data-phase="running"]) .running {
 }
 
 .claude-stage-msg {
-  font-family: var(--num);
-  font-size: 13px;
-  color: var(--chalk);
+  font-family: var(--face);
+  font-size: 14.5px;
+  font-weight: 500;
+  color: #FFFFFF;
   flex: 1;
+  letter-spacing: -0.01em;
 }
 
 .claude-pct-readout {
   font-family: var(--num);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 750;
   color: #F5D77F;
   text-shadow: 0 0 8px rgba(245, 215, 127, 0.5);
@@ -2046,11 +1995,11 @@ body:not([data-phase="running"]) .running {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   font-family: var(--font-mono, monospace);
   overflow: hidden;
 }
@@ -2097,7 +2046,7 @@ body:not([data-phase="running"]) .running {
   background: rgba(255, 255, 255, 0.06);
   position: relative;
   overflow: visible;
-  margin-bottom: 20px;
+  margin-bottom: 6px;
 }
 
 .claude-progress-rail {
@@ -2105,6 +2054,10 @@ body:not([data-phase="running"]) .running {
   width: 100%;
   position: relative;
   border-radius: 999px;
+}
+
+.claude-log-terminal {
+  display: none !important;
 }
 
 .claude-progress-fill {

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=full_suite_v2">
+<link rel="stylesheet" href="studio.css?v=minimal_clean_v1">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -630,6 +630,9 @@
             <div class="slider-container">
               <input type="range" class="stance stance--claude" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
                      aria-label="Vastu stance from modern to orthodox">
+              <div class="vastu-beam-track" aria-hidden="true">
+                <div class="vastu-beam-particle"></div>
+              </div>
               <div class="stance-scale" id="stance-scale" aria-hidden="true">
                 <span data-val="0" class="stance-station"><i class="station-glyph">☉</i><b class="station-name">Modern</b></span>
                 <span data-val="1" class="stance-station"><i class="station-glyph">☿</i><b class="station-name">Advisory</b></span>
@@ -703,28 +706,17 @@
         </div>
       </div>
 
-      <!-- ── ACTION CTA (Sexy Bespoke Architectural Hardware Instrument) ── -->
+      <!-- ── ACTION CTA (Sleek Architectural Instrument) ── -->
       <div class="studio-cta-wrap">
         <button type="submit" class="convene convene--studio convene--hardware" id="convene">
           <div class="convene__chassis">
             <div class="convene__specular-edge"></div>
-
             <div class="convene__lead-col">
-              <div class="convene__emblem-badge" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="12 2 15 8.5 22 9.5 17 14.5 18.5 21.5 12 18 5.5 21.5 7 14.5 2 9.5 9 8.5 12 2" fill="rgba(245,215,127,0.2)" stroke="#F5D77F"></polygon>
-                </svg>
-              </div>
-              <div class="convene__text-stack">
-                <span class="convene__title-text">Synthesize Architectural Schemes</span>
-                <span class="convene__sub" id="convene-sub">13 INDEPENDENT CRITICS · 3 CANDIDATE SCHEMES · PARETO CONSENSUS</span>
-              </div>
+              <span class="convene__spark">✦</span>
+              <span class="convene__title-text">Generate Architectural Plan</span>
             </div>
-
-            <!-- Precision Lathe-Machined Rotary Action Dial -->
             <div class="convene__lathe-dial" aria-hidden="true">
-              <div class="dial-concentric-rings"></div>
-              <svg class="dial-arrow-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <svg class="dial-arrow-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
@@ -732,46 +724,29 @@
           </div>
         </button>
 
-        <!-- Hidden slot for JS critic telemetry compatibility -->
+        <!-- Hidden slots for telemetry and JS compatibility -->
+        <span id="convene-sub" style="display:none;" aria-hidden="true"></span>
         <span id="convene-critics-status" style="display:none;" aria-hidden="true"></span>
-
-        <!-- Precision Machine Telemetry Bay -->
-        <div class="hardware-telemetry-bay" id="engine-status-capsule">
-          <div class="telemetry-laser-diode">
-            <span class="diode-core" id="engine-dot"></span>
-            <span class="diode-halo"></span>
-          </div>
-          <p class="telemetry-readout" id="engine-note">ENGINE READY · DUAL-ZONE VASTU & LOAD PATHS ACTIVE</p>
-          <span class="telemetry-cost">₹0 / FREE TIER</span>
-        </div>
+        <span id="engine-dot" style="display:none;" aria-hidden="true"></span>
+        <span id="engine-note" style="display:none;" aria-hidden="true"></span>
       </div>
 
     </form>
   </div>
 </section>
 
-<!-- ══════════════════════ RUNNING (CLAUDE CODE ASTROLOGY SYMBOL STREAM) ══════════════════════ -->
-<section class="running" id="running" aria-live="polite" aria-label="The committee is sitting">
+<!-- ══════════════════════ RUNNING (MINIMAL CLAUDE CODE DELIBERATION) ══════════════════════ -->
+<section class="running" id="running" aria-live="polite" aria-label="Drafting architectural plan">
   <div class="running__inner">
-    <div class="claude-console-card">
-      <div class="claude-console-top">
-        <div class="claude-console-tag">
-          <span class="claude-console-spark">✦</span>
-          <span>Sabha · 13 Analytical Critics Sitting</span>
-        </div>
-        <div class="claude-console-timer" id="run-timer">0.0s</div>
-      </div>
-
-      <h2 class="claude-console-title" id="run-title">The committee is sitting</h2>
-
-      <!-- Claude Code Terminal Status Line with Spinning Astrology Glyph -->
-      <div class="claude-status-line">
+    <div class="claude-minimal-card">
+      <!-- Status Line with Spinning Astrological Glyph & Stage -->
+      <div class="claude-minimal-status">
         <span class="claude-spinner-glyph" id="astro-glyph">☉</span>
-        <span class="claude-stage-msg" id="run-stage">Interpreting the brief…</span>
+        <span class="claude-stage-msg" id="run-stage">Drafting architectural layout…</span>
         <span class="claude-pct-readout" id="run-pct">0%</span>
       </div>
 
-      <!-- Claude Code Astrology Symbol Traveling Wave Matrix -->
+      <!-- Golden Astrology Symbol Traveling Wave Matrix -->
       <div class="claude-symbol-matrix" aria-hidden="true">
         <span class="matrix-bracket">[</span>
         <div class="matrix-track" id="sym-track">
@@ -811,17 +786,12 @@
         </div>
       </div>
 
-      <!-- Monospace Synthesis Log Terminal -->
-      <div class="claude-log-terminal">
-        <div class="log-terminal-header">
-          <span class="terminal-indicator"></span>
-          <span>DELIBERATION AUDIT STREAM</span>
-        </div>
-        <div class="run-log" id="run-log"></div>
-      </div>
-
+      <!-- Hidden JS compatibility hooks -->
+      <h2 id="run-title" style="display:none;" aria-hidden="true"></h2>
+      <span id="run-timer" style="display:none;" aria-hidden="true">0.0s</span>
+      <div id="run-log" style="display:none;" aria-hidden="true"></div>
       <div class="run-actions" id="restart" hidden>
-        <button type="button" class="ghost-btn" id="run-restart-btn">← Return to Studio</button>
+        <button type="button" class="ghost-btn" id="run-restart-btn">← Cancel</button>
       </div>
     </div>
   </div>
@@ -929,6 +899,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js?v=full_suite_v2" type="module"></script>
+<script src="studio.js?v=minimal_clean_v1" type="module"></script>
 </body>
 </html>

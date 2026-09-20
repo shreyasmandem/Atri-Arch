@@ -77,6 +77,107 @@ function toast(msg) {
 
 function phase(p) { S.phase = p; document.body.dataset.phase = p; }
 
+/* ═══ CLAUDE DELIBERATION & ASTRO WAVE ENGINE ═════════════════════════ */
+
+const ASTRO_GLYPHS = [
+  "☉", "☽", "☿", "♀", "♂", "♃", "♄", "✦", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "☸", "✧", "✵", "✶"
+];
+
+let astroTimer = null;
+let astroWaveTimer = null;
+let astroIndex = 0;
+let astroWavePos = 0;
+let runStartMs = 0;
+let runTimerInterval = null;
+
+function initAstroMatrix() {
+  const track = $("sym-track");
+  if (!track) return;
+  track.innerHTML = "";
+  ASTRO_GLYPHS.forEach((g, idx) => {
+    const s = document.createElement("span");
+    s.className = "matrix-sym";
+    s.dataset.idx = idx;
+    s.textContent = g;
+    track.appendChild(s);
+  });
+}
+
+function startAstroAnimation() {
+  stopAstroAnimation();
+  initAstroMatrix();
+  const glyphEl = $("astro-glyph");
+  const timerEl = $("run-timer");
+  runStartMs = Date.now();
+  if (timerEl) timerEl.textContent = "0.0s";
+
+  runTimerInterval = setInterval(() => {
+    if (timerEl) {
+      const elapsed = ((Date.now() - runStartMs) / 1000).toFixed(1);
+      timerEl.textContent = `${elapsed}s`;
+    }
+  }, 100);
+
+  astroTimer = setInterval(() => {
+    if (glyphEl) {
+      astroIndex = (astroIndex + 1) % ASTRO_GLYPHS.length;
+      glyphEl.textContent = ASTRO_GLYPHS[astroIndex];
+    }
+  }, 110);
+
+  const syms = document.querySelectorAll("#sym-track .matrix-sym");
+  if (syms.length > 0) {
+    astroWavePos = 0;
+    astroWaveTimer = setInterval(() => {
+      astroWavePos = (astroWavePos + 1) % syms.length;
+      syms.forEach((node, idx) => {
+        const dist = (idx - astroWavePos + syms.length) % syms.length;
+        node.classList.remove("is-lit", "is-trail");
+        if (dist === 0) {
+          node.classList.add("is-lit");
+        } else if (dist === 1 || dist === syms.length - 1) {
+          node.classList.add("is-trail");
+        }
+      });
+    }, 90);
+  }
+}
+
+function stopAstroAnimation() {
+  if (astroTimer) { clearInterval(astroTimer); astroTimer = null; }
+  if (astroWaveTimer) { clearInterval(astroWaveTimer); astroWaveTimer = null; }
+  if (runTimerInterval) { clearInterval(runTimerInterval); runTimerInterval = null; }
+}
+
+function updateAstroTrack(pct) {
+  const percent = Math.min(1, Math.max(0, pct || 0));
+  const fill = $("run-fill");
+  if (fill) fill.style.width = `${(percent * 100).toFixed(1)}%`;
+  const bead = $("run-bead");
+  if (bead) bead.style.left = `${(percent * 100).toFixed(1)}%`;
+  const pctEl = $("run-pct");
+  if (pctEl) pctEl.textContent = `${Math.round(percent * 100)}%`;
+}
+
+function resetRunScreen(title, stage) {
+  const log = $("run-log"); if (log) log.innerHTML = "";
+  const fill = $("run-fill"); if (fill) fill.style.width = "0%";
+  const bead = $("run-bead"); if (bead) bead.style.left = "0%";
+  const pctEl = $("run-pct"); if (pctEl) pctEl.textContent = "0%";
+  const rt = $("run-title"); if (rt) rt.textContent = title;
+  const rs = $("run-stage"); if (rs) rs.textContent = stage;
+  const restart = $("restart"); if (restart) restart.hidden = true;
+  document.querySelectorAll(".rc").forEach((r) => {
+    r.classList.remove("is-in");
+    const s = r.querySelector(".rc__s"); if (s) s.textContent = "—";
+  });
+  document.querySelectorAll(".cr").forEach((r) => {
+    r.classList.remove("is-low");
+    const s = r.querySelector(".cr__s"); if (s) s.textContent = "—";
+    const b = r.querySelector(".cr__b i"); if (b) b.style.transform = "scaleX(0)";
+  });
+}
+
 /* ═══ MANDALA ════════════════════════════════════════════════════════ */
 
 function strike(svg) {
@@ -773,16 +874,16 @@ function updateStudioHUD() {
         ]);
         S.committee = c.committee || [];
         setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
-        setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
+        setText("convene-sub", "");
         const critStat = $("convene-critics-status");
         if (critStat) {
-          critStat.textContent = `${S.committee.length} PARALLEL CRITICS ARMED`;
+          critStat.textContent = "";
         }
 
         if (h.degraded_mode) {
-          updateEngineStatus("ok", "Engine ready · Analytical judgment mode · Vastu & structural active");
+          updateEngineStatus("ok", "Engine ready");
         } else {
-          updateEngineStatus("ok", `Engine ready · ${h.providers_configured?.length || 1} provider(s) · ${h.corpus?.total || 30} passages · $0.00 spent`);
+          updateEngineStatus("ok", "Engine ready");
         }
         seatCritics();
         return;
@@ -802,8 +903,8 @@ function updateStudioHUD() {
     phase("running");
     startAstroAnimation();
     updateAstroTrack(0.58);
-    const rt = $("run-title"); if (rt) rt.textContent = "The committee is sitting";
-    const rs = $("run-stage"); if (rs) rs.textContent = "13 independent critics evaluating 3 candidate schemes across Pareto frontier...";
+    const rt = $("run-title"); if (rt) rt.textContent = "";
+    const rs = $("run-stage"); if (rs) rs.textContent = "Drafting architectural layout and optimizing room adjacencies…";
     const log = $("run-log");
     if (log) {
       log.innerHTML = `
@@ -907,19 +1008,19 @@ async function onSubmit(e) {
     btn.classList.add("is-loading");
     btn.disabled = true;
     const txt = btn.querySelector(".convene__title-text");
-    if (txt) txt.textContent = "✦ Convening Committee…";
+    if (txt) txt.textContent = "✦ Drafting Architectural Plan…";
   }
   if (dot) dot.dataset.tone = "running";
   if (note) {
     note.dataset.tone = "running";
-    note.textContent = "✦ The committee is deliberating candidate layouts…";
+    note.textContent = "✦ Drafting architectural plan…";
   }
 
   S.briefSent = readBrief();
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
 
   phase("running");
-  resetRunScreen("The committee is sitting", "Interpreting the brief…");
+  resetRunScreen("", "Drafting architectural layout…");
   startAstroAnimation();
 
   try {
@@ -939,12 +1040,12 @@ async function onSubmit(e) {
       btn.classList.remove("is-loading");
       btn.disabled = false;
       const txt = btn.querySelector(".convene__title-text");
-      if (txt) txt.textContent = "Synthesize Architectural Schemes";
-      setText("convene-sub", "13 INDEPENDENT CRITICS · 3 CANDIDATE SCHEMES · PARETO CONSENSUS");
+      if (txt) txt.textContent = "Generate Architectural Plan";
+      setText("convene-sub", "");
       if (dot) dot.dataset.tone = "ok";
       if (note) {
         note.dataset.tone = "ok";
-        note.textContent = "Engine ready · Analytical judgment mode · Vastu & structural active";
+        note.textContent = "Engine ready";
       }
     }
   }
@@ -1023,106 +1124,6 @@ function renderImportReport(imp, rooms, error) {
     }
     box.append(wrap);
   }
-}
-
-const ASTRO_GLYPHS = [
-  "☉", "☽", "☿", "♀", "♂", "♃", "♄", "✦", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "☸", "✧", "✵", "✶"
-];
-
-let astroTimer = null;
-let astroWaveTimer = null;
-let astroIndex = 0;
-let astroWavePos = 0;
-let runStartMs = 0;
-let runTimerInterval = null;
-
-function initAstroMatrix() {
-  const track = $("sym-track");
-  if (!track) return;
-  track.innerHTML = "";
-  ASTRO_GLYPHS.forEach((g, idx) => {
-    const s = document.createElement("span");
-    s.className = "matrix-sym";
-    s.dataset.idx = idx;
-    s.textContent = g;
-    track.appendChild(s);
-  });
-}
-
-function startAstroAnimation() {
-  stopAstroAnimation();
-  initAstroMatrix();
-  const glyphEl = $("astro-glyph");
-  const timerEl = $("run-timer");
-  runStartMs = Date.now();
-  if (timerEl) timerEl.textContent = "0.0s";
-
-  runTimerInterval = setInterval(() => {
-    if (timerEl) {
-      const elapsed = ((Date.now() - runStartMs) / 1000).toFixed(1);
-      timerEl.textContent = `${elapsed}s`;
-    }
-  }, 100);
-
-  astroTimer = setInterval(() => {
-    if (glyphEl) {
-      astroIndex = (astroIndex + 1) % ASTRO_GLYPHS.length;
-      glyphEl.textContent = ASTRO_GLYPHS[astroIndex];
-    }
-  }, 110);
-
-  // Claude Code traveling golden wave through astrology symbols
-  const syms = document.querySelectorAll("#sym-track .matrix-sym");
-  if (syms.length > 0) {
-    astroWavePos = 0;
-    astroWaveTimer = setInterval(() => {
-      astroWavePos = (astroWavePos + 1) % syms.length;
-      syms.forEach((node, idx) => {
-        const dist = (idx - astroWavePos + syms.length) % syms.length;
-        node.classList.remove("is-lit", "is-trail");
-        if (dist === 0) {
-          node.classList.add("is-lit");
-        } else if (dist === 1 || dist === syms.length - 1) {
-          node.classList.add("is-trail");
-        }
-      });
-    }, 90);
-  }
-}
-
-function stopAstroAnimation() {
-  if (astroTimer) { clearInterval(astroTimer); astroTimer = null; }
-  if (astroWaveTimer) { clearInterval(astroWaveTimer); astroWaveTimer = null; }
-  if (runTimerInterval) { clearInterval(runTimerInterval); runTimerInterval = null; }
-}
-
-function updateAstroTrack(pct) {
-  const percent = Math.min(1, Math.max(0, pct || 0));
-  const fill = $("run-fill");
-  if (fill) fill.style.width = `${(percent * 100).toFixed(1)}%`;
-  const bead = $("run-bead");
-  if (bead) bead.style.left = `${(percent * 100).toFixed(1)}%`;
-  const pctEl = $("run-pct");
-  if (pctEl) pctEl.textContent = `${Math.round(percent * 100)}%`;
-}
-
-function resetRunScreen(title, stage) {
-  const log = $("run-log"); if (log) log.innerHTML = "";
-  const fill = $("run-fill"); if (fill) fill.style.width = "0%";
-  const bead = $("run-bead"); if (bead) bead.style.left = "0%";
-  const pctEl = $("run-pct"); if (pctEl) pctEl.textContent = "0%";
-  const rt = $("run-title"); if (rt) rt.textContent = title;
-  const rs = $("run-stage"); if (rs) rs.textContent = stage;
-  const restart = $("restart"); if (restart) restart.hidden = true;
-  document.querySelectorAll(".rc").forEach((r) => {
-    r.classList.remove("is-in");
-    const s = r.querySelector(".rc__s"); if (s) s.textContent = "—";
-  });
-  document.querySelectorAll(".cr").forEach((r) => {
-    r.classList.remove("is-low");
-    const s = r.querySelector(".cr__s"); if (s) s.textContent = "—";
-    const b = r.querySelector(".cr__b i"); if (b) b.style.transform = "scaleX(0)";
-  });
 }
 
 async function onUpload(e) {
