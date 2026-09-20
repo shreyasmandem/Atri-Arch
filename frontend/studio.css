@@ -2069,22 +2069,25 @@ body:not([data-phase="running"]) .running {
 }
 
 .matrix-sym {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.22);
-  transition: all 0.14s ease;
+  color: rgba(229, 169, 88, 0.45);
+  text-shadow: 0 0 6px rgba(229, 169, 88, 0.2);
+  transition: all 0.12s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
+  display: inline-block;
 }
 
 .matrix-sym.is-lit {
-  color: #FFE680;
-  text-shadow: 0 0 12px #FFE680, 0 0 20px rgba(245, 215, 127, 0.85);
-  transform: scale(1.28);
+  color: #FFFFFF;
+  text-shadow: 0 0 8px #FFFFFF, 0 0 16px #FFE680, 0 0 24px rgba(245, 215, 127, 0.95);
+  transform: scale(1.36);
 }
 
 .matrix-sym.is-trail {
-  color: rgba(245, 215, 127, 0.65);
-  text-shadow: 0 0 6px rgba(245, 215, 127, 0.4);
+  color: #FFE680;
+  text-shadow: 0 0 8px rgba(245, 215, 127, 0.75);
+  transform: scale(1.16);
 }
 
 /* Precision Progress Bar with Incandescent Bead */

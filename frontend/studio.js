@@ -523,9 +523,10 @@ function updateStudioHUD() {
   // Intro Screen Controller
   const curtain = $("intro-curtain");
   const inIframe = window.self !== window.top;
+  const skipIntro = inIframe || new URLSearchParams(location.search).has("studio");
 
   if (curtain) {
-    if (inIframe) {
+    if (skipIntro) {
       curtain.style.display = "none";
       document.body.classList.remove("is-loading");
       starField.spread(true);
@@ -794,6 +795,23 @@ function updateStudioHUD() {
           updateEngineStatus("bad", `Cannot reach the engine at ${API}. Verify server is running on port 8001`);
         }
       }
+    }
+  }
+
+  if (new URLSearchParams(location.search).has("preview_running")) {
+    phase("running");
+    startAstroAnimation();
+    updateAstroTrack(0.58);
+    const rt = $("run-title"); if (rt) rt.textContent = "The committee is sitting";
+    const rs = $("run-stage"); if (rs) rs.textContent = "13 independent critics evaluating 3 candidate schemes across Pareto frontier...";
+    const log = $("run-log");
+    if (log) {
+      log.innerHTML = `
+        <div class="log-entry"><span class="log-ts">00:01.2</span> [critic.vastu] Nairutya heavy load condition satisfied (+1.00)</div>
+        <div class="log-entry"><span class="log-ts">00:02.4</span> [critic.daylight] North orientation daylight quotient 84%</div>
+        <div class="log-entry"><span class="log-ts">00:03.1</span> [critic.ventilation] Cross-ventilation airflow verified across living corridor</div>
+        <div class="log-entry"><span class="log-ts">00:04.2</span> [critic.structure] Framing 4.2m grid spacing compliant with IS 456...</div>
+      `;
     }
   }
 
