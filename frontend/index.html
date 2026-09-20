@@ -255,7 +255,7 @@
               <div class="orientation-compass-matrix" id="direction-grid">
 
                 <!-- 1. North-West -->
-                <label class="dir-radio dir-radio--nw" data-val="NW" title="North-West (315°)">
+                <label class="dir-radio dir-radio--nw" data-val="NW" title="North-West (315° · Vayavya)">
                   <input type="radio" name="road_direction" value="NW">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -264,13 +264,13 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">North-West</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="13" y1="13" x2="3" y2="3"></line><polyline points="3 9 3 3 9 3"></polyline></svg>
+                      <span class="dir-radio__vedic">Vayavya</span>
                     </span>
                   </span>
                 </label>
 
                 <!-- 2. North -->
-                <label class="dir-radio dir-radio--n is-selected" data-val="N" title="North (000°)">
+                <label class="dir-radio dir-radio--n is-selected" data-val="N" title="North (000° · Uttara)">
                   <input type="radio" name="road_direction" value="N" checked>
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -279,13 +279,13 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">North</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="14" x2="8" y2="2"></line><polyline points="4 6 8 2 12 6"></polyline></svg>
+                      <span class="dir-radio__vedic">Uttara</span>
                     </span>
                   </span>
                 </label>
 
                 <!-- 3. North-East -->
-                <label class="dir-radio dir-radio--ne" data-val="NE" title="North-East (045°)">
+                <label class="dir-radio dir-radio--ne" data-val="NE" title="North-East (045° · Ishanya)">
                   <input type="radio" name="road_direction" value="NE">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -294,13 +294,13 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">North-East</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="13" x2="13" y2="3"></line><polyline points="7 3 13 3 13 9"></polyline></svg>
+                      <span class="dir-radio__vedic">Ishanya</span>
                     </span>
                   </span>
                 </label>
 
                 <!-- 4. West -->
-                <label class="dir-radio dir-radio--w" data-val="W" title="West (270°)">
+                <label class="dir-radio dir-radio--w" data-val="W" title="West (270° · Pashchima)">
                   <input type="radio" name="road_direction" value="W">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -309,12 +309,12 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">West</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="14" y1="8" x2="2" y2="8"></line><polyline points="6 4 2 8 6 12"></polyline></svg>
+                      <span class="dir-radio__vedic">Pashchima</span>
                     </span>
                   </span>
                 </label>
 
-                <!-- 5. CENTER: Simple Stylish Architectural Compass Dial -->
+                <!-- 5. CENTER: Architectural Azimuth Rose Dial -->
                 <div class="compass-dial" id="compass-dial" aria-hidden="true">
                   <svg class="compass-dial__bezel" viewBox="0 0 160 160">
                     <circle cx="80" cy="80" r="76" class="bezel-ring bezel-ring--outer" />
@@ -322,9 +322,18 @@
                     <circle cx="80" cy="80" r="50" class="bezel-ring bezel-ring--core" />
                     <line x1="80" y1="6" x2="80" y2="154" class="bezel-crosshair" />
                     <line x1="6" y1="80" x2="154" y2="80" class="bezel-crosshair" />
-                    <text x="80" y="18" class="bezel-label bezel-label--n">N</text>
+                    <!-- Compass Azimuth Ticks -->
+                    <line x1="80" y1="4" x2="80" y2="12" class="bezel-tick bezel-tick--major" />
+                    <line x1="156" y1="80" x2="148" y2="80" class="bezel-tick bezel-tick--major" />
+                    <line x1="80" y1="156" x2="80" y2="148" class="bezel-tick bezel-tick--major" />
+                    <line x1="4" y1="80" x2="12" y2="80" class="bezel-tick bezel-tick--major" />
+                    <line x1="133.7" y1="26.3" x2="128" y2="32" class="bezel-tick bezel-tick--sub" />
+                    <line x1="133.7" y1="133.7" x2="128" y2="128" class="bezel-tick bezel-tick--sub" />
+                    <line x1="26.3" y1="133.7" x2="32" y2="128" class="bezel-tick bezel-tick--sub" />
+                    <line x1="26.3" y1="26.3" x2="32" y2="32" class="bezel-tick bezel-tick--sub" />
+                    <text x="80" y="19" class="bezel-label bezel-label--n">N</text>
                     <text x="144" y="83" class="bezel-label">E</text>
-                    <text x="80" y="148" class="bezel-label">S</text>
+                    <text x="80" y="147" class="bezel-label">S</text>
                     <text x="16" y="83" class="bezel-label">W</text>
                   </svg>
 
@@ -349,7 +358,7 @@
                 </div>
 
                 <!-- 6. East -->
-                <label class="dir-radio dir-radio--e" data-val="E" title="East (090°)">
+                <label class="dir-radio dir-radio--e" data-val="E" title="East (090° · Purva)">
                   <input type="radio" name="road_direction" value="E">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -358,13 +367,13 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">East</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" y1="8" x2="14" y2="8"></line><polyline points="10 4 14 8 10 12"></polyline></svg>
+                      <span class="dir-radio__vedic">Purva</span>
                     </span>
                   </span>
                 </label>
 
                 <!-- 7. South-West -->
-                <label class="dir-radio dir-radio--sw" data-val="SW" title="South-West (225°)">
+                <label class="dir-radio dir-radio--sw" data-val="SW" title="South-West (225° · Nairutya)">
                   <input type="radio" name="road_direction" value="SW">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -373,13 +382,13 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">South-West</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="13" y1="3" x2="3" y2="13"></line><polyline points="3 7 3 13 9 13"></polyline></svg>
+                      <span class="dir-radio__vedic">Nairutya</span>
                     </span>
                   </span>
                 </label>
 
                 <!-- 8. South -->
-                <label class="dir-radio dir-radio--s" data-val="S" title="South (180°)">
+                <label class="dir-radio dir-radio--s" data-val="S" title="South (180° · Dakshina)">
                   <input type="radio" name="road_direction" value="S">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -388,13 +397,13 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">South</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="2" x2="8" y2="14"></line><polyline points="12 10 8 14 4 10"></polyline></svg>
+                      <span class="dir-radio__vedic">Dakshina</span>
                     </span>
                   </span>
                 </label>
 
                 <!-- 9. South-East -->
-                <label class="dir-radio dir-radio--se" data-val="SE" title="South-East (135°)">
+                <label class="dir-radio dir-radio--se" data-val="SE" title="South-East (135° · Agneya)">
                   <input type="radio" name="road_direction" value="SE">
                   <span class="dir-radio__card">
                     <span class="dir-radio__top">
@@ -403,7 +412,7 @@
                     </span>
                     <span class="dir-radio__bottom">
                       <span class="dir-radio__name">South-East</span>
-                      <svg class="dir-radio__vector" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="3" x2="13" y2="13"></line><polyline points="13 7 13 13 7 13"></polyline></svg>
+                      <span class="dir-radio__vedic">Agneya</span>
                     </span>
                   </span>
                 </label>
@@ -622,11 +631,11 @@
               <input type="range" class="stance stance--claude" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
                      aria-label="Vastu stance from modern to orthodox">
               <div class="stance-scale" id="stance-scale" aria-hidden="true">
-                <span data-val="0">Modern</span>
-                <span data-val="1">Advisory</span>
-                <span data-val="2" class="is-active">Balanced</span>
-                <span data-val="3">Strict</span>
-                <span data-val="4">Orthodox</span>
+                <span data-val="0" class="stance-station"><i class="station-glyph">☉</i><b class="station-name">Modern</b></span>
+                <span data-val="1" class="stance-station"><i class="station-glyph">☿</i><b class="station-name">Advisory</b></span>
+                <span data-val="2" class="stance-station is-active"><i class="station-glyph">✦</i><b class="station-name">Balanced</b></span>
+                <span data-val="3" class="stance-station"><i class="station-glyph">♄</i><b class="station-name">Strict</b></span>
+                <span data-val="4" class="stance-station"><i class="station-glyph">☸</i><b class="station-name">Orthodox</b></span>
               </div>
             </div>
           </fieldset>
@@ -694,21 +703,28 @@
         </div>
       </div>
 
-      <!-- ── ACTION CTA (Sleek, A Lil Less Designed) ── -->
+      <!-- ── ACTION CTA (Sexy Bespoke Architectural Hardware Instrument) ── -->
       <div class="studio-cta-wrap">
-        <button type="submit" class="convene convene--studio convene--refined" id="convene">
-          <div class="convene__content">
-            <div class="convene__body">
-              <div class="convene__title-row">
-                <span class="convene__spark">✦</span>
-                <span class="convene__title-text">Generate Architectural Schemes</span>
+        <button type="submit" class="convene convene--studio convene--hardware" id="convene">
+          <div class="convene__chassis">
+            <div class="convene__specular-edge"></div>
+
+            <div class="convene__lead-col">
+              <div class="convene__emblem-badge" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 15 8.5 22 9.5 17 14.5 18.5 21.5 12 18 5.5 21.5 7 14.5 2 9.5 9 8.5 12 2" fill="rgba(245,215,127,0.2)" stroke="#F5D77F"></polygon>
+                </svg>
               </div>
-              <span class="convene__sub" id="convene-sub">13 critics · 3 schemes · ₹0 to run</span>
+              <div class="convene__text-stack">
+                <span class="convene__title-text">Synthesize Architectural Schemes</span>
+                <span class="convene__sub" id="convene-sub">13 INDEPENDENT CRITICS · 3 CANDIDATE SCHEMES · PARETO CONSENSUS</span>
+              </div>
             </div>
 
-            <!-- Sleek Concentric Action Portal -->
-            <div class="convene__action-portal" aria-hidden="true">
-              <svg class="convene__arrow-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Precision Lathe-Machined Rotary Action Dial -->
+            <div class="convene__lathe-dial" aria-hidden="true">
+              <div class="dial-concentric-rings"></div>
+              <svg class="dial-arrow-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
                 <polyline points="12 5 19 12 12 19"></polyline>
               </svg>
@@ -719,10 +735,14 @@
         <!-- Hidden slot for JS critic telemetry compatibility -->
         <span id="convene-critics-status" style="display:none;" aria-hidden="true"></span>
 
-        <!-- Engine Status Capsule -->
-        <div class="engine-status-capsule" id="engine-status-capsule">
-          <span class="engine-dot" id="engine-dot"></span>
-          <p class="engine-note" id="engine-note">Connecting to architectural engine…</p>
+        <!-- Precision Machine Telemetry Bay -->
+        <div class="hardware-telemetry-bay" id="engine-status-capsule">
+          <div class="telemetry-laser-diode">
+            <span class="diode-core" id="engine-dot"></span>
+            <span class="diode-halo"></span>
+          </div>
+          <p class="telemetry-readout" id="engine-note">ENGINE READY · DUAL-ZONE VASTU & LOAD PATHS ACTIVE</p>
+          <span class="telemetry-cost">₹0 / FREE TIER</span>
         </div>
       </div>
 
@@ -730,17 +750,56 @@
   </div>
 </section>
 
-<!-- ══════════════════════ RUNNING (BASIC CLEAN COMMITTEE SCREEN) ══════════════════════ -->
+<!-- ══════════════════════ RUNNING (CLAUDE CODE ASTROLOGY SYMBOL STREAM) ══════════════════════ -->
 <section class="running" id="running" aria-live="polite" aria-label="The committee is sitting">
   <div class="running__inner">
-    <p class="sanskrit">Sabha</p>
-    <h2 id="run-title">The committee is sitting</h2>
-    <div class="run-track"><i id="run-fill"></i></div>
-    <p class="run-stage" id="run-stage">Interpreting the brief…</p>
-    <ol class="run-critics" id="run-critics" hidden></ol>
-    <div class="run-log" id="run-log"></div>
-    <div class="run-actions" id="restart" hidden>
-      <button type="button" class="ghost-btn" id="run-restart-btn">← Return to Studio</button>
+    <div class="claude-console-card">
+      <div class="claude-console-top">
+        <div class="claude-console-tag">
+          <span class="claude-console-spark">✦</span>
+          <span>Sabha · 13 Analytical Critics Sitting</span>
+        </div>
+        <div class="claude-console-timer" id="run-timer">0.0s</div>
+      </div>
+
+      <h2 class="claude-console-title" id="run-title">The committee is sitting</h2>
+
+      <!-- Claude Code Terminal Status Line with Spinning Astrology Glyph -->
+      <div class="claude-status-line">
+        <span class="claude-spinner-glyph" id="astro-glyph">☉</span>
+        <span class="claude-stage-msg" id="run-stage">Interpreting the brief…</span>
+        <span class="claude-pct-readout" id="run-pct">0%</span>
+      </div>
+
+      <!-- Claude Code Astrology Symbol Traveling Wave Matrix -->
+      <div class="claude-symbol-matrix" aria-hidden="true">
+        <span class="matrix-bracket">[</span>
+        <div class="matrix-track" id="sym-track">
+          <!-- Dynamically animated golden astrological / alchemical glyphs -->
+        </div>
+        <span class="matrix-bracket">]</span>
+      </div>
+
+      <!-- Precision Progress Bar with Incandescent Bead -->
+      <div class="claude-progress-chassis">
+        <div class="claude-progress-rail">
+          <div class="claude-progress-fill" id="run-fill"></div>
+          <div class="claude-progress-bead" id="run-bead"></div>
+        </div>
+      </div>
+
+      <!-- Monospace Synthesis Log Terminal -->
+      <div class="claude-log-terminal">
+        <div class="log-terminal-header">
+          <span class="terminal-indicator"></span>
+          <span>DELIBERATION AUDIT STREAM</span>
+        </div>
+        <div class="run-log" id="run-log"></div>
+      </div>
+
+      <div class="run-actions" id="restart" hidden>
+        <button type="button" class="ghost-btn" id="run-restart-btn">← Return to Studio</button>
+      </div>
     </div>
   </div>
 </section>

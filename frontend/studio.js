@@ -665,15 +665,17 @@ function updateStudioHUD() {
   function updateStanceDisplay(val) {
     const stanceIdx = Math.max(0, Math.min(4, Math.round(+val || 0)));
     const s = STANCES[stanceIdx] || STANCES[2];
+    const GLYPHS = ["☉", "☿", "✦", "♄", "☸"];
+    const glyph = GLYPHS[stanceIdx] || "✦";
     const nameEl = $("stance-name");
     if (nameEl) {
-      nameEl.innerHTML = `<span class="stance-spark">✦</span> ${s[0]}`;
+      nameEl.innerHTML = `<span class="stance-spark">${glyph}</span> ${s[0]}`;
     }
     const noteEl = $("stance-note");
     if (noteEl) {
       noteEl.textContent = s[2];
     }
-    document.querySelectorAll("#stance-scale span").forEach((span) => {
+    document.querySelectorAll("#stance-scale .stance-station").forEach((span) => {
       const sVal = +span.dataset.val;
       if (sVal === stanceIdx) {
         span.classList.add("is-active");
@@ -681,6 +683,11 @@ function updateStudioHUD() {
         span.classList.remove("is-active");
       }
     });
+    const stanceInput = $("stance");
+    if (stanceInput) {
+      const pct = (stanceIdx / 4) * 100;
+      stanceInput.style.setProperty("--stance-pct", `${pct}%`);
+    }
     const hudVastu = $("hud-vastu");
     if (hudVastu) hudVastu.textContent = s[0];
   }
@@ -914,8 +921,8 @@ async function onSubmit(e) {
       btn.classList.remove("is-loading");
       btn.disabled = false;
       const txt = btn.querySelector(".convene__title-text");
-      if (txt) txt.textContent = "Generate Architectural Schemes";
-      setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
+      if (txt) txt.textContent = "Synthesize Architectural Schemes";
+      setText("convene-sub", "13 INDEPENDENT CRITICS · 3 CANDIDATE SCHEMES · PARETO CONSENSUS");
       if (dot) dot.dataset.tone = "ok";
       if (note) {
         note.dataset.tone = "ok";
@@ -1001,16 +1008,32 @@ function renderImportReport(imp, rooms, error) {
 }
 
 const ASTRO_GLYPHS = [
-  "☉", "☽", "☿", "♀", "♂", "♃", "♄", "✦", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "☸"
+  "☉", "☽", "☿", "♀", "♂", "♃", "♄", "✦", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "☸", "✧", "✵", "✶"
 ];
 
 let astroTimer = null;
+let astroWaveTimer = null;
 let astroIndex = 0;
+let astroWavePos = 0;
 let runStartMs = 0;
 let runTimerInterval = null;
 
+function initAstroMatrix() {
+  const track = $("sym-track");
+  if (!track) return;
+  track.innerHTML = "";
+  ASTRO_GLYPHS.forEach((g, idx) => {
+    const s = document.createElement("span");
+    s.className = "matrix-sym";
+    s.dataset.idx = idx;
+    s.textContent = g;
+    track.appendChild(s);
+  });
+}
+
 function startAstroAnimation() {
   stopAstroAnimation();
+  initAstroMatrix();
   const glyphEl = $("astro-glyph");
   const timerEl = $("run-timer");
   runStartMs = Date.now();
@@ -1029,22 +1052,47 @@ function startAstroAnimation() {
       glyphEl.textContent = ASTRO_GLYPHS[astroIndex];
     }
   }, 110);
+
+  // Claude Code traveling golden wave through astrology symbols
+  const syms = document.querySelectorAll("#sym-track .matrix-sym");
+  if (syms.length > 0) {
+    astroWavePos = 0;
+    astroWaveTimer = setInterval(() => {
+      astroWavePos = (astroWavePos + 1) % syms.length;
+      syms.forEach((node, idx) => {
+        const dist = (idx - astroWavePos + syms.length) % syms.length;
+        node.classList.remove("is-lit", "is-trail");
+        if (dist === 0) {
+          node.classList.add("is-lit");
+        } else if (dist === 1 || dist === syms.length - 1) {
+          node.classList.add("is-trail");
+        }
+      });
+    }, 90);
+  }
 }
 
 function stopAstroAnimation() {
   if (astroTimer) { clearInterval(astroTimer); astroTimer = null; }
+  if (astroWaveTimer) { clearInterval(astroWaveTimer); astroWaveTimer = null; }
   if (runTimerInterval) { clearInterval(runTimerInterval); runTimerInterval = null; }
 }
 
 function updateAstroTrack(pct) {
   const percent = Math.min(1, Math.max(0, pct || 0));
   const fill = $("run-fill");
-  if (fill) fill.style.transform = `scaleX(${percent})`;
+  if (fill) fill.style.width = `${(percent * 100).toFixed(1)}%`;
+  const bead = $("run-bead");
+  if (bead) bead.style.left = `${(percent * 100).toFixed(1)}%`;
+  const pctEl = $("run-pct");
+  if (pctEl) pctEl.textContent = `${Math.round(percent * 100)}%`;
 }
 
 function resetRunScreen(title, stage) {
   const log = $("run-log"); if (log) log.innerHTML = "";
-  const fill = $("run-fill"); if (fill) fill.style.transform = "scaleX(0)";
+  const fill = $("run-fill"); if (fill) fill.style.width = "0%";
+  const bead = $("run-bead"); if (bead) bead.style.left = "0%";
+  const pctEl = $("run-pct"); if (pctEl) pctEl.textContent = "0%";
   const rt = $("run-title"); if (rt) rt.textContent = title;
   const rs = $("run-stage"); if (rs) rs.textContent = stage;
   const restart = $("restart"); if (restart) restart.hidden = true;
