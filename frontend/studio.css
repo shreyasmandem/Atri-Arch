@@ -1830,7 +1830,9 @@ body[data-phase="review"]  .review  { display: grid; }
 .running {
   position: fixed;
   inset: var(--crown-h) 0 0 0;
-  display: grid;
+  /* Visibility is the phase's to decide (see the body[data-phase] rules
+     above). Declaring display here overrode them and pinned this screen
+     over the brief the moment the intro ended. */
   place-items: center;
   padding: 4vh 4vw;
   overflow-y: auto;
