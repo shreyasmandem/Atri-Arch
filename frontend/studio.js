@@ -80,9 +80,7 @@ function phase(p) { S.phase = p; document.body.dataset.phase = p; }
 
 /* ═══ CLAUDE DELIBERATION & ASTRO WAVE ENGINE ═════════════════════════ */
 
-const ASTRO_GLYPHS = [
-  "☉", "☽", "☿", "♀", "♂", "♃", "♄", "✦", "♈", "♉", "♊", "♋", "♌", "♍", "♎", "♏", "♐", "♑", "♒", "♓", "☸", "✧", "✵", "✶"
-];
+const ASTRO_GLYPHS = ["✦", "✧", "✶", "✷", "✦", "✧", "✶", "✦"];
 
 let astroTimer = null;
 let astroWaveTimer = null;
