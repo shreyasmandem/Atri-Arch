@@ -609,11 +609,11 @@
             </div>
           </fieldset>
 
-          <!-- Card 4: Vastu Stance (Precision Segmented Calibration) -->
+          <!-- Card 4: Vastu Stance (Claude Code Terminal Hardware Precision) -->
           <fieldset class="form-card stance-block" id="vastu-card">
             <legend class="form-card__head">
               <div class="form-card__icon-badge form-card__icon-badge--gold">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="2" x2="12" y2="6"></line>
                   <line x1="12" y1="18" x2="12" y2="22"></line>
@@ -627,7 +627,7 @@
                 <span class="form-card__subtitle">Harmonize directional principles with functional structural geometry</span>
               </div>
               <div class="stance-badge-wrap">
-                <div class="stance-status-pill">
+                <div class="stance-status-pill" id="stance-status-pill">
                   <span class="stance-dot"></span>
                   <span class="stance-status-name" id="stance-name">Balanced</span>
                   <span class="stance-status-weight" id="stance-weight">50% Weight</span>
@@ -635,18 +635,39 @@
               </div>
             </legend>
 
+            <!-- Claude Code Telemetry Header Strip -->
+            <div class="stance-telemetry-bar">
+              <div class="telemetry-item">
+                <span class="telemetry-k">PARAM</span>
+                <span class="telemetry-v">DIRECTIONAL_ALIGNMENT</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-k">INDEX</span>
+                <span class="telemetry-v" id="stance-telemetry-idx">02 // 04</span>
+              </div>
+              <div class="telemetry-item">
+                <span class="telemetry-k">CANON</span>
+                <span class="telemetry-v">PURUSHA_MANDALA</span>
+              </div>
+            </div>
+
             <div class="stance-insight-row">
+              <span class="stance-insight-prefix">// RULE:</span>
               <p class="stance-desc" id="stance-note">Classical rules and modern building science carry equal weight.</p>
             </div>
 
             <div class="slider-container stance-slider-chassis">
               <div class="stance-track-backdrop" aria-hidden="true">
                 <div class="stance-track-fill" id="stance-track-fill"></div>
-                <div class="stance-tick" style="left: 0%"></div>
-                <div class="stance-tick" style="left: 25%"></div>
-                <div class="stance-tick" style="left: 50%"></div>
-                <div class="stance-tick" style="left: 75%"></div>
-                <div class="stance-tick" style="left: 100%"></div>
+                <div class="stance-tick stance-tick--major" style="left: 0%"></div>
+                <div class="stance-tick stance-tick--sub" style="left: 12.5%"></div>
+                <div class="stance-tick stance-tick--major" style="left: 25%"></div>
+                <div class="stance-tick stance-tick--sub" style="left: 37.5%"></div>
+                <div class="stance-tick stance-tick--major" style="left: 50%"></div>
+                <div class="stance-tick stance-tick--sub" style="left: 62.5%"></div>
+                <div class="stance-tick stance-tick--major" style="left: 75%"></div>
+                <div class="stance-tick stance-tick--sub" style="left: 87.5%"></div>
+                <div class="stance-tick stance-tick--major" style="left: 100%"></div>
               </div>
 
               <input type="range" class="stance stance--luxury" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
@@ -654,24 +675,29 @@
 
               <div class="stance-scale" id="stance-scale" aria-label="Vastu Calibration Stations">
                 <button type="button" data-val="0" class="stance-station" aria-label="Modern: 0% Vastu weight">
-                  <span class="station-pct">0%</span>
+                  <span class="station-idx">00</span>
                   <span class="station-name">Modern</span>
+                  <span class="station-sub">0% WT</span>
                 </button>
                 <button type="button" data-val="1" class="stance-station" aria-label="Advisory: 25% Vastu weight">
-                  <span class="station-pct">25%</span>
+                  <span class="station-idx">01</span>
                   <span class="station-name">Advisory</span>
+                  <span class="station-sub">25% WT</span>
                 </button>
                 <button type="button" data-val="2" class="stance-station is-active" aria-label="Balanced: 50% Vastu weight">
-                  <span class="station-pct">50%</span>
+                  <span class="station-idx">02</span>
                   <span class="station-name">Balanced</span>
+                  <span class="station-sub">50% WT</span>
                 </button>
                 <button type="button" data-val="3" class="stance-station" aria-label="Strict: 75% Vastu weight">
-                  <span class="station-pct">75%</span>
+                  <span class="station-idx">03</span>
                   <span class="station-name">Strict</span>
+                  <span class="station-sub">75% WT</span>
                 </button>
                 <button type="button" data-val="4" class="stance-station" aria-label="Orthodox: 100% Vastu weight">
-                  <span class="station-pct">100%</span>
+                  <span class="station-idx">04</span>
                   <span class="station-name">Orthodox</span>
+                  <span class="station-sub">100% WT</span>
                 </button>
               </div>
             </div>

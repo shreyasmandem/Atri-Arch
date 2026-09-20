@@ -71,6 +71,14 @@ const inr = (n) => n >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr`
 
 const cap = (s) => String(s).replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
+/* ── drawings pan & zoom state ─────────────────────────────────────── */
+let plateZoom = 1.35; // Default zoomed in so room labels & architectural dimensions are crisp & clear
+let platePanX = 0;
+let platePanY = 0;
+let isPlatePanning = false;
+let panStartX = 0;
+let panStartY = 0;
+
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(t._t); t._t = setTimeout(() => { t.hidden = true; }, 8000);
@@ -774,6 +782,8 @@ function updateStudioHUD() {
     if (weightEl) weightEl.textContent = `${weight}% Weight`;
     const noteEl = $("stance-note");
     if (noteEl) noteEl.textContent = s[2];
+    const idxEl = $("stance-telemetry-idx");
+    if (idxEl) idxEl.textContent = `0${stanceIdx} // 04`;
     const trackFill = $("stance-track-fill");
     if (trackFill) trackFill.style.width = pct + "%";
     document.querySelectorAll("#stance-scale .stance-station").forEach((btn) => {
@@ -832,7 +842,9 @@ function updateStudioHUD() {
   $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      $("why").hidden = true;
+      const whyModal = $("why");
+      if (whyModal) whyModal.hidden = true;
+      const compareModal = $("compare-modal") || $("compare");
       if (compareModal) compareModal.hidden = true;
     }
   });
@@ -1606,12 +1618,6 @@ function scrollPane(v) {
 
 /* ── drawings pan & zoom ───────────────────────────────────────────── */
 
-let plateZoom = 1.35; // Default zoomed in so room labels & architectural dimensions are crisp & clear
-let platePanX = 0;
-let platePanY = 0;
-let isPlatePanning = false;
-let panStartX = 0;
-let panStartY = 0;
 
 function applyPlateTransform(animate = false) {
   const canvas = $("plate-canvas") || $("plate");

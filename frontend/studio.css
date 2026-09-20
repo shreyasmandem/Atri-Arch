@@ -1415,156 +1415,217 @@ body[data-phase="review"]  .review  { display: grid; }
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 4px 12px;
-  border-radius: 9999px;
-  background: rgba(229, 169, 88, 0.08);
-  border: 1px solid rgba(229, 169, 88, 0.28);
-  font-family: var(--num);
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.28);
+  font-family: var(--num), ui-monospace, "SF Mono", monospace;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(6px);
-  transition: all 0.3s ease;
+  backdrop-filter: blur(8px);
+  transition: all 0.25s ease;
 }
 .stance-dot {
   display: inline-block;
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: #E5A958;
-  box-shadow: 0 0 6px rgba(229, 169, 88, 0.7);
-  animation: stance-dot-pulse 2.4s ease-in-out infinite;
+  background: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.85);
+  animation: stance-dot-pulse 2.2s ease-in-out infinite;
 }
 @keyframes stance-dot-pulse {
-  0%, 100% { opacity: 0.6; box-shadow: 0 0 4px rgba(229, 169, 88, 0.5); }
-  50%      { opacity: 1;   box-shadow: 0 0 10px rgba(229, 169, 88, 0.9); }
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 4px rgba(245, 158, 11, 0.4); transform: scale(0.92); }
+  50%      { opacity: 1;   box-shadow: 0 0 10px rgba(245, 158, 11, 1);    transform: scale(1.1); }
 }
 .stance-status-name {
-  color: #F5D77F;
+  color: #FDE68A;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
+  font-weight: 700;
 }
 .stance-status-weight {
   color: rgba(255, 255, 255, 0.45);
   font-weight: 500;
-  padding-left: 4px;
+  padding-left: 5px;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-/* Insight Row */
+/* Claude Code Telemetry Header Bar */
+.stance-telemetry-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.telemetry-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--num), ui-monospace, "SF Mono", monospace;
+  line-height: 1;
+}
+.telemetry-k {
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.telemetry-v {
+  color: #F59E0B;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+/* Insight Prompt Row */
 .stance-insight-row {
-  padding: 10px 14px;
-  margin-bottom: 6px;
-  border-left: 2px solid rgba(229, 169, 88, 0.4);
-  background: rgba(229, 169, 88, 0.04);
-  border-radius: 0 6px 6px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-left: 2px solid #D97706;
+  background: rgba(217, 119, 6, 0.05);
+  border-radius: 0 4px 4px 0;
+}
+.stance-insight-prefix {
+  font-family: var(--num), ui-monospace, "SF Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #D97706;
+  line-height: 1.5;
+  user-select: none;
 }
 .stance-desc {
   margin: 0;
-  color: var(--chalk-3);
-  font-size: 12px;
-  line-height: 1.55;
-  font-style: italic;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-style: normal;
 }
 
 /* Slider Chassis */
-.slider-container { padding: 8px 0 4px; }
-.stance-slider-chassis { position: relative; padding: 14px 0 8px; }
+.slider-container { padding: 4px 0 2px; }
+.stance-slider-chassis { position: relative; padding: 12px 0 6px; }
 .stance-track-backdrop {
   position: relative;
   width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  height: 8px;
+  border-radius: 4px;
+  background: #09090C;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.8);
   margin-top: 10px;
   pointer-events: none;
   overflow: visible;
 }
 .stance-track-fill {
   position: absolute;
-  top: 0; left: 0; bottom: 0;
+  top: 1px; left: 1px; bottom: 1px;
   width: 50%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #C49A4C 0%, #E5C063 50%, #F5D77F 100%);
-  box-shadow: 0 0 10px rgba(229, 169, 88, 0.35);
-  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 3px;
+  background: linear-gradient(90deg, #92400E 0%, #D97706 60%, #F59E0B 100%);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.45);
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .stance-tick {
   position: absolute;
-  top: -3px;
-  width: 1px; height: 12px;
-  background: rgba(255, 255, 255, 0.12);
   transform: translateX(-50%);
   pointer-events: none;
+}
+.stance-tick--major {
+  top: -4px;
+  width: 1.5px; height: 16px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 1px;
+}
+.stance-tick--sub {
+  top: 0px;
+  width: 1px; height: 8px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 /* Range Input */
 .stance {
   appearance: none;
   width: 100%;
-  height: 26px;
+  height: 28px;
   background: none;
   cursor: pointer;
   outline: none;
-  margin-top: -16px;
+  margin-top: -18px;
   position: relative;
   z-index: 2;
 }
 .stance::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 999px;
+  height: 8px;
+  border-radius: 4px;
   background: transparent;
 }
 .stance::-moz-range-track {
-  height: 6px;
-  border-radius: 999px;
+  height: 8px;
+  border-radius: 4px;
   background: transparent;
 }
 
-/* Machined Gold Thumb */
+/* Claude Code Terminal Machined Thumb */
 .stance::-webkit-slider-thumb {
   appearance: none;
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   margin-top: -6px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #FFF8E1 0%, #F5D77F 40%, #C49A4C 100%);
-  border: 2px solid rgba(20, 17, 24, 0.85);
+  border-radius: 4px;
+  background: #141417;
+  border: 2px solid #F59E0B;
   box-shadow:
-    0 0 0 1px rgba(229, 169, 88, 0.4),
-    0 1px 4px rgba(0, 0, 0, 0.6),
-    inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    0 0 0 1px rgba(0, 0, 0, 0.9),
+    0 2px 8px rgba(0, 0, 0, 0.7),
+    0 0 10px rgba(245, 158, 11, 0.45),
+    inset 0 0 0 2px #0B0B0E;
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.18s ease;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.16s ease,
+              border-color 0.16s ease;
 }
 .stance::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  transform: scale(1.15);
+  border-color: #FDE68A;
   box-shadow:
-    0 0 0 2px rgba(229, 169, 88, 0.6),
-    0 0 12px rgba(245, 215, 127, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.5),
-    inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    0 0 0 1px rgba(0, 0, 0, 0.9),
+    0 2px 10px rgba(0, 0, 0, 0.8),
+    0 0 16px rgba(245, 158, 11, 0.7),
+    inset 0 0 0 2px #0B0B0E;
 }
 .stance::-webkit-slider-thumb:active {
   cursor: grabbing;
-  transform: scale(1.05);
+  transform: scale(1.04);
 }
 .stance::-moz-range-thumb {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 40% 35%, #FFF8E1 0%, #F5D77F 40%, #C49A4C 100%);
-  border: 2px solid rgba(20, 17, 24, 0.85);
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  background: #141417;
+  border: 2px solid #F59E0B;
   box-shadow:
-    0 0 0 1px rgba(229, 169, 88, 0.4),
-    0 1px 4px rgba(0, 0, 0, 0.6),
-    inset 0 1px 2px rgba(255, 255, 255, 0.5);
+    0 0 0 1px rgba(0, 0, 0, 0.9),
+    0 2px 8px rgba(0, 0, 0, 0.7),
+    0 0 10px rgba(245, 158, 11, 0.45),
+    inset 0 0 0 2px #0B0B0E;
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.18s ease;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.16s ease,
+              border-color 0.16s ease;
 }
 
-/* 5-Segment Station Switcher */
+/* 5-Station Tactical Push Switchers */
 .stance-scale {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1577,14 +1638,16 @@ body[data-phase="review"]  .review  { display: grid; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 4px 7px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  gap: 3px;
+  padding: 9px 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(18, 18, 22, 0.75);
   position: relative;
   overflow: hidden;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: var(--num), ui-monospace, "SF Mono", monospace;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .stance-station::before {
   content: '';
@@ -1592,55 +1655,66 @@ body[data-phase="review"]  .review  { display: grid; }
   top: 0; left: 0; right: 0;
   height: 2px;
   background: transparent;
-  border-radius: 2px 2px 0 0;
-  transition: background 0.22s ease;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
-.station-pct {
-  font-family: var(--num);
-  font-size: 13px;
+.station-idx {
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  color: rgba(255, 255, 255, 0.32);
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.25);
   line-height: 1;
-  transition: all 0.22s ease;
+  transition: color 0.2s ease;
 }
 .station-name {
-  font-family: var(--num);
-  font-size: 8.5px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.28);
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.1;
+  transition: all 0.2s ease;
+}
+.station-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.3);
   line-height: 1;
-  transition: all 0.22s ease;
+  transition: color 0.2s ease;
 }
 
-/* Hover */
+/* Station Hover */
 .stance-station:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
 }
-.stance-station:hover .station-pct { color: rgba(255, 255, 255, 0.7); }
-.stance-station:hover .station-name { color: rgba(255, 255, 255, 0.55); }
+.stance-station:hover .station-idx { color: rgba(255, 255, 255, 0.6); }
+.stance-station:hover .station-name { color: #FFF; }
+.stance-station:hover .station-sub { color: rgba(255, 255, 255, 0.55); }
 
-/* Active */
+/* Station Active State (Claude Amber Terminal Highlight) */
 .stance-station.is-active {
-  background: rgba(229, 169, 88, 0.1);
-  border-color: rgba(229, 169, 88, 0.45);
-  box-shadow: 0 2px 12px rgba(229, 169, 88, 0.18);
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow:
+    0 2px 14px rgba(217, 119, 6, 0.22),
+    inset 0 1px 0 rgba(254, 243, 199, 0.15);
   transform: translateY(-1px);
 }
 .stance-station.is-active::before {
-  background: linear-gradient(90deg, #C49A4C, #F5D77F);
+  background: #F59E0B;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.9);
 }
-.stance-station.is-active .station-pct {
-  color: #F5D77F;
-  text-shadow: 0 0 8px rgba(245, 215, 127, 0.4);
+.stance-station.is-active .station-idx {
+  color: #F59E0B;
 }
 .stance-station.is-active .station-name {
-  color: rgba(245, 215, 127, 0.85);
-  font-weight: 700;
+  color: #FFFFFF;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.45);
+}
+.stance-station.is-active .station-sub {
+  color: #FDE68A;
+  font-weight: 600;
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */
