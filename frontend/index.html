@@ -638,7 +638,6 @@
                 <div class="stance-status-pill" id="stance-status-pill">
                   <span class="stance-dot"></span>
                   <span class="stance-status-name" id="stance-name">Balanced</span>
-                  <span class="stance-status-weight" id="stance-weight">50% Weight</span>
                 </div>
               </div>
             </legend>
@@ -646,7 +645,7 @@
             <div class="slider-container stance-slider-chassis">
               <div class="stance-track-backdrop" aria-hidden="true">
                 <div class="stance-track-fill" id="stance-track-fill">
-                  <!-- Animated Claude Code shimmering light beam -->
+                  <!-- Forward light beam sweep when advancing -->
                   <div class="stance-claude-beam"></div>
                 </div>
                 <div class="stance-tick" style="left: 0%"></div>
@@ -659,27 +658,22 @@
               <input type="range" class="stance stance--luxury" name="vastu_slider" id="stance" min="0" max="4" step="1" value="2"
                      aria-label="Vastu stance calibration from modern to orthodox">
 
-              <!-- Minimal Clean Stations -->
+              <!-- Minimal Clean Stations (Pure Names, Zero Percentages) -->
               <div class="stance-scale" id="stance-scale" aria-label="Vastu Calibration Stations">
-                <button type="button" data-val="0" class="stance-station" aria-label="Modern: 0% Vastu weight">
+                <button type="button" data-val="0" class="stance-station" aria-label="Modern">
                   <span class="station-name">Modern</span>
-                  <span class="station-pct">0%</span>
                 </button>
-                <button type="button" data-val="1" class="stance-station" aria-label="Advisory: 25% Vastu weight">
+                <button type="button" data-val="1" class="stance-station" aria-label="Advisory">
                   <span class="station-name">Advisory</span>
-                  <span class="station-pct">25%</span>
                 </button>
-                <button type="button" data-val="2" class="stance-station is-active" aria-label="Balanced: 50% Vastu weight">
+                <button type="button" data-val="2" class="stance-station is-active" aria-label="Balanced">
                   <span class="station-name">Balanced</span>
-                  <span class="station-pct">50%</span>
                 </button>
-                <button type="button" data-val="3" class="stance-station" aria-label="Strict: 75% Vastu weight">
+                <button type="button" data-val="3" class="stance-station" aria-label="Strict">
                   <span class="station-name">Strict</span>
-                  <span class="station-pct">75%</span>
                 </button>
-                <button type="button" data-val="4" class="stance-station" aria-label="Orthodox: 100% Vastu weight">
+                <button type="button" data-val="4" class="stance-station" aria-label="Orthodox">
                   <span class="station-name">Orthodox</span>
-                  <span class="station-pct">100%</span>
                 </button>
               </div>
             </div>

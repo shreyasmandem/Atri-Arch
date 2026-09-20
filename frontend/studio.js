@@ -793,21 +793,36 @@ function updateStudioHUD() {
     });
   });
 
+  let lastStanceVal = 2;
+
   function updateStanceDisplay(val) {
     const stanceIdx = Math.max(0, Math.min(4, Math.round(+val || 0)));
+    const isAdvancingForward = stanceIdx > lastStanceVal;
+    lastStanceVal = stanceIdx;
+
     const s = STANCES[stanceIdx] || STANCES[2];
     const pct = (stanceIdx / 4) * 100;
-    const weight = stanceIdx * 25;
     const nameEl = $("stance-name");
     if (nameEl) nameEl.textContent = s[0];
     const weightEl = $("stance-weight");
-    if (weightEl) weightEl.textContent = `${weight}% Weight`;
+    if (weightEl) weightEl.textContent = "";
     const noteEl = $("stance-note");
     if (noteEl) noteEl.textContent = s[2];
     const idxEl = $("stance-telemetry-idx");
     if (idxEl) idxEl.textContent = `0${stanceIdx} // 04`;
     const trackFill = $("stance-track-fill");
-    if (trackFill) trackFill.style.width = pct + "%";
+    if (trackFill) {
+      trackFill.style.width = pct + "%";
+
+      // ONLY animated whenever going forward
+      if (isAdvancingForward) {
+        trackFill.classList.remove("is-advancing");
+        void trackFill.offsetWidth;
+        trackFill.classList.add("is-advancing");
+      } else {
+        trackFill.classList.remove("is-advancing");
+      }
+    }
     
     // Animate covered ticks with golden phosphor luminescence
     document.querySelectorAll(".stance-tick").forEach((tick, i) => {

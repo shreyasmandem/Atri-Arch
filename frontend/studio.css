@@ -1479,40 +1479,42 @@ body[data-phase="review"]  .review  { display: grid; }
   top: 0; left: 0; bottom: 0;
   width: 50%;
   border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    #7A5418 0%,
-    #C49A4C 25%,
-    #F5D77F 50%,
-    #FFF5D0 65%,
-    #C49A4C 85%,
-    #7A5418 100%
-  );
-  background-size: 200% 100%;
-  animation: claudePhosphorFlow 2.8s linear infinite;
-  box-shadow: 0 0 16px rgba(229, 169, 88, 0.5), 0 0 32px rgba(229, 169, 88, 0.2);
-  transition: width 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: linear-gradient(90deg, #7A5418 0%, #C49A4C 45%, #F5D77F 100%);
+  box-shadow: 0 0 10px rgba(229, 169, 88, 0.35);
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   overflow: hidden;
 }
-@keyframes claudePhosphorFlow {
-  0%   { background-position: 200% 0; }
-  100% { background-position: 0% 0; }
-}
 
-/* Claude Code Animated Shimmer Beam */
+/* Light beam container - only animates when advancing forward */
 .stance-claude-beam {
   position: absolute;
   top: 0; bottom: 0; left: 0; right: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.85) 50%, transparent 100%);
-  background-size: 50% 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.9) 50%, transparent 100%);
+  background-size: 60% 100%;
   background-repeat: no-repeat;
-  animation: claudePulseBeam 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  opacity: 0;
+  pointer-events: none;
 }
-@keyframes claudePulseBeam {
-  0%   { background-position: -50% 0; opacity: 0; }
+
+/* Forward-only Animation: triggered only when moving stance forward */
+.stance-track-fill.is-advancing {
+  animation: forwardTrackGlow 0.45s ease-out;
+}
+.stance-track-fill.is-advancing .stance-claude-beam {
+  animation: forwardBeamSweep 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes forwardTrackGlow {
+  0%   { box-shadow: 0 0 10px rgba(229, 169, 88, 0.35); }
+  35%  { box-shadow: 0 0 20px rgba(245, 215, 127, 0.75), 0 0 35px rgba(229, 169, 88, 0.35); }
+  100% { box-shadow: 0 0 10px rgba(229, 169, 88, 0.35); }
+}
+
+@keyframes forwardBeamSweep {
+  0%   { background-position: -60% 0; opacity: 0; }
   20%  { opacity: 1; }
-  80%  { opacity: 1; }
-  100% { background-position: 150% 0; opacity: 0; }
+  75%  { opacity: 1; }
+  100% { background-position: 140% 0; opacity: 0; }
 }
 
 .stance-tick {
@@ -1556,115 +1558,47 @@ body[data-phase="review"]  .review  { display: grid; }
   background: transparent;
 }
 
-/* Precision Machined Architectural Slider Knob */
+/* Simple, Elegant Machined Dial */
 .stance::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 26px;
-  margin-top: -10px;
-  border-radius: 5px;
-  background:
-    /* Center Laser Indicator Slit */
-    linear-gradient(90deg,
-      transparent calc(50% - 1px),
-      rgba(14, 12, 18, 0.75) calc(50% - 1px),
-      #FFFDF8 50%,
-      rgba(14, 12, 18, 0.75) calc(50% + 1px),
-      transparent calc(50% + 1px)
-    ),
-    /* Precision Grip Ribs */
-    linear-gradient(180deg,
-      transparent 0 7px,
-      rgba(18, 16, 22, 0.5) 7px 8.5px,
-      transparent 8.5px 11px,
-      rgba(18, 16, 22, 0.5) 11px 12.5px,
-      transparent 12.5px 15px,
-      rgba(18, 16, 22, 0.5) 15px 16.5px,
-      transparent 16.5px 100%
-    ),
-    /* Brushed Anodized Champagne Gold */
-    linear-gradient(180deg,
-      #FFFFFF 0%,
-      #FCE5AC 20%,
-      #E5BA68 45%,
-      #B88532 75%,
-      #7A5214 100%
-    );
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F5D77F 45%, #C49A4C 100%);
+  border: 2px solid #121016;
   box-shadow:
-    0 0 0 1px rgba(12, 10, 16, 0.9),
-    0 3px 10px rgba(0, 0, 0, 0.75),
-    0 0 14px rgba(229, 169, 88, 0.45);
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 0 10px rgba(229, 169, 88, 0.4);
   cursor: grab;
-  animation: thumbGlowBreathe 2.4s ease-in-out infinite;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
               box-shadow 0.18s ease;
 }
-@keyframes thumbGlowBreathe {
-  0%, 100% {
-    box-shadow:
-      0 0 0 1px rgba(12, 10, 16, 0.9),
-      0 3px 10px rgba(0, 0, 0, 0.75),
-      0 0 12px rgba(229, 169, 88, 0.4);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1.5px rgba(245, 215, 127, 0.95),
-      0 4px 14px rgba(0, 0, 0, 0.8),
-      0 0 22px rgba(245, 215, 127, 0.8);
-  }
-}
 .stance::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
+  transform: scale(1.18);
   box-shadow:
-    0 0 0 1.5px #FFF5D0,
-    0 0 24px rgba(245, 215, 127, 0.95),
-    0 4px 14px rgba(0, 0, 0, 0.8);
+    0 2px 8px rgba(0, 0, 0, 0.8),
+    0 0 16px rgba(245, 215, 127, 0.75);
 }
 .stance::-webkit-slider-thumb:active {
   cursor: grabbing;
-  transform: scale(1.05);
+  transform: scale(1.06);
   box-shadow:
-    0 0 0 2px #F5D77F,
-    0 0 30px rgba(245, 215, 127, 1),
-    0 2px 8px rgba(0, 0, 0, 0.9);
+    0 2px 6px rgba(0, 0, 0, 0.9),
+    0 0 20px rgba(245, 215, 127, 0.9);
 }
+
 .stance::-moz-range-thumb {
-  width: 14px;
-  height: 26px;
-  border-radius: 5px;
-  background:
-    linear-gradient(90deg,
-      transparent calc(50% - 1px),
-      rgba(14, 12, 18, 0.75) calc(50% - 1px),
-      #FFFDF8 50%,
-      rgba(14, 12, 18, 0.75) calc(50% + 1px),
-      transparent calc(50% + 1px)
-    ),
-    linear-gradient(180deg,
-      transparent 0 7px,
-      rgba(18, 16, 22, 0.5) 7px 8.5px,
-      transparent 8.5px 11px,
-      rgba(18, 16, 22, 0.5) 11px 12.5px,
-      transparent 12.5px 15px,
-      rgba(18, 16, 22, 0.5) 15px 16.5px,
-      transparent 16.5px 100%
-    ),
-    linear-gradient(180deg,
-      #FFFFFF 0%,
-      #FCE5AC 20%,
-      #E5BA68 45%,
-      #B88532 75%,
-      #7A5214 100%
-    );
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F5D77F 45%, #C49A4C 100%);
+  border: 2px solid #121016;
   box-shadow:
-    0 0 0 1px rgba(12, 10, 16, 0.9),
-    0 3px 10px rgba(0, 0, 0, 0.75),
-    0 0 14px rgba(229, 169, 88, 0.45);
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 0 10px rgba(229, 169, 88, 0.4);
   cursor: grab;
-  animation: thumbGlowBreathe 2.4s ease-in-out infinite;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
               box-shadow 0.18s ease;
 }
@@ -1680,10 +1614,9 @@ body[data-phase="review"]  .review  { display: grid; }
 .stance-station {
   cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 8px 4px 7px;
+  justify-content: center;
+  padding: 10px 4px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
@@ -1702,20 +1635,12 @@ body[data-phase="review"]  .review  { display: grid; }
 }
 .station-name {
   font-family: var(--sans);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.45);
   letter-spacing: 0.02em;
-  line-height: 1.1;
-  transition: all 0.2s ease;
-}
-.station-pct {
-  font-family: var(--num);
-  font-size: 9.5px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.28);
   line-height: 1;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 /* Station Hover */
@@ -1725,33 +1650,22 @@ body[data-phase="review"]  .review  { display: grid; }
   transform: translateY(-1px);
 }
 .stance-station:hover .station-name { color: rgba(255, 255, 255, 0.85); }
-.stance-station:hover .station-pct { color: rgba(255, 255, 255, 0.65); }
 
-/* Station Active State (Golden Celestial Highlight) */
+/* Station Active State (Clean Golden Highlight - No looping laser) */
 .stance-station.is-active {
   background: rgba(229, 169, 88, 0.12);
   border-color: rgba(229, 169, 88, 0.5);
-  box-shadow: 0 2px 14px rgba(229, 169, 88, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 2px 14px rgba(229, 169, 88, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
 }
 .stance-station.is-active::before {
-  background: linear-gradient(90deg, #C49A4C, #F5D77F, #FFFFFF, #F5D77F, #C49A4C);
-  background-size: 200% 100%;
-  animation: stationTopLaser 2s linear infinite;
-  box-shadow: 0 0 8px rgba(229, 169, 88, 0.9);
-}
-@keyframes stationTopLaser {
-  0%   { background-position: 0% 0; }
-  100% { background-position: 200% 0; }
+  background: linear-gradient(90deg, #C49A4C, #F5D77F);
+  box-shadow: 0 0 6px rgba(229, 169, 88, 0.7);
 }
 .stance-station.is-active .station-name {
   color: #F5D77F;
   font-weight: 700;
-  text-shadow: 0 0 10px rgba(245, 215, 127, 0.45);
-}
-.stance-station.is-active .station-pct {
-  color: rgba(245, 215, 127, 0.9);
-  font-weight: 600;
+  text-shadow: 0 0 8px rgba(245, 215, 127, 0.35);
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */
