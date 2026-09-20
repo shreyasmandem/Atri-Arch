@@ -342,8 +342,10 @@ function initStarField() {
 
   function seed() {
     stars.length = 0;
-    state = "ambient";
-    const count = 160;
+    updateCenter();
+    birthTime = performance.now();
+    state = "forming";
+    const count = 120;
     for (let i = 0; i < count; i++) {
       const isHero = Math.random() < 0.12;
       const radius = isHero ? Math.random() * 0.9 + 1.6 : Math.random() * 0.8 + 0.6;
@@ -357,7 +359,7 @@ function initStarField() {
         vy: (Math.random() - 0.5) * 0.15,
         r: radius,
         isHero,
-        introAlpha: 0,
+        introAlpha: Math.random() * 0.2 + 0.2,
         ambientAlpha: Math.random() * 0.16 + 0.14,
         color: col,
         phase: Math.random() * Math.PI * 2,
@@ -372,7 +374,7 @@ function initStarField() {
 
   let hasSpread = false;
   function spread(fast = false) {
-    if (hasSpread || state === "ambient") return;
+    if (hasSpread) return;
     hasSpread = true;
     state = "splitting";
     spreadStart = performance.now();
@@ -649,11 +651,52 @@ function updateStudioHUD() {
   // Cosmic Star-field Engine
   const starField = initStarField();
 
-  // Intro Screen Controller (Instant Full Site Studio)
+  // Architectural Intro Screen Controller (Minimal, High-Aesthetic & Responsive)
   const curtain = $("intro-curtain");
-  if (curtain) curtain.style.display = "none";
-  document.body.classList.remove("is-loading");
-  if (starField && starField.spread) starField.spread(true);
+  const inIframe = window.self !== window.top;
+  const skipIntro = inIframe || new URLSearchParams(location.search).has("nostudio");
+
+  if (curtain && !skipIntro) {
+    let isDismissed = false;
+    let hasBlasted = false;
+
+    const triggerBlast = () => {
+      if (hasBlasted) return;
+      hasBlasted = true;
+      if (starField && starField.spread) starField.spread(false);
+    };
+
+    const dismissIntro = (fast = false) => {
+      if (isDismissed) return;
+      isDismissed = true;
+      if (!hasBlasted) triggerBlast();
+      curtain.classList.add("is-fading");
+      const delay = fast ? 200 : 600;
+      setTimeout(() => {
+        curtain.style.display = "none";
+      }, delay);
+    };
+
+    // 1. Cosmic star blast when gold & silver lock (0.7s)
+    const blastTimer = setTimeout(triggerBlast, 700);
+
+    // 2. Smooth silk transition into the studio (1.5s total duration)
+    const introTimer = setTimeout(() => dismissIntro(false), 1500);
+
+    // Any click, touch, or keypress dismisses immediately
+    curtain.addEventListener("click", () => {
+      clearTimeout(blastTimer);
+      clearTimeout(introTimer);
+      dismissIntro(true);
+    });
+    window.addEventListener("keydown", () => dismissIntro(true), { once: true });
+    window.addEventListener("touchstart", () => dismissIntro(true), { once: true, passive: true });
+  } else if (curtain) {
+    curtain.style.display = "none";
+    if (starField && starField.spread) starField.spread(true);
+  } else {
+    if (starField && starField.spread) starField.spread(true);
+  }
 
   strike($("hero-mandala"));
   strike($("review-mandala"));
