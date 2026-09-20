@@ -561,6 +561,9 @@ function updateStudioHUD() {
         clearTimeout(introTimer);
         dismissIntro(true);
       });
+      window.addEventListener("keydown", () => dismissIntro(true), { once: true });
+      window.addEventListener("click", () => dismissIntro(true), { once: true });
+      setTimeout(() => dismissIntro(false), 3400);
     }
   }
 

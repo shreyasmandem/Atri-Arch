@@ -2392,17 +2392,17 @@ body > :not(#space-stars):not(#intro-curtain) {
   justify-content: center;
 }
 
-/* 1. Golden Part: Appears first in center, glows, STAYS VISIBLE */
+/* 1. Golden Part: Appears immediately on mount, glows, STAYS VISIBLE */
 .intro-logo-gold {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
-  opacity: 0;
+  opacity: 1;
   z-index: 2;
   will-change: transform, opacity, filter;
-  animation: logo-gold-reveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.18s forwards;
+  animation: logo-gold-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0s forwards;
 }
 
 /* 2. Silver Part: Appears second, overlaps on top in center smoothly, STAYS VISIBLE */
@@ -2415,7 +2415,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   opacity: 0;
   z-index: 3;
   will-change: transform, opacity, filter;
-  animation: logo-silver-enter 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.72s forwards;
+  animation: logo-silver-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.65s forwards;
 }
 
 /* ── Company Title (Staggered Letter Reveal) ── */
@@ -2438,7 +2438,7 @@ body > :not(#space-stars):not(#intro-curtain) {
   transform: translateY(12px) scale(0.9);
   color: #FFFFFF;
   text-shadow: 0 0 24px rgba(255, 255, 255, 0.35);
-  animation: char-pop 0.55s cubic-bezier(0.16, 1, 0.3, 1) calc(1.4s + var(--i, 0) * 0.05s) forwards;
+  animation: char-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) calc(0.35s + var(--i, 0) * 0.04s) forwards;
 }
 .intro-char--gold {
   color: #E5A958;
