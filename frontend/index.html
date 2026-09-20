@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=minimal_clean_v1">
+<link rel="stylesheet" href="studio.css?v=modals_zoom_v1">
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -821,12 +822,20 @@
       <div class="pane__bar">
         <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Drawings"></div>
         <div class="pane__tools">
-          <button type="button" class="ghost-btn" id="zoom">Actual size</button>
+          <div class="zoom-cluster" role="group" aria-label="Drawing zoom controls">
+            <button type="button" class="zoom-btn" id="zoom-out" title="Zoom Out (or mouse wheel down)" aria-label="Zoom Out">−</button>
+            <span class="zoom-val" id="zoom-val" title="Current zoom level">135%</span>
+            <button type="button" class="zoom-btn" id="zoom-in" title="Zoom In (or mouse wheel up)" aria-label="Zoom In">+</button>
+            <button type="button" class="zoom-btn zoom-btn--fit" id="zoom-fit" title="Reset to Fit frame">Fit</button>
+          </div>
           <button type="button" class="ghost-btn" id="dl-svg">SVG</button>
           <button type="button" class="ghost-btn" id="dl-dxf" title="Editable CAD, opens in AutoCAD, BricsCAD, LibreCAD or QCAD">DXF</button>
         </div>
       </div>
-      <div class="plate" id="plate"></div>
+      <div class="plate" id="plate">
+        <div class="plate__canvas" id="plate-canvas"></div>
+        <div class="plate__hint" id="plate-hint">Scroll to zoom · Drag to pan · Double-click to reset</div>
+      </div>
       <p class="plate__caption" id="plate-caption"></p>
     </div>
 
@@ -899,6 +908,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js?v=minimal_clean_v1" type="module"></script>
+<script src="studio.js?v=modals_zoom_v1" type="module"></script>
 </body>
 </html>

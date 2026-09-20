@@ -63,6 +63,7 @@ const S = {
   plans: {},          // id -> { plan, vastu, cost, interior, analysis, drawing }
   sheet: "plan_level_0",
 };
+window.S = S;
 
 const inr = (n) => n >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr`
   : n >= 1e5 ? `₹${(n / 1e5).toFixed(2)} L`
@@ -840,10 +841,7 @@ function updateStudioHUD() {
   });
   $("dl-svg").addEventListener("click", downloadSheet);
   $("dl-dxf").addEventListener("click", downloadDxf);
-  $("zoom").addEventListener("click", () => {
-    const on = $("plate").classList.toggle("is-zoomed");
-    $("zoom").textContent = on ? "Fit to frame" : "Actual size";
-  });
+  initPlateInteraction();
   document.querySelectorAll(".view-tab").forEach((t) =>
     t.addEventListener("click", () => showView(t.dataset.view)));
 
@@ -1600,12 +1598,127 @@ function showView(v) {
   if (v === "negotiation") renderNegotiation();
   if (v === "audit") renderAudit();
 }
+window.showView = showView;
 
 const pane = (v) => document.querySelector(`.pane[data-view="${v}"]`);
 
 function scrollPane(v) {
   const p = pane(v); p.innerHTML = "";
   const s = el("div", "pane__scroll"); p.append(s); return s;
+}
+
+/* ── drawings pan & zoom ───────────────────────────────────────────── */
+
+let plateZoom = 1.35; // Default zoomed in so room labels & architectural dimensions are crisp & clear
+let platePanX = 0;
+let platePanY = 0;
+let isPlatePanning = false;
+let panStartX = 0;
+let panStartY = 0;
+
+function applyPlateTransform(animate = false) {
+  const canvas = $("plate-canvas") || $("plate");
+  if (!canvas) return;
+  if (animate) {
+    canvas.style.transition = "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)";
+    setTimeout(() => { if (canvas) canvas.style.transition = "transform 0.06s ease-out"; }, 240);
+  }
+  canvas.style.transform = `translate(${platePanX}px, ${platePanY}px) scale(${plateZoom})`;
+  const zVal = $("zoom-val");
+  if (zVal) zVal.textContent = `${Math.round(plateZoom * 100)}%`;
+}
+
+function setPlateZoom(newZoom, centerX = null, centerY = null) {
+  const clamped = Math.max(0.4, Math.min(4.0, newZoom));
+  if (centerX !== null && centerY !== null) {
+    const factor = clamped / plateZoom;
+    platePanX = centerX - (centerX - platePanX) * factor;
+    platePanY = centerY - (centerY - platePanY) * factor;
+  }
+  plateZoom = clamped;
+  applyPlateTransform();
+}
+
+function resetPlateView() {
+  plateZoom = 1.0;
+  platePanX = 0;
+  platePanY = 0;
+  applyPlateTransform(true);
+}
+
+function initPlateInteraction() {
+  const plateElem = $("plate");
+  const zoomInBtn = $("zoom-in");
+  const zoomOutBtn = $("zoom-out");
+  const zoomFitBtn = $("zoom-fit");
+  const hintElem = $("plate-hint");
+
+  if (!plateElem) return;
+  applyPlateTransform();
+
+  plateElem.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = plateElem.getBoundingClientRect();
+    const cursorX = e.clientX - rect.left - rect.width / 2;
+    const cursorY = e.clientY - rect.top - rect.height / 2;
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    setPlateZoom(plateZoom + delta, cursorX, cursorY);
+    if (hintElem) hintElem.style.opacity = "0";
+  }, { passive: false });
+
+  plateElem.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    isPlatePanning = true;
+    panStartX = e.clientX - platePanX;
+    panStartY = e.clientY - platePanY;
+    plateElem.classList.add("is-panning");
+    if (hintElem) hintElem.style.opacity = "0";
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    if (!isPlatePanning) return;
+    platePanX = e.clientX - panStartX;
+    platePanY = e.clientY - panStartY;
+    applyPlateTransform();
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (isPlatePanning) {
+      isPlatePanning = false;
+      plateElem.classList.remove("is-panning");
+    }
+  });
+
+  plateElem.addEventListener("dblclick", () => {
+    if (plateZoom > 1.05) {
+      resetPlateView();
+    } else {
+      plateZoom = 1.35;
+      platePanX = 0;
+      platePanY = 0;
+      applyPlateTransform(true);
+    }
+    if (hintElem) hintElem.style.opacity = "0";
+  });
+
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener("click", () => {
+      setPlateZoom(plateZoom + 0.25);
+      if (hintElem) hintElem.style.opacity = "0";
+    });
+  }
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener("click", () => {
+      setPlateZoom(plateZoom - 0.25);
+      if (hintElem) hintElem.style.opacity = "0";
+    });
+  }
+  if (zoomFitBtn) {
+    zoomFitBtn.addEventListener("click", () => {
+      resetPlateView();
+      if (hintElem) hintElem.style.opacity = "0";
+    });
+  }
 }
 
 /* ── drawings ──────────────────────────────────────────────────────── */
@@ -1633,25 +1746,27 @@ async function loadSheet(key) {
   S.sheet = key;
   $("sheet-tabs").querySelectorAll("button").forEach((b) =>
     b.setAttribute("aria-selected", String(b.dataset.sheet === key)));
-  const plate = $("plate");
-  plate.innerHTML = "";
-  plate.append(el("p", "empty-note", "Drawing…"));
+  const canvas = $("plate-canvas") || $("plate");
+  canvas.innerHTML = "";
+  canvas.append(el("p", "empty-note", "Drawing…"));
   try {
     const r = await fetch(`${API}/plans/${S.activeId}/drawings/${key}.svg?dark=true`);
     if (!r.ok) throw new Error(String(r.status));
-    plate.innerHTML = await r.text();
+    canvas.innerHTML = await r.text();
+    applyPlateTransform();
     const { plan } = cur();
     $("plate-caption").textContent =
       `${(plan?.total_built_area || 0).toFixed(1)} m² built-up · FAR ${(plan?.achieved_far || 0).toFixed(2)} · ` +
       `${(plan?.levels || []).length} level(s) · ${plan?.style ? cap(plan.style) : ""}`;
   } catch (err) {
-    plate.innerHTML = "";
-    plate.append(el("p", "empty-note", `That drawing could not be produced (${err.message}).`));
+    canvas.innerHTML = "";
+    canvas.append(el("p", "empty-note", `That drawing could not be produced (${err.message}).`));
   }
 }
 
 function downloadSheet() {
-  const svg = $("plate").querySelector("svg");
+  const container = $("plate-canvas") || $("plate");
+  const svg = container.querySelector("svg");
   if (!svg) return toast("No drawing to download yet.");
   const blob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
   const a = document.createElement("a");
@@ -2034,11 +2149,74 @@ async function renderInterior() {
 async function renderModel() {
   const s = scrollPane("model");
   s.append(el("h3", "sec", "Three-dimensional model"));
-  s.append(el("p", "lede", "Exported as glTF, which every browser, phone and XR headset reads natively. Open it on a phone to place the scheme in a real room."));
+  s.append(el("p", "lede", "Interactive 3D model generated directly from your architectural floorplan. Orbit, zoom, inspect geometry, or export to GLB / CAD."));
+
+  const glbUrl = `${API}/plans/${S.activeId}/model.glb`;
+
+  // Interactive 3D Model Chassis with <model-viewer>
+  const chassis = el("div", "model-chassis");
+  chassis.innerHTML = `
+    <div class="model-badge"><i></i> 3D GLTF Viewport</div>
+    <div class="model-chassis__bar">
+      <button type="button" class="mv-btn" id="mv-reset" title="Reset Camera View">↺ Reset View</button>
+      <button type="button" class="mv-btn" id="mv-rotate" title="Toggle Auto-Rotation">⏸ Orbit</button>
+      <button type="button" class="mv-btn" id="mv-zoom-in" title="Zoom In">+</button>
+      <button type="button" class="mv-btn" id="mv-zoom-out" title="Zoom Out">−</button>
+    </div>
+    <model-viewer
+      id="arch-model-viewer"
+      src="${glbUrl}"
+      alt="Architectural 3D Model"
+      camera-controls
+      auto-rotate
+      auto-rotate-delay="1000"
+      rotation-per-second="18deg"
+      shadow-intensity="1.3"
+      shadow-softness="0.75"
+      exposure="1.08"
+      camera-orbit="38deg 58deg 90%"
+      min-camera-orbit="auto auto 5%"
+      max-camera-orbit="auto auto 500%"
+      field-of-view="28deg"
+      touch-action="pan-y"
+    ></model-viewer>
+  `;
+  s.append(chassis);
+
+  // Wire model controls
+  const mv = chassis.querySelector("#arch-model-viewer");
+  const resetBtn = chassis.querySelector("#mv-reset");
+  const rotateBtn = chassis.querySelector("#mv-rotate");
+  const zoomInBtn = chassis.querySelector("#mv-zoom-in");
+  const zoomOutBtn = chassis.querySelector("#mv-zoom-out");
+
+  if (resetBtn && mv) {
+    resetBtn.addEventListener("click", () => {
+      mv.cameraOrbit = "38deg 58deg 90%";
+      mv.fieldOfView = "28deg";
+      if (mv.jumpCameraToGoal) mv.jumpCameraToGoal();
+    });
+  }
+  if (rotateBtn && mv) {
+    rotateBtn.addEventListener("click", () => {
+      mv.autoRotate = !mv.autoRotate;
+      rotateBtn.textContent = mv.autoRotate ? "⏸ Orbit" : "▶ Orbit";
+    });
+  }
+  if (zoomInBtn && mv) {
+    zoomInBtn.addEventListener("click", () => {
+      if (mv.zoom) mv.zoom(1);
+    });
+  }
+  if (zoomOutBtn && mv) {
+    zoomOutBtn.addEventListener("click", () => {
+      if (mv.zoom) mv.zoom(-1);
+    });
+  }
 
   const links = el("div"); links.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px";
   for (const [label, href] of [
-    ["Download model (.glb)", `${API}/plans/${S.activeId}/model.glb`],
+    ["Download model (.glb)", glbUrl],
     ["Download for CAD (.obj)", `${API}/plans/${S.activeId}/model.obj`],
   ]) {
     const a = el("a", "ghost-btn", label); a.href = href; a.style.textDecoration = "none"; links.append(a);

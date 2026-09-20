@@ -2206,23 +2206,196 @@ body:not([data-phase="running"]) .running {
 .sheet-tabs button:hover { color: var(--chalk); border-color: var(--rule-2); }
 .sheet-tabs button[aria-selected=true] { background: var(--chalk); color: var(--earth); border-color: var(--chalk); }
 
+/* ── zoom & plate viewer ────────────────────────────────────────────── */
+
+.zoom-cluster {
+  display: inline-flex;
+  align-items: center;
+  background: var(--earth-2);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r);
+  padding: 2px 3px;
+  gap: 2px;
+}
+.zoom-btn {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--chalk-2);
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  width: 24px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  padding: 0;
+}
+.zoom-btn:hover {
+  background: rgba(246, 241, 228, 0.1);
+  color: var(--chalk);
+  border-color: var(--rule-2);
+}
+.zoom-btn:active {
+  background: var(--rule-2);
+}
+.zoom-btn--fit {
+  width: auto;
+  padding: 0 7px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--ochre);
+}
+.zoom-val {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--chalk-1);
+  min-width: 42px;
+  text-align: center;
+  user-select: none;
+}
+
 .plate {
-  flex: 1 1 auto; overflow: auto; min-height: 0;
-  display: grid; place-items: center; padding: 26px;
+  flex: 1 1 auto;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background:
+    radial-gradient(ellipse at 50% 50%, rgba(229,161,54,0.025) 0%, transparent 65%),
     repeating-linear-gradient(0deg, transparent 0 47px, rgba(246,241,228,.022) 47px 48px),
     repeating-linear-gradient(90deg, transparent 0 47px, rgba(246,241,228,.022) 47px 48px);
+  cursor: grab;
+  user-select: none;
 }
-/* The server emits SVG at its own intrinsic size, and a portrait floorplan is
-   far taller than a landscape viewport. Bounding both axes letterboxes the
-   sheet into the frame instead of forcing the architect to scroll a drawing
-   they wanted to see whole. */
+.plate.is-panning {
+  cursor: grabbing !important;
+}
+.plate__canvas {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transition: transform 0.06s ease-out;
+  will-change: transform;
+  pointer-events: none;
+}
+.plate__canvas > * {
+  pointer-events: auto;
+}
 .plate svg {
-  max-width: 100%; max-height: 100%; width: auto; height: auto;
-  display: block; filter: drop-shadow(0 18px 40px rgba(0,0,0,.5));
+  max-width: 92%;
+  max-height: 92%;
+  width: auto;
+  height: auto;
+  display: block;
+  filter: drop-shadow(0 20px 48px rgba(0,0,0,.65));
+}
+.plate__hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 14, 11, 0.85);
+  border: 1px solid var(--rule-2);
+  color: var(--chalk-3);
+  font-size: 10px;
+  font-family: var(--sans);
+  letter-spacing: 0.05em;
+  padding: 3px 12px;
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  z-index: 10;
+  white-space: nowrap;
 }
 .plate.is-zoomed { place-items: start center; }
 .plate.is-zoomed svg { max-height: none; width: 100%; }
+
+/* ── 3d model viewport chassis ─────────────────────────────────────── */
+
+.model-chassis {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  background: radial-gradient(ellipse at 50% 50%, #201b15 0%, #110e0b 65%, #080605 100%);
+  border: 1px solid var(--rule-2);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 22px;
+  box-shadow: inset 0 2px 24px rgba(0,0,0,0.65), 0 16px 44px rgba(0,0,0,0.45);
+}
+.model-chassis model-viewer {
+  width: 100%;
+  height: 100%;
+  --poster-color: transparent;
+  outline: none;
+}
+.model-chassis__bar {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  gap: 7px;
+  z-index: 10;
+}
+.mv-btn {
+  background: rgba(18, 14, 11, 0.85);
+  border: 1px solid var(--rule-2);
+  color: var(--chalk-2);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: var(--r);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: all 0.16s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mv-btn:hover {
+  background: var(--chalk);
+  color: var(--earth);
+  border-color: var(--chalk);
+}
+.model-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(18, 14, 11, 0.85);
+  border: 1px solid var(--rule-2);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ochre);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+.model-badge i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
 .plate__caption {
   flex: 0 0 auto; margin: 0; padding: 10px 20px; border-top: 1px solid var(--rule);
   font-family: var(--num); font-size: 11.5px; color: var(--chalk-3);
@@ -2331,28 +2504,29 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
 /* ── overlay ───────────────────────────────────────────────────────── */
 
 .sheetover {
-  position: fixed; inset: 0; z-index: 60; background: rgba(10,8,5,.72);
-  backdrop-filter: blur(4px); display: grid; place-items: center; padding: 5vh 4vw;
+  position: fixed; inset: 0; z-index: 60; background: rgba(10,8,5,.75);
+  backdrop-filter: blur(8px); display: grid; place-items: center; padding: 4vh 4vw;
   animation: fade .2s ease both;
 }
 @keyframes fade { from { opacity: 0 } }
 .sheetover__panel {
-  width: min(780px, 100%); max-height: 86vh; display: flex; flex-direction: column;
-  background: var(--earth-2); border: 1px solid var(--rule-2); border-radius: var(--r);
-  box-shadow: 0 30px 90px rgba(0,0,0,.6); animation: lift .3s var(--ease) both;
+  width: min(880px, 94vw); max-height: 88vh; display: flex; flex-direction: column;
+  background: var(--earth-2); border: 1px solid var(--rule-2); border-radius: 10px;
+  box-shadow: 0 35px 100px rgba(0,0,0,.75), 0 0 0 1px rgba(229,161,54,0.18);
+  animation: lift .3s var(--ease) both;
 }
 @keyframes lift { from { transform: translateY(14px); opacity: 0 } }
 .sheetover__bar {
-  display: flex; align-items: center; padding: 16px 22px; border-bottom: 1px solid var(--rule);
+  display: flex; align-items: center; padding: 18px 26px; border-bottom: 1px solid var(--rule);
 }
-.sheetover__bar h2 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .19em; text-transform: uppercase; color: var(--ochre); }
+.sheetover__bar h2 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--ochre); }
 .x {
   margin-left: auto; background: none; border: 1px solid var(--rule-2); border-radius: var(--r);
   width: 28px; height: 28px; cursor: pointer; color: var(--chalk-3); display: grid; place-items: center;
 }
 .x:hover { color: var(--chalk); border-color: var(--chalk-3); }
-.sheetover__body { overflow-y: auto; padding: 22px; }
-.sheetover__body p { margin: 0 0 16px; font-size: 14.5px; line-height: 1.8; color: var(--chalk-2); max-width: 70ch; }
+.sheetover__body { overflow-y: auto; padding: 28px; }
+.sheetover__body p { margin: 0 0 18px; font-size: 15.5px; line-height: 1.85; color: var(--chalk-1); max-width: 76ch; }
 
 .toast {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 80;
