@@ -744,6 +744,13 @@ function updateStudioHUD() {
       card.classList.add("is-selected");
       updateOrientationDial(radio.value);
       updateStudioHUD();
+      // Pulse the compass dial on direction change
+      const dial = document.getElementById("compass-dial");
+      if (dial) {
+        dial.classList.remove("is-pulsing");
+        void dial.offsetWidth;
+        dial.classList.add("is-pulsing");
+      }
     });
   });
 
