@@ -345,7 +345,12 @@ function initStarField() {
     updateCenter();
     birthTime = performance.now();
     state = "forming";
-    const count = 120;
+  }
+
+  function seedAmbient() {
+    stars.length = 0;
+    state = "ambient";
+    const count = 160;
     for (let i = 0; i < count; i++) {
       const isHero = Math.random() < 0.12;
       const radius = isHero ? Math.random() * 0.9 + 1.6 : Math.random() * 0.8 + 0.6;
@@ -359,7 +364,7 @@ function initStarField() {
         vy: (Math.random() - 0.5) * 0.15,
         r: radius,
         isHero,
-        introAlpha: Math.random() * 0.2 + 0.2,
+        introAlpha: 0,
         ambientAlpha: Math.random() * 0.16 + 0.14,
         color: col,
         phase: Math.random() * Math.PI * 2,
@@ -380,17 +385,8 @@ function initStarField() {
     spreadStart = performance.now();
     updateCenter();
 
-    // 1. Give existing wide stars an outward impulse
-    for (let i = 0; i < stars.length; i++) {
-      const s = stars[i];
-      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.25;
-      const speed = fast ? (Math.random() * 20 + 14) : (Math.random() * 15 + 8);
-      s.vx = Math.cos(angle) * speed;
-      s.vy = Math.sin(angle) * speed;
-    }
-
-    // 2. Dynamically generate full cosmos burst stars erupting from center outward
-    const burstCount = fast ? Math.floor(BURST_STAR_COUNT * 0.75) : BURST_STAR_COUNT;
+    // Dynamically generate full cosmos burst stars erupting from center outward
+    const burstCount = fast ? 120 : 260;
     for (let i = 0; i < burstCount; i++) {
       stars.push(createBurstStar());
     }
@@ -507,7 +503,7 @@ function initStarField() {
 
   window.addEventListener("resize", () => {
     resize();
-    if (state === "ambient") seed();
+    if (state === "ambient") seedAmbient();
   });
 
   window.addEventListener("mousemove", (e) => {
@@ -519,7 +515,7 @@ function initStarField() {
   });
   window.addEventListener("mouseleave", () => { mouse.active = false; });
 
-  return { spread };
+  return { spread, seedAmbient };
 }
 
 /* ═══ BOOT & STUDIO INTERACTION ═════════════════════════════════════ */
@@ -670,18 +666,19 @@ function updateStudioHUD() {
       if (isDismissed) return;
       isDismissed = true;
       if (!hasBlasted) triggerBlast();
+      document.body.classList.remove("is-loading");
       curtain.classList.add("is-fading");
-      const delay = fast ? 200 : 600;
+      const delay = fast ? 200 : 750;
       setTimeout(() => {
         curtain.style.display = "none";
       }, delay);
     };
 
-    // 1. Cosmic star blast when gold & silver lock (0.7s)
-    const blastTimer = setTimeout(triggerBlast, 700);
+    // 1. Cosmic star blast EXACTLY when gold & silver A's merge (1.2s)
+    const blastTimer = setTimeout(triggerBlast, 1200);
 
-    // 2. Smooth silk transition into the studio (1.5s total duration)
-    const introTimer = setTimeout(() => dismissIntro(false), 1500);
+    // 2. Smooth silk transition into the studio after stars explode across cosmos (2.4s total duration)
+    const introTimer = setTimeout(() => dismissIntro(false), 2400);
 
     // Any click, touch, or keypress dismisses immediately
     curtain.addEventListener("click", () => {
@@ -692,10 +689,14 @@ function updateStudioHUD() {
     window.addEventListener("keydown", () => dismissIntro(true), { once: true });
     window.addEventListener("touchstart", () => dismissIntro(true), { once: true, passive: true });
   } else if (curtain) {
+    document.body.classList.remove("is-loading");
     curtain.style.display = "none";
-    if (starField && starField.spread) starField.spread(true);
+    if (starField && starField.seedAmbient) starField.seedAmbient();
+    else if (starField && starField.spread) starField.spread(true);
   } else {
-    if (starField && starField.spread) starField.spread(true);
+    document.body.classList.remove("is-loading");
+    if (starField && starField.seedAmbient) starField.seedAmbient();
+    else if (starField && starField.spread) starField.spread(true);
   }
 
   strike($("hero-mandala"));
@@ -807,7 +808,12 @@ function updateStudioHUD() {
     const weightEl = $("stance-weight");
     if (weightEl) weightEl.textContent = "";
     const noteEl = $("stance-note");
-    if (noteEl) noteEl.textContent = s[2];
+    if (noteEl) {
+      noteEl.textContent = s[2];
+      noteEl.classList.remove("is-fading-in");
+      void noteEl.offsetWidth;
+      noteEl.classList.add("is-fading-in");
+    }
     const idxEl = $("stance-telemetry-idx");
     if (idxEl) idxEl.textContent = `0${stanceIdx} // 04`;
     const trackFill = $("stance-track-fill");
@@ -823,10 +829,23 @@ function updateStudioHUD() {
         trackFill.classList.remove("is-advancing");
       }
     }
+
+    // Dynamic celestial light tracking dial position
+    const vastuCard = $("vastu-card");
+    if (vastuCard) {
+      vastuCard.style.setProperty("--vastu-dial-x", `${pct}%`);
+    }
     
-    // Animate covered ticks with golden phosphor luminescence
+    // Animate covered ticks with golden phosphor luminescence & ignite new ticks
     document.querySelectorAll(".stance-tick").forEach((tick, i) => {
-      tick.classList.toggle("is-covered", i <= stanceIdx);
+      const wasCovered = tick.classList.contains("is-covered");
+      const isNowCovered = i <= stanceIdx;
+      tick.classList.toggle("is-covered", isNowCovered);
+      if (!wasCovered && isNowCovered && isAdvancingForward) {
+        tick.classList.remove("is-igniting");
+        void tick.offsetWidth;
+        tick.classList.add("is-igniting");
+      }
     });
 
     // Pop the status pill with smooth elastic micro-bounce
@@ -841,8 +860,13 @@ function updateStudioHUD() {
       const sVal = +btn.dataset.val;
       if (sVal === stanceIdx) {
         btn.classList.add("is-active");
+        if (isAdvancingForward) {
+          btn.classList.remove("is-impacted");
+          void btn.offsetWidth;
+          btn.classList.add("is-impacted");
+        }
       } else {
-        btn.classList.remove("is-active");
+        btn.classList.remove("is-active", "is-impacted");
       }
     });
     const stanceInput = $("stance");

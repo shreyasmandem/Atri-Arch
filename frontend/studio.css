@@ -226,7 +226,8 @@ body[data-phase="review"]  .review  { display: grid; }
 
 .compose {
   position: fixed; inset: var(--crown-h) 0 0 0;
-  background: var(--bg-base);
+  z-index: 2;
+  background: transparent;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -1474,47 +1475,69 @@ body[data-phase="review"]  .review  { display: grid; }
   pointer-events: none;
   overflow: visible;
 }
+/* ══════════════════════ VASTU STANCE: DYNAMIC COSMIC LUXURY ══════════════════════ */
 .stance-track-fill {
   position: absolute;
   top: 0; left: 0; bottom: 0;
   width: 50%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7A5418 0%, #C49A4C 45%, #F5D77F 100%);
-  box-shadow: 0 0 10px rgba(229, 169, 88, 0.35);
-  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  background: linear-gradient(
+    90deg,
+    #7A5418 0%,
+    #C49A4C 25%,
+    #F5D77F 48%,
+    #FFF9E6 58%,
+    #F5D77F 68%,
+    #C49A4C 88%,
+    #7A5418 100%
+  );
+  background-size: 200% 100%;
+  animation: vastuPhosphorPlasma 2.6s linear infinite;
+  box-shadow: 0 0 14px rgba(229, 169, 88, 0.45), 0 0 28px rgba(229, 169, 88, 0.2);
+  transition: width 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
   overflow: hidden;
 }
+@keyframes vastuPhosphorPlasma {
+  0%   { background-position: 200% 0; }
+  100% { background-position: 0% 0; }
+}
 
-/* Light beam container - only animates when advancing forward */
+/* Continuous Light Beam Wave */
 .stance-claude-beam {
   position: absolute;
   top: 0; bottom: 0; left: 0; right: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.9) 50%, transparent 100%);
-  background-size: 60% 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.85) 50%, transparent 100%);
+  background-size: 50% 100%;
   background-repeat: no-repeat;
-  opacity: 0;
+  animation: vastuPulseBeam 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   pointer-events: none;
 }
+@keyframes vastuPulseBeam {
+  0%   { background-position: -50% 0; opacity: 0; }
+  20%  { opacity: 0.95; }
+  80%  { opacity: 0.95; }
+  100% { background-position: 150% 0; opacity: 0; }
+}
 
-/* Forward-only Animation: triggered only when moving stance forward */
+/* Forward Advancement Surge Animation */
 .stance-track-fill.is-advancing {
-  animation: forwardTrackGlow 0.45s ease-out;
+  animation: vastuSurgeGlow 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .stance-track-fill.is-advancing .stance-claude-beam {
-  animation: forwardBeamSweep 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: vastuHyperFlare 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes forwardTrackGlow {
-  0%   { box-shadow: 0 0 10px rgba(229, 169, 88, 0.35); }
-  35%  { box-shadow: 0 0 20px rgba(245, 215, 127, 0.75), 0 0 35px rgba(229, 169, 88, 0.35); }
-  100% { box-shadow: 0 0 10px rgba(229, 169, 88, 0.35); }
+@keyframes vastuSurgeGlow {
+  0%   { box-shadow: 0 0 14px rgba(229, 169, 88, 0.45); }
+  35%  { box-shadow: 0 0 32px rgba(245, 215, 127, 1), 0 0 65px rgba(229, 169, 88, 0.65); filter: brightness(1.3); }
+  100% { box-shadow: 0 0 14px rgba(229, 169, 88, 0.45); filter: brightness(1); }
 }
 
-@keyframes forwardBeamSweep {
+@keyframes vastuHyperFlare {
   0%   { background-position: -60% 0; opacity: 0; }
-  20%  { opacity: 1; }
-  75%  { opacity: 1; }
-  100% { background-position: 140% 0; opacity: 0; }
+  25%  { opacity: 1; filter: drop-shadow(0 0 10px #FFFFFF); }
+  75%  { opacity: 1; filter: drop-shadow(0 0 10px #FFFFFF); }
+  100% { background-position: 150% 0; opacity: 0; }
 }
 
 .stance-tick {
@@ -1524,15 +1547,34 @@ body[data-phase="review"]  .review  { display: grid; }
   background: rgba(255, 255, 255, 0.15);
   transform: translateX(-50%);
   pointer-events: none;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   border-radius: 1px;
 }
 .stance-tick.is-covered {
   background: #F5D77F;
-  box-shadow: 0 0 8px rgba(245, 215, 127, 0.95);
-  height: 14px;
-  top: -4px;
+  box-shadow: 0 0 8px rgba(245, 215, 127, 0.95), 0 0 16px rgba(229, 169, 88, 0.5);
+  height: 15px;
+  top: -4.5px;
   width: 2px;
+}
+.stance-tick.is-igniting {
+  animation: tickIgnite 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes tickIgnite {
+  0% {
+    transform: translateX(-50%) scaleY(1);
+    box-shadow: 0 0 8px rgba(245, 215, 127, 0.95);
+  }
+  40% {
+    transform: translateX(-50%) scaleY(1.5);
+    box-shadow: 0 0 16px #FFFFFF, 0 0 28px rgba(245, 215, 127, 1);
+    background: #FFFFFF;
+  }
+  100% {
+    transform: translateX(-50%) scaleY(1);
+    box-shadow: 0 0 8px rgba(245, 215, 127, 0.95), 0 0 16px rgba(229, 169, 88, 0.5);
+    background: #F5D77F;
+  }
 }
 
 /* Range Input */
@@ -1558,49 +1600,72 @@ body[data-phase="review"]  .review  { display: grid; }
   background: transparent;
 }
 
-/* Simple, Elegant Machined Dial */
+/* Simple, Living Champagne Dial */
 .stance::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
-  margin-top: -6px;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
   border-radius: 50%;
-  background: linear-gradient(180deg, #FFFFFF 0%, #F5D77F 45%, #C49A4C 100%);
-  border: 2px solid #121016;
+  background: radial-gradient(circle at 35% 35%, #FFFFFF 0%, #FFF4D0 25%, #E5A958 65%, #9C6721 100%);
+  border: 2px solid #0F0D14;
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.7),
-    0 0 10px rgba(229, 169, 88, 0.4);
+    0 0 0 1px rgba(255, 255, 255, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.8),
+    0 0 12px rgba(229, 169, 88, 0.45);
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.18s ease;
+  animation: dialHaloBreathe 2.4s ease-in-out infinite;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease;
+}
+@keyframes dialHaloBreathe {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.25),
+      0 2px 6px rgba(0, 0, 0, 0.8),
+      0 0 10px rgba(229, 169, 88, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1.5px rgba(255, 255, 255, 0.45),
+      0 2px 10px rgba(0, 0, 0, 0.9),
+      0 0 24px rgba(245, 215, 127, 0.95),
+      0 0 38px rgba(229, 169, 88, 0.45);
+  }
 }
 .stance::-webkit-slider-thumb:hover {
-  transform: scale(1.18);
+  transform: scale(1.24);
   box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.8),
-    0 0 16px rgba(245, 215, 127, 0.75);
+    0 0 0 2px rgba(255, 255, 255, 0.6),
+    0 2px 10px rgba(0, 0, 0, 0.9),
+    0 0 28px rgba(245, 215, 127, 1),
+    0 0 44px rgba(229, 169, 88, 0.55);
 }
 .stance::-webkit-slider-thumb:active {
   cursor: grabbing;
-  transform: scale(1.06);
+  transform: scale(1.1);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.9),
-    0 0 20px rgba(245, 215, 127, 0.9);
+    0 0 0 2px #FFFFFF,
+    0 2px 8px rgba(0, 0, 0, 0.95),
+    0 0 36px rgba(245, 215, 127, 1),
+    0 0 52px rgba(229, 169, 88, 0.7);
 }
 
 .stance::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: linear-gradient(180deg, #FFFFFF 0%, #F5D77F 45%, #C49A4C 100%);
-  border: 2px solid #121016;
+  background: radial-gradient(circle at 35% 35%, #FFFFFF 0%, #FFF4D0 25%, #E5A958 65%, #9C6721 100%);
+  border: 2px solid #0F0D14;
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.7),
-    0 0 10px rgba(229, 169, 88, 0.4);
+    0 0 0 1px rgba(255, 255, 255, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.8),
+    0 0 12px rgba(229, 169, 88, 0.45);
   cursor: grab;
-  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.18s ease;
+  animation: dialHaloBreathe 2.4s ease-in-out infinite;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease;
 }
 
 /* 5 Minimal Clean Stations */
@@ -1651,21 +1716,69 @@ body[data-phase="review"]  .review  { display: grid; }
 }
 .stance-station:hover .station-name { color: rgba(255, 255, 255, 0.85); }
 
-/* Station Active State (Clean Golden Highlight - No looping laser) */
+/* Station Active State with Top Laser Sweep */
 .stance-station.is-active {
   background: rgba(229, 169, 88, 0.12);
   border-color: rgba(229, 169, 88, 0.5);
-  box-shadow: 0 2px 14px rgba(229, 169, 88, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 14px rgba(229, 169, 88, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   transform: translateY(-1px);
 }
 .stance-station.is-active::before {
-  background: linear-gradient(90deg, #C49A4C, #F5D77F);
-  box-shadow: 0 0 6px rgba(229, 169, 88, 0.7);
+  background: linear-gradient(90deg, #C49A4C, #F5D77F, #FFFFFF, #F5D77F, #C49A4C);
+  background-size: 200% 100%;
+  animation: stationTopLaser 2s linear infinite;
+  box-shadow: 0 0 8px rgba(229, 169, 88, 0.85);
+}
+@keyframes stationTopLaser {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
 }
 .stance-station.is-active .station-name {
   color: #F5D77F;
   font-weight: 700;
   text-shadow: 0 0 8px rgba(245, 215, 127, 0.35);
+}
+
+/* Station Click Impact Ripple */
+.stance-station.is-impacted {
+  animation: stationImpact 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes stationImpact {
+  0% {
+    transform: scale(0.96) translateY(0);
+    box-shadow: 0 0 0 rgba(229, 169, 88, 0.8);
+  }
+  50% {
+    transform: scale(1.03) translateY(-2px);
+    box-shadow: 0 0 22px rgba(229, 169, 88, 0.5), inset 0 0 10px rgba(245, 215, 127, 0.4);
+  }
+  100% {
+    transform: scale(1) translateY(-1px);
+    box-shadow: 0 2px 14px rgba(229, 169, 88, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Dynamic Celestial Light Tracking on Vastu Card */
+#vastu-card {
+  position: relative;
+  overflow: hidden;
+}
+#vastu-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--vastu-dial-x, 50%) 45%, rgba(229, 169, 88, 0.11) 0%, transparent 60%);
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+#stance-note.is-fading-in {
+  animation: noteFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes noteFadeIn {
+  0%   { opacity: 0.3; transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */
@@ -2126,6 +2239,8 @@ body:not([data-phase="running"]) .running {
 
 .review {
   position: fixed; inset: var(--crown-h) 0 0 0;
+  z-index: 2;
+  background: transparent;
   grid-template-columns: 280px minmax(0, 1fr) 300px;
   grid-template-rows: minmax(0, 1fr) auto;
 }
@@ -2695,14 +2810,20 @@ table.led tfoot td { border-top: 2px solid var(--rule-2); border-bottom: 0; colo
   inset: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 1;
+  z-index: 0;
   pointer-events: none;
-  background: transparent;
+  background: #09080E;
 }
 
-/* Full Studio Experience - Always Visible and Pristine */
+/* While intro is running, keep home UI hidden in pure void until stars expand */
+body.is-loading > :not(#space-stars):not(#intro-curtain) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  transform: translateY(6px);
+}
 body > :not(#space-stars):not(#intro-curtain) {
-  opacity: 1;
+  transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ══════════════════════ ARCHITECTURAL DRAFTING INTRO ══════════════════════ */
@@ -2710,14 +2831,12 @@ body > :not(#space-stars):not(#intro-curtain) {
 .intro-curtain {
   position: fixed;
   inset: 0;
-  z-index: 9999;
-  background: radial-gradient(circle at center, rgba(16, 14, 22, 0.97) 0%, rgba(8, 7, 11, 0.99) 100%);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  z-index: 100;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.75s;
   overflow: hidden;
   user-select: none;
   cursor: pointer;
@@ -2725,7 +2844,7 @@ body > :not(#space-stars):not(#intro-curtain) {
 
 .intro-curtain.is-fading {
   opacity: 0;
-  transform: scale(1.02);
+  transform: scale(1.04);
   pointer-events: none;
   visibility: hidden;
 }
