@@ -1464,463 +1464,207 @@ body[data-phase="review"]  .review  { display: grid; }
   background-size: 12px; background-repeat: no-repeat; padding-right: 32px;
 }
 
-/* ═══ Vastu Stance — Precision Segmented Calibration ═══ */
+/* ═══ Vastu Stance — Architectural Vernier Scale Calibration ═══ */
 .stance-block { margin-bottom: 24px; }
 
-/* Status Pill in legend */
+/* Minimalist Architectural Status Tag */
 .stance-badge-wrap { margin-left: auto; }
 .stance-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 12px;
-  border-radius: 9999px;
-  background: rgba(229, 169, 88, 0.08);
-  border: 1px solid rgba(229, 169, 88, 0.32);
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-family: var(--num);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: all 0.25s ease;
-  box-shadow: 0 0 12px rgba(229, 169, 88, 0.12);
+  letter-spacing: 0.08em;
+  color: var(--chalk-2);
+  transition: all 0.2s ease;
 }
 .stance-status-pill.is-popping {
-  animation: popMicroBounce 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-@keyframes popMicroBounce {
-  0%   { transform: scale(0.92); }
-  50%  { transform: scale(1.08); box-shadow: 0 0 20px rgba(245, 215, 127, 0.4); }
-  100% { transform: scale(1); }
+  border-color: rgba(229, 169, 88, 0.5);
 }
 .stance-dot {
-  position: relative;
   display: inline-block;
-  width: 6px; height: 6px;
+  width: 4px; height: 4px;
   border-radius: 50%;
-  background: #F5D77F;
-  box-shadow: 0 0 8px rgba(245, 215, 127, 0.95);
-}
-.stance-dot::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1px solid rgba(245, 215, 127, 0.6);
-  animation: dotPing 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
-  pointer-events: none;
-}
-@keyframes dotPing {
-  0%   { transform: scale(0.8); opacity: 1; }
-  75%, 100% { transform: scale(2.4); opacity: 0; }
+  background: var(--ochre);
 }
 .stance-status-name {
-  color: #F5D77F;
+  color: var(--chalk);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 700;
-  text-shadow: 0 0 8px rgba(245, 215, 127, 0.35);
+  letter-spacing: 0.08em;
+  font-weight: 650;
 }
 .stance-status-weight {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--chalk-4);
   font-weight: 500;
-  padding-left: 5px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Slider Chassis */
-.slider-container { padding: 8px 0 4px; }
-.stance-slider-chassis { position: relative; padding: 12px 0 6px; }
+/* Precision Hairline Slider Chassis */
+.slider-container { padding: 4px 0 2px; }
+.stance-slider-chassis { position: relative; padding: 10px 0 4px; }
 .stance-track-backdrop {
   position: relative;
   width: 100%;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(14, 18, 28, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.05);
+  height: 2px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.12);
   margin-top: 10px;
   pointer-events: none;
   overflow: visible;
 }
-/* ══════════════════════ VASTU STANCE: DYNAMIC COSMIC LUXURY ══════════════════════ */
 .stance-track-fill {
   position: absolute;
   top: 0; left: 0; bottom: 0;
   width: 50%;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    #6B4510 0%,
-    #A87625 22%,
-    #E5A958 46%,
-    #FFF9E6 54%,
-    #E5A958 64%,
-    #A87625 84%,
-    #6B4510 100%
-  );
-  background-size: 220% 100%;
-  animation: vastuPhosphorPlasma 2.4s linear infinite;
-  box-shadow: 0 0 12px rgba(229, 169, 88, 0.45), 0 0 24px rgba(229, 169, 88, 0.18);
-  transition: width 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
-  overflow: visible;
-}
-@keyframes vastuPhosphorPlasma {
-  0%   { background-position: 220% 0; }
-  100% { background-position: 0% 0; }
+  border-radius: 1px;
+  background: var(--ochre);
+  transition: width 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Leading Edge Photon Comet Spark */
-.stance-track-fill::after {
-  content: '';
-  position: absolute;
-  right: -3px;
-  top: -2px;
-  bottom: -2px;
-  width: 8px;
-  border-radius: 999px;
-  background: radial-gradient(circle, #FFFFFF 0%, #FFF4D0 40%, rgba(229, 169, 88, 0.8) 80%, transparent 100%);
-  box-shadow: 0 0 10px #FFFFFF, 0 0 22px #F5D77F, 0 0 36px #E5A958;
-  pointer-events: none;
-  animation: sparkCometPulse 1.8s ease-in-out infinite alternate;
-}
-@keyframes sparkCometPulse {
-  0%   { opacity: 0.85; filter: drop-shadow(0 0 2px #FFFFFF); }
-  100% { opacity: 1;    filter: drop-shadow(0 0 8px #F5D77F); transform: scale(1.1); }
-}
-
-/* Continuous Light Beam Wave */
-.stance-claude-beam {
-  position: absolute;
-  top: 0; bottom: 0; left: 0; right: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.75) 45%, #FFFFFF 50%, rgba(255, 255, 255, 0.75) 55%, transparent 100%);
-  background-size: 40% 100%;
-  background-repeat: no-repeat;
-  animation: vastuPulseBeam 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  pointer-events: none;
-  border-radius: 999px;
-}
-@keyframes vastuPulseBeam {
-  0%   { background-position: -50% 0; opacity: 0; }
-  15%  { opacity: 0.9; }
-  85%  { opacity: 0.9; }
-  100% { background-position: 150% 0; opacity: 0; }
-}
-
-/* Forward Advancement Surge Animation */
-.stance-track-fill.is-advancing {
-  animation: vastuSurgeGlow 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-.stance-track-fill.is-advancing .stance-claude-beam {
-  animation: vastuHyperFlare 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes vastuSurgeGlow {
-  0%   { box-shadow: 0 0 12px rgba(229, 169, 88, 0.45); }
-  35%  { box-shadow: 0 0 34px rgba(245, 215, 127, 1), 0 0 70px rgba(229, 169, 88, 0.7); filter: brightness(1.35); }
-  100% { box-shadow: 0 0 12px rgba(229, 169, 88, 0.45); filter: brightness(1); }
-}
-
-@keyframes vastuHyperFlare {
-  0%   { background-position: -60% 0; opacity: 0; }
-  25%  { opacity: 1; filter: drop-shadow(0 0 12px #FFFFFF); }
-  75%  { opacity: 1; filter: drop-shadow(0 0 12px #FFFFFF); }
-  100% { background-position: 150% 0; opacity: 0; }
-}
-
+/* Architectural Drafting Calibration Ticks */
 .stance-tick {
   position: absolute;
-  top: -2px;
-  width: 1.5px; height: 10px;
-  background: rgba(255, 255, 255, 0.16);
+  top: -3px;
+  width: 1px; height: 8px;
+  background: rgba(255, 255, 255, 0.18);
   transform: translateX(-50%);
   pointer-events: none;
-  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-  border-radius: 1px;
+  transition: background 0.2s ease;
 }
 .stance-tick.is-covered {
-  background: #F5D77F;
-  box-shadow: 0 0 8px rgba(245, 215, 127, 0.95), 0 0 16px rgba(229, 169, 88, 0.5);
-  height: 14px;
-  top: -4px;
-  width: 2px;
-}
-.stance-tick.is-igniting {
-  animation: tickIgnite 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-@keyframes tickIgnite {
-  0% {
-    transform: translateX(-50%) scaleY(1);
-    box-shadow: 0 0 8px rgba(245, 215, 127, 0.95);
-  }
-  40% {
-    transform: translateX(-50%) scaleY(1.7);
-    box-shadow: 0 0 18px #FFFFFF, 0 0 32px rgba(245, 215, 127, 1);
-    background: #FFFFFF;
-  }
-  100% {
-    transform: translateX(-50%) scaleY(1);
-    box-shadow: 0 0 8px rgba(245, 215, 127, 0.95), 0 0 16px rgba(229, 169, 88, 0.5);
-    background: #F5D77F;
-  }
+  background: var(--ochre);
 }
 
-/* Range Input */
+/* Range Input & Vernier Cursor Thumb */
 .stance {
   appearance: none;
   width: 100%;
-  height: 26px;
+  height: 24px;
   background: none;
-  cursor: pointer;
+  cursor: col-resize;
   outline: none;
-  margin-top: -16px;
+  margin-top: -13px;
   position: relative;
   z-index: 2;
 }
 .stance::-webkit-slider-runnable-track {
-  height: 6px;
-  border-radius: 999px;
+  height: 2px;
   background: transparent;
 }
 .stance::-moz-range-track {
-  height: 6px;
-  border-radius: 999px;
+  height: 2px;
   background: transparent;
 }
 
-/* ═══ Premium Gemstone Dial Thumb ═══ */
+/* Machined Vernier Cursor */
 .stance::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 24px;
-  height: 24px;
-  margin-top: -9px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 38% 35%, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0) 24%),
-    radial-gradient(circle at 50% 50%, transparent 30%, rgba(255,244,208,0.5) 32%, rgba(229,169,88,0.2) 34%, transparent 36%),
-    radial-gradient(circle at 50% 50%, #FFF8E7 0%, #F5D77F 25%, #E5A958 52%, #9C6721 80%, #5E390A 100%);
-  border: 1.5px solid rgba(12, 10, 16, 0.95);
-  box-shadow:
-    0 0 0 1px rgba(245, 215, 127, 0.5),
-    0 0 0 4px rgba(229, 169, 88, 0.12),
-    0 2px 4px rgba(0, 0, 0, 0.9),
-    0 4px 12px rgba(0, 0, 0, 0.7),
-    0 0 20px rgba(229, 169, 88, 0.55),
-    inset 0 1px 1px rgba(255, 255, 255, 0.5);
-  cursor: grab;
-  animation: dialHaloBreathe 2.6s ease-in-out infinite;
-  transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.24s ease;
-}
-@keyframes dialHaloBreathe {
-  0%, 100% {
-    box-shadow:
-      0 0 0 1px rgba(245, 215, 127, 0.5),
-      0 0 0 3px rgba(229, 169, 88, 0.1),
-      0 2px 4px rgba(0, 0, 0, 0.9),
-      0 4px 12px rgba(0, 0, 0, 0.7),
-      0 0 14px rgba(229, 169, 88, 0.45);
-  }
-  50% {
-    box-shadow:
-      0 0 0 1.5px rgba(245, 215, 127, 0.75),
-      0 0 0 6px rgba(229, 169, 88, 0.18),
-      0 2px 5px rgba(0, 0, 0, 0.9),
-      0 4px 14px rgba(0, 0, 0, 0.8),
-      0 0 28px rgba(245, 215, 127, 0.85),
-      0 0 48px rgba(229, 169, 88, 0.35);
-  }
+  width: 10px;
+  height: 18px;
+  margin-top: -8px;
+  border-radius: 2px;
+  background: #141824;
+  background-image: linear-gradient(180deg, transparent 3px, var(--ochre) 3px, var(--ochre) 15px, transparent 15px);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  border: 1px solid var(--ochre);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  cursor: col-resize;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .stance::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  box-shadow:
-    0 0 0 2px rgba(245, 215, 127, 0.85),
-    0 0 0 7px rgba(229, 169, 88, 0.22),
-    0 3px 12px rgba(0, 0, 0, 0.9),
-    0 0 32px rgba(245, 215, 127, 0.95),
-    0 0 56px rgba(229, 169, 88, 0.5);
+  border-color: #F5D77F;
+  background-color: #1a2030;
 }
 .stance::-webkit-slider-thumb:active {
+  border-color: #FFFFFF;
   cursor: grabbing;
-  transform: scale(1.1);
-  box-shadow:
-    0 0 0 2.5px rgba(255, 255, 255, 0.9),
-    0 0 0 8px rgba(245, 215, 127, 0.3),
-    0 3px 10px rgba(0, 0, 0, 0.95),
-    0 0 40px rgba(245, 215, 127, 1),
-    0 0 64px rgba(229, 169, 88, 0.7);
 }
 
 .stance::-moz-range-thumb {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 38% 35%, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0) 24%),
-    radial-gradient(circle at 50% 50%, transparent 30%, rgba(255,244,208,0.5) 32%, rgba(229,169,88,0.2) 34%, transparent 36%),
-    radial-gradient(circle at 50% 50%, #FFF8E7 0%, #F5D77F 25%, #E5A958 52%, #9C6721 80%, #5E390A 100%);
-  border: 1.5px solid rgba(12, 10, 16, 0.95);
-  box-shadow:
-    0 0 0 1px rgba(245, 215, 127, 0.5),
-    0 0 0 4px rgba(229, 169, 88, 0.12),
-    0 2px 4px rgba(0, 0, 0, 0.9),
-    0 4px 12px rgba(0, 0, 0, 0.7),
-    0 0 20px rgba(229, 169, 88, 0.55),
-    inset 0 1px 1px rgba(255, 255, 255, 0.5);
-  cursor: grab;
-  animation: dialHaloBreathe 2.6s ease-in-out infinite;
-  transition: transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1),
-              box-shadow 0.24s ease;
+  width: 10px;
+  height: 18px;
+  border-radius: 2px;
+  background: #141824;
+  background-image: linear-gradient(180deg, transparent 3px, var(--ochre) 3px, var(--ochre) 15px, transparent 15px);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  border: 1px solid var(--ochre);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  cursor: col-resize;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-/* 5 Minimal Clean Stations */
+/* Architectural Segmented Ruler Stations */
 .stance-scale {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 6px;
-  margin-top: 14px;
+  gap: 4px;
+  margin-top: 12px;
   user-select: none;
 }
 .stance-station {
   cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 4px 6px;
-  border-radius: 6px;
+  padding: 7px 2px;
+  border-radius: 3px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.02);
   position: relative;
-  overflow: hidden;
-  transition: all 0.26s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.stance-station::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: transparent;
-  border-radius: 2px 2px 0 0;
-  transition: background 0.25s ease, box-shadow 0.25s ease;
-}
-/* Micro status indicator pip */
-.stance-station::after {
-  content: '';
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  transition: all 0.25s ease;
+  transition: all 0.18s ease;
 }
 .station-name {
-  font-family: var(--sans);
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
-  letter-spacing: 0.03em;
+  font-family: var(--num);
+  font-size: 10px;
+  font-weight: 550;
+  color: var(--chalk-4);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
   line-height: 1;
-  transition: all 0.22s ease;
+  transition: color 0.18s ease;
 }
-
-/* Station Hover */
 .stance-station:hover {
-  background: rgba(229, 169, 88, 0.05);
-  border-color: rgba(229, 169, 88, 0.22);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
 }
-.stance-station:hover .station-name { color: rgba(255, 255, 255, 0.9); }
-.stance-station:hover::after { background: rgba(229, 169, 88, 0.4); }
-
-/* Station Active State with Top Laser Sweep */
+.stance-station:hover .station-name {
+  color: var(--chalk-2);
+}
 .stance-station.is-active {
-  background: rgba(229, 169, 88, 0.12);
-  border-color: rgba(229, 169, 88, 0.5);
-  box-shadow: 0 2px 16px rgba(229, 169, 88, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  transform: translateY(-1px);
+  background: rgba(229, 169, 88, 0.06);
+  border-color: rgba(229, 169, 88, 0.45);
 }
 .stance-station.is-active::before {
-  background: linear-gradient(90deg, transparent 0%, #C49A4C 25%, #FFFFFF 50%, #C49A4C 75%, transparent 100%);
-  background-size: 200% 100%;
-  animation: stationTopLaser 2.2s linear infinite;
-  box-shadow: 0 0 8px rgba(229, 169, 88, 0.85);
-}
-@keyframes stationTopLaser {
-  0%   { background-position: 0% 0; }
-  100% { background-position: 200% 0; }
-}
-.stance-station.is-active::after {
-  background: #F5D77F;
-  box-shadow: 0 0 8px #F5D77F, 0 0 14px rgba(229, 169, 88, 0.8);
-  transform: scale(1.3);
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 1.5px;
+  background: var(--ochre);
+  border-radius: 1px 1px 0 0;
 }
 .stance-station.is-active .station-name {
   color: #F5D77F;
-  font-weight: 700;
-  text-shadow: 0 0 8px rgba(245, 215, 127, 0.4);
+  font-weight: 650;
 }
 
-/* Station Click Impact Ripple */
-.stance-station.is-impacted {
-  animation: stationImpactClean 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes stationImpactClean {
-  0% {
-    transform: scale(0.96) translateY(0);
-    box-shadow: 0 0 0 rgba(229, 169, 88, 0.8);
-  }
-  45% {
-    transform: scale(1.025) translateY(-2px);
-    box-shadow: 0 0 20px rgba(229, 169, 88, 0.45), inset 0 0 10px rgba(245, 215, 127, 0.35);
-  }
-  100% {
-    transform: scale(1) translateY(-1px);
-    box-shadow: 0 2px 16px rgba(229, 169, 88, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  }
-}
-
-/* Dynamic Celestial Light Tracking on Vastu Card */
-#vastu-card {
-  position: relative;
-  overflow: hidden;
-}
-/* Dynamic spotlight tracking dial position */
-#vastu-card::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(circle 300px at var(--vastu-dial-x, 50%) 46%, rgba(229, 169, 88, 0.10) 0%, transparent 70%);
-  transition: opacity 0.3s ease;
-  z-index: 0;
-}
-/* Sliding top specular light bar */
-#vastu-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: var(--vastu-dial-x, 50%);
-  transform: translateX(-50%);
-  width: 140px;
-  height: 1.5px;
-  background: linear-gradient(90deg, transparent 0%, rgba(245, 215, 127, 0.75) 50%, transparent 100%);
-  pointer-events: none;
-  transition: left 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
-  z-index: 1;
-}
-
-#stance-note.is-fading-in {
-  animation: noteFadeSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes noteFadeSlide {
-  0%   { opacity: 0.2; transform: translateY(3px); color: #F5D77F; text-shadow: 0 0 8px rgba(245,215,127,0.6); }
-  50%  { color: #FFF4D0; text-shadow: 0 0 4px rgba(245,215,127,0.3); }
-  100% { opacity: 1; transform: translateY(0); color: var(--chalk-3); text-shadow: none; }
+#stance-note {
+  font-size: 11.5px;
+  color: var(--chalk-4);
+  line-height: 1.4;
 }
 
 /* ══════════════════════ FULL-WIDTH BOTTOM VASTU STANCE ══════════════════════ */
