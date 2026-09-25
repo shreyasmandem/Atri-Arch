@@ -59,9 +59,9 @@ TRAVEL_SECONDS = 4.0
 PARTICLES_PER_LINE = 4
 
 
-def _opening_points(level: Level, room: Room) -> list[tuple[Vec2, Vec2]]:
-    """Every external opening serving this room, as (centre, inward normal)."""
-    out: list[tuple[Vec2, Vec2]] = []
+def _opening_points(level: Level, room: Room) -> list[tuple[Vec2, Vec2, float]]:
+    """Every external opening serving this room, as (centre, inward normal, width)."""
+    out: list[tuple[Vec2, Vec2, float]] = []
     centre = room.centre
     for wall in level.walls:
         if room.id not in wall.rooms:
@@ -77,7 +77,7 @@ def _opening_points(level: Level, room: Room) -> list[tuple[Vec2, Vec2]]:
             if (point + normal * 0.1).distance_to(centre) > (point - normal * 0.1).distance_to(centre):
                 normal = normal * -1
             out.append((point, normal, opening.width))
-    return [(p, n) for p, n, _w in out]
+    return out
 
 
 def _opening_widths(level: Level, room: Room) -> list[tuple[Vec2, float]]:
@@ -138,12 +138,23 @@ def _field_image(field, room: Room) -> str:
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
-def _seed_points(field, room: Room, openings: list[tuple[Vec2, Vec2]]) -> list[Vec2]:
-    """Where to release particles: just inside each opening, spread across it."""
+def _seed_points(field, room: Room, openings: list[tuple[Vec2, Vec2, float]]) -> list[Vec2]:
+    """Where to release particles: just inside each opening, spread across it.
+
+    Wider openings get more seeds so the streamline coverage is proportional to
+    the opening's physical extent. Narrow ventilators get fewer to avoid clutter.
+    """
     seeds: list[Vec2] = []
-    for point, normal in openings:
+    for point, normal, width in openings:
         tangent = Vec2(-normal.y, normal.x)
-        for k in (-0.36, -0.18, 0.0, 0.18, 0.36):
+        # Adaptive seed count by opening width
+        if width > 2.0:
+            offsets = (-0.45, -0.30, -0.15, 0.0, 0.15, 0.30, 0.45)
+        elif width < 0.8:
+            offsets = (-0.15, 0.0, 0.15)
+        else:
+            offsets = (-0.36, -0.18, 0.0, 0.18, 0.36)
+        for k in offsets:
             seeds.append(
                 Vec2(point.x + normal.x * field.cell * 2 + tangent.x * k,
                      point.y + normal.y * field.cell * 2 + tangent.y * k)
@@ -229,9 +240,9 @@ def _draw_field(canvas: _Canvas, room: Room, field, seq: int) -> int:
     return seq + 1
 
 
-def _draw_wind_ingress(canvas: _Canvas, openings: list[tuple[Vec2, Vec2]]) -> None:
+def _draw_wind_ingress(canvas: _Canvas, openings: list[tuple[Vec2, Vec2, float]]) -> None:
     """Animated aerodynamic intake chevrons outside exterior openings."""
-    for op_idx, (point, normal) in enumerate(openings):
+    for op_idx, (point, normal, _w) in enumerate(openings):
         tangent = Vec2(-normal.y, normal.x)
         for c_idx, dist in enumerate((0.60, 0.38, 0.16)):
             tip = point - normal * dist
@@ -251,9 +262,9 @@ def _draw_wind_ingress(canvas: _Canvas, openings: list[tuple[Vec2, Vec2]]) -> No
 
 
 def _draw_particles(
-    canvas: _Canvas, room: Room, field, openings: list[tuple[Vec2, Vec2]], seq: int, through_flow: bool = True
+    canvas: _Canvas, room: Room, field, openings: list[tuple[Vec2, Vec2, float]], seq: int, through_flow: bool = True
 ) -> int:
-    """Streaklines traced through the solved field with continuous aerodynamic ribbons and comets."""
+    """Streaklines traced through the solved field with velocity-proportional ribbons and comets."""
     from aip.engines.architecture.cfd import streamline
 
     stream_grad = "url(#aeroStreamCross)" if through_flow else "url(#aeroStreamRecirc)"
@@ -268,10 +279,22 @@ def _draw_particles(
         )
         pid = f"fl{seq}"
 
+        # Sample average speed along the streamline for velocity-proportional width
+        avg_speed = 0.0
+        for p in path[::max(1, len(path) // 8)]:
+            sx, sy = field.at(p)
+            avg_speed += (sx * sx + sy * sy) ** 0.5
+        avg_speed /= max(1, len(path[::max(1, len(path) // 8)]))
+        # Normalised speed → stroke width: slow 0.8px, fast 2.4px
+        speed_norm = min(1.0, avg_speed / (1e-6 + max(0.01, float(field.speed.max()))))
+        ribbon_width = round(0.8 + 1.6 * speed_norm, 2)
+        base_width = round(0.4 + 0.5 * speed_norm, 2)
+        shimmer_width = round(0.5 + 0.5 * speed_norm, 2)
+
         # 1. Base technical drafting guide
         canvas.add(
             f'<path id="{pid}" d="{d}" fill="none" stroke="#38bdf8" '
-            f'stroke-width="0.75" opacity="0.14" stroke-dasharray="2 3"/>'
+            f'stroke-width="{base_width}" opacity="0.14" stroke-dasharray="2 3"/>'
         )
 
         length = sum(
@@ -280,31 +303,33 @@ def _draw_particles(
         )
         duration = max(1.8, TRAVEL_SECONDS * (length / 240.0))
 
-        # 2. Continuous flowing aerodynamic dash ribbon (seamless 24 + 48 = 72 loop)
+        # 2. Continuous flowing aerodynamic dash ribbon — width proportional to velocity
         canvas.add(
-            f'<path d="{d}" fill="none" stroke="{stream_grad}" stroke-width="1.8" '
+            f'<path d="{d}" fill="none" stroke="{stream_grad}" stroke-width="{ribbon_width}" '
             f'stroke-linecap="round" stroke-dasharray="24 48" opacity="0.82">'
             f'<animate attributeName="stroke-dashoffset" from="0" to="-72" '
             f'dur="{duration:.2f}s" repeatCount="indefinite"/>'
             f'</path>'
         )
 
-        # 3. Micro shimmer streak
+        # 3. Micro shimmer streak — also velocity-scaled
         canvas.add(
-            f'<path d="{d}" fill="none" stroke="#f0fdff" stroke-width="0.9" '
+            f'<path d="{d}" fill="none" stroke="#f0fdff" stroke-width="{shimmer_width}" '
             f'stroke-linecap="round" stroke-dasharray="12 60" opacity="0.45">'
             f'<animate attributeName="stroke-dashoffset" from="36" to="-36" '
             f'dur="{duration * 0.85:.2f}s" repeatCount="indefinite"/>'
             f'</path>'
         )
 
-        # 4. Aerodynamic comets: glowing dual-layer heads
+        # 4. Aerodynamic comets: glowing dual-layer heads — size proportional to flow
+        comet_r = round(2.2 + 1.4 * speed_norm, 1)
+        core_r = round(1.0 + 0.6 * speed_norm, 1)
         for n in range(PARTICLES_PER_LINE):
             begin = round(n * duration / PARTICLES_PER_LINE, 2)
             canvas.add(
                 f'<g opacity="0">'
-                f'<circle r="3.2" fill="#38bdf8" opacity="0.45" filter="url(#aeroGlow)"/>'
-                f'<circle r="1.4" fill="#ffffff" opacity="0.95"/>'
+                f'<circle r="{comet_r}" fill="#38bdf8" opacity="0.45" filter="url(#aeroGlow)"/>'
+                f'<circle r="{core_r}" fill="#ffffff" opacity="0.95"/>'
                 f'<animateMotion dur="{duration:.2f}s" begin="{begin}s" '
                 f'repeatCount="indefinite"><mpath href="#{pid}"/></animateMotion>'
                 f'<animate attributeName="opacity" values="0;0.95;0.95;0" '
@@ -316,7 +341,11 @@ def _draw_particles(
 
 
 def _stagnant_outline(canvas: _Canvas, room: Room, normal: Vec2, reach: float, clip_id: str | None = None) -> None:
-    """Mark the depth beyond which the air does not reach with architectural hatching and callout."""
+    """Mark the depth beyond which the air does not reach with gradient hatching and callout.
+
+    The hatching fades from light near the reach line to dense at the far wall,
+    which is physically truthful: air doesn't stop abruptly but decays.
+    """
     box = room.bbox
     along_y = abs(normal.y) >= abs(normal.x)
     depth = box.height if along_y else box.width
@@ -342,12 +371,58 @@ def _stagnant_outline(canvas: _Canvas, room: Room, normal: Vec2, reach: float, c
         sx0, sy0 = canvas.px(Vec2(stagnant_min_x, box.max_y))
         sx1, sy1 = canvas.px(Vec2(stagnant_max_x, box.min_y))
 
-    # Diagonal architectural hatching
     sw, sh = abs(sx1 - sx0), abs(sy1 - sy0)
     clip_attr = f' clip-path="url(#{clip_id})"' if clip_id else ''
+    # Unique gradient id per room for the fade
+    grad_id = f"stagnFade_{hash(room.id) & 0xFFFF}"
+
+    # Gradient from light (near reach line) to dense (far wall)
+    if along_y:
+        # Vertical flow: gradient goes from top to bottom or bottom to top
+        if normal.y > 0:
+            # Stagnant is above the reach line — gradient from top (near) to bottom (far)
+            canvas.add(
+                f'<defs><linearGradient id="{grad_id}" x1="0" y1="0" x2="0" y2="1">'
+                f'<stop offset="0%" stop-color="#ef4444" stop-opacity="0.06"/>'
+                f'<stop offset="40%" stop-color="#ef4444" stop-opacity="0.18"/>'
+                f'<stop offset="100%" stop-color="#ef4444" stop-opacity="0.35"/>'
+                f'</linearGradient></defs>'
+            )
+        else:
+            canvas.add(
+                f'<defs><linearGradient id="{grad_id}" x1="0" y1="1" x2="0" y2="0">'
+                f'<stop offset="0%" stop-color="#ef4444" stop-opacity="0.06"/>'
+                f'<stop offset="40%" stop-color="#ef4444" stop-opacity="0.18"/>'
+                f'<stop offset="100%" stop-color="#ef4444" stop-opacity="0.35"/>'
+                f'</linearGradient></defs>'
+            )
+    else:
+        if normal.x > 0:
+            canvas.add(
+                f'<defs><linearGradient id="{grad_id}" x1="0" y1="0" x2="1" y2="0">'
+                f'<stop offset="0%" stop-color="#ef4444" stop-opacity="0.06"/>'
+                f'<stop offset="40%" stop-color="#ef4444" stop-opacity="0.18"/>'
+                f'<stop offset="100%" stop-color="#ef4444" stop-opacity="0.35"/>'
+                f'</linearGradient></defs>'
+            )
+        else:
+            canvas.add(
+                f'<defs><linearGradient id="{grad_id}" x1="1" y1="0" x2="0" y2="0">'
+                f'<stop offset="0%" stop-color="#ef4444" stop-opacity="0.06"/>'
+                f'<stop offset="40%" stop-color="#ef4444" stop-opacity="0.18"/>'
+                f'<stop offset="100%" stop-color="#ef4444" stop-opacity="0.35"/>'
+                f'</linearGradient></defs>'
+            )
+
+    # Gradient fill underlay
     canvas.add(
         f'<rect x="{min(sx0, sx1):.1f}" y="{min(sy0, sy1):.1f}" width="{sw:.1f}" height="{sh:.1f}" '
-        f'fill="url(#stagnantHatch)" opacity="0.9"{clip_attr}/>'
+        f'fill="url(#{grad_id})"{clip_attr}/>'
+    )
+    # Diagonal architectural hatching overlay — also with gradient opacity
+    canvas.add(
+        f'<rect x="{min(sx0, sx1):.1f}" y="{min(sy0, sy1):.1f}" width="{sw:.1f}" height="{sh:.1f}" '
+        f'fill="url(#stagnantHatch)" opacity="0.7"{clip_attr}/>'
     )
 
     canvas.line(a, b, STAGNANT, width=1.1, dash="4 3", opacity=0.95)
@@ -364,16 +439,18 @@ def _stagnant_outline(canvas: _Canvas, room: Room, normal: Vec2, reach: float, c
 
 
 def _draw_room_badge(canvas: _Canvas, room: Room, mode: str, detail: dict) -> None:
-    """Architectural classification badge rendered crisp over the fluid field."""
+    """Architectural classification badge with ACH readout over the fluid field."""
     cx, cy = canvas.px(room.centre)
     name = room.display_name().upper()
+    ach = detail.get("estimated_ach", 0.0) if isinstance(detail, dict) else 0.0
+    stagnant_pct = detail.get("stagnant_fraction", 0.0) if isinstance(detail, dict) else 0.0
 
     if mode == "cross":
         badge_text = "CROSS-FLOW · ACTIVE"
         badge_color = "#38bdf8"
         dot_color = "#34d399"
     elif mode == "none" or not detail:
-        badge_text = "NO OPENING · UNVENTILATED"
+        badge_text = "no external opening"
         badge_color = STAGNANT
         dot_color = "#ef4444"
     else:
@@ -381,8 +458,16 @@ def _draw_room_badge(canvas: _Canvas, room: Room, mode: str, detail: dict) -> No
         badge_color = "#fbbf24"
         dot_color = "#f59e0b"
 
-    pill_w = max(len(name) * 6.5, len(badge_text) * 5.0) + 18.0
-    pill_h = 24.0
+    # Third line: ACH and stagnant %
+    if mode == "none" or not detail:
+        ach_text = "UNVENTILATED"
+    else:
+        ach_text = f"{ach:.1f} ACH"
+        if stagnant_pct > 0.05:
+            ach_text += f" · {stagnant_pct:.0%} STAGNANT"
+
+    pill_w = max(len(name) * 6.5, len(badge_text) * 5.0, len(ach_text) * 5.2) + 18.0
+    pill_h = 32.0
     px = cx - pill_w / 2
     py = cy - pill_h / 2
 
@@ -391,8 +476,97 @@ def _draw_room_badge(canvas: _Canvas, room: Room, mode: str, detail: dict) -> No
         f'rx="3" fill="#090f1c" stroke="rgba(255,255,255,0.12)" stroke-width="0.8" opacity="0.86"/>'
         f'<circle cx="{px + 7:.1f}" cy="{py + 7:.1f}" r="2" fill="{dot_color}"/>'
     )
-    canvas.text(room.centre, name, size=7.2, fill="#f8fafc", weight="700", dy=-3)
-    canvas.text(room.centre, badge_text, size=5.8, fill=badge_color, weight="600", dy=6)
+    canvas.text(room.centre, name, size=7.2, fill="#f8fafc", weight="700", dy=-7)
+    canvas.text(room.centre, badge_text, size=5.8, fill=badge_color, weight="600", dy=2)
+    canvas.text(room.centre, ach_text, size=5.5, fill="#94a3b8", weight="600", dy=11)
+
+
+def _draw_contours(canvas: _Canvas, room: Room, field, clip_id: str | None = None) -> None:
+    """Faint stream function isobar contours — the pressure landscape behind the flow.
+
+    These show the potential distribution and make the diagram read like a real
+    CFD post-processor output: 4-6 contour levels as very faint dashed lines.
+    """
+    import numpy as np
+
+    psi = np.cumsum(field.u, axis=0) * field.cell  # reconstruct ψ from u = dψ/dy
+    psi_min, psi_max = float(psi.min()), float(psi.max())
+    psi_range = psi_max - psi_min
+    if psi_range < 1e-8:
+        return
+
+    ny, nx = field.shape
+    box = room.bbox
+    levels = [psi_min + psi_range * f for f in (0.15, 0.3, 0.5, 0.7, 0.85)]
+    clip_attr = f' clip-path="url(#{clip_id})"' if clip_id else ''
+
+    for level_val in levels:
+        # Simple marching: trace cells where ψ crosses the level
+        segments: list[tuple[float, float, float, float]] = []
+        for i in range(ny - 1):
+            for j in range(nx - 1):
+                corners = [psi[i, j], psi[i, j + 1], psi[i + 1, j + 1], psi[i + 1, j]]
+                below = [c < level_val for c in corners]
+                if all(below) or not any(below):
+                    continue  # no crossing
+                # Find edge crossings
+                x0 = box.min_x + j * field.cell
+                y0 = box.min_y + i * field.cell
+                crossings: list[tuple[float, float]] = []
+                edges = [(0, 1, x0, y0, x0 + field.cell, y0),
+                         (1, 2, x0 + field.cell, y0, x0 + field.cell, y0 + field.cell),
+                         (2, 3, x0 + field.cell, y0 + field.cell, x0, y0 + field.cell),
+                         (3, 0, x0, y0 + field.cell, x0, y0)]
+                for ci, cj, ex0, ey0, ex1, ey1 in edges:
+                    v0, v1 = corners[ci], corners[cj]
+                    if (v0 < level_val) != (v1 < level_val):
+                        t = (level_val - v0) / (v1 - v0) if abs(v1 - v0) > 1e-12 else 0.5
+                        crossings.append((ex0 + t * (ex1 - ex0), ey0 + t * (ey1 - ey0)))
+                if len(crossings) >= 2:
+                    segments.append((crossings[0][0], crossings[0][1],
+                                     crossings[1][0], crossings[1][1]))
+
+        # Draw the contour segments as faint lines
+        for sx0, sy0, sx1, sy1 in segments:
+            p0 = canvas.px(Vec2(sx0, sy0))
+            p1 = canvas.px(Vec2(sx1, sy1))
+            canvas.add(
+                f'<line x1="{p0[0]:.1f}" y1="{p0[1]:.1f}" x2="{p1[0]:.1f}" y2="{p1[1]:.1f}" '
+                f'stroke="#ffffff" stroke-width="0.6" stroke-dasharray="2 4" opacity="0.06"{clip_attr}/>'
+            )
+
+
+def _draw_velocity_labels(
+    canvas: _Canvas, openings: list[tuple[Vec2, Vec2, float]], field
+) -> None:
+    """Small velocity annotation arrows at each opening showing face velocity."""
+    for point, normal, width in openings:
+        # Sample velocity at the opening
+        ux, uy = field.at(point)
+        face_v = (ux * ux + uy * uy) ** 0.5
+        # Scale to approximate m/s (field is normalised, scale back)
+        approx_ms = max(0.2, face_v * 2.2)  # empirical CFD-to-physical mapping
+
+        # Arrow from outside to inside, length proportional to velocity
+        arrow_len = min(0.5, max(0.15, approx_ms * 0.15))
+        tip = Vec2(point.x + normal.x * arrow_len, point.y + normal.y * arrow_len)
+        p_start = canvas.px(point)
+        p_tip = canvas.px(tip)
+
+        # Arrow shaft
+        canvas.add(
+            f'<line x1="{p_start[0]:.1f}" y1="{p_start[1]:.1f}" '
+            f'x2="{p_tip[0]:.1f}" y2="{p_tip[1]:.1f}" '
+            f'stroke="#67e8f9" stroke-width="1.2" stroke-linecap="round" opacity="0.7"/>'
+        )
+        # Velocity label
+        label_x = (p_start[0] + p_tip[0]) / 2
+        label_y = (p_start[1] + p_tip[1]) / 2 - 5
+        canvas.add(
+            f'<text x="{label_x:.1f}" y="{label_y:.1f}" font-size="5.5" '
+            f'fill="#67e8f9" text-anchor="middle" font-weight="600" '
+            f'font-family="{canvas.style.font}" opacity="0.8">{approx_ms:.1f} m/s</text>'
+        )
 
 
 def airflow_svg(
@@ -422,6 +596,10 @@ def airflow_svg(
     extent = _padded_extent(plan, level)
     canvas = _Canvas(extent, style, f"{plan.name} - airflow, {level.display_name()}")
 
+    # Import the wind model for the direction indicator
+    from aip.engines.architecture.solar import prevailing_wind
+    summer_wind, _winter_wind = prevailing_wind(plan.site.latitude, plan.site.longitude)
+
     # Dark background with global CFD defs: glow filters, diagonal hatch pattern, aerodynamic gradients
     canvas.add(
         '<rect width="100%" height="100%" fill="#0b1220"/>'
@@ -450,7 +628,7 @@ def airflow_svg(
 
     # -- the air ------------------------------------------------------------
     seq = 0
-    summary: list[tuple[str, str]] = []
+    summary: list[tuple[str, str, float, float]] = []
     for room in level.rooms:
         if room.type.is_outdoor:
             continue
@@ -460,11 +638,13 @@ def airflow_svg(
             continue
 
         mode = detail.get("ventilation_mode") or ventilation_mode(set(), len(openings))
-        reach = VENTILATION_DEPTH_LIMIT.get(mode, 0.0) * room.ceiling_height
+        reach = detail.get("effective_reach_m", VENTILATION_DEPTH_LIMIT.get(mode, 0.0) * room.ceiling_height)
+        ach = detail.get("estimated_ach", 0.0)
+        stagnant = detail.get("stagnant_fraction", 0.0)
 
         if not openings:
             _draw_room_badge(canvas, room, "none", detail)
-            summary.append((room.display_name(), "sealed"))
+            summary.append((room.display_name(), "sealed", 0.0, 0.0))
             continue
 
         box = room.bbox
@@ -474,17 +654,25 @@ def airflow_svg(
             through_flow=(mode == "cross"),
         )
         if field is None:
-            summary.append((room.display_name(), "not solved"))
+            summary.append((room.display_name(), "not solved", 0.0, 0.0))
             continue
 
         field_seq = seq
         seq = _draw_field(canvas, room, field, seq)
+
+        # Pressure contour lines (stream function isobars)
+        _draw_contours(canvas, room, field, clip_id=f"clip{field_seq}")
+
         _draw_wind_ingress(canvas, openings)
         seq = _draw_particles(canvas, room, field, openings, seq, through_flow=(mode == "cross"))
+
+        # Opening velocity annotations
+        _draw_velocity_labels(canvas, openings, field)
+
         if mode != "cross":
             _stagnant_outline(canvas, room, openings[0][1], reach, clip_id=f"clip{field_seq}")
 
-        summary.append((room.display_name(), mode.replace("_", " ")))
+        summary.append((room.display_name(), mode.replace("_", " "), ach, stagnant))
         _draw_room_badge(canvas, room, mode, detail)
 
     # Walls last, so they read as edges over the field rather than under it.
@@ -492,35 +680,41 @@ def airflow_svg(
         canvas.line(wall.start, wall.end, "#dfe6f2",
                     width=max(1.2, canvas.m(wall.thickness)), opacity=0.85)
 
-    _legend(canvas, extent, report.score)
+    _legend(canvas, extent, report.score, summary, summer_wind, plan.site.north_angle)
     return canvas.render()
 
 
-def _legend(canvas: _Canvas, extent: BoundingBox, score: float) -> None:
-    """Title and colour key.
+def _legend(
+    canvas: _Canvas,
+    extent: BoundingBox,
+    score: float,
+    summary: list[tuple[str, str, float, float]] | None = None,
+    summer_wind: Direction | None = None,
+    north_angle: float = 0.0,
+) -> None:
+    """Title, calibrated aerodynamic velocity scale, wind indicator, and room schedule."""
+    import math
 
-    Explicitly light-on-dark: the drawing style's text colours are chosen for a
-    white sheet and vanish against the ground this diagram needs.
-    """
-    x = extent.min_x + 0.3
-    y = extent.max_y - 0.35
+    # Top-left anchor in pixel space
+    base_x, base_y = canvas.px(Vec2(extent.min_x + 0.3, extent.max_y - 0.2))
 
-    canvas.text(Vec2(x, y), f"Airflow — ventilation index {score:.2f}", size=12,
-                fill="#f2f6ff", anchor="start", weight="700")
-    canvas.text(
-        Vec2(x, y + 0.48),
-        "Cross flow sweeps the room; a single opening recirculates and leaves the far end still.",
-        size=8.5, fill="#9fb0cc", anchor="start",
+    # 1. Main title
+    canvas.add(
+        f'<text x="{base_x:.1f}" y="{base_y:.1f}" font-family="{canvas.style.font}" '
+        f'font-size="12" fill="#f2f6ff" font-weight="700">Airflow — ventilation index {score:.2f}</text>'
     )
-    canvas.text(
-        Vec2(x, y + 0.88),
-        "AERODYNAMIC DISPLACEMENT & CFD STREAMLINES · BS 5925 / CIBSE AM10",
-        size=6.5, fill="#5b6b86", anchor="start", weight="600",
+    # 2. Subtitles
+    canvas.add(
+        f'<text x="{base_x:.1f}" y="{base_y + 16:.1f}" font-family="{canvas.style.font}" '
+        f'font-size="8.0" fill="#9fb0cc">Cross flow sweeps the room; a single opening recirculates and leaves the far end still.</text>'
+        f'<text x="{base_x:.1f}" y="{base_y + 30:.1f}" font-family="{canvas.style.font}" '
+        f'font-size="6.2" fill="#5b6b86" font-weight="600">AERODYNAMIC DISPLACEMENT &amp; CFD STREAMLINES · BS 5925 / CIBSE AM10</text>'
     )
 
-    # A colour bar, because a field without a key is decoration.
-    bar_x, bar_y = canvas.px(Vec2(x, y + 1.35))
-    width, height = 150.0, 7.0
+    # 3. Colour bar
+    bar_x = base_x
+    bar_y = base_y + 42.0
+    width, height = 145.0, 6.5
     stops = "".join(
         f'<stop offset="{t * 100:.0f}%" stop-color="rgb{_ramp(t)}"/>'
         for t in (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
@@ -529,13 +723,83 @@ def _legend(canvas: _Canvas, extent: BoundingBox, score: float) -> None:
         f'<defs><linearGradient id="speedkey" x1="0" x2="1">{stops}</linearGradient></defs>'
         f'<rect x="{bar_x:.1f}" y="{bar_y:.1f}" width="{width}" height="{height}" '
         f'fill="url(#speedkey)" rx="1.5" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>'
-        f'<text x="{bar_x:.1f}" y="{bar_y + height + 9:.1f}" font-size="7.0" '
+        f'<text x="{bar_x:.1f}" y="{bar_y + height + 9:.1f}" font-size="6.8" '
         f'fill="#9fb0cc" font-family="{canvas.style.font}">0.0 m/s [STILL]</text>'
-        f'<text x="{bar_x + width * 0.45:.1f}" y="{bar_y + height + 9:.1f}" font-size="7.0" '
+        f'<text x="{bar_x + width * 0.45:.1f}" y="{bar_y + height + 9:.1f}" font-size="6.8" '
         f'fill="#9fb0cc" text-anchor="middle" font-family="{canvas.style.font}">1.0 m/s [COMFORT]</text>'
-        f'<text x="{bar_x + width:.1f}" y="{bar_y + height + 9:.1f}" font-size="7.0" '
+        f'<text x="{bar_x + width:.1f}" y="{bar_y + height + 9:.1f}" font-size="6.8" '
         f'fill="#9fb0cc" text-anchor="end" font-family="{canvas.style.font}">2.5+ m/s [FAST]</text>'
     )
+
+    # 4. Prevailing wind indicator
+    if summer_wind is not None:
+        compass_cx = bar_x + width + 38.0
+        compass_cy = bar_y + 3.0
+        screen_bearing = (summer_wind.bearing - north_angle) % 360
+        rad = math.radians(screen_bearing)
+        arr_from_x = compass_cx - math.sin(rad) * 11.0
+        arr_from_y = compass_cy + math.cos(rad) * 11.0
+        arr_to_x = compass_cx + math.sin(rad) * 7.0
+        arr_to_y = compass_cy - math.cos(rad) * 7.0
+
+        canvas.add(
+            f'<g>'
+            f'<circle cx="{compass_cx:.1f}" cy="{compass_cy:.1f}" r="11" fill="#090f1c" '
+            f'stroke="rgba(255,255,255,0.14)" stroke-width="0.8"/>'
+            f'<line x1="{arr_from_x:.1f}" y1="{arr_from_y:.1f}" x2="{arr_to_x:.1f}" y2="{arr_to_y:.1f}" '
+            f'stroke="#38bdf8" stroke-width="1.3" stroke-linecap="round"/>'
+            f'<circle cx="{arr_to_x:.1f}" cy="{arr_to_y:.1f}" r="1.5" fill="#38bdf8"/>'
+            f'<text x="{compass_cx + 17:.1f}" y="{compass_cy - 1:.1f}" font-size="6.0" '
+            f'fill="#f8fafc" font-weight="700" font-family="{canvas.style.font}">PREVAILING WIND</text>'
+            f'<text x="{compass_cx + 17:.1f}" y="{compass_cy + 8:.1f}" font-size="5.6" '
+            f'fill="#38bdf8" font-weight="600" font-family="{canvas.style.font}">{summer_wind.value} ({int(summer_wind.bearing)}°)</text>'
+            f'</g>'
+        )
+
+    # 5. Diagnostic schedule summary HUD card (top-right of canvas)
+    if summary:
+        panel_w = 210.0
+        row_h = 13.0
+        panel_h = 20.0 + len(summary[:6]) * row_h
+        px_r = canvas.width - canvas.style.margin
+        px_l = px_r - panel_w
+        py_t = base_y - 12.0
+
+        items_svg = [
+            f'<rect x="{px_l:.1f}" y="{py_t:.1f}" width="{panel_w:.1f}" height="{panel_h:.1f}" '
+            f'rx="3" fill="#090f1c" stroke="rgba(255,255,255,0.10)" stroke-width="0.8" opacity="0.88"/>',
+            f'<text x="{px_l + 10:.1f}" y="{py_t + 12:.1f}" font-size="5.8" fill="#64748b" '
+            f'font-weight="700" letter-spacing="0.5" font-family="{canvas.style.font}">VENTILATION SCHEDULE · CIBSE AM10</text>',
+        ]
+
+        for idx, (name, mode_str, ach, stagnant) in enumerate(summary[:6]):
+            row_y = py_t + 24.0 + idx * row_h
+            if "cross" in mode_str:
+                dot = "#34d399"
+                mode_lbl = "CROSS"
+            elif "sealed" in mode_str:
+                dot = "#ef4444"
+                mode_lbl = "SEALED"
+            else:
+                dot = "#fbbf24"
+                mode_lbl = "SINGLE"
+
+            ach_str = f"{ach:.1f} ACH" if ach > 0 else "—"
+            dead_str = f"{stagnant:.0%} DEAD" if stagnant > 0.05 else "FLUSHED"
+            dead_col = "#ef4444" if stagnant > 0.05 else "#10b981"
+
+            items_svg.append(
+                f'<circle cx="{px_l + 12:.1f}" cy="{row_y - 2.5:.1f}" r="1.8" fill="{dot}"/>'
+                f'<text x="{px_l + 20:.1f}" y="{row_y:.1f}" font-size="6.0" fill="#e2e8f0" '
+                f'font-weight="600" font-family="{canvas.style.font}">{name[:11].upper()}</text>'
+                f'<text x="{px_l + 95:.1f}" y="{row_y:.1f}" font-size="5.5" fill="#94a3b8" '
+                f'font-family="{canvas.style.font}">{mode_lbl}</text>'
+                f'<text x="{px_l + 140:.1f}" y="{row_y:.1f}" font-size="5.5" fill="#38bdf8" '
+                f'font-family="{canvas.style.font}">{ach_str}</text>'
+                f'<text x="{px_l + 175:.1f}" y="{row_y:.1f}" font-size="5.5" fill="{dead_col}" '
+                f'font-weight="600" font-family="{canvas.style.font}">{dead_str}</text>'
+            )
+        canvas.add("".join(items_svg))
 
 
 def _empty(style: DrawingStyle) -> str:

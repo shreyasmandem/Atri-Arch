@@ -295,6 +295,7 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
         wind_alignment = 0.0
         internal_doors = 0
         external_openings = 0
+        face_areas: dict[Direction, float] = {}
 
         for wall in walls:
             direction = _opening_direction(plan, wall)
@@ -307,11 +308,20 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
                     continue
                 if not (opening.kind.is_glazed or opening.kind is OpeningKind.SLIDING_DOOR):
                     continue
-                openable += opening.area * OPENABLE_FRACTION.get(opening.kind, 0.6)
+                area = opening.area * OPENABLE_FRACTION.get(opening.kind, 0.6)
+                openable += area
+                face_areas[direction] = face_areas.get(direction, 0.0) + area
                 external_openings += 1
                 directions.add(direction)
                 delta = abs(((direction.bearing - summer_wind.bearing) + 180) % 360 - 180)
                 wind_alignment = max(wind_alignment, math.cos(math.radians(min(delta, 90))))
+
+        # Inlet/outlet balance
+        if len(face_areas) >= 2:
+            sorted_areas = sorted(face_areas.values(), reverse=True)
+            area_balance = sorted_areas[-1] / sorted_areas[0] if sorted_areas[0] > 0 else 0.0
+        else:
+            area_balance = 1.0  # single-sided, balance not applicable
 
         # Cross ventilation needs an inlet and an outlet on meaningfully
         # different pressure faces. Two opposed external openings is the ideal.
@@ -344,9 +354,14 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
         reach_score = 1.0 - stagnant
 
         score = _clamp(
-            0.34 * cross + 0.27 * adequacy + 0.15 * wind_alignment + 0.24 * reach_score
+            0.30 * cross + 0.25 * adequacy + 0.13 * wind_alignment
+            + 0.22 * reach_score + 0.10 * area_balance
         )
         per_room[room.id] = round(score, 4)
+        has_skylight = any(
+            o.kind is OpeningKind.SKYLIGHT
+            for w in walls for o in w.openings
+        )
         detail[room.id] = {
             "name": room.display_name(),
             "openable_area_m2": round(openable, 3),
@@ -358,7 +373,14 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
             "effective_reach_m": round(reach, 2),
             "stagnant_fraction": round(stagnant, 3),
             "wind_alignment": round(wind_alignment, 3),
-            "estimated_ach": round(_estimate_ach(openable, room.volume, opposing, wind_alignment), 2),
+            "inlet_area_m2": round(sorted(face_areas.values(), reverse=True)[0], 3) if face_areas else 0.0,
+            "outlet_area_m2": round(sorted(face_areas.values(), reverse=True)[-1], 3) if len(face_areas) >= 2 else 0.0,
+            "area_balance": round(area_balance, 3),
+            "has_skylight": has_skylight,
+            "estimated_ach": round(_estimate_ach(
+                openable, room.volume, opposing, wind_alignment,
+                ceiling_height=room.ceiling_height, has_skylight=has_skylight,
+            ), 2),
         }
 
         if openable <= 0:
@@ -562,19 +584,31 @@ def _has_opposing_pair(directions: set[Direction]) -> bool:
     return False
 
 
-def _estimate_ach(openable: float, volume: float, cross: bool, wind_alignment: float) -> float:
-    """Rough air changes per hour from wind-driven flow.
+def _estimate_ach(
+    openable: float, volume: float, cross: bool, wind_alignment: float,
+    ceiling_height: float = 3.0, has_skylight: bool = False,
+) -> float:
+    """Rough air changes per hour from wind-driven and stack-effect flow.
 
-    Uses Q = C x A x V with an empirical discharge coefficient. Indicative only -
-    enough to distinguish a stuffy room from a breezy one, which is the decision
-    the optimiser needs.
+    Uses Q = C x A x V with an empirical discharge coefficient. Stack effect
+    adds buoyancy-driven ventilation for tall rooms and skylights.
+    Indicative only - enough to distinguish a stuffy room from a breezy one.
     """
     if volume <= 0 or openable <= 0:
         return 0.0
-    wind_speed = 2.2                       # m/s, typical urban residential
+    wind_speed = 2.2  # m/s, typical urban residential
     coefficient = 0.6 if cross else 0.25
     flow = coefficient * openable * wind_speed * (0.55 + 0.45 * wind_alignment)
-    return (flow * 3600) / volume
+    wind_ach = (flow * 3600) / volume
+
+    # Stack effect: buoyancy-driven flow from temperature difference
+    delta_t = 3.0  # K, typical indoor/outdoor ΔT
+    stack_height = ceiling_height * (1.4 if has_skylight else 0.7)
+    stack_velocity = 0.4 * (9.81 * stack_height * delta_t / 293.0) ** 0.5
+    stack_flow = 0.25 * openable * stack_velocity
+    stack_ach = (stack_flow * 3600) / volume
+
+    return wind_ach + stack_ach
 
 
 # ---------------------------------------------------------------------------

@@ -113,7 +113,8 @@ def solve(
         return None
 
     longest = max(width, height)
-    cell = longest / RESOLUTION
+    resolution = max(40, min(80, int(round(longest * 7))))
+    cell = longest / resolution
     nx = max(MIN_CELLS, int(round(width / cell)))
     ny = max(MIN_CELLS, int(round(height / cell)))
     if nx * ny > 20_000:                       # guard against a pathological room
@@ -143,10 +144,16 @@ def solve(
             index: sum(1 for a in assigned if a == index)
             for index in {a for a in assigned if a is not None}
         }
+        widths = {
+            index: width
+            for index, (centre, width) in enumerate(openings)
+            if index in {a for a in assigned if a is not None}
+        }
+        total_width = sum(widths.values())
         running = 0.0
         for k, owner in enumerate(assigned):
             if owner is not None:
-                step = flux / max(counts[owner], 1)
+                step = flux * (widths[owner] / total_width) / max(counts[owner], 1)
                 running += step if owner == first else -step
             psi_boundary[k] = running
     else:
