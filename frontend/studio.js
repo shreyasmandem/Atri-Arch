@@ -252,9 +252,12 @@ function lightPadas(svg, plan) {
   return { occupied, sectors };
 }
 
-/* ═══ COSMIC STAR-FIELD RENDERER ═════════════════════════════════════ */
+/* ═══ MINIMAL ARCHITECTURAL CANVAS (STARFIELD DISABLED) ═══════════════ */
 
 function initStarField() {
+  return { spread: () => {}, seedAmbient: () => {} };
+}
+function _unused_initStarField() {
   if (window.self !== window.top) return { spread: () => {} };
   const canvas = document.getElementById("space-stars");
   if (!canvas) return { spread: () => {} };
