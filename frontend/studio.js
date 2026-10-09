@@ -7,7 +7,7 @@
    just quiet.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { atelier, person, avatar, PRINCIPAL } from "./atelier.js";
+import { atelier, person, avatar } from "./atelier.js";
 
 const API = (() => {
   const o = new URLSearchParams(location.search).get("api");
@@ -848,9 +848,9 @@ function seatCritics() {
     const head = el("button", "tm__head");
     head.type = "button";
     head.setAttribute("aria-expanded", "false");
-    head.append(avatar(p, 32));
+    head.append(avatar(p, 26));
     const who = el("span", "tm__who");
-    who.append(el("b", null, p.name), el("small", null, `${p.role} · ${c.analytical ? "measured" : "judged"}`));
+    who.append(el("b", null, p.name), el("small", null, p.role));
     head.append(who, el("span", "tm__sc", "—"));
     const line = el("p", "tm__line", "");
     const bar = el("span", "tm__bar"); bar.append(el("i"));
@@ -1367,35 +1367,6 @@ function renderRail() {
     $("pick-why").textContent += ` Offered with reservations: ${guard.slice(0, 3).join("; ")}.`;
   }
 
-  const credits = $("credits");
-  if (credits) {
-    credits.innerHTML = "";
-    const line = (people, text) => {
-      const r = el("div", "credit");
-      const stack = el("span", "credit__stack");
-      people.slice(0, 5).forEach((p) => stack.append(avatar(p, 24)));
-      if (people.length > 5) stack.append(el("span", "credit__more", `+${people.length - 5}`));
-      r.append(stack, el("span", "credit__tx", text));
-      credits.append(r);
-    };
-    if (!S.imported) line([PRINCIPAL], "Drawn by two architects and a site engineer");
-    const team = S.committee.map((c) => person(c.id, S.committee));
-    line(team, `Reviewed by ${team.length} specialists`);
-  }
-
-  const row = rankingRow();
-  const bars = $("axis-bars"); bars.innerHTML = "";
-  const axes = Object.entries(row?.axis_scores || {}).sort((a, b) => a[1] - b[1]);
-  for (const [axis, v] of axes) {
-    const d = el("div", "abar");
-    const top = el("div", "abar__top");
-    top.append(el("span", null, cap(axis)), el("b", null, v.toFixed(2)));
-    const t = el("div", "abar__t"); const i = el("i");
-    i.style.background = v < 0.5 ? HEX.hingula : v < 0.75 ? HEX.ochre : HEX.indigo;
-    t.append(i); d.append(top, t); bars.append(d);
-    requestAnimationFrame(() => { i.style.transform = `scaleX(${v})`; });
-  }
-
   const b = S.briefSent || {};
   const recap = $("brief-recap"); recap.innerHTML = "";
   const rows = S.imported ? [
@@ -1454,13 +1425,6 @@ function renderCritics() {
       more.append(el("p", "tm__detail", c?.charter || "No specific concern on this scheme."));
     }
   });
-  const ag = S.consensus?.overall_agreement;
-  $("agree-chip").textContent = ag == null ? "" : `${Math.round(ag * 100)}% agreed`;
-  const chair = $("chair");
-  if (chair) {
-    chair.replaceChildren(avatar(PRINCIPAL, 22),
-      document.createTextNode("Chaired by the lead architect"));
-  }
 }
 
 function renderVerdict() {
@@ -1530,10 +1494,31 @@ async function loadAnalysis() {
 
 /* ═══ VIEWS ══════════════════════════════════════════════════════════ */
 
+const VIEW_GROUPS = {
+  vastu: [["vastu", "Score"], ["mandala", "Mandala"]],
+  report: [["findings", "Findings"], ["negotiation", "Negotiation"], ["audit", "Audit"]],
+};
+const groupOf = (v) => Object.keys(VIEW_GROUPS).find((g) => VIEW_GROUPS[g].some(([k]) => k === v)) || v;
+
 function showView(v) {
+  if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
+  if (v !== "model" && S.viewer) { S.viewer.dispose(); S.viewer = null; window.speechSynthesis?.cancel(); }
   S.view = v;
-  document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("is-on", t.dataset.view === v));
+  const g = groupOf(v);
+  (S.lastIn ||= {})[g] = v;
+  document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("is-on", t.dataset.view === g));
   document.querySelectorAll(".pane").forEach((p) => { p.hidden = p.dataset.view !== v; });
+  const sub = $("subnav");
+  sub.hidden = !VIEW_GROUPS[g];
+  sub.innerHTML = "";
+  for (const [k, label] of VIEW_GROUPS[g] || []) {
+    const b = el("button", null, label);
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(k === v));
+    b.addEventListener("click", () => showView(k));
+    sub.append(b);
+  }
 
   if (v === "mandala") renderMandala();
   if (v === "vastu") renderVastu();
@@ -1554,17 +1539,37 @@ function scrollPane(v) {
 
 /* ── drawings ──────────────────────────────────────────────────────── */
 
-function buildSheetTabs() {
-  const { plan } = cur();
-  const tabs = $("sheet-tabs"); tabs.innerHTML = "";
-  const levels = plan?.levels || [];
-  const sheets = [
-    ...levels.map((lv) => [`plan_level_${lv.index}`, lv.index === 0 ? "Ground plan" : `Level ${lv.index}`]),
-    ["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"],
-    ["section_aa", "Section A–A"], ["section_bb", "Section B–B"], ["roof_plan", "Roof"], ["site_plan", "Site"],
-    ...levels.map((lv) => [`airflow_level_${lv.index}`, levels.length > 1 ? `Airflow L${lv.index}` : "Airflow"]),
+const floorName = (i) => (i === 0 ? "Ground" : `Level ${i}`);
+
+function sheetSets() {
+  const levels = cur().plan?.levels || [];
+  return [
+    ["Plans", levels.map((lv) => [`plan_level_${lv.index}`, floorName(lv.index)])],
+    ["Elevations", [["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"]]],
+    ["Sections", [["section_aa", "A–A"], ["section_bb", "B–B"]]],
+    ["Roof", [["roof_plan", "Roof"]]],
+    ["Site", [["site_plan", "Site"]]],
+    ["Airflow", levels.map((lv) => [`airflow_level_${lv.index}`, floorName(lv.index)])],
   ];
-  for (const [key, label] of sheets) {
+}
+
+function buildSheetTabs() {
+  const sets = sheetSets();
+  const inSet = sets.find(([, items]) => items.some(([k]) => k === S.sheet)) || sets[0];
+  const groups = $("sheet-groups"); groups.innerHTML = "";
+  for (const [name, items] of sets) {
+    if (!items.length) continue;
+    const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(name === inSet[0]));
+    b.addEventListener("click", () => {
+      const keep = items.find(([k]) => k.replace(/^\w+_level_/, "") === S.sheet.replace(/^\w+_level_/, ""));
+      loadSheet((keep || items[0])[0]);
+    });
+    groups.append(b);
+  }
+  const tabs = $("sheet-tabs"); tabs.innerHTML = "";
+  tabs.hidden = inSet[1].length < 2;
+  for (const [key, label] of inSet[1]) {
     const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
     b.dataset.sheet = key;
     b.setAttribute("aria-selected", String(key === S.sheet));
@@ -1575,8 +1580,7 @@ function buildSheetTabs() {
 
 async function loadSheet(key) {
   S.sheet = key;
-  $("sheet-tabs").querySelectorAll("button").forEach((b) =>
-    b.setAttribute("aria-selected", String(b.dataset.sheet === key)));
+  buildSheetTabs();
   const plate = $("plate");
   const ghost = plate.querySelector(".plate__ghost");
   if (!ghost) {
@@ -1594,9 +1598,10 @@ async function loadSheet(key) {
       fresh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });
     }
     const { plan } = cur();
-    $("plate-caption").textContent =
-      `${(plan?.total_built_area || 0).toFixed(1)} m² built-up · FAR ${(plan?.achieved_far || 0).toFixed(2)} · ` +
-      `${(plan?.levels || []).length} level(s) · ${plan?.style ? cap(plan.style) : ""}`;
+    const [set, items] = sheetSets().find(([, it]) => it.some(([k]) => k === key)) || ["", []];
+    const label = items.find(([k]) => k === key)?.[1] || "";
+    $("plate-caption").textContent = [set === label ? set : `${set} · ${label}`, plan?.style ? cap(plan.style) : ""]
+      .filter(Boolean).join("  ·  ");
   } catch (err) {
     plate.innerHTML = "";
     plate.append(el("p", "empty-note", `That drawing could not be produced (${err.message}).`));
@@ -1985,51 +1990,49 @@ async function renderInterior() {
 /* ── 3D ────────────────────────────────────────────────────────────── */
 
 async function renderModel() {
-  const s = scrollPane("model");
-  s.append(el("h3", "sec", "Three-dimensional model"));
-  s.append(el("p", "lede", "Exported as glTF, which every browser, phone and XR headset reads natively. Open it on a phone to place the scheme in a real room."));
-
-  const links = el("div"); links.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px";
-  for (const [label, href] of [
-    ["Download model (.glb)", `${API}/plans/${S.activeId}/model.glb`],
-    ["Download for CAD (.obj)", `${API}/plans/${S.activeId}/model.obj`],
-  ]) {
-    const a = el("a", "ghost-btn", label); a.href = href; a.style.textDecoration = "none"; links.append(a);
+  S.viewer?.dispose();
+  S.viewer = null;
+  const p = pane("model"); p.innerHTML = "";
+  const bar = el("div", "pane__bar");
+  bar.append(el("span", "model-hint", "Drag to orbit, scroll to zoom"));
+  const tools = el("div", "pane__tools");
+  const play = el("button", "ghost-btn", "Play walkthrough"); play.type = "button";
+  tools.append(play);
+  for (const [label, href] of [[".glb", `${API}/plans/${S.activeId}/model.glb`], [".obj", `${API}/plans/${S.activeId}/model.obj`]]) {
+    const a = el("a", "ghost-btn", label); a.href = href; a.download = ""; a.title = `Download the model as ${label}`;
+    tools.append(a);
   }
-  s.append(links);
+  bar.append(tools);
+  const stage = el("div", "model-stage");
+  const cap = el("p", "model-cap", "Loading the model…");
+  const say = el("p", "model-say"); say.setAttribute("aria-live", "polite");
+  stage.append(cap, say);
+  p.append(bar, stage);
 
+  const id = S.activeId;
   try {
-    const d = await fetch(`${API}/plans/${S.activeId}/walkthrough`).then((r) => r.json());
-    const st = d.statistics || {};
-    const stats = el("div", "stat-row");
-    for (const [pig, k, v2, sub] of [
-      ["indigo", "Triangles", (st.triangles || 0).toLocaleString(), `${st.parts || 0} parts`],
-      ["chalk", "Height", `${(st.height_m || 0).toFixed(2)} m`, `${st.bounds?.width_m ?? "—"} × ${st.bounds?.depth_m ?? "—"} m`],
-      ["orpiment", "Waypoints", `${(d.waypoints || []).length}`, "narrated route"],
-    ]) {
-      const dl = el("dl", "stat"); dl.dataset.pig = pig;
-      dl.append(el("dt", null, k), el("dd", null, v2), el("small", null, sub)); stats.append(dl);
-    }
-    s.append(stats);
+    const { Viewer3D } = await import("./viewer3d.js");
+    if (S.view !== "model" || S.activeId !== id) return;
+    S.viewer = new Viewer3D(stage);
+    const st = await S.viewer.load(`${API}/plans/${id}/model.glb`);
+    cap.textContent = `${st.width.toFixed(1)} × ${st.depth.toFixed(1)} m  ·  ${st.height.toFixed(1)} m high  ·  ${st.triangles.toLocaleString()} triangles`;
+  } catch (err) {
+    cap.textContent = `The model could not be shown here (${err.message}). It can still be downloaded.`;
+  }
 
-    s.append(el("h3", "sec", "Narrated walkthrough"));
-    const play = el("button", "ghost-btn", "Play narration"); play.type = "button";
-    play.style.marginBottom = "16px";
+  fetch(`${API}/plans/${id}/walkthrough`).then((r) => r.json()).then((d) => {
+    const lines = (d.narration || []).map((l) => l.text);
+    play.disabled = !lines.length;
     play.addEventListener("click", () => {
       if (!("speechSynthesis" in window)) return toast("This browser has no speech synthesis.");
       speechSynthesis.cancel();
-      for (const line of d.narration || []) speechSynthesis.speak(new SpeechSynthesisUtterance(line.text));
+      for (const text of lines) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.onstart = () => { say.textContent = text; };
+        speechSynthesis.speak(u);
+      }
     });
-    s.append(play);
-    for (const line of d.narration || []) {
-      const p = el("p", "find__t", line.text);
-      p.style.cssText = "padding:10px 0;border-bottom:1px solid var(--rule);margin:0";
-      s.append(p);
-    }
-    if (d.ar?.note) s.append(el("p", "note-card", d.ar.note));
-  } catch (err) {
-    s.append(el("p", "empty-note", `Walkthrough data unavailable (${err.message}).`));
-  }
+  }).catch(() => { play.disabled = true; });
 }
 
 /* ── findings ──────────────────────────────────────────────────────── */

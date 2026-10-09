@@ -8,8 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=atelier_1">
-<link rel="stylesheet" href="atelier.css?v=atelier_1">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
+<link rel="stylesheet" href="studio.css?v=atelier_5">
+<link rel="stylesheet" href="atelier.css?v=atelier_5">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -65,14 +66,11 @@
 
     <nav class="views" id="views" aria-label="Views">
       <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
-      <button type="button" class="view-tab" data-view="mandala">Mandala</button>
+      <button type="button" class="view-tab" data-view="model">3D</button>
       <button type="button" class="view-tab" data-view="vastu">Vastu</button>
       <button type="button" class="view-tab" data-view="cost">Cost</button>
       <button type="button" class="view-tab" data-view="interior">Interior</button>
-      <button type="button" class="view-tab" data-view="model">3D</button>
-      <button type="button" class="view-tab" data-view="findings">Findings</button>
-      <button type="button" class="view-tab" data-view="negotiation">Negotiation</button>
-      <button type="button" class="view-tab" data-view="audit">Audit</button>
+      <button type="button" class="view-tab" data-view="report">Report</button>
     </nav>
 
     <div class="crown__end">
@@ -739,26 +737,11 @@
 <!-- ══════════════════════ REVIEW ══════════════════════ -->
 <main class="review" id="review">
 
-  <aside class="rail rail--west" aria-label="Scheme and brief">
-    <div class="rail__block">
-      <h2 class="rail__head">Selected scheme</h2>
-      <p class="pick" id="pick-name">—</p>
-      <p class="pick__why" id="pick-why"></p>
-      <div class="credits" id="credits"></div>
-    </div>
-    <div class="rail__block">
-      <h2 class="rail__head">Axis scores</h2>
-      <div id="axis-bars"></div>
-    </div>
-    <div class="rail__block">
-      <h2 class="rail__head">The brief</h2>
-      <dl class="kv" id="brief-recap"></dl>
-    </div>
-  </aside>
-
   <section class="stage" id="stage">
+    <div class="subnav" id="subnav" role="tablist" hidden></div>
     <div class="pane" data-view="drawings">
       <div class="pane__bar">
+        <div class="sheet-groups" id="sheet-groups" role="tablist" aria-label="Drawing sets"></div>
         <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Drawings"></div>
         <div class="pane__tools">
           <button type="button" class="ghost-btn" id="zoom">Actual size</button>
@@ -799,32 +782,26 @@
     <div class="pane" data-view="audit" hidden></div>
   </section>
 
-  <aside class="rail rail--east" aria-label="The committee">
-    <div class="rail__block rail__block--flush">
-      <h2 class="rail__head">
-        The team
-        <span class="agree" id="agree-chip"></span>
-      </h2>
-      <p class="chair" id="chair"></p>
-      <ol class="critics" id="critics"></ol>
+  <aside class="side" aria-label="Verdict">
+    <div class="side__verdict">
+      <p class="side__eyebrow"><span id="pick-name">Selected scheme</span></p>
+      <p class="side__score"><b id="v-score">—</b><small id="v-agree"></small></p>
+      <p class="pick__why" id="pick-why"></p>
+      <button type="button" class="link-btn" id="see-why">Why this scheme</button>
     </div>
+    <dl class="stats">
+      <div><dt>Estimate</dt><dd id="v-cost">—</dd><small id="v-cost-note"></small></div>
+      <div><dt>Built area</dt><dd id="v-area">—</dd><small id="v-far"></small></div>
+      <div><dt>Vastu</dt><dd id="v-vastu">—</dd><small id="v-vastu-note"></small></div>
+      <div><dt>Findings</dt><dd id="v-find">—</dd><small id="v-find-note"></small></div>
+    </dl>
+    <h2 class="side__head">Committee</h2>
+    <ol class="critics" id="critics"></ol>
+    <details class="side__brief">
+      <summary>The brief</summary>
+      <dl class="kv" id="brief-recap"></dl>
+    </details>
   </aside>
-
-  <footer class="verdict" id="verdict">
-    <div class="v-cell" data-pig="indigo">
-      <dt>Consensus</dt><dd id="v-score">—</dd><small id="v-agree">—</small></div>
-    <div class="v-cell" data-pig="orpiment">
-      <dt>Vastu</dt><dd id="v-vastu">—</dd><small id="v-vastu-note">—</small></div>
-    <div class="v-cell" data-pig="ochre">
-      <dt>Estimate</dt><dd id="v-cost">—</dd><small id="v-cost-note">—</small></div>
-    <div class="v-cell" data-pig="chalk">
-      <dt>Built area</dt><dd id="v-area">—</dd><small id="v-far">—</small></div>
-    <div class="v-cell" data-pig="hingula">
-      <dt>Open findings</dt><dd id="v-find">—</dd><small id="v-find-note">—</small></div>
-    <div class="v-cell v-cell--act">
-      <button type="button" class="ghost-btn" id="see-why">Why this scheme</button>
-    </div>
-  </footer>
 </main>
 
 <!-- ══════════════════════ OVERLAYS ══════════════════════ -->
@@ -840,6 +817,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js?v=atelier_1" type="module"></script>
+<script src="studio.js?v=atelier_5" type="module"></script>
 </body>
 </html>
