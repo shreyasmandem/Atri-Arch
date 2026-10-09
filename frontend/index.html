@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="studio.css?v=basic_screen_v1">
+<link rel="stylesheet" href="studio.css?v=atelier_1">
+<link rel="stylesheet" href="atelier.css?v=atelier_1">
 </head>
 <body class="is-loading" data-phase="compose">
 
@@ -730,19 +731,9 @@
   </div>
 </section>
 
-<!-- ══════════════════════ RUNNING (BASIC CLEAN COMMITTEE SCREEN) ══════════════════════ -->
-<section class="running" id="running" aria-live="polite" aria-label="The committee is sitting">
-  <div class="running__inner">
-    <p class="sanskrit">Sabha</p>
-    <h2 id="run-title">The committee is sitting</h2>
-    <div class="run-track"><i id="run-fill"></i></div>
-    <p class="run-stage" id="run-stage">Interpreting the brief…</p>
-    <ol class="run-critics" id="run-critics" hidden></ol>
-    <div class="run-log" id="run-log"></div>
-    <div class="run-actions" id="restart" hidden>
-      <button type="button" class="ghost-btn" id="run-restart-btn">← Return to Studio</button>
-    </div>
-  </div>
+<!-- ══════════════════════ RUNNING: THE ATELIER ══════════════════════ -->
+<section class="running" id="running" aria-label="Your studio at work">
+  <div class="atelier" id="atelier"></div>
 </section>
 
 <!-- ══════════════════════ REVIEW ══════════════════════ -->
@@ -753,6 +744,7 @@
       <h2 class="rail__head">Selected scheme</h2>
       <p class="pick" id="pick-name">—</p>
       <p class="pick__why" id="pick-why"></p>
+      <div class="credits" id="credits"></div>
     </div>
     <div class="rail__block">
       <h2 class="rail__head">Axis scores</h2>
@@ -810,9 +802,10 @@
   <aside class="rail rail--east" aria-label="The committee">
     <div class="rail__block rail__block--flush">
       <h2 class="rail__head">
-        Committee
+        The team
         <span class="agree" id="agree-chip"></span>
       </h2>
+      <p class="chair" id="chair"></p>
       <ol class="critics" id="critics"></ol>
     </div>
   </aside>
@@ -847,6 +840,6 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js?v=basic_screen_v1" type="module"></script>
+<script src="studio.js?v=atelier_1" type="module"></script>
 </body>
 </html>

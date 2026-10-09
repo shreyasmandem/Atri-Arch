@@ -211,6 +211,7 @@ async def review_stream(
                         "explanation": result.explanation,
                         "recommendations": result.recommendations,
                         "committee": result.committee,
+                        "voices": result.voices,
                         "evidence": [json.loads(e.model_dump_json()) for e in result.evidence[:20]],
                         "negotiation": result.negotiation,
                         "negotiation_outcome": result.negotiation_outcome,
