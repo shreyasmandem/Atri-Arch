@@ -824,6 +824,7 @@ export class Stage3D {
       piece.rotation.y = angle;
       piece.castShadow = true; piece.receiveShadow = true;
       piece.scale.y = 0.001; piece.visible = false;
+      piece.userData.seg = [a.clone().addScaledVector(dir, s0), a.clone().addScaledVector(dir, s1)];
       group.add(piece);
       out.push(piece);
     }
@@ -835,6 +836,7 @@ export class Stage3D {
       pane.position.set(mid.x, WALL_H * 0.55, mid.z);
       pane.rotation.y = angle;
       pane.scale.y = 0.001; pane.visible = false;
+      pane.userData.seg = [a.clone().addScaledVector(dir, s0), a.clone().addScaledVector(dir, s1)];
       group.add(pane);
       out.push(pane);
     }
@@ -897,18 +899,47 @@ export class Stage3D {
     else this._fade(r.fill.material, 0.16, 500);
     this._show(r.lab);
     const s = this.current;
+    if (!instant && s && s.rooms.includes(r)) this._build(s, r);
     if (s && s.rooms.includes(r) && s.rooms.every((x) => x.drawn) && !s.drawn) {
       s.drawn = true;
       this._rise(s, instant);
     }
   }
 
-  // The walls go up in a wave from the road, then the team steps back.
+  // A room is built the moment its outline closes: its walls and glazing
+  // go up one after another around it, so the house is constructed room by
+  // room behind the people drawing it rather than appearing at the end.
+  _build(s, r) {
+    const near = (seg) => {
+      const m = seg[0].clone().lerp(seg[1], 0.5);
+      let best = Infinity;
+      for (let i = 0; i < r.pts.length; i++) {
+        const a = r.pts[i], b = r.pts[(i + 1) % r.pts.length];
+        const ab = b.clone().sub(a), t = clamp(m.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-9), 0, 1);
+        best = Math.min(best, a.clone().addScaledVector(ab, t).distanceTo(m));
+      }
+      return best < 0.35;
+    };
+    const mine = s.walls.filter((w) => !w.userData.up && w.userData.seg && near(w.userData.seg));
+    mine.sort((x, y) => Math.atan2(x.position.z - r.centre.z, x.position.x - r.centre.x)
+      - Math.atan2(y.position.z - r.centre.z, y.position.x - r.centre.x));
+    mine.forEach((w, i) => {
+      w.userData.up = true;
+      setTimeout(() => {
+        w.visible = true;
+        this._tween(900, (t) => { w.scale.y = Math.max(0.001, ease(t)); });
+      }, (i * 160) / this.speed);
+    });
+  }
+
+  // Whatever is still standing open goes up in a wave from the road, then
+  // the team steps back.
   _rise(s, instant = false) {
     if (s.risen) return;
     s.risen = true;
     const front = this.P(0, this.plot.w / 2, this.plot.road === "S" ? 0 : this.plot.d);
-    const order = s.walls.map((m) => ({ m, k: m.position.distanceTo(front) })).sort((a, b) => a.k - b.k);
+    const order = s.walls.filter((m) => !m.userData.up || instant)
+      .map((m) => ({ m, k: m.position.distanceTo(front) })).sort((a, b) => a.k - b.k);
     const span = order.length ? order[order.length - 1].k || 1 : 1;
     for (const { m, k } of order) {
       m.visible = true;
@@ -1077,12 +1108,13 @@ export class Stage3D {
     });
   }
 
-  // The result is in: everyone finishes at a sprint, the specialists
+  // The result is in: the team fast-forwards through what is left at a pace
+  // you can still follow, every line and wall still drawn and built, the specialists
   // leave, the walls go up and the camera settles to plan view. Resolves
   // when the board is still.
   async settle() {
     this.settling = true;
-    this.speed = 7;
+    this.speed = 2.5;
     this.view.rate = 4;
     this.pending = [];
     for (const c of this.critics.slice()) {
@@ -1094,9 +1126,21 @@ export class Stage3D {
     if (s && !s.drawn && !this.static) {
       for (const m of this.team) {
         m.tasks = m.tasks.filter((t) => t.type === "draw" || t.type === "run");
-        for (const t of [m.task, ...m.tasks]) if (t?.type === "draw") t.fast = true;
       }
-      const until = performance.now() + 900;
+      // Fast-forward, not skip: set the speed from what is left to draw, so
+      // the busiest hand finishes in about five seconds with every line drawn
+      // and every wall raised on screen.
+      let most = 0;
+      for (const m of this.team) {
+        let left = 0;
+        for (const t of [m.task, ...m.tasks]) {
+          if (t?.type === "draw") left += (t.pts.length - (t.i ?? 0)) * 0.08;
+          else if (t?.type === "run") left += 2;
+        }
+        most = Math.max(most, left);
+      }
+      this.speed = clamp(most / (PACE * 5), 2, 12);
+      const until = performance.now() + 15000;   // a safety net, not the plan
       while (!s.drawn && performance.now() < until) await sleep(50);
     }
     if (s && !s.drawn) s.rooms.forEach((x) => this._complete(x, true));

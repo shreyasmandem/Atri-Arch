@@ -496,7 +496,7 @@ class Atelier {
       : "The committee has reported.");
     this.root.querySelector(".at-main").dataset.done = "1";
 
-    if (this.stage3d) await Promise.race([this.stage3d.settle(), sleep(2600)]);
+    if (this.stage3d) await Promise.race([this.stage3d.settle(), sleep(19000)]);
     if (run !== this.run) return;
     this.settled = true;
     this.shot = this.stage3d?.snapshot() || null;
