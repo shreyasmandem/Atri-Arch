@@ -355,10 +355,7 @@ function initBrief() {
   });
   $("dl-svg").addEventListener("click", downloadSheet);
   $("dl-dxf").addEventListener("click", downloadDxf);
-  $("zoom").addEventListener("click", () => {
-    const on = $("plate").classList.toggle("is-zoomed");
-    $("zoom").textContent = on ? "Fit to frame" : "Actual size";
-  });
+  initPlate();
   document.querySelectorAll(".view-tab").forEach((t) =>
     t.addEventListener("click", () => showView(t.dataset.view)));
 
@@ -1162,6 +1159,70 @@ function buildSheetTabs() {
   }
 }
 
+/* ── drawings: pan and zoom ─────────────────────────────────────────── */
+
+// Scroll to zoom toward the pointer, drag to pan, double-click to step in
+// or back to fit. The drawing moves; the plate stays put.
+const plateView = { z: 1, x: 0, y: 0, drag: null };
+
+function applyPlate(animate = false) {
+  const art = $("plate")?.querySelector("svg, img");
+  if (art) {
+    art.style.transition = animate ? "transform .45s cubic-bezier(.16,1,.3,1)" : "none";
+    art.style.transform = `translate(${plateView.x}px, ${plateView.y}px) scale(${plateView.z})`;
+  }
+  setText("zoom-val", `${Math.round(plateView.z * 100)}%`);
+}
+
+function zoomPlate(z, cx = 0, cy = 0, animate = false) {
+  const next = Math.max(0.5, Math.min(5, z));
+  const f = next / plateView.z;
+  plateView.x = cx - (cx - plateView.x) * f;
+  plateView.y = cy - (cy - plateView.y) * f;
+  plateView.z = next;
+  applyPlate(animate);
+}
+
+function resetPlate(animate = true) {
+  Object.assign(plateView, { z: 1, x: 0, y: 0 });
+  applyPlate(animate);
+}
+
+function initPlate() {
+  const plate = $("plate");
+  if (!plate) return;
+  const centre = (e) => {
+    const r = plate.getBoundingClientRect();
+    return [e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2];
+  };
+  plate.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    zoomPlate(plateView.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), ...centre(e));
+  }, { passive: false });
+  plate.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    plateView.drag = { x: e.clientX - plateView.x, y: e.clientY - plateView.y };
+    plate.setPointerCapture(e.pointerId);
+    plate.classList.add("is-panning");
+  });
+  plate.addEventListener("pointermove", (e) => {
+    if (!plateView.drag) return;
+    plateView.x = e.clientX - plateView.drag.x;
+    plateView.y = e.clientY - plateView.drag.y;
+    applyPlate();
+  });
+  const end = () => { plateView.drag = null; plate.classList.remove("is-panning"); };
+  plate.addEventListener("pointerup", end);
+  plate.addEventListener("pointercancel", end);
+  plate.addEventListener("dblclick", (e) => {
+    if (plateView.z > 1.05) resetPlate();
+    else zoomPlate(2, ...centre(e), true);
+  });
+  $("zoom-in")?.addEventListener("click", () => zoomPlate(plateView.z * 1.3, 0, 0, true));
+  $("zoom-out")?.addEventListener("click", () => zoomPlate(plateView.z / 1.3, 0, 0, true));
+  $("zoom-val")?.addEventListener("click", () => resetPlate());
+}
+
 async function loadSheet(key) {
   S.sheet = key;
   buildSheetTabs();
@@ -1177,6 +1238,7 @@ async function loadSheet(key) {
     const text = await r.text();
     if (S.sheet !== key) return;   // another sheet was asked for meanwhile
     plate.innerHTML = text;
+    resetPlate(false);
     const fresh = plate.querySelector("svg");
     if (fresh && ghost && !reducedMotion()) {
       fresh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });

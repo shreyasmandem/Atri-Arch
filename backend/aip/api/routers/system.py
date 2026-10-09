@@ -142,3 +142,25 @@ async def capabilities(principal: Principal = Depends(get_principal)) -> dict[st
         "zero_cost": True,
         "scope": principal.scope,
     }
+
+
+@router.get("/vastu/calibration")
+async def vastu_calibration_status() -> dict[str, Any]:
+    """Inspect the Vastu weight calibration subsystem status and rule cards."""
+    from aip.engines.vastu.calibration import cards_from_corpus
+    cards = cards_from_corpus()
+    return {
+        "status": "active",
+        "calibrated_rules_count": len(cards),
+        "trainable_parameter": "rule_weight_w_r",
+        "frozen_invariants": ["modern_validity", "provenance", "stance_t"],
+        "cards": [
+            {
+                "rule_id": c.rule_id,
+                "provenance": c.provenance,
+                "modern_validity": c.modern_validity,
+                "prior_weight": c.prior_weight,
+            }
+            for c in cards
+        ],
+    }
