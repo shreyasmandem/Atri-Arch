@@ -37,9 +37,9 @@ const PACE = 1.7;         // m/s while drawing
 const ACCEL = 4.5;        // m/s²
 
 const COL = {
-  ground: 0x0b0c10, plot: 0x1a1d24, slab: 0x14161b, line: 0xe8ebf0, chalk: 0x8d94a5,
-  gold: 0xe5a958, indigo: 0x7fa3d4, wall: 0xe9ecf1, glass: 0x7fa3d4,
-  public: 0xe5a958, service: 0x7fa3d4, wet: 0x7fa3d4, private: 0xf3d063,
+  ground: 0x0b0a09, plot: 0x1c1b19, slab: 0x141312, line: 0xede6dc, chalk: 0x8a847b,
+  gold: 0xc9b497, indigo: 0xa39c92, wall: 0xefe9df, glass: 0x9fb2bf,
+  public: 0xc9b497, service: 0xa39c92, wet: 0x8f9aa1, private: 0xe8dcc6,
 };
 
 const PUBLIC = new Set(["foyer", "living", "dining", "puja", "verandah", "garage", "drawing", "family", "lobby", "home_office"]);
@@ -356,8 +356,8 @@ export class Stage3D {
     host.append(this.labelLayer);
 
     const scene = (this.scene = new THREE.Scene());
-    scene.add(new THREE.HemisphereLight(0xc8d6ff, 0x241c14, 1.15));
-    const sun = (this.sun = new THREE.DirectionalLight(0xfff2e0, 1.7));
+    scene.add(new THREE.HemisphereLight(0xf4ead8, 0x1e1914, 1.2));
+    const sun = (this.sun = new THREE.DirectionalLight(0xffeedb, 1.75));
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.bias = -0.0008;
@@ -369,7 +369,7 @@ export class Stage3D {
     ground.receiveShadow = true;
     scene.add(ground);
     // A faint metre grid: the drafting table's own paper.
-    const grid = new THREE.GridHelper(120, 120, 0x1a1d24, 0x13151a);
+    const grid = new THREE.GridHelper(120, 120, 0x1d1b19, 0x151413);
     grid.position.y = 0.001;
     scene.add(grid);
 

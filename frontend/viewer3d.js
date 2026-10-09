@@ -19,12 +19,12 @@ export class Viewer3D {
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
-    r.setClearColor(0x0b0c10, 1);
+    r.setClearColor(0x0b0a09, 1);
     r.domElement.className = "v3-canvas";
     host.append(r.domElement);
 
     const scene = (this.scene = new THREE.Scene());
-    scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2118, 1.25));
+    scene.add(new THREE.HemisphereLight(0xf4ead8, 0x221c16, 1.25));
     const sun = (this.sun = new THREE.DirectionalLight(0xfff1dc, 2.1));
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -84,7 +84,7 @@ export class Viewer3D {
     const span = Math.max(size.x, size.z, size.y * 1.5);
 
     const ground = new THREE.Mesh(new THREE.CircleGeometry(span * 1.6, 64),
-      new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 1 }));
+      new THREE.MeshStandardMaterial({ color: 0x141312, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.002;
     ground.receiveShadow = true;

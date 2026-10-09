@@ -128,10 +128,21 @@ class Atelier {
     host.innerHTML = `
       <div class="at-main" data-done="0">
         <div class="at-stage" id="at-stage">
-          <div class="at-cap">
-            <p class="at-eyebrow" id="at-eyebrow">Studio</p>
-            <h2 id="at-title">The team is at work</h2>
-            <p class="at-sub" id="at-sub"></p>
+          <div class="at-top">
+            <div class="at-cap">
+              <h2 id="at-title">The studio is at work</h2>
+              <p class="at-sub" id="at-sub"></p>
+            </div>
+            <div class="at-ctl">
+              <span class="at-clock" id="at-clock">0:00</span>
+              <button type="button" class="btn btn--cream" id="at-open" hidden>Open the review</button>
+              <button type="button" class="btn btn--line" id="at-cancel">Cancel</button>
+            </div>
+          </div>
+          <div class="at-chapter">
+            <p class="at-index" id="at-index">Stage 1 of 9</p>
+            <p class="at-step"><span id="at-step">Starting</span></p>
+            <p class="at-msg" id="at-msg" aria-live="polite"></p>
           </div>
           <p class="at-note" id="at-note" hidden></p>
           <div class="at-fail" id="at-fail" hidden role="alert"></div>
@@ -141,23 +152,12 @@ class Atelier {
             <h3>Scores</h3>
             <div class="at-pills" id="at-pills" role="tablist" aria-label="Schemes"></div>
           </div>
-          <div class="at-overall">
-            <span>Overall</span><b id="at-overall">—</b>
-          </div>
+          <p class="at-overall"><span>Overall</span><b id="at-overall">—</b></p>
           <p class="at-voice" id="at-voice" aria-live="polite"></p>
           <ol class="at-scores" id="at-scores"></ol>
         </aside>
       </div>
-      <footer class="at-foot">
-        <div class="at-foot__row">
-          <b class="at-step" id="at-step">Starting</b>
-          <span class="at-msg" id="at-msg"></span>
-          <span class="at-clock" id="at-clock">0:00</span>
-          <button type="button" class="at-btn at-btn--go" id="at-open" hidden>Open the review</button>
-          <button type="button" class="at-btn" id="at-cancel">Cancel</button>
-        </div>
-        <div class="at-track" aria-hidden="true"><i id="at-bar"></i></div>
-      </footer>`;
+      <div class="at-track" aria-hidden="true"><i id="at-bar"></i></div>`;
   }
 
   seat(charter) {
@@ -207,8 +207,7 @@ class Atelier {
     this.started = performance.now();
     this.bar = { shown: 0, floor: 0, ceil: STAGES[0][2] };
 
-    this.$("at-eyebrow").textContent = upload ? "Review" : "Studio";
-    this.$("at-title").textContent = upload ? "Reviewing your drawing" : "The team is at work";
+    this.$("at-title").textContent = upload ? "Reviewing your drawing" : "The studio is at work";
     this.$("at-sub").textContent = upload ? fileName : this._briefLine(brief);
     this.$("at-pills").innerHTML = "";
     this.$("at-overall").textContent = "—";
@@ -219,6 +218,7 @@ class Atelier {
     cancel.hidden = false;
     cancel.onclick = () => onCancel && onCancel();
     this.$("at-step").textContent = "Starting";
+    this.$("at-index").textContent = upload ? "Reading the drawing" : "Setting out";
     this.$("at-msg").textContent = upload ? "Reading the drawing." : "Setting out the plot.";
     this.$("at-clock").textContent = "0:00";
     this.root.querySelectorAll(".sc").forEach((li) => {
@@ -308,7 +308,15 @@ class Atelier {
     }
     if (b.shown < b.floor - 0.1) b.shown = b.floor - 0.1;
     this.stage3d?.pace(b.ceil);
-    this.$("at-step").textContent = st.label;
+    this.$("at-index").textContent = `Stage ${st.i + 1} of ${STAGES.length}`;
+    this._chapter(st.label);
+  }
+
+  _chapter(word) {
+    const w = this.$("at-step");
+    if (w.textContent === word) return;
+    w.textContent = word;
+    if (!reduced()) w.animate([{ transform: "translateY(105%)" }, { transform: "none" }], { duration: 620, easing: "cubic-bezier(.16,1,.3,1)" });
   }
 
   _say(text) {
@@ -480,7 +488,8 @@ class Atelier {
     this._paintScores(cand);
 
     const agree = d.consensus?.overall_agreement;
-    this.$("at-step").textContent = this.upload ? "Reviewed" : `Scheme ${this.letter[cand] || "A"} selected`;
+    this.$("at-index").textContent = "Decided";
+    this._chapter(this.upload ? "Reviewed" : `Scheme ${this.letter[cand] || "A"}`);
     this.$("at-clock").textContent += " total";
     this._say(agree != null
       ? `${Math.round(agree * 100)}% of the committee agreed.`
@@ -506,12 +515,12 @@ class Atelier {
   fail(title, message, { onBack } = {}) {
     this.failed = true;
     const box = this.$("at-fail");
-    box.innerHTML = '<h3></h3><p></p><button type="button" class="at-btn at-btn--go">Back to the brief</button>';
+    box.innerHTML = '<h3></h3><p></p><button type="button" class="btn btn--cream">Back to the brief</button>';
     box.querySelector("h3").textContent = title;
     box.querySelector("p").textContent = message;
     box.querySelector("button").onclick = () => onBack && onBack();
     box.hidden = false;
-    this.$("at-step").textContent = "Stopped";
+    this._chapter("Stopped");
     this.$("at-cancel").hidden = true;
     this._say(message);
   }

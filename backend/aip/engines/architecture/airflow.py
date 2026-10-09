@@ -31,20 +31,21 @@ from aip.domain.geometry import BoundingBox, Vec2
 from aip.domain.plan import FloorPlan, Level, OpeningKind, Room
 from aip.engines.architecture.drawings import DrawingStyle, _Canvas, _padded_extent
 
-#: The colour ramp every CFD post-processor uses: still air is dark blue, fast
-#: air runs through cyan and green to yellow. Borrowing the convention means an
-#: engineer reads the picture without being told how.
+#: Air speed as light: still air sinks into the warm black of the sheet,
+#: moving air rises through umber and sand to cream. One hue family and a
+#: steady rise in lightness, so speed reads correctly at a glance, in print and
+#: for colour-blind readers, and the diagram sits in the studio's palette
+#: instead of shouting over it.
 TURBO = (
-    (0.00, (12, 24, 68)),
-    (0.18, (18, 86, 160)),
-    (0.36, (24, 158, 178)),
-    (0.55, (56, 190, 120)),
-    (0.72, (168, 205, 62)),
-    (0.87, (240, 176, 48)),
-    (1.00, (232, 92, 42)),
+    (0.00, (18, 16, 14)),
+    (0.20, (52, 42, 34)),
+    (0.42, (104, 84, 64)),
+    (0.62, (160, 136, 106)),
+    (0.82, (214, 200, 176)),
+    (1.00, (248, 243, 234)),
 )
 
-STAGNANT = "#c53030"
+STAGNANT = "#c4553f"
 
 #: Seconds for a particle to cross the room. Slow enough to follow, fast enough
 #: that the field never reads as static.
@@ -179,8 +180,8 @@ def _draw_particles(
         )
         pid = f"fl{seq}"
         canvas.add(
-            f'<path id="{pid}" d="{d}" fill="none" stroke="#ffffff" '
-            f'stroke-width="0.9" opacity="0.18"/>'
+            f'<path id="{pid}" d="{d}" fill="none" stroke="#ede6dc" '
+            f'stroke-width="0.7" opacity="0.14"/>'
         )
         # A path through slow air is short; letting duration follow length keeps
         # every particle moving at the speed of the field it is in.
@@ -192,7 +193,7 @@ def _draw_particles(
         for n in range(PARTICLES_PER_LINE):
             begin = round(n * duration / PARTICLES_PER_LINE, 2)
             canvas.add(
-                f'<circle r="1.9" fill="#ffffff" opacity="0">'
+                f'<circle r="1.6" fill="#fffaf2" opacity="0">'
                 f'<animateMotion dur="{duration:.2f}s" begin="{begin}s" '
                 f'repeatCount="indefinite"><mpath href="#{pid}"/></animateMotion>'
                 f'<animate attributeName="opacity" values="0;0.95;0.95;0" '
@@ -258,9 +259,9 @@ def airflow_svg(
 
     # A dark ground, because the field is painted in emissive colours and reads
     # as washed out over white. The plan is context here, not the subject.
-    canvas.add('<rect width="100%" height="100%" fill="#0b1220"/>')
+    canvas.add('<rect width="100%" height="100%" fill="#0b0a09"/>')
     for room in level.rooms:
-        canvas.polygon(room.polygon, fill="#111a2b", stroke="none")
+        canvas.polygon(room.polygon, fill="#141312", stroke="none")
 
     # -- the air ------------------------------------------------------------
     seq = 0
@@ -278,7 +279,7 @@ def airflow_svg(
 
         if not openings:
             canvas.text(room.centre, room.display_name().upper(), size=7.5,
-                        fill="#5b6b86", weight="700", dy=-3)
+                        fill="#8a847b", weight="600", dy=-3)
             canvas.text(room.centre, "no external opening", size=7.0,
                         fill=STAGNANT, weight="600", dy=8)
             summary.append((room.display_name(), "sealed"))
@@ -301,11 +302,11 @@ def airflow_svg(
 
         summary.append((room.display_name(), mode.replace("_", " ")))
         canvas.text(room.centre, room.display_name().upper(), size=7.5,
-                    fill="#ffffff", weight="700", dy=-3)
+                    fill="#ede6dc", weight="600", dy=-3)
 
     # Walls last, so they read as edges over the field rather than under it.
     for wall in level.walls:
-        canvas.line(wall.start, wall.end, "#dfe6f2",
+        canvas.line(wall.start, wall.end, "#ede6dc",
                     width=max(1.2, canvas.m(wall.thickness)), opacity=0.85)
 
     _legend(canvas, extent, report.score)
@@ -321,17 +322,17 @@ def _legend(canvas: _Canvas, extent: BoundingBox, score: float) -> None:
     x = extent.min_x + 0.3
     y = extent.max_y - 0.35
 
-    canvas.text(Vec2(x, y), f"Airflow — ventilation index {score:.2f}", size=12,
-                fill="#f2f6ff", anchor="start", weight="700")
+    canvas.text(Vec2(x, y), f"AIRFLOW  ·  VENTILATION INDEX {score:.2f}", size=11,
+                fill="#ede6dc", anchor="start", weight="600")
     canvas.text(
-        Vec2(x, y + 0.5),
-        "Cross flow sweeps the room; a single opening recirculates and leaves the far end still.",
-        size=8.5, fill="#9fb0cc", anchor="start",
+        Vec2(x, y - 0.42),
+        "Cross flow sweeps a room; a single opening recirculates and leaves the far end still.",
+        size=8.5, fill="#9a948b", anchor="start",
     )
 
     # A colour bar, because a field without a key is decoration.
-    bar_x, bar_y = canvas.px(Vec2(x, y + 1.15))
-    width, height = 132.0, 7.0
+    bar_x, bar_y = canvas.px(Vec2(x, y - 0.95))
+    width, height = 132.0, 3.0
     stops = "".join(
         f'<stop offset="{t * 100:.0f}%" stop-color="rgb{_ramp(t)}"/>'
         for t in (0.0, 0.2, 0.4, 0.6, 0.8, 1.0)
@@ -339,11 +340,11 @@ def _legend(canvas: _Canvas, extent: BoundingBox, score: float) -> None:
     canvas.add(
         f'<defs><linearGradient id="speedkey" x1="0" x2="1">{stops}</linearGradient></defs>'
         f'<rect x="{bar_x:.1f}" y="{bar_y:.1f}" width="{width}" height="{height}" '
-        f'fill="url(#speedkey)" rx="1.5"/>'
+        f'fill="url(#speedkey)" rx="1.5" stroke="#3a3632" stroke-width="0.5"/>'
         f'<text x="{bar_x:.1f}" y="{bar_y + height + 9:.1f}" font-size="7.5" '
-        f'fill="#9fb0cc" font-family="{canvas.style.font}">still</text>'
+        f'fill="#9a948b" letter-spacing="1" font-family="{canvas.style.font}">STILL</text>'
         f'<text x="{bar_x + width:.1f}" y="{bar_y + height + 9:.1f}" font-size="7.5" '
-        f'fill="#9fb0cc" text-anchor="end" font-family="{canvas.style.font}">fast</text>'
+        f'fill="#9a948b" letter-spacing="1" text-anchor="end" font-family="{canvas.style.font}">MOVING</text>'
     )
 
 

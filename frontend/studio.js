@@ -35,7 +35,9 @@ const PIG = {
   SSW: "ochre", SW: "ochre", WSW: "ochre", W: "ochre",
   WNW: "orpiment", NW: "orpiment", NNW: "orpiment", CENTRE: "chalk",
 };
-const HEX = { indigo: "#7FA3D4", hingula: "#E4694C", ochre: "#DFA85C", orpiment: "#F0D165", chalk: "#9C9078" };
+// Pigments, read in the studio's monochrome: stone, sand and cream, with brick
+// red kept for the one thing that must stand out, a breach.
+const HEX = { indigo: "#A39C92", hingula: "#C4553F", ochre: "#C9B497", orpiment: "#E8DCC6", chalk: "#6F6A63" };
 
 const CRITIC_PIG = {
   "critic.compliance": "hingula", "critic.daylight": "indigo", "critic.ventilation": "indigo",
@@ -92,7 +94,11 @@ function phase(p) {
   if (document.startViewTransition && !reducedMotion() && !document.hidden) {
     document.documentElement.dataset.vt = p;
     const t = document.startViewTransition(apply);
-    t.finished.finally(() => { delete document.documentElement.dataset.vt; });
+    // A transition the browser skips (a hidden tab, a slow frame) still
+    // applies the phase; it only loses the animation, so it is not an error.
+    t.ready.catch(() => {});
+    t.updateCallbackDone.catch(() => {});
+    t.finished.catch(() => {}).finally(() => { delete document.documentElement.dataset.vt; });
   } else {
     apply();
   }
@@ -111,7 +117,7 @@ function backToBrief() {
     btn.classList.remove("is-loading");
     btn.disabled = false;
     const txt = btn.querySelector(".convene__title-text");
-    if (txt) txt.textContent = "Generate Architectural Schemes";
+    if (txt) txt.textContent = "Convene the studio";
   }
   const up = $("review-btn");
   if (up) { up.classList.remove("is-loading"); up.disabled = false; }
@@ -125,9 +131,9 @@ function strike(svg) {
   const N = 9, U = 900 / N, out = [];
   for (let r = 0; r < N; r++)
     for (let c = 0; c < N; c++)
-      out.push(`<rect class="pada" data-r="${r}" data-c="${c}" x="${c * U}" y="${r * U}" width="${U}" height="${U}" fill="transparent" stroke="#2E2517" stroke-width="1"/>`);
-  out.push(`<path d="M0 0L900 900M900 0L0 900" stroke="#2E2517" stroke-width="1" opacity=".45"/>`);
-  out.push(`<rect x="${3 * U}" y="${3 * U}" width="${3 * U}" height="${3 * U}" fill="none" stroke="#453724" stroke-width="2"/>`);
+      out.push(`<rect class="pada" data-r="${r}" data-c="${c}" x="${c * U}" y="${r * U}" width="${U}" height="${U}" fill="transparent" stroke="#2A2724" stroke-width="1"/>`);
+  out.push(`<path d="M0 0L900 900M900 0L0 900" stroke="#2A2724" stroke-width="1" opacity=".45"/>`);
+  out.push(`<rect x="${3 * U}" y="${3 * U}" width="${3 * U}" height="${3 * U}" fill="none" stroke="#57524B" stroke-width="2"/>`);
   svg.innerHTML = out.join("");
 }
 
@@ -135,7 +141,7 @@ function strike(svg) {
 function lightPadas(svg, plan) {
   if (!svg || !plan?.levels?.length) return { occupied: 0, sectors: [] };
   svg.querySelectorAll(".pada").forEach((p) => {
-    p.setAttribute("fill", "transparent"); p.setAttribute("stroke", "#2E2517"); p.removeAttribute("data-lit");
+    p.setAttribute("fill", "transparent"); p.setAttribute("stroke", "#2A2724"); p.removeAttribute("data-lit");
   });
 
   const rooms = plan.levels[0].rooms || [];
@@ -180,572 +186,150 @@ function lightPadas(svg, plan) {
     if (p.getAttribute("data-lit")) {
       occupied++;
       p.setAttribute("fill", HEX.hingula); p.setAttribute("fill-opacity", ".34"); p.setAttribute("stroke", HEX.hingula);
-    } else { p.setAttribute("stroke", "#9C9078"); }
+    } else { p.setAttribute("stroke", "#8A847B"); }
   }
   return { occupied, sectors };
 }
 
-/* ═══ COSMIC STAR-FIELD RENDERER ═════════════════════════════════════ */
+/* ═══ THE BRIEF ══════════════════════════════════════════════════════ */
 
-function initStarField() {
-  if (window.self !== window.top) return { spread: () => {} };
-  const canvas = document.getElementById("space-stars");
-  if (!canvas) return { spread: () => {} };
-  const ctx = canvas.getContext("2d");
+const ROAD_WORD = { N: "north", NE: "north-east", E: "east", SE: "south-east", S: "south", SW: "south-west", W: "west", NW: "north-west" };
+const NUMWORD = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+const fmtM = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+const lakh = (n) => n >= 1e7 ? `${(n / 1e7).toFixed(2).replace(/\.?0+$/, "")} crore` : `${Math.round(n / 1e5)} lakh`;
 
-  const INTRO_STAR_COUNT = 0; // Pure black void during intro; only the logo is visible
-  const BURST_STAR_COUNT = 240; // All stars are born directly when the logo splits
-  const stars = [];
-  let state = "forming"; // "forming" | "splitting" | "ambient"
-  let spreadStart = 0;
-  let birthTime = performance.now();
-  let cx = window.innerWidth / 2;
-  let cy = window.innerHeight / 2;
-  let dpr = 1;
-  let mouse = { x: -1000, y: -1000, active: false };
+// The headline and the plot drawing are the brief itself, set large, so the
+// first screen already shows the house being asked for.
+function renderBrief() {
+  const f = $("brief");
+  if (!f) return;
+  const v = (n) => f.elements[n]?.value;
+  const w = Math.max(3, +v("plot_width") || 12), d = Math.max(3, +v("plot_depth") || 18);
+  const road = f.querySelector('input[name="road_direction"]:checked')?.value || "N";
+  const levels = +v("levels") || 2;
+  const beds = Math.max(1, +v("bedrooms") || 1);
+  const budget = +v("budget") || 0;
+  const stance = STANCES[+(f.querySelector('input[name="vastu_slider"]:checked')?.value ?? 2)] || STANCES[2];
 
-  function updateCenter() {
-    const stage = document.querySelector(".intro-brand-stage");
-    if (stage && state === "forming") {
-      const rect = stage.getBoundingClientRect();
-      cx = rect.left + rect.width / 2;
-      cy = rect.top + rect.height / 2;
-    } else {
-      cx = window.innerWidth / 2;
-      cy = window.innerHeight / 2;
-    }
+  setText("hl-plot", `${fmtM(w)} × ${fmtM(d)} m`);
+  setText("hl-road", ROAD_WORD[road]);
+  const storeys = levels === 1 ? "one storey" : `${NUMWORD[levels] || levels} storeys`;
+  setText("hl-prog", `${NUMWORD[beds] || beds} bedroom${beds > 1 ? "s" : ""}, ${storeys}`);
+  setText("budget-words", budget ? lakh(budget) : "");
+  setText("stance-note", stance[2]);
+  setText("sum-line", `${Math.round(w * d)} m² plot · ${beds} bed · ₹${lakh(budget)} · Vastu ${stance[0].toLowerCase()}`);
+  drawPlot({ w, d, road, levels,
+    front: +v("setback_front") || 0, rear: +v("setback_rear") || 0, side: +v("setback_side") || 0 });
+}
+
+// The plot to scale: boundary, setback envelope, the road on its side, the
+// floors stacked behind, dimensions and a north point. Geometry is set with
+// CSS-transitionable attributes so a change of input redraws smoothly.
+function drawPlot({ w, d, road, levels, front, rear, side }) {
+  const svg = $("plot-svg");
+  if (!svg) return;
+  const VW = 420, VH = 340, M = 56;
+  const k = Math.min((VW - M * 2) / w, (VH - M * 2) / d);
+  const pw = w * k, pd = d * k;
+  const x0 = (VW - pw) / 2, y0 = (VH - pd) / 2;
+  // Which sides face the road: the letters of the direction.
+  const has = (s) => road.includes(s);
+  const inset = {
+    t: has("N") ? front : has("S") ? rear : side,
+    b: has("S") ? front : has("N") ? rear : side,
+    l: has("W") ? front : has("E") ? rear : side,
+    r: has("E") ? front : has("W") ? rear : side,
+  };
+  if (road.length === 1 && (road === "N" || road === "S")) { inset.l = side; inset.r = side; }
+  if (road.length === 1 && (road === "E" || road === "W")) { inset.t = side; inset.b = side; }
+
+  if (!svg.dataset.built) {
+    svg.innerHTML = `
+      <g class="pf-floors"></g>
+      <rect class="pf-plot" />
+      <rect class="pf-env" />
+      <g class="pf-road"></g>
+      <g class="pf-dims">
+        <line class="pf-dim" data-d="w" /><text class="pf-t" data-d="w"></text>
+        <line class="pf-dim" data-d="d" /><text class="pf-t" data-d="d"></text>
+      </g>
+      <g class="pf-north" transform="translate(${VW - 26} 30)">
+        <path d="M0 -14 L5 6 L0 2 L-5 6 Z" /><text y="22">N</text>
+      </g>`;
+    svg.dataset.built = "1";
   }
-
-  function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width  = Math.floor(window.innerWidth * dpr);
-    canvas.height = Math.floor(window.innerHeight * dpr);
-    canvas.style.width  = window.innerWidth + "px";
-    canvas.style.height = window.innerHeight + "px";
-    updateCenter();
-  }
-
-  // Celestial palette: Gold, Diamond White, Sapphire
-  const COLORS = [
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
-    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.35)" },
-    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.55)" },
-    { rgb: "229, 169, 88",  glow: "rgba(229, 169, 88, 0.50)" },
-    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.40)" },
-  ];
-
-  // Creates stars that burst directly out from the logo when it splits
-  function createBurstStar() {
-    const angle = Math.random() * Math.PI * 2;
-    // Spawns right inside the logo boundary so they literally split from the logo
-    const rx = (Math.random() - 0.5) * 50;
-    const ry = (Math.random() - 0.5) * 50;
-    const targetX = Math.random() * window.innerWidth;
-    const targetY = Math.random() * window.innerHeight;
-
-    const isHero = Math.random() < 0.12;
-    const radius = isHero
-      ? Math.random() * 0.9 + 1.6
-      : Math.random() * 0.8 + 0.6;
-
-    const col = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const speed = Math.random() * 26 + 12;
-
-    return {
-      x: cx + rx,
-      y: cy + ry,
-      orbitR: 0, orbitAngle: angle, orbitSpeed: 0,
-      targetX, targetY,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      r: radius,
-      isHero,
-      introAlpha: Math.random() * 0.35 + 0.65,
-      ambientAlpha: Math.random() * 0.10 + 0.14,
-      color: col,
-      phase: Math.random() * Math.PI * 2,
-      twinkleSpeed: Math.random() * 0.002 + 0.001,
-      driftX: (Math.random() - 0.5) * 0.08,
-      driftY: (Math.random() - 0.5) * 0.08,
-      popDelay: 0,
-      popDuration: 0,
-    };
-  }
-
-  function seed() {
-    stars.length = 0;
-    updateCenter();
-    birthTime = performance.now();
-    for (let i = 0; i < INTRO_STAR_COUNT; i++) {
-      stars.push(createIntroStar(i));
-    }
-  }
-
-  let hasSpread = false;
-  function spread(fast = false) {
-    if (hasSpread || state === "ambient") return;
-    hasSpread = true;
-    state = "splitting";
-    spreadStart = performance.now();
-    updateCenter();
-
-    // 1. Give existing wide stars an outward impulse
-    for (let i = 0; i < stars.length; i++) {
-      const s = stars[i];
-      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.25;
-      const speed = fast ? (Math.random() * 20 + 14) : (Math.random() * 15 + 8);
-      s.vx = Math.cos(angle) * speed;
-      s.vy = Math.sin(angle) * speed;
-    }
-
-    // 2. Dynamically generate full cosmos burst stars erupting from center outward
-    const burstCount = fast ? Math.floor(BURST_STAR_COUNT * 0.75) : BURST_STAR_COUNT;
-    for (let i = 0; i < burstCount; i++) {
-      stars.push(createBurstStar());
-    }
-  }
-
-  function draw(t) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(dpr, dpr);
-
-    if (state === "forming") {
-      updateCenter();
-    }
-
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const elapsed = t - birthTime;
-
-    for (let i = 0; i < stars.length; i++) {
-      const s = stars[i];
-
-      // ─── 1. FORMING: Minimal, wide-spaced stars softly popping in around perimeter ───
-      if (state === "forming") {
-        if (elapsed < s.popDelay) continue;
-
-        const popAge = elapsed - s.popDelay;
-        const popFade = Math.min(popAge / s.popDuration, 1);
-        const popEase = 1 - Math.pow(1 - popFade, 3);
-
-        s.orbitAngle += s.orbitSpeed;
-        s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
-        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.75);
-
-        const alpha = s.introAlpha * popEase;
-        const rNow = s.r * (0.4 + 0.6 * popEase);
-
-        if (rNow > 0.7) {
-          ctx.beginPath();
-          ctx.arc(s.x, s.y, rNow * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = s.color.glow;
-          ctx.globalAlpha = popEase * 0.6;
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, rNow, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-      }
-
-      // ─── 2. SPLITTING: Dynamic star eruption & settling into wide positions ───
-      else if (state === "splitting") {
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vx *= 0.91;
-        s.vy *= 0.91;
-
-        s.x += (s.targetX - s.x) * 0.055;
-        s.y += (s.targetY - s.y) * 0.055;
-
-        const splitAge = performance.now() - spreadStart;
-        const fadeProgress = Math.min(splitAge / 1800, 1);
-        const alpha = s.introAlpha * (1 - fadeProgress) + s.ambientAlpha * fadeProgress;
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-
-        if (splitAge > 1850) {
-          state = "ambient";
-        }
-      }
-
-      // ─── 3. AMBIENT: Dull, subtle, wide-apart peaceful starry void ───
-      else {
-        s.x += s.driftX;
-        s.y += s.driftY;
-
-        if (s.x < 0) s.x = w;
-        if (s.x > w) s.x = 0;
-        if (s.y < 0) s.y = h;
-        if (s.y > h) s.y = 0;
-
-        if (mouse.active) {
-          const mdx = s.x - mouse.x;
-          const mdy = s.y - mouse.y;
-          const mdist = Math.hypot(mdx, mdy);
-          if (mdist < 100 && mdist > 0) {
-            const push = (1 - mdist / 100) * 1.2;
-            s.x += (mdx / mdist) * push;
-            s.y += (mdy / mdist) * push;
-          }
-        }
-
-        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.05 + 0.95;
-        const alpha = s.ambientAlpha * twinkle;
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-      }
-    }
-
-    ctx.restore();
-    requestAnimationFrame(draw);
-  }
-
-  resize();
-  seed();
-  requestAnimationFrame(draw);
-
-  window.addEventListener("resize", () => {
-    resize();
-    if (state === "ambient") seed();
+  const set = (el, a) => { for (const [n, val] of Object.entries(a)) el.setAttribute(n, typeof val === "number" ? val.toFixed(1) : val); };
+  set(svg.querySelector(".pf-plot"), { x: x0, y: y0, width: pw, height: pd });
+  set(svg.querySelector(".pf-env"), {
+    x: x0 + inset.l * k, y: y0 + inset.t * k,
+    width: Math.max(0, pw - (inset.l + inset.r) * k), height: Math.max(0, pd - (inset.t + inset.b) * k),
   });
 
-  window.addEventListener("mousemove", (e) => {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-    mouse.active = true;
-    document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
-    document.documentElement.style.setProperty("--mouse-y", `${e.clientY}px`);
-  });
-  window.addEventListener("mouseleave", () => { mouse.active = false; });
+  // Upper floors, stacked behind like sheets on a table.
+  const floors = svg.querySelector(".pf-floors");
+  floors.innerHTML = "";
+  for (let i = levels - 1; i >= 1; i--) {
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    set(r, { x: x0 + i * 9, y: y0 - i * 9, width: pw, height: pd, class: "pf-floor" });
+    floors.append(r);
+  }
 
-  return { spread };
+  // The road: a band along each road side, with its name.
+  const g = svg.querySelector(".pf-road");
+  g.innerHTML = "";
+  const band = (x, y, bw, bh, label, lx, ly, rot = 0) => {
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    set(r, { x, y, width: bw, height: bh, class: "pf-band" });
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    set(t, { x: lx, y: ly, class: "pf-t pf-t--road", transform: rot ? `rotate(${rot} ${lx} ${ly})` : "" });
+    t.textContent = label;
+    g.append(r, t);
+  };
+  const B = 14, G = 8;
+  if (has("N")) band(x0 - 20, y0 - G - B, pw + 40, B, "ROAD", x0 + pw / 2, y0 - G - B / 2 + 3);
+  if (has("S")) band(x0 - 20, y0 + pd + G, pw + 40, B, "ROAD", x0 + pw / 2, y0 + pd + G + B / 2 + 3);
+  if (has("W")) band(x0 - G - B, y0 - 20, B, pd + 40, "ROAD", x0 - G - B / 2 + 3, y0 + pd / 2, -90);
+  if (has("E")) band(x0 + pw + G, y0 - 20, B, pd + 40, "ROAD", x0 + pw + G + B / 2 + 3, y0 + pd / 2, -90);
+
+  // Dimensions on the sides away from the road.
+  const dimY = has("S") ? y0 - 22 : y0 + pd + 26;
+  const dimX = has("E") ? x0 - 26 : x0 + pw + 26;
+  set(svg.querySelector('.pf-dim[data-d="w"]'), { x1: x0, x2: x0 + pw, y1: dimY, y2: dimY });
+  set(svg.querySelector('.pf-dim[data-d="d"]'), { x1: dimX, x2: dimX, y1: y0, y2: y0 + pd });
+  const tw = svg.querySelector('.pf-t[data-d="w"]');
+  set(tw, { x: x0 + pw / 2, y: dimY - 6 });
+  tw.textContent = `${fmtM(w)} m`;
+  const td = svg.querySelector('.pf-t[data-d="d"]');
+  set(td, { x: dimX + 6, y: y0 + pd / 2, transform: `rotate(-90 ${(dimX + 6).toFixed(1)} ${(y0 + pd / 2).toFixed(1)})` });
+  td.textContent = `${fmtM(d)} m`;
 }
 
-/* ═══ BOOT & STUDIO INTERACTION ═════════════════════════════════════ */
-
-const DIR_LABELS = {
-  N: "North Facing",
-  NE: "North-East Facing",
-  E: "East Facing",
-  SE: "South-East Facing",
-  S: "South Facing",
-  SW: "South-West Facing",
-  W: "West Facing",
-  NW: "North-West Facing"
-};
-
-const ORIENTATION_DATA = {
-  N: { azimuth: "000°", angle: 0, label: "North Facing", frontageClass: "frontage--n" },
-  NE: { azimuth: "045°", angle: 45, label: "North-East Facing", frontageClass: "frontage--ne" },
-  E: { azimuth: "090°", angle: 90, label: "East Facing", frontageClass: "frontage--e" },
-  SE: { azimuth: "135°", angle: 135, label: "South-East Facing", frontageClass: "frontage--se" },
-  S: { azimuth: "180°", angle: 180, label: "South Facing", frontageClass: "frontage--s" },
-  SW: { azimuth: "225°", angle: 225, label: "South-West Facing", frontageClass: "frontage--sw" },
-  W: { azimuth: "270°", angle: 270, label: "West Facing", frontageClass: "frontage--w" },
-  NW: { azimuth: "315°", angle: 315, label: "North-West Facing", frontageClass: "frontage--nw" }
-};
-
-function updateOrientationDial(dir = "N") {
-  const data = ORIENTATION_DATA[dir] || ORIENTATION_DATA.N;
-
-  // 1. Rotate Needle Vector
-  const needle = $("compass-needle-stage");
-  if (needle) {
-    needle.style.transform = `rotate(${data.angle}deg)`;
-  }
-
-  // 2. Bearing Digital Readout
-  const bearing = $("compass-bearing-readout");
-  if (bearing) {
-    bearing.textContent = `${data.azimuth} ${dir}`;
-  }
-
-  // 3. Top Orientation Badge
-  const badgeVal = $("orientation-badge-text");
-  if (badgeVal) {
-    badgeVal.textContent = `${DIR_LABELS[dir] || dir} · ${data.azimuth}`;
-  }
-
-  // 4. Update Center Plot Dimensions & Dynamic Frontage Curb
-  const w = parseFloat($("inp-plot-width")?.value || 12);
-  const d = parseFloat($("inp-plot-depth")?.value || 18);
-  const metric = $("compass-plot-metric");
-  if (metric) {
-    metric.textContent = `${w}×${d}m`;
-  }
-  const frame = $("compass-plot-frame");
-  if (frame) {
-    const ratio = Math.max(0.7, Math.min(1.3, d / w));
-    frame.style.height = `${Math.round(38 * ratio)}px`;
-    frame.className = `compass-plot-frame ${data.frontageClass || "frontage--n"}`;
-  }
+function initBrief() {
+  const f = $("brief");
+  if (!f) return;
+  f.addEventListener("input", renderBrief);
+  f.addEventListener("change", renderBrief);
+  // Steppers: the − and + beside a number.
+  f.querySelectorAll(".step").forEach((b) => b.addEventListener("click", () => {
+    const input = b.parentElement.querySelector("input");
+    if (+b.dataset.step > 0) input.stepUp(); else input.stepDown();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }));
+  f.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => chk.addEventListener("change", () => {
+    chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
+  }));
+  $("upload")?.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => chk.addEventListener("change", () => {
+    chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
+  }));
+  renderBrief();
 }
 
-const PRESETS = {
-  "vastu-villa": {
-    prompt: "Contemporary 3BHK duplex with open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
-    width: 12, depth: 18, levels: "2", dir: "N", bedrooms: 3, bathrooms: 3, kitchen: "open_modular",
-    budget: 6500000, finish: "premium", style: "tropical_modern", stance: 2
-  },
-  "compact-urban": {
-    prompt: "2BHK urban residence with efficient open kitchen, master bedroom with balcony, attached bathrooms, and covered car porch.",
-    width: 9, depth: 14, levels: "2", dir: "E", bedrooms: 2, bathrooms: 2, kitchen: "open_modular",
-    budget: 4500000, finish: "standard", style: "contemporary", stance: 1
-  },
-  "biophilic-retreat": {
-    prompt: "4BHK courtyard villa with central lightwell, generous verandahs, double-height living area, and senior accessibility.",
-    width: 15, depth: 22, levels: "2", dir: "NE", bedrooms: 4, bathrooms: 4, kitchen: "wet_dry",
-    budget: 9000000, finish: "luxury", style: "biophilic", stance: 3
-  },
-  "kerala-vernacular": {
-    prompt: "Kerala vernacular residence with timber joinery, pitched terracotta tile roofs, central courtyard, and natural cross-ventilation.",
-    width: 14, depth: 20, levels: "2", dir: "E", bedrooms: 3, bathrooms: 3, kitchen: "closed",
-    budget: 7500000, finish: "premium", style: "kerala_vernacular", stance: 3
-  },
-  "modern-studio": {
-    prompt: "Modern compact single-floor residence with open minimalist floorplan, seamless indoor-outdoor connection, and efficient footprint.",
-    width: 8, depth: 12, levels: "1", dir: "N", bedrooms: 1, bathrooms: 1, kitchen: "open_modular",
-    budget: 3500000, finish: "standard", style: "modern_minimal", stance: 0
-  }
-};
-
-function updateStudioHUD() {
-  const w = parseFloat($("inp-plot-width")?.value || 12);
-  const d = parseFloat($("inp-plot-depth")?.value || 18);
-  const areaM2 = (w * d).toFixed(0);
-  const areaSqFt = (w * d * 10.7639).toFixed(0);
-  const badge = $("plot-area-calc");
-  if (badge) {
-    badge.textContent = `${areaM2} m² · ${Number(areaSqFt).toLocaleString()} sq ft (Aspect 1:${(d/w).toFixed(2)})`;
-  }
-
-  // Orientation
-  const checkedRadio = document.querySelector('input[name="road_direction"]:checked');
-  const dir = checkedRadio?.value || "N";
-  const hudOri = $("hud-orientation");
-  if (hudOri) hudOri.textContent = DIR_LABELS[dir] || `${dir} Facing`;
-  updateOrientationDial(dir);
-
-  // Program
-  const bhk = $("inp-bedrooms")?.value || "3";
-  const baths = $("inp-bathrooms")?.value || "3";
-  const levels = $("inp-levels")?.value || "2";
-  const levelText = levels === "1" ? "Ground" : levels === "2" ? "Duplex" : levels === "3" ? "Triplex" : "Multi-level";
-  const hudProg = $("hud-program");
-  if (hudProg) hudProg.textContent = `${bhk} BHK ${levelText} · ${baths} Baths`;
-
-  // Vastu Stance
-  const stanceVal = +($("stance")?.value ?? 2);
-  const hudVastu = $("hud-vastu");
-  if (hudVastu && STANCES[stanceVal]) hudVastu.textContent = STANCES[stanceVal][0];
-
-  // Budget
-  const budget = parseFloat($("inp-budget")?.value || 6500000);
-  const tier = $("inp-finish-tier")?.value || "premium";
-  const hudBudget = $("hud-budget");
-  if (hudBudget) hudBudget.textContent = `${inr(budget)} · ${cap(tier)}`;
-}
+/* ═══ BOOT ═══════════════════════════════════════════════════════════ */
 
 (async function boot() {
   atelier.mount($("atelier"));
-
-  // Cosmic Star-field Engine
-  const starField = initStarField();
-
-  // Intro Screen Controller
-  const curtain = $("intro-curtain");
-  const inIframe = window.self !== window.top;
-
-  if (curtain) {
-    if (inIframe) {
-      curtain.style.display = "none";
-      document.body.classList.remove("is-loading");
-      starField.spread(true);
-    } else {
-      let isDismissed = false;
-      let hasBlasted = false;
-
-      const triggerBlast = () => {
-        if (hasBlasted) return;
-        hasBlasted = true;
-        starField.spread(false);
-      };
-
-      const dismissIntro = (fast = false) => {
-        if (isDismissed) return;
-        isDismissed = true;
-        if (!hasBlasted) {
-          triggerBlast();
-        }
-        document.body.classList.remove("is-loading");
-        curtain.classList.add("is-fading");
-        setTimeout(() => { curtain.style.display = "none"; }, 850);
-      };
-
-      // 1. Single Star Blast when silver locks with gold (both visible, 1.3s)
-      const blastTimer = setTimeout(triggerBlast, 1300);
-
-      // 2. Smoothly transition into home studio after stars settle (3.15s) - NO second burst
-      const introTimer = setTimeout(() => dismissIntro(false), 3150);
-
-      curtain.addEventListener("click", () => {
-        clearTimeout(blastTimer);
-        clearTimeout(introTimer);
-        dismissIntro(true);
-      });
-    }
-  }
-
-  strike($("hero-mandala"));
   strike($("review-mandala"));
-  updateStudioHUD();
-
-  // Dynamic plot inputs
-  $("inp-plot-width")?.addEventListener("input", updateStudioHUD);
-  $("inp-plot-depth")?.addEventListener("input", updateStudioHUD);
-  $("inp-bedrooms")?.addEventListener("input", updateStudioHUD);
-  $("inp-bathrooms")?.addEventListener("input", updateStudioHUD);
-  $("inp-levels")?.addEventListener("change", updateStudioHUD);
-  $("inp-budget")?.addEventListener("input", updateStudioHUD);
-  $("inp-finish-tier")?.addEventListener("change", updateStudioHUD);
-
-  // Direction grid radios with dynamic tactile hover preview & click commit
-  document.querySelectorAll(".dir-radio").forEach((card) => {
-    const radio = card.querySelector('input[type="radio"]');
-    const val = card.dataset.val || radio?.value;
-
-    card.addEventListener("mouseenter", () => {
-      if (!val) return;
-      const data = ORIENTATION_DATA[val];
-      if (data) {
-        const needle = $("compass-needle-stage");
-        if (needle) needle.style.transform = `rotate(${data.angle}deg)`;
-        const bearing = $("compass-bearing-readout");
-        if (bearing) bearing.textContent = `${data.azimuth} ${val}`;
-      }
-    });
-
-    card.addEventListener("mouseleave", () => {
-      const activeRadio = document.querySelector('input[name="road_direction"]:checked');
-      if (activeRadio) {
-        const activeData = ORIENTATION_DATA[activeRadio.value] || ORIENTATION_DATA.N;
-        const needle = $("compass-needle-stage");
-        if (needle) needle.style.transform = `rotate(${activeData.angle}deg)`;
-        const bearing = $("compass-bearing-readout");
-        if (bearing) bearing.textContent = `${activeData.azimuth} ${activeRadio.value}`;
-      }
-    });
-
-    radio?.addEventListener("change", () => {
-      document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
-      card.classList.add("is-selected");
-      updateOrientationDial(radio.value);
-      updateStudioHUD();
-    });
-  });
-
-  // Amenities checkboxes
-  document.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
-    });
-  });
-
-  // Architectural presets
-  document.querySelectorAll(".preset-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.preset;
-      const p = PRESETS[key];
-      if (!p) return;
-
-      document.querySelectorAll(".preset-chip").forEach((b) => b.classList.remove("is-active"));
-      btn.classList.add("is-active");
-
-      if ($("client-prompt")) $("client-prompt").value = p.prompt;
-      if ($("inp-plot-width")) $("inp-plot-width").value = p.width;
-      if ($("inp-plot-depth")) $("inp-plot-depth").value = p.depth;
-      if ($("inp-levels")) $("inp-levels").value = p.levels;
-      if ($("inp-bedrooms")) $("inp-bedrooms").value = p.bedrooms;
-      if ($("inp-bathrooms")) $("inp-bathrooms").value = p.bathrooms;
-      if (document.querySelector('select[name="kitchen_type"]')) {
-        document.querySelector('select[name="kitchen_type"]').value = p.kitchen;
-      }
-      if ($("inp-budget")) $("inp-budget").value = p.budget;
-      if ($("inp-finish-tier")) $("inp-finish-tier").value = p.finish;
-      if ($("inp-styles")) $("inp-styles").value = p.style;
-      if ($("stance")) {
-        $("stance").value = p.stance;
-        updateStanceDisplay(p.stance);
-      }
-
-      // Update Direction Radio
-      const radio = document.querySelector(`.dir-radio[data-val="${p.dir}"] input[type="radio"]`);
-      if (radio) {
-        radio.checked = true;
-        document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
-        radio.closest(".dir-radio")?.classList.add("is-selected");
-        updateOrientationDial(p.dir);
-      }
-
-      updateStudioHUD();
-    });
-  });
-
-  function updateStanceDisplay(val) {
-    const stanceIdx = Math.max(0, Math.min(4, Math.round(+val || 0)));
-    const s = STANCES[stanceIdx] || STANCES[2];
-    const nameEl = $("stance-name");
-    if (nameEl) {
-      nameEl.innerHTML = `<span class="stance-spark">✦</span> ${s[0]}`;
-    }
-    const noteEl = $("stance-note");
-    if (noteEl) {
-      noteEl.textContent = s[2];
-    }
-    document.querySelectorAll("#stance-scale span").forEach((span) => {
-      const sVal = +span.dataset.val;
-      if (sVal === stanceIdx) {
-        span.classList.add("is-active");
-      } else {
-        span.classList.remove("is-active");
-      }
-    });
-    const hudVastu = $("hud-vastu");
-    if (hudVastu) hudVastu.textContent = s[0];
-  }
-
-  const stanceInput = $("stance");
-  if (stanceInput) {
-    stanceInput.addEventListener("input", (e) => {
-      updateStanceDisplay(+e.target.value);
-      updateStudioHUD();
-    });
-  }
-
-  document.querySelectorAll("#stance-scale span").forEach((span) => {
-    span.addEventListener("click", () => {
-      const val = +span.dataset.val;
-      if (stanceInput) {
-        stanceInput.value = val;
-        updateStanceDisplay(val);
-        updateStudioHUD();
-      }
-    });
-  });
-
-  // Initialize stance display on load
-  updateStanceDisplay(stanceInput ? +stanceInput.value : 2);
+  initBrief();
 
   $("brief").addEventListener("submit", onSubmit);
   $("upload")?.addEventListener("submit", onUpload);
@@ -767,7 +351,6 @@ function updateStudioHUD() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       $("why").hidden = true;
-      if (compareModal) compareModal.hidden = true;
     }
   });
   $("dl-svg").addEventListener("click", downloadSheet);
@@ -806,26 +389,27 @@ function updateStudioHUD() {
         ]);
         S.committee = c.committee || [];
         setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
-        setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
+        setText("convene-sub", `${S.committee.length || 13} specialists · 3 schemes · costs nothing to run`);
         const critStat = $("convene-critics-status");
         if (critStat) {
           critStat.textContent = `${S.committee.length} PARALLEL CRITICS ARMED`;
         }
 
         if (h.degraded_mode) {
-          updateEngineStatus("ok", "Engine ready · Analytical judgment mode · Vastu & structural active");
+          updateEngineStatus("ok", "Engine ready");
         } else {
-          updateEngineStatus("ok", `Engine ready · ${h.providers_configured?.length || 1} provider(s) · ${h.corpus?.total || 30} passages · $0.00 spent`);
+          updateEngineStatus("ok", "Engine ready");
         }
         seatCritics();
         return;
       } catch (err) {
         console.warn(`Health check attempt ${attempt} failed:`, err);
         if (attempt < retries) {
-          updateEngineStatus("bad", `Connecting to engine (attempt ${attempt}/${retries})…`);
+          updateEngineStatus("bad", "Connecting…");
           await new Promise((res) => setTimeout(res, 1200));
         } else {
-          updateEngineStatus("bad", `Cannot reach the engine at ${API}. Verify server is running on port 8001`);
+          updateEngineStatus("bad", "Engine offline");
+          toast(`The engine is not answering at ${API}. Start the backend and reload.`);
         }
       }
     }
@@ -935,7 +519,7 @@ async function onSubmit(e) {
   if (dot) dot.dataset.tone = "running";
   if (note) {
     note.dataset.tone = "running";
-    note.textContent = "The studio is drafting your schemes…";
+    note.textContent = "Designing";
   }
 
   S.briefSent = readBrief();
@@ -954,7 +538,7 @@ async function onSubmit(e) {
     if (dot) dot.dataset.tone = "bad";
     if (note) {
       note.dataset.tone = "bad";
-      note.textContent = `Run failed: ${err.message}`;
+      note.textContent = "Run stopped";
     }
   } finally {
     S.isGenerating = false;
@@ -962,12 +546,12 @@ async function onSubmit(e) {
       btn.classList.remove("is-loading");
       btn.disabled = false;
       const txt = btn.querySelector(".convene__title-text");
-      if (txt) txt.textContent = "Generate Architectural Schemes";
-      setText("convene-sub", `${S.committee.length || 13} critics · 3 schemes · ₹0 to run`);
+      if (txt) txt.textContent = "Convene the studio";
+      setText("convene-sub", `${S.committee.length || 13} specialists · 3 schemes · costs nothing to run`);
       if (dot) dot.dataset.tone = "ok";
       if (note) {
         note.dataset.tone = "ok";
-        note.textContent = "Engine ready · Analytical judgment mode · Vastu & structural active";
+        note.textContent = "Engine ready";
       }
     }
   }
@@ -1065,7 +649,7 @@ async function onUpload(e) {
   if (dot) dot.dataset.tone = "running";
   if (note) {
     note.dataset.tone = "running";
-    note.textContent = `Reading ${file.name}…`;
+    note.textContent = "Reading the drawing";
   }
 
   const f = new FormData($("upload"));

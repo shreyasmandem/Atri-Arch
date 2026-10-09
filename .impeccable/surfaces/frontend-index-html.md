@@ -2,27 +2,27 @@
 version: 1
 slug: "frontend-index-html"
 primary_target: "frontend/index.html"
-related_targets: ["frontend/studio.js","frontend/studio.css"]
+related_targets: ["frontend/studio.js","frontend/rabbit.css"]
 ---
 
-# Studio SPA — run + review (the Atelier)
+# Studio SPA — brief, run and review (Studio Rabbit world)
 
-Scope: the running phase (rebuilt), the review phase's committee rail and verdict strip, and every phase transition. The brief form gets a polish pass only. Mode: Operate (the architect defends a scheme), with the run as the one authored moment.
+Scope: the whole studio, rebuilt from scratch: brief, upload, run, review, every pane and every transition. Only the 3D team scene (stage3d.js) and the glTF viewer survive as engines, restyled to the new world. Mode: Operate (the architect defends a scheme, often with a client beside them), with the run as the one authored moment.
 
-Audience/job: the architect, often with the client beside them, waits 30–90 s for a scheme and then has to defend it. The wait should show the work, not hide it.
+Audience/job: the architect on a large studio monitor, sometimes the client on a phone. Brief a house in under a minute, watch it get designed, defend the chosen scheme.
 
-Constraints: inherit DESIGN.md (pitch-black ground, Atri Arch gold, five semantic pigments, Inter + JetBrains Mono for measurements). Named personas, no "AI" tag (user decision 2026-10-09). Every remark shown is a real backend message, attributed to the critic or stage that produced it; the plan being drawn is the real candidate geometry.
+Constraints: user pinned the Studio Rabbit site (F:\Users\shrey\Desktop\Studiorabbit-V2) as the theme on 2026-10-10. Monochrome warm black and cream; colour only as signal (one muted red for breaches and low scores). Opens straight on the brief, no intro. Role names only, no personal names. No subagents. Every remark shown is real engine output.
 
 ## Direction contract
 
-THESIS: The run is a working session in an architect's atelier, not a progress bar. Three draughtspeople draw the real candidate schemes room by room while thirteen named specialists read each sheet and speak their verdicts; the principal chairs the vote. Refuses the spinner-plus-log-plus-percent default and the "AI agent console" costume.
+THESIS: The brief is the title of the project. As the architect types, the house's own specification is set as a large editorial headline and a to-scale plot drawing, so the first screen already shows the job, not a form. Refuses the card-grid SaaS form and the glowing "AI console".
 
-OWN-WORLD: Black drafting room. The sheet is graphite (#0A0B0E) with a faint grain and chalk-white line work; the active pen is Atri gold. Each specialist carries one pigment by discipline (code hingula, environment indigo, structure/cost ochre, Vastu and judgement orpiment) on a monogram avatar with an authored discipline glyph. Hairline rules, no glass, no glow, no gradient text.
+OWN-WORLD: Studio Rabbit: warm black ground (#0B0A09 / #1A1919), cream type (#EDE6DC) at three opacities, hairline cream rules, film grain and vignette, chrome-white line drawings. Archivo uppercase display (semi-condensed, tight) with Archivo italic for the soft line; Geist for UI and tracked uppercase labels; tabular Geist numerals. Muted brick red only for failures. No cards, no glass, no glow, no gradient text, no emoji.
 
-STORY: The visitor sees the plot set out from their own brief, watches their house being drawn by named hands, hears each specialist react, sees the vote land, and the chosen sheet carries straight into the review.
+STORY: State the house, see it drawn to scale as you type, convene the studio, watch the team draw it and the specialists judge it, open the chosen scheme with every score traceable.
 
-FIRST VIEWPORT: Top: title line + stage rail (Brief → Rationale) with elapsed time. Left two-thirds: the drafting sheet with title block, pens and name tags moving over it; under it the studio conversation (last four lines). Right third: "Around the table" — 13 people grouped by discipline, each with state, score and their latest line. Skip-to-results sits top right.
+FIRST VIEWPORT: Left: the live headline ("A home on / 12 × 18 m / facing north") over a hairline plot drawing with setbacks and road. Right: the specification as an editorial sheet of rows (site, programme, budget, Vastu, style), quiet underlined inputs. Bottom bar: one-line summary and the cream "Convene the studio" button.
 
-FORM: Drafting atelier, shaped directly from the brief (precisely specified extension; no concept-seed roll). Signature move: named pens drawing the actual plan section by section, then the selected sheet morphing into the review plate (shared-element view transition).
+FORM: Editorial specification sheet + cinematic 3D run + gallery-quiet review. Signature move: the headline and plot drawing rewrite themselves from the inputs; on convene, the drawing hands off to the 3D board.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+FINISH: inspected desktop and mobile in one batched round, detector run, DESIGN.md rewritten from the shipped world.
