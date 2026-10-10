@@ -1688,7 +1688,7 @@ async function renderModel() {
         if (S.viewer && b.getAttribute("aria-selected") === "true") {
           S.viewer.setVastu(vastu, lv);
           const here = vastu.rooms.filter((r) => r.level === lv);
-          const off = here.filter((r) => r.ideal_point).length;
+          const off = here.filter((r) => r.target).length;
           cap.textContent = `Vastu ${vastu.score.toFixed(0)} / 100  ·  ${here.length} rooms placed on this floor`
             + (off ? `  ·  ${off} could move to a better quarter` : "  ·  every room in a good quarter");
         }

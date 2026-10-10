@@ -182,106 +182,92 @@ export class Viewer3D {
   }
 
 
-  // Vastu over the model: the nine-cell grid laid on one floor, a pin over
-  // every assessed room coloured by its verdict, and for a room in the wrong
-  // quarter a ghost of it in the right one with an arc showing the move.
+  // Vastu over the model, read as a plan: the floor washed in the nine zone
+  // tints, each key room ringed in its verdict colour, the quarters named
+  // around the house (labels that stay legible at any size), and a dashed arc
+  // for every move or swap that would help.
   setVastu(data, level = 0) {
     this.clearVastu();
     this.vastuData = data; this.vastuLevel = level;
     if (!data || !this.model) return;
     const g = (this.vastu = new THREE.Group());
-    g.name = "vastu_overlay";
     const lv = data.levels.find((l) => l.index === level) || data.levels[0];
     const y = (lv?.base ?? 0.45) + 0.03;
-    const [x0, y0, x1, y1] = data.envelope;
-    const w = x1 - x0, h = y1 - y0;
-
-    // The grid, drawn on a canvas and laid on the floor.
-    const px = 1024, py = Math.round(px * h / w);
-    const cv = document.createElement("canvas"); cv.width = px; cv.height = py;
-    const c = cv.getContext("2d");
-    // Opaque: a painted floor, the zone colours washed over warm stone.
-    c.fillStyle = "#d9cfbd"; c.fillRect(0, 0, px, py);
-    const cell = { NW: [0, 0], N: [1, 0], NE: [2, 0], W: [0, 1], CENTRE: [1, 1], E: [2, 1], SW: [0, 2], S: [1, 2], SE: [2, 2] };
-    for (const z of data.zones) {
-      const [col, row] = cell[z.dir];
-      c.fillStyle = z.colour; c.globalAlpha = z.dir === "CENTRE" ? 0.35 : 0.85;
-      c.fillRect(col * px / 3, row * py / 3, px / 3, py / 3);
-      c.globalAlpha = 0.95;
-      c.fillStyle = "#1c1a17";
-      c.font = `800 ${Math.round(px / 14)}px Geist, system-ui, sans-serif`;
-      c.textAlign = "center"; c.textBaseline = "middle";
-      const cx = (col + 0.5) * px / 3, cy = (row + 0.5) * py / 3;
-      c.fillText(z.dir === "CENTRE" ? "BRAHMA" : z.dir, cx, cy - px / 30);
-      c.font = `600 ${Math.round(px / 30)}px Geist, system-ui, sans-serif`;
-      c.globalAlpha = 0.8;
-      c.fillText(z.dir === "CENTRE" ? "keep open" : `${z.name} · ${z.element}`, cx, cy + px / 20);
-    }
-    c.globalAlpha = 0.85; c.strokeStyle = "#1c1a17"; c.lineWidth = 6; c.setLineDash([26, 16]);
-    for (let k = 1; k < 3; k++) {
-      c.beginPath(); c.moveTo(k * px / 3, 0); c.lineTo(k * px / 3, py); c.stroke();
-      c.beginPath(); c.moveTo(0, k * py / 3); c.lineTo(px, k * py / 3); c.stroke();
-    }
-    c.setLineDash([]); c.strokeRect(2, 2, px - 4, py - 4);
-    const tex = new THREE.CanvasTexture(cv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
-    const grid = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ map: tex }));
-    grid.rotation.x = -Math.PI / 2;
-    grid.position.set((x0 + x1) / 2, y, -(y0 + y1) / 2);
-    grid.renderOrder = 2;
-    g.add(grid);
-
-    // Pins and moves for the rooms on this floor.
-    const col = { ideal: 0x8fb27a, acceptable: 0xd9b45a, neutral: 0xd9b45a, prohibited: 0xd2553f };
+    const V = (x, py, h = y) => new THREE.Vector3(x, h, -py);
     this.pins = [];
-    for (const r of data.rooms.filter((x) => x.level === lv.index)) {
-      const top = y + 3.1;
-      const colour = col[r.verdict] ?? 0xd9b45a;
-      const pin = new THREE.Group();
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 20, 14), new THREE.MeshStandardMaterial({ color: colour, emissive: colour, emissiveIntensity: 0.35, roughness: 0.4 }));
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, top - y, 8), new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: 0.6 }));
-      stem.position.y = -(top - y) / 2;
-      pin.add(head, stem);
-      pin.position.set(r.centre[0], top, -r.centre[1]);
-      g.add(pin);
+    const tag = (cls, html, obj, dy = 0) => {
       const el = document.createElement("div");
-      el.className = `v3-pin v3-pin--${r.verdict}`;
-      const move = r.ideal_point ? `<span>belongs in the ${r.ideal_zone}</span>` : "";
-      el.innerHTML = `<b>${r.name}</b><span>${r.zone || r.direction} · ${r.verdict === "ideal" ? "ideal" : r.verdict === "prohibited" ? "avoid" : "acceptable"}</span>${move}`;
-      el.title = `${r.rule}\n${r.why || ""}${r.remedy ? `\nRemedy: ${r.remedy}` : ""}`;
+      el.className = cls; el.innerHTML = html;
       this.host.append(el);
-      this.pins.push({ el, obj: pin, dy: 0.45 });
-      if (r.ideal_point) {
-        // The room as it would sit in its ideal quarter, and the move there.
-        const side = Math.sqrt(Math.max(r.area, 2));
-        const ghost = new THREE.Mesh(new THREE.BoxGeometry(side, 0.06, side),
-          new THREE.MeshStandardMaterial({ color: 0x8fb27a, emissive: 0x8fb27a, emissiveIntensity: 0.3, roughness: 0.6 }));
-        ghost.position.set(r.ideal_point[0], y + 0.03, -r.ideal_point[1]);
-        const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(side, 1.2, side)),
-          new THREE.LineDashedMaterial({ color: 0xfbf6ec, dashSize: 0.25, gapSize: 0.15, transparent: true, opacity: 0.8 }));
-        edge.position.set(r.ideal_point[0], y + 0.6, -r.ideal_point[1]);
-        edge.computeLineDistances();
-        const a = new THREE.Vector3(r.centre[0], y + 1.6, -r.centre[1]);
-        const b = new THREE.Vector3(r.ideal_point[0], y + 1.2, -r.ideal_point[1]);
-        const mid = a.clone().lerp(b, 0.5).setY(y + 1.6 + a.distanceTo(b) * 0.35);
+      this.pins.push({ el, obj, dy });
+      return el;
+    };
+
+    // Zone tints: one flat shape per cell, opaque, on the floor.
+    for (const z of data.zones) {
+      const shape = new THREE.Shape(z.polygon.map(([x, py]) => new THREE.Vector2(x, py)));
+      const geo = new THREE.ShapeGeometry(shape);
+      geo.rotateX(-Math.PI / 2);
+      const base = new THREE.Color(0xe2d8c6).lerp(new THREE.Color(z.colour), z.dir === "CENTRE" ? 0.25 : 0.55);
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: base }));
+      m.position.y = y;
+      g.add(m);
+      const edge = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(z.polygon.map(([x, py]) => V(x, py, y + 0.01))),
+        new THREE.LineBasicMaterial({ color: 0x1c1a17, transparent: true, opacity: 0.45 }));
+      g.add(edge);
+    }
+    // The quarters named outside the house, and the centre kept open.
+    const [x0, y0, x1, y1] = data.envelope;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, pad = 1.4;
+    for (const z of data.zones) {
+      const [px, py] = z.point;
+      const out = z.dir === "CENTRE" ? V(px, py, y + 0.2)
+        : V(cx + (px - cx) * (1 + pad / Math.max(1e-3, Math.abs(px - cx) + Math.abs(py - cy)) * 1.6), cy + (py - cy) * (1 + pad / Math.max(1e-3, Math.abs(px - cx) + Math.abs(py - cy)) * 1.6), y + 0.2);
+      const o = new THREE.Object3D(); o.position.copy(out); g.add(o);
+      tag(`v3-zone${z.dir === "CENTRE" ? " v3-zone--c" : ""}`,
+        z.dir === "CENTRE" ? "<b>Brahmasthan</b><span>keep open</span>" : `<b>${z.dir}</b><span>${z.element}</span>`, o);
+    }
+
+    // Key rooms on this floor: a ring in the verdict colour, a chip, a move.
+    const COLS = { ideal: 0x6f9a55, fair: 0xc9a13e, avoid: 0xc4553f };
+    for (const r of data.rooms.filter((x) => x.level === lv.index)) {
+      const pts = r.polygon.map(([x, py]) => new THREE.Vector2(x, py));
+      const outer = new THREE.Shape(pts);
+      // Inset hole: a band about 25 cm wide just inside the walls.
+      const c = pts.reduce((a, p) => a.add(p), new THREE.Vector2()).multiplyScalar(1 / pts.length);
+      const hole = new THREE.Path(pts.map((p) => {
+        const d = p.clone().sub(c); const L = d.length() || 1;
+        return c.clone().add(d.multiplyScalar(Math.max(0.2, (L - 0.42) / L)));
+      }));
+      outer.holes.push(hole);
+      const geo = new THREE.ShapeGeometry(outer);
+      geo.rotateX(-Math.PI / 2);
+      const ring = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COLS[r.verdict] }));
+      ring.position.y = y + 0.02;
+      g.add(ring);
+      const anchor = new THREE.Object3D(); anchor.position.copy(V(r.centre[0], r.centre[1], y + 0.1)); g.add(anchor);
+      const mark = r.verdict === "ideal" ? "✓" : r.verdict === "avoid" ? "✕" : "~";
+      const move = r.target ? (r.swap ? `swap with ${r.swap}` : `better in the ${r.target}`) : "";
+      const el = tag(`v3-chip v3-chip--${r.verdict}`, `<b>${mark} ${r.name}</b><span>${r.zone}${move ? ` · ${move}` : ""}</span>`, anchor);
+      el.title = `${r.rule}\nIdeal: ${r.ideal.join(", ")}${r.avoid.length ? `\nAvoid: ${r.avoid.join(", ")}` : ""}\n${r.why || ""}${r.remedy ? `\nIf it stays: ${r.remedy}` : ""}`;
+      if (r.target_point) {
+        const a = V(r.centre[0], r.centre[1], y + 0.4), b = V(r.target_point[0], r.target_point[1], y + 0.4);
+        const mid = a.clone().lerp(b, 0.5); mid.y += Math.max(1.2, a.distanceTo(b) * 0.4);
         const curve = new THREE.QuadraticBezierCurve3(a, mid, b);
         const arc = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(40)),
-          new THREE.LineDashedMaterial({ color: 0xfbf6ec, dashSize: 0.3, gapSize: 0.2 }));
+          new THREE.LineDashedMaterial({ color: COLS[r.verdict], dashSize: 0.3, gapSize: 0.18 }));
         arc.computeLineDistances();
-        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.32, 14), new THREE.MeshBasicMaterial({ color: 0xfbf6ec }));
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 14), new THREE.MeshBasicMaterial({ color: COLS[r.verdict] }));
         tip.position.copy(b);
         tip.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), curve.getTangent(1).normalize());
-        g.add(ghost, edge, arc, tip);
-        this.vastuPulse = (this.vastuPulse || []).concat([ghost.material]);
+        g.add(arc, tip);
       }
     }
     this.model.add(g);
-    // Look down on the floor so the grid reads: a high, slightly tilted plan view.
-    const focus = new THREE.Vector3(); grid.getWorldPosition(focus);
-    const span = Math.max(w, h);
-    const to = new THREE.Vector3(focus.x + span * 0.1, focus.y + span * 2.5, focus.z + span * 0.85);
+    // Look down on the floor so it reads as a plan.
+    const focus = this.model.localToWorld(V(cx, cy));
+    const span = Math.max(x1 - x0, y1 - y0) + pad * 4;
+    const to = new THREE.Vector3(focus.x + span * 0.05, focus.y + span * 2.1, focus.z + span * 0.7);
     const from = this.camera.position.clone(), t0 = this.controls.target.clone();
     this.controls.autoRotate = false;
     const start = performance.now();
@@ -297,15 +283,14 @@ export class Viewer3D {
   clearVastu() {
     if (this.vastu) {
       this.vastu.removeFromParent();
-      this.vastu.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose?.(); });
+      this.vastu.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });
     }
     this.vastu = null;
-    this.vastuPulse = [];
     (this.pins || []).forEach((p) => p.el.remove());
     this.pins = [];
   }
 
-  _pinsTick(now) {
+  _pinsTick() {
     if (!this.pins?.length) return;
     const w = this.host.clientWidth, h = this.host.clientHeight;
     const v = new THREE.Vector3();
@@ -315,9 +300,8 @@ export class Viewer3D {
       v.project(this.camera);
       const hidden = v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1;
       p.el.style.opacity = hidden ? "0" : "1";
-      p.el.style.transform = `translate(-50%, -100%) translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px)`;
+      p.el.style.transform = `translate(-50%, -50%) translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px)`;
     }
-    for (const m of this.vastuPulse || []) m.emissiveIntensity = 0.3 + 0.25 * Math.sin(now / 420);
   }
 
   _tick(now) {
