@@ -78,6 +78,9 @@ class ModelSpec:
         return self.quality / (1.0 + self.typical_latency_ms / 6000.0)
 
 
+_ROTATION: dict[str, int] = {}
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderSpec:
     """An OpenAI-compatible endpoint plus its credential source."""
@@ -92,8 +95,18 @@ class ProviderSpec:
     extra_headers: dict[str, str] = field(default_factory=dict)
     models: tuple[ModelSpec, ...] = ()
 
+    def credentials(self, settings: Settings) -> list[str]:
+        """Every key configured for the provider: a comma-separated list spreads
+        a committee's burst of calls across several free-tier quotas."""
+        raw = str(getattr(settings, self.settings_key, "") or "")
+        return [k.strip() for k in raw.split(",") if k.strip()]
+
     def credential(self, settings: Settings) -> str:
-        return str(getattr(settings, self.settings_key, "") or "").strip()
+        keys = self.credentials(settings)
+        if not keys:
+            return ""
+        _ROTATION[self.name] = (_ROTATION.get(self.name, -1) + 1) % len(keys)
+        return keys[_ROTATION[self.name]]
 
     def is_available(self, settings: Settings) -> bool:
         # Order matters. Ollama needs no credential, so an `AuthStyle.NONE`

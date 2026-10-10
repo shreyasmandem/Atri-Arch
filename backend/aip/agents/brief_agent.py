@@ -291,32 +291,137 @@ def apply_defaults(b: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm: bool = True) -> dict[str, Any]:
-    """One turn: the updated brief, what is still missing, and what to say."""
+CHAT_SYSTEM = """You are Atri, the lead architect of a residential design studio in India, talking with a client who wants a house designed. You are warm, sharp and brief - like a good architect on a first call, never like a form or a chatbot.
+
+Each turn you do two things:
+1. Understand what the client said, in whatever language or mix of languages they use (English, Hindi, Hinglish, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, anything) and however they phrase it, and record every concrete requirement in the brief.
+2. Reply in the language and script of the client's latest message (romanised Kannada or Hindi gets romanised Kannada or Hindi back), in one to three short sentences: acknowledge the specific things they asked for (not a recap of everything), offer one useful architectural observation when you have a real one (for example how a courtyard helps a deep plot, or why a north road suits the living room), and ask about at most two things that are still missing and would change the design.
+
+Essentials that must be known before designing: plot size, which side the road is on, number of floors, number of bedrooms. Ask for those first, one or two at a time, never all at once. Everything else (bathrooms, Vastu, style, budget, colours) has sensible defaults - do not interrogate. If the client says to go ahead or that you can decide, assume only the defaults (bathrooms equal to bedrooms, balanced Vastu, contemporary style) and say so in a few words. Never add a room or amenity the client did not ask for - parking, a lounge, a gym are theirs to request.
+
+Plot sizes in India are usually given in feet ("30x40", "40 by 60") - convert to metres (x 0.3048). Small numbers like "12x18" are usually metres. "G+1" means 2 floors. "3BHK" means 3 bedrooms. "East facing" means the road is on the east.
+
+Never invent a number the client did not give. Never claim to have started designing - the studio starts when they press the button.
+
+Return only JSON:
+{
+ "reply": "your message to the client, in their language",
+ "updates": {only the brief fields this message set or changed:
+   "plot_width": metres, "plot_depth": metres, "plot_unit": "ft" or "m" (as the client gave it),
+   "road_direction": "N"|"NE"|"E"|"SE"|"S"|"SW"|"W"|"NW", "levels": 1-6, "bedrooms": int, "bathrooms": int,
+   "locality": "city, state", "vastu": "ignore"|"advisory"|"balanced"|"strict",
+   "styles": [from contemporary, modern_minimal, tropical_modern, kerala_vernacular, traditional_indian, chettinad, scandinavian, japandi, industrial, biophilic, mid_century_modern, rajasthani_haveli, indo_saracenic],
+   "budget": rupees, "occupant_elders": int, "occupant_children": int,
+   "amenities": [from pooja, parking, study, utility, balcony, courtyard, verandah, gym, home theatre, terrace, store, family lounge, library, servant room],
+   "rooms": [{"type": a room type such as master_bedroom, bedroom, guest_bedroom, children_bedroom, kitchen, living, dining, puja, study, balcony, terrace, courtyard, verandah, garage, gym, home_theatre, store, utility, bathroom,
+              "level": 0 for ground, 1 for first..., "direction": compass quarter, "area": m2, "attach_to": room type it opens off, "scale": 1.3 for bigger / 0.8 for smaller}] - only rooms the client placed, sized or attached. A balcony off the master bedroom upstairs is {"type": "balcony", "level": 1, "attach_to": "master_bedroom"},
+   "remove": [room types the client does not want],
+   "colours": "the client's colour wishes in their words",
+   "notes": "anything else they want that fits nowhere above"},
+ "questions": [{"key": "plot"|"road_direction"|"levels"|"bedrooms"|"other", "text": "the question, in their language", "options": ["2-5 short one-tap answers, in their language"]}],
+ "go_ahead": true if they told you to proceed or decide yourself
+}"""
+
+
+async def llm_turn(message: str, brief: dict[str, Any], history: list[dict[str, str]]) -> dict[str, Any] | None:
+    """The conversation turn, by a language model; None if none is reachable."""
+    try:
+        from aip.core.llm import LLMRouter, assistant, system, user
+        from aip.core.providers import Capability
+
+        msgs = [system(CHAT_SYSTEM + f"\n\nThe brief so far: {json.dumps(brief, ensure_ascii=False)}")]
+        for h in history[-12:]:
+            text = str(h.get("text", ""))[:2000]
+            msgs.append(user(text) if h.get("role") == "user" else assistant(text))
+        msgs.append(user(message))
+        router = LLMRouter()
+        try:
+            resp = await router.complete(msgs, capability=Capability.STRUCTURED, temperature=0.3, max_tokens=900,
+                                         json_schema={"type": "object"}, latency_sensitive=True)
+        finally:
+            await router.aclose()
+        if getattr(resp, "provider", "") == "offline":
+            return None
+        raw = resp.text.strip()
+        raw = raw[raw.find("{"): raw.rfind("}") + 1]
+        data = json.loads(raw) if raw else None
+        return data if isinstance(data, dict) and data.get("reply") else None
+    except Exception as exc:  # noqa: BLE001 - the rules still answer
+        logger.info("brief.chat_llm_unavailable %s", exc)
+        return None
+
+
+_TYPES = {"plot_width": float, "plot_depth": float, "levels": int, "bedrooms": int, "bathrooms": int,
+          "budget": float, "occupant_elders": int, "occupant_children": int}
+
+
+def _clean(updates: dict[str, Any]) -> dict[str, Any]:
+    """Keep what a model returned only if it is the right shape."""
+    out: dict[str, Any] = {}
+    for k, v in (updates or {}).items():
+        if v in (None, "", [], {}):
+            continue
+        try:
+            if k in _TYPES:
+                v = _TYPES[k](v)
+                if k in ("plot_width", "plot_depth") and not 2 < v < 300:
+                    continue
+                if k == "levels":
+                    v = max(1, min(6, v))
+            elif k == "road_direction":
+                v = str(v).upper().replace("-", "")[:2]
+                if v not in {"N", "NE", "E", "SE", "S", "SW", "W", "NW"}:
+                    continue
+            elif k in ("amenities", "styles", "remove"):
+                v = [str(x).lower().replace("_", " ") if k == "amenities" else str(x).lower() for x in v]
+            elif k == "rooms":
+                v = [r for r in v if isinstance(r, dict) and r.get("type")]
+            out[k] = v
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm: bool = True,
+                   history: list[dict[str, str]] | None = None) -> dict[str, Any]:
+    """One turn: the updated brief, what is still missing, what to ask, and the reply."""
     brief = dict(brief or {})
     rules = parse(message)
-    model = await llm_parse(message, brief) if use_llm else {}
-    # The rules win on numbers they read; the model fills what they could not.
-    # and never overwrites what the conversation already settled - a model
-    # asked about "G+1" must not quietly re-guess the plot size.
-    lists = ("rooms", "amenities", "notes", "colours", "styles")
-    model = {k: v for k, v in model.items() if k in lists or (k not in rules and not brief.get(k))}
-    if "plot_width" in model and "plot_unit" not in model:
-        model["plot_unit"] = "m"
-    merged = merge(brief, model, rules)
-    go = bool(GO_AHEAD.search(message.lower()))
+    turn = await llm_turn(message, brief, history or []) if use_llm else None
+    if turn is not None:
+        model = _clean(turn.get("updates") or {})
+        # The rules win where they read a number unambiguously (a model can
+        # slip a unit); the model carries everything else, in any language.
+        for k in ("plot_width", "plot_depth", "plot_unit", "bedrooms", "levels"):
+            if k in rules:
+                model[k] = rules[k]
+        merged = merge(brief, model)
+        if model.get("remove"):
+            merged["remove"] = sorted(set(brief.get("remove", [])) | set(model["remove"]))
+        need = missing(merged)
+        if (turn.get("go_ahead") or GO_AHEAD.search(message.lower())) and need:
+            merged = apply_defaults(merged)
+            need = []
+        questions = [q for q in (turn.get("questions") or []) if isinstance(q, dict) and q.get("text")][:2]
+        if need and not questions:
+            questions = [{"key": k, "text": QUESTIONS[k][0], "options": QUESTIONS[k][1]} for k in need[:2]]
+        if not need:
+            questions = [q for q in questions if q.get("key") == "other"][:1]
+        return {"brief": merged, "missing": need, "questions": questions, "ready": not need,
+                "reply": str(turn["reply"]).strip(), "by": "model"}
+    # No model reachable: the rules, with a plain reply.
+    merged = merge(brief, rules)
     need = missing(merged)
-    if go and need:
+    if GO_AHEAD.search(message.lower()) and need:
         merged = apply_defaults(merged)
         need = []
-    heard = _summary(merged)
     questions = [{"key": k, "text": QUESTIONS[k][0], "options": QUESTIONS[k][1]} for k in need[:2]]
+    heard = _summary(rules) if rules else ""
     if questions:
-        reply = (f"Got it - {heard}. " if heard else "Happy to design it. ") + " ".join(q["text"] for q in questions)
+        reply = (f"Noted - {heard}. " if heard else "") + " ".join(q["text"] for q in questions)
     else:
-        reply = f"Here is what I'll design: {heard}. Starting the studio now."
-    return {"brief": merged, "missing": need, "questions": questions, "ready": not need, "reply": reply,
-            "understood": {"rules": rules, "model": model}}
+        reply = "That's everything I need. Press Start designing when you're ready, or tell me anything else you'd like."
+    return {"brief": merged, "missing": need, "questions": questions, "ready": not need, "reply": reply, "by": "rules"}
 
 
 async def revise(instruction: str, brief: dict[str, Any], *, use_llm: bool = True) -> dict[str, Any]:

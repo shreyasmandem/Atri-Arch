@@ -351,7 +351,9 @@ async def design_chat(payload: dict[str, Any]) -> dict[str, Any]:
     from aip.agents.brief_agent import converse, to_request
 
     message = str(payload.get("message", ""))[:4000]
-    turn = await converse(message, payload.get("brief") or {})
+    history = payload.get("history") or []
+    turn = await converse(message, payload.get("brief") or {},
+                          history=[h for h in history if isinstance(h, dict)][-12:])
     turn["request"] = to_request(turn["brief"]) if turn["ready"] else None
     return turn
 

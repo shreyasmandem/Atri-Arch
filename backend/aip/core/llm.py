@@ -117,6 +117,10 @@ class LLMResponse:
 # ---------------------------------------------------------------------------
 
 
+#: How many keys each provider has, set by the router from the settings.
+KEYS_PER_PROVIDER: dict[str, int] = {}
+
+
 class RateLimiter:
     """Sliding-window limiter enforcing per-model RPM and RPD ceilings."""
 
@@ -135,7 +139,8 @@ class RateLimiter:
                 minute.popleft()
             while day and now - day[0] > 86_400:
                 day.popleft()
-            if len(minute) >= model.rpm or len(day) >= model.rpd:
+            keys = KEYS_PER_PROVIDER.get(model.provider, 1)
+            if len(minute) >= model.rpm * keys or len(day) >= model.rpd * keys:
                 return False
             minute.append(now)
             day.append(now)
@@ -545,7 +550,22 @@ class LLMRouter:
 
         errors: list[str] = []
         attempts = 0
-        for model in models:
+        try:
+            from aip.core.providers import PROVIDERS as _P
+            for _spec in (_P.values() if isinstance(_P, dict) else _P):
+                KEYS_PER_PROVIDER[_spec.name] = max(1, len(_spec.credentials(self.settings)))
+        except Exception:  # noqa: BLE001
+            pass
+        # A committee fans out dozens of calls at once; a free tier says "not
+        # this second", not "never". Wait and go round again before falling
+        # back to the offline narrative.
+        rounds = [m for _ in range(4) for m in (models + [None])]
+        wait = 1.5
+        for model in rounds:
+            if model is None:
+                await asyncio.sleep(wait + random.random())
+                wait *= 1.8
+                continue
             if self.dead.is_dead(model):
                 continue
             if self.breaker.is_open(model.provider):
@@ -578,7 +598,10 @@ class LLMRouter:
                 errors.append(f"{model.provider}/{model.id}: retired ({exc})")
                 continue
             except Exception as exc:  # noqa: BLE001 - failover is the point
-                self.breaker.record_failure(model.provider)
+                # A rate limit is "later", not "broken": it must not open the
+                # breaker and take the provider out for the whole committee.
+                if "429" not in str(exc) and "rate" not in str(exc).lower():
+                    self.breaker.record_failure(model.provider)
                 detail = f"{model.provider}/{model.id}: {type(exc).__name__}: {exc}"
                 errors.append(detail)
                 self.ledger.record(

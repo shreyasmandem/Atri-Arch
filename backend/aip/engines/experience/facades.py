@@ -27,8 +27,6 @@ DESIGNS: dict[str, dict[str, Any]] = {
               "styles": {"contemporary", "modern_minimal", "industrial", "mid_century_modern"}},
     "jaali": {"name": "Jaali Screen", "story": "Lattice screens filter the hard west and south sun, as a haveli would.",
               "styles": {"traditional_indian", "rajasthani_haveli", "indo_saracenic", "chettinad", "contemporary"}},
-    "garden": {"name": "Green Wall", "story": "A planted wall on the long side and planters along every parapet.",
-               "styles": {"biophilic", "tropical_modern", "japandi", "contemporary"}},
     "pitch": {"name": "Mono-pitch", "story": "A single sloping roof rises to a clerestory band that lets light deep inside.",
               "styles": {"scandinavian", "contemporary", "modern_minimal", "japandi"}},
     "twotone": {"name": "Stone Base", "story": "A stone-clad ground floor, a light plaster top and a deep cornice at each floor.",
@@ -146,7 +144,7 @@ def apply(b, plan: FloorPlan, design: str, levels: list[tuple[Any, float, Any]],
                 for j in range(rows + 1):
                     _box(b, node, "joinery", s0, base + 0.3 + j * (h - 0.6) / rows, (w, 0.04, 0.05), yaw)
                 _box(b, node, "frame", s0, base + h - 0.25, (w + 0.2, 0.08, 0.4), yaw)
-            elif design == "garden" and li == min(1, n - 1) and not street(e) and L == max(x.length for x in es if not street(x)):
+            elif False and design == "garden" and li == min(1, n - 1) and not street(e) and L == max(x.length for x in es if not street(x)):
                 w = L * 0.6
                 p = e.at(0.5, 0.1)
                 _box(b, node, "leaf", p, base + h * 0.5, (w, h * 0.85, 0.1), yaw)
@@ -168,7 +166,7 @@ def apply(b, plan: FloorPlan, design: str, levels: list[tuple[Any, float, Any]],
                 _box(b, node, "timber", e.at(0.5, 1.6), base + h - 0.2, (L + 0.2, 0.2, 0.18), yaw)
                 pts = [e.at(0, 0), e.at(1, 0), e.at(1, 1.9), e.at(0, 1.9)]
                 b.slab(node, "roof_tile", pts, base + h - 0.12, base + h - 0.02)
-            if design == "garden" and li == n - 1:
+            if False:
                 # Planters on the parapet line.
                 for i in range(max(1, int(L / 1.6))):
                     p = e.at((i + 0.5) / max(1, int(L / 1.6)), -0.35)
@@ -178,7 +176,7 @@ def apply(b, plan: FloorPlan, design: str, levels: list[tuple[Any, float, Any]],
         over["roof"] = "hip"
     elif design == "pitch":
         over["roof"] = "pitch"
-    elif design in {"fins", "frame", "twotone", "jaali", "garden"}:
+    elif design in {"fins", "frame", "twotone", "jaali"}:
         over["roof"] = "flat"
     return over
 
