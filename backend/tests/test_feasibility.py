@@ -41,6 +41,9 @@ QUICK = {"population": 24, "generations": 20, "max_runs": 2, "time_budget": 4.0}
 
 def _brief(**kw):
     amenities = kw.pop("amenities", ["pooja", "dining", "utility"])
+    # These tests cover the studio filling a generous plot, which it now does
+    # only when the client allows rooms they did not ask for.
+    kw.setdefault("auto_extras", True)
     return SimpleBriefRequest(amenities=amenities, **kw).to_brief()
 
 

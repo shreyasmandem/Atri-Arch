@@ -61,6 +61,9 @@ class SimpleBriefRequest(BaseModel):
     #: a room pinned to a floor or a quarter, resized, added, or removed.
     extra_rooms: list[RoomRequest] = Field(default_factory=list)
     remove_rooms: list[RoomType] = Field(default_factory=list)
+    #: May the studio add rooms nobody asked for (a family lounge, a theatre,
+    #: a courtyard) to fill a generous plot? Off: only what was asked is drawn.
+    auto_extras: bool = False
 
     styles: list[DesignStyle] = Field(default_factory=lambda: [DesignStyle.CONTEMPORARY])
     materials_liked: list[str] = Field(default_factory=list)
@@ -112,7 +115,7 @@ class SimpleBriefRequest(BaseModel):
             if same and x.type not in {RoomType.BALCONY, RoomType.TERRACE, RoomType.STUDY, RoomType.GYM,
                                        RoomType.HOME_THEATRE, RoomType.FAMILY, RoomType.STORE}:
                 continue
-            notes = f"opens off the {x.attach_to.value.replace('_', ' ')}" if x.attach_to else ""
+            notes = "Requested by the client." + (f" Opens off the {x.attach_to.value.replace('_', ' ')}." if x.attach_to else "")
             reqs.append(RoomRequirement(
                 type=x.type, count=x.count, preferred_area=x.area, preferred_direction=x.direction,
                 attached_bathroom=x.attached_bathroom, level=x.level, notes=notes,
@@ -164,7 +167,7 @@ class SimpleBriefRequest(BaseModel):
         else:
             requirements.append(RoomRequirement(type=RoomType.LIVING, priority=1.6))
             requirements.append(RoomRequirement(type=RoomType.KITCHEN, priority=1.5))
-            if not self.amenities or "dining" in self.amenities:
+            if "no dining" not in self.amenities:
                 requirements.append(RoomRequirement(type=RoomType.DINING, priority=1.2))
             if self.bedrooms >= 1:
                 requirements.append(
@@ -199,7 +202,7 @@ class SimpleBriefRequest(BaseModel):
                         type=RoomType.STUDY, preferred_area=9.0, priority=1.0,
                     )
                 )
-            if not self.amenities or "utility" in self.amenities:
+            if "no utility" not in self.amenities:
                 requirements.append(RoomRequirement(type=RoomType.UTILITY, priority=0.8))
             # A balcony is outdoors and a garage is a shed: neither needs a
             # window, and marking them as daylit made each one claim one of
@@ -236,6 +239,21 @@ class SimpleBriefRequest(BaseModel):
         elif self.finish_tier == "premium" and "vitrified_tiles" not in materials:
             materials.extend(["vitrified_tiles", "granite", "teak_wood"])
 
+        # Amenities the client named become rooms, marked as asked for so no
+        # stage of the design lets go of them.
+        named = {"courtyard": RoomType.COURTYARD, "verandah": RoomType.VERANDAH, "sit-out": RoomType.VERANDAH,
+                 "gym": RoomType.GYM, "home theatre": RoomType.HOME_THEATRE, "theatre": RoomType.HOME_THEATRE,
+                 "terrace": RoomType.TERRACE, "family lounge": RoomType.FAMILY, "library": RoomType.LIBRARY,
+                 "servant room": RoomType.SERVANT, "store": RoomType.STORE}
+        for am in self.amenities:
+            kind = named.get(am.lower())
+            if kind and not any(r.type is kind for r in requirements):
+                requirements.append(RoomRequirement(type=kind, priority=1.0, notes="Requested by the client.",
+                                                    needs_external_wall=kind is not RoomType.COURTYARD,
+                                                    needs_daylight=kind not in (RoomType.STORE, RoomType.COURTYARD)))
+        for r in requirements:
+            if r.type in {RoomType.STUDY, RoomType.BALCONY, RoomType.GARAGE, RoomType.PUJA} and not r.notes:
+                r.notes = "Requested by the client."
         requirements = self._apply_extras(requirements)
         must_haves = list(self.must_haves)
         if self.kitchen_type and f"kitchen:{self.kitchen_type}" not in must_haves:
@@ -245,6 +263,7 @@ class SimpleBriefRequest(BaseModel):
                 must_haves.append(am)
 
         metadata: dict[str, Any] = {
+            "auto_extras": self.auto_extras,
             "finish_tier": self.finish_tier,
             "kitchen_type": self.kitchen_type,
             "amenities": self.amenities,

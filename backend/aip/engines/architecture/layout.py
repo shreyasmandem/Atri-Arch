@@ -1817,6 +1817,11 @@ class LayoutGenerator:
             # A toilet over the kitchen, the puja or the dining table is a
             # plumbing leak waiting to happen and a Vastu fault: mark it so the
             # variant without it wins.
+            # Everything the client asked for must be in the plan.
+            have = {r.type for lv in plan.levels for r in lv.rooms}
+            for req in self.requirements:
+                if "Requested" in (req.notes or "") and req.type not in have:
+                    plan.metadata["guardrail"].append(f"the {req.type.label.lower()} the client asked for is missing")
             from shapely.geometry import Polygon as _P
             for lo, hi in zip(plan.levels, plan.levels[1:]):
                 below = [(r, _P([(q.x, q.y) for q in r.polygon])) for r in lo.rooms
@@ -2685,7 +2690,10 @@ class LayoutGenerator:
         factor, grown, filled = solve()
         grown = rebalance(grown)
         added: list[str] = []
-        pending = list(EXTRA_ROOMS)
+        # Rooms the client did not ask for are added only if they said the
+        # studio may (auto_extras); otherwise the rest of the plot is garden.
+        auto = bool((self.brief.metadata or {}).get("auto_extras", False))
+        pending = list(EXTRA_ROOMS) if auto else []
         # Elders go first to a bedroom on the ground floor: stairs are the thing
         # an older household avoids, and a guest suite is the room that serves.
         if any(o.role == "elder" and o.count for o in self.brief.occupants):
@@ -2726,7 +2734,7 @@ class LayoutGenerator:
         # Both are ground-floor rooms, so it is the ground floor's shortfall they
         # make up; the floors above fill with terrace.
         gap = goal_fill / 1.08 - grown.target[0]
-        if gap > 8.0:
+        if gap > 8.0 and auto:
             pin = 0 if levels > 1 else None
             plate = goal_fill
             for kind, share, label in ((RoomType.COURTYARD, 0.6, "courtyard"), (RoomType.VERANDAH, 0.4, "verandah")):

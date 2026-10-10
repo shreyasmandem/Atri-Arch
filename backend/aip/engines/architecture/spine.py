@@ -204,6 +204,11 @@ class SpinePlanner:
         W, D = (self.D, self.W) if v.transverse else (self.W, self.D)
         self.outer = {}
         levels = [list(l) for l in levels]
+        self.verandah = None
+        # Courtyards, verandahs and car porches are ground-floor rooms.
+        for l in levels[1:]:
+            for r in [r for r in l if r.type in {T.COURTYARD, T.VERANDAH, T.GARAGE}]:
+                l.remove(r); levels[0].append(r)
         # A bedroom floor needs its bathrooms on it: pull a spare one from a floor that has more.
         def count(l, ts): return sum(1 for r in l if r.type in ts)
         for li, l in enumerate(levels):
@@ -244,7 +249,8 @@ class SpinePlanner:
                 if li == 0 and it.type is T.VERANDAH:
                     if v.transverse:
                         pub.insert(1 if pub and pub[0].type is T.FOYER else 0, Item(T.VERANDAH, min(it.area, 9.0), it.req))
-                    # (with the hall at the front, a sit-out would block the foyer: left to the porch)
+                    else:
+                        self.verandah = Item(T.VERANDAH, it.area, it.req)   # a band across the front
                 elif li == 0 and it.type is T.GARAGE:
                     priv.insert(0, Item(T.GARAGE, it.area, it.req))
                 elif li == 0 and it.type is T.COURTYARD:
@@ -303,13 +309,14 @@ class SpinePlanner:
             # Upstairs, the side over the kitchen puts each bath in front of its
             # bedroom (toward the living room), not over the kitchen at the back.
             vv = v if li == 0 else replace(v, bath_behind=False)
-            fitted = self._fit_level(pub, priv, fronts, pl[1] - pl[0], ql[1] - ql[0], D, stair_len + head, vv)
+            ver = 1.8 if li == 0 and self.verandah is not None else 0.0
+            fitted = self._fit_level(pub, priv, fronts, pl[1] - pl[0], ql[1] - ql[0], D - ver, stair_len + head, vv)
             if fitted is None:
                 self.why = 3
                 return None
             prow, qrow, fronts = fitted
             fdepth = sum(max(1.5, min(1.8 if i.type is T.BALCONY else 3.0, i.area / (ql[1] - ql[0]))) for i in fronts)
-            need_d = max(need_d, sum(r.depth for r in prow), sum(r.depth for r in qrow) + stair_len + fdepth + head)
+            need_d = max(need_d, sum(r.depth for r in prow) + ver, sum(r.depth for r in qrow) + stair_len + fdepth + head + ver)
             cap_d = max(cap_d, sum(r.cap for r in prow), sum(r.cap for r in qrow) + stair_len + fdepth + head)
             plans.append((prow, qrow, fronts))
         if need_d > D + 1e-6:
@@ -325,7 +332,7 @@ class SpinePlanner:
             # The stair on the outer side; any strip between it and the hall is its landing lobby.
             su0 = ql[1] - sw if v.public_left else ql[0]
             free = Dh - STAIR_L
-            head0 = FOYER if not v.transverse and not v.single else 0.0
+            head0 = (FOYER if not v.transverse and not v.single else 0.0) + (1.8 if self.verandah is not None else 0.0)
             free = Dh - stair_len - head0
             sv0 = v0 + free * v.stair_at
             # Never leave a sliver beside the stair that no room can use.
@@ -349,25 +356,30 @@ class SpinePlanner:
                                              "brief_area": getattr(req, "asked_area", None) or getattr(req, "target_area", None) or area,
                                              "planner": "spine"}))
             s0, s1 = spine
+            Dl = D
+            if li == 0 and self.verandah is not None:
+                # A covered verandah across the whole front, the house behind it.
+                Dl = D - 1.8
+                add(T.VERANDAH, self.house[0], Dl, self.house[1], D, self.verandah.req, name="Verandah")
             foyer_cut = 0.0
             if li == 0 and not v.transverse and not v.single:
                 # The entrance hall: across the head of the hall and the front of
                 # the private stack, so it opens straight onto the living room.
                 fu0, fu1 = min(s0, ql[0]), max(s1, ql[1])
-                add(T.FOYER, fu0, D - FOYER, fu1, D, name="Foyer")
+                add(T.FOYER, fu0, Dl - FOYER, fu1, Dl, name="Foyer")
                 foyer_cut = FOYER
-                add(T.CORRIDOR, s0, v0, s1, D - FOYER, name="Corridor")
+                add(T.CORRIDOR, s0, v0, s1, Dl - FOYER, name="Corridor")
             else:
-                add(T.CORRIDOR, s0, v0, s1, D, name="Corridor")
+                add(T.CORRIDOR, s0, v0, s1, Dl, name="Corridor")
             if stair:
                 add(T.STAIRCASE, *stair, name="Staircase")
             self.level = li
             self.v0 = v0
             self.rooms_ref = rooms
-            if not self._fill(add, pl, prow, v0, D, None, []):
+            if not self._fill(add, pl, prow, v0, Dl, None, []):
                 self.why = 5
                 return None
-            if not self._fill(add, ql, qrow, v0, D - foyer_cut, stair, fronts):
+            if not self._fill(add, ql, qrow, v0, Dl - foyer_cut, stair, fronts):
                 self.why = 6
                 return None
             out_levels.append(rooms)
@@ -425,7 +437,9 @@ class SpinePlanner:
                     continue
                 # Let go of the extras, least needed first.
                 for t in optional:
-                    pool = [x for x in (fronts if t in {T.TERRACE, T.BALCONY} else (priv if dq > dp else pub)) if x.type is t]
+                    # Never what the client asked for - only what the programme added.
+                    pool = [x for x in (fronts if t in {T.TERRACE, T.BALCONY} else (priv if dq > dp else pub))
+                            if x.type is t and "Requested" not in (getattr(x.req, "notes", "") or "")]
                     if pool:
                         (fronts if t in {T.TERRACE, T.BALCONY} else (priv if dq > dp else pub)).remove(pool[-1])
                         moved = True
@@ -473,8 +487,11 @@ class SpinePlanner:
                 add(T.STORE, inner[0], sv0, inner[1], sv1, name="Store")
             spans = [(sv1, D), (v0, sv0)]
         top = D
+        front_floor = max(lo for lo, hi in spans if hi >= D - 1e-6)   # the stair, if it sits at the front
         for it in fronts:
             d = max(1.5, min(1.8 if it.type is T.BALCONY else 3.0, it.area / width))
+            if top - d < front_floor - 1e-6:
+                continue            # no room in front of the stair; the floor's leftover becomes terrace
             add(it.type, u0, top - d, u1, top, it.req)
             top -= d
         bins = [[lo, min(hi, top)] for lo, hi in spans if min(hi, top) - lo > 0.05]
