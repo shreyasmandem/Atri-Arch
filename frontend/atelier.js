@@ -146,6 +146,11 @@ class Atelier {
           </div>
           <p class="at-note" id="at-note" hidden></p>
           <div class="at-fail" id="at-fail" hidden role="alert"></div>
+          <button type="button" class="at-ff" id="at-ff" hidden aria-label="Fast-forward to the review" title="Fast-forward">
+            <span class="at-ff__ring"></span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path class="at-ff__a" d="M4 6l7 6-7 6z"/><path class="at-ff__b" d="M12 6l7 6-7 6z"/></svg>
+            <span class="at-ff__k">Fast-forward</span>
+          </button>
         </div>
         <aside class="at-side" aria-label="Scores">
           <div class="at-side__h">
@@ -199,6 +204,7 @@ class Atelier {
     this.speech = [];
     this.speaking = false;
     this.finished = false;
+    this.ff = false;
     this.settled = false;
     this.failed = false;
     this.focused = null;
@@ -391,7 +397,7 @@ class Atelier {
     this.focused = id;
     this.root.querySelectorAll(".pill").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.plan === id)));
     this._paintScores(id);
-    this.stage3d?.draw(id, { fast: this.finished });
+    this.stage3d?.draw(id, { fast: this.ff });
   }
 
   _pill(id, state, value) {
@@ -432,8 +438,9 @@ class Atelier {
       v.append(who, document.createTextNode(this._tidy(r.line)));
       if (!reduced()) v.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 240 });
       this.stage3d?.critique({ critic: r.critic, short: shortName(p), pig: p.pig, line: this._tidy(r.line), score: r.score });
-      if (this.finished) break;
-      await sleep(this.speech.length > 14 ? 260 : this.speech.length > 5 ? 520 : 950);
+      // While the engine works, keep up with it; once the plans are in, slow
+      // to a pace a person can follow - unless they fast-forward.
+      await sleep(this.ff ? 90 : this.finished ? 1700 : this.speech.length > 14 ? 260 : this.speech.length > 5 ? 520 : 950);
     }
     this.root.querySelectorAll(".sc.is-speaking").forEach((x) => x.classList.remove("is-speaking"));
     this.speaking = false;
@@ -477,7 +484,6 @@ class Atelier {
     if (this.failed) return;
     const run = this.run;
     this.finished = true;
-    this.speech = [];
     const cand = d.selected_candidate_id || d.consensus?.winner_id;
     if (cand && this.letter[cand] && this.winner !== cand) this._chosen(cand);
     for (const row of d.consensus?.ranking || []) this._pill(row.candidate_id, null, row.score);
@@ -495,6 +501,28 @@ class Atelier {
       ? `${Math.round(agree * 100)}% of the committee agreed.`
       : "The committee has reported.");
     this.root.querySelector(".at-main").dataset.done = "1";
+
+    // Showtime: the plans are in, but the team finishes its work and the
+    // committee finishes speaking at a readable pace. Fast-forward skips it.
+    if (!reduced() && this.stage3d) {
+      this.stage3d.calm();
+      const ff = this.$("at-ff");
+      ff.hidden = false;
+      this.ff = false;
+      ff.onclick = () => {
+        this.ff = true;
+        ff.classList.add("is-going");
+        this.stage3d.hurry();
+      };
+      if (this.speech.length && !this.speaking) this._speak();
+      const until = performance.now() + 28000;
+      while (run === this.run && !this.ff && performance.now() < until
+             && (this.speech.length || this.speaking || !this.stage3d.idle())) await sleep(200);
+      ff.classList.add("is-going");
+      setTimeout(() => { ff.hidden = true; ff.classList.remove("is-going"); }, 500);
+      if (run !== this.run) return;
+    }
+    this.speech = [];
 
     if (this.stage3d) await Promise.race([this.stage3d.settle(), sleep(8000)]);
     if (run !== this.run) return;

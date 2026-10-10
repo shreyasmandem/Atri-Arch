@@ -687,6 +687,7 @@ export class Stage3D {
     this.tweens = [];
     this.speed = 1;
     this.deadline = 0;
+    this.boost = 1;
     this.settling = false;
     this.focusLevel = null;
     this.focusRooms = [];
@@ -786,6 +787,7 @@ export class Stage3D {
       const secs = Math.max(1.5, ((this.deadline - performance.now()) / 1000) * 0.85);
       want = clamp(this._left() / (PACE * secs), 1, 9);
     }
+    want *= this.boost || 1;
     this.speed += (want - this.speed) * 0.35;
   }
 
@@ -1520,7 +1522,7 @@ export class Stage3D {
     if (live.length >= 3) this._dismiss(live[0]);
     const p = this.pending.shift();
     // Unhurried, so a reader can follow who said what to whom.
-    this.nextCritic = now + 3400;
+    this.nextCritic = now + 3400 / (this.boost || 1);
     const { w, d, n } = this.plot;
     const lv = p.room ? p.room.li : Math.min(n - 1, this.focusLevel ?? 0);
     const enter = this.P(lv, 1 + Math.random() * (w - 2), d + 3.5 + Math.random() * 1.5);
@@ -1621,6 +1623,19 @@ export class Stage3D {
     });
   }
 
+  // After the result: no more racing the engine's clock - a human pace.
+  calm() { this.deadline = 0; this.boost = 1; }
+
+  // Fast-forward: everything at several times speed until it is done.
+  hurry() { this.boost = 4; this.pending = this.pending.slice(-2); }
+
+  // Nothing left to draw, fit out or say.
+  idle() {
+    const s = this.current;
+    const busy = this.team.some((m) => m.task || m.tasks.length > 0 && m.tasks.some((t) => t.type !== "face"));
+    return !!s && s.drawn && (!s.fitting || (s.unfitted ?? 0) <= 0) && !this.pending.length && !this.critics.length && !busy;
+  }
+
   // The result is in: the team fast-forwards through what is left at a pace
   // you can still follow, every line and wall still drawn and built, the specialists
   // leave, the walls go up and the camera settles to plan view. Resolves
@@ -1696,7 +1711,7 @@ export class Stage3D {
       this._spawnCritic(now);
       for (const m of this.team) this._member_tick(m, step, dt, now);
       // The specialists keep a human pace even when the drafting fast-forwards.
-      const calm = dt * Math.min(this.speed, 1.2);
+      const calm = dt * Math.min(this.speed, 1.2) * (this.boost || 1);
       for (const c of this.critics.slice()) this._member_tick(c, calm, dt, now);
     }
 
