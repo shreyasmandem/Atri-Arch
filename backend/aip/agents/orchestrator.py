@@ -173,8 +173,19 @@ class DesignPipeline:
         upload exactly as it would its own work, the negotiation repairs
         what it legally can, and the rationale explains what it found.
         """
+        from aip.core.telemetry import flush_telemetry, workflow_span
+
         started = time.perf_counter()
-        with trace_context() as trace_id:
+        with trace_context() as trace_id, workflow_span(
+            "atriarch.design_pipeline",
+            session_id=trace_id,
+            input_value=brief.summary_text(),
+            attributes={
+                "aip.brief.kind": brief.kind.value,
+                "aip.brief.rooms": brief.total_rooms,
+                "aip.brief.plot_area_sqm": round(brief.site.plot_area, 1),
+            },
+        ) as wf_span:
             result = DesignResult(trace_id=trace_id, brief_summary=brief.summary_text())
             ctx = AgentContext(
                 brief=brief,
@@ -283,13 +294,24 @@ class DesignPipeline:
                     f"unaffected and remain valid."
                 )
 
+            if wf_span is not None:
+                try:
+                    wf_span.set_attribute("aip.winner_id", consensus.winner_id)
+                    wf_span.set_attribute("aip.winner_score", round(consensus.winner_score, 4))
+                    wf_span.set_attribute("aip.agreement", round(consensus.overall_agreement, 4))
+                    wf_span.set_attribute("aip.negotiation_outcome", result.negotiation_outcome)
+                    wf_span.set_attribute("output.value", result.explanation[:2000])
+                except Exception:  # noqa: BLE001
+                    pass
+
             log_event(
                 logger, "pipeline.complete",
                 plans=len(plans), winner=consensus.winner_id,
                 score=consensus.winner_score, agreement=consensus.overall_agreement,
                 ms=round(result.duration_ms), cost_usd=result.total_cost_usd,
             )
-            return result
+        flush_telemetry()
+        return result
 
     async def stream(
         self, brief: ClientBrief, *, plans: list[FloorPlan] | None = None

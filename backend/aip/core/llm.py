@@ -555,9 +555,22 @@ class LLMRouter:
                 continue
             attempts += 1
             try:
-                response = await self._call(
-                    model, messages, temperature, max_tokens, json_schema
-                )
+                from aip.core.telemetry import llm_call_span
+
+                with llm_call_span(
+                    provider=model.provider,
+                    model=model.id,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ) as llm_rec:
+                    response = await self._call(
+                        model, messages, temperature, max_tokens, json_schema
+                    )
+                    llm_rec["text"] = response.text
+                    llm_rec["prompt_tokens"] = response.prompt_tokens
+                    llm_rec["completion_tokens"] = response.completion_tokens
+                    llm_rec["latency_ms"] = response.latency_ms
             except ModelUnavailable as exc:
                 # The id is gone, not the provider. Retire the model and keep
                 # every other model on this provider in play.
@@ -601,7 +614,23 @@ class LLMRouter:
             tried=len(models),
             errors=errors[:4],
         )
-        text = self.offline.generate(messages, json_schema)
+        from aip.core.telemetry import llm_call_span
+
+        with llm_call_span(
+            provider="offline",
+            model="offline-deterministic",
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        ) as llm_rec:
+            text = self.offline.generate(messages, json_schema)
+            prompt_est = estimate_tokens("\n".join(m.content for m in messages))
+            comp_est = estimate_tokens(text)
+            llm_rec["text"] = text
+            llm_rec["prompt_tokens"] = prompt_est
+            llm_rec["completion_tokens"] = comp_est
+            llm_rec["latency_ms"] = 0.5
+            llm_rec["degraded"] = True
         response = LLMResponse(
             text=text,
             model="offline-deterministic",

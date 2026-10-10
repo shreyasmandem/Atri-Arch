@@ -32,6 +32,7 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "PyYAML>=6.0",
     "python-dateutil>=2.9",
+    "neatlogs>=1.4",
 ]
 
 [project.optional-dependencies]

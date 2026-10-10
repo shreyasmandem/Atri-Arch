@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     cost_currency_default: str = "INR"
     cost_monte_carlo_runs: int = 4000
 
+    # Neatlogs observability.
+    neatlogs_api_key: str = ""
+    neatlogs_project_id: str = "467f83ee-e953-4b72-aa4a-2831318be004"
+    neatlogs_endpoint: str = "https://ingest.neatlogs.com"
+    neatlogs_enabled: bool = True
+
     @field_validator("data_dir", "artifact_dir", "cache_dir", mode="after")
     @classmethod
     def _ensure_dir(cls, value: Path) -> Path:
@@ -201,6 +207,8 @@ def hermetic_settings(**overrides: Any) -> Settings:
         "cerebras_api_key": "", "mistral_api_key": "", "together_api_key": "",
         "huggingface_api_key": "", "github_token": "", "nvidia_api_key": "",
         "ollama_enabled": False,
+        "neatlogs_api_key": "",
+        "neatlogs_enabled": False,
         "database_url": "sqlite+aiosqlite:///:memory:",
     }
     base.update(overrides)

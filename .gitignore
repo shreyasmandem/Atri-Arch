@@ -13,3 +13,5 @@ backend/var/
 .DS_Store
 _t_*.py
 docs/samples/gallery.html
+spans_raw_optimized.log
+

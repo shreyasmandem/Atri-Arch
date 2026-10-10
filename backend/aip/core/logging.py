@@ -53,41 +53,49 @@ def trace_context(trace_id: str | None = None) -> Iterator[str]:
 @contextmanager
 def span(name: str, **fields: Any) -> Iterator[dict[str, Any]]:
     """Time a named unit of work and emit a structured completion record."""
+    from aip.core.telemetry import chain_span
+
     stack = _span_stack.get()
     token = _span_stack.set((*stack, name))
     log = get_logger("aip.span")
     started = time.perf_counter()
     payload: dict[str, Any] = dict(fields)
-    try:
-        yield payload
-    except Exception as exc:  # pragma: no cover - re-raised immediately
-        elapsed = (time.perf_counter() - started) * 1000
-        log.error(
-            "span.failed",
-            extra={
-                "extra_fields": {
-                    "span": ".".join((*stack, name)),
-                    "duration_ms": round(elapsed, 2),
-                    "error": f"{type(exc).__name__}: {exc}",
-                    **payload,
-                }
-            },
-        )
-        raise
-    else:
-        elapsed = (time.perf_counter() - started) * 1000
-        log.info(
-            "span.completed",
-            extra={
-                "extra_fields": {
-                    "span": ".".join((*stack, name)),
-                    "duration_ms": round(elapsed, 2),
-                    **payload,
-                }
-            },
-        )
-    finally:
-        _span_stack.reset(token)
+    with chain_span(".".join((*stack, name)), **payload) as nl_span:
+        try:
+            yield payload
+        except Exception as exc:  # pragma: no cover - re-raised immediately
+            elapsed = (time.perf_counter() - started) * 1000
+            log.error(
+                "span.failed",
+                extra={
+                    "extra_fields": {
+                        "span": ".".join((*stack, name)),
+                        "duration_ms": round(elapsed, 2),
+                        "error": f"{type(exc).__name__}: {exc}",
+                        **payload,
+                    }
+                },
+            )
+            raise
+        else:
+            elapsed = (time.perf_counter() - started) * 1000
+            if nl_span is not None:
+                try:
+                    nl_span.set_attribute("aip.duration_ms", round(elapsed, 2))
+                except Exception:  # noqa: BLE001
+                    pass
+            log.info(
+                "span.completed",
+                extra={
+                    "extra_fields": {
+                        "span": ".".join((*stack, name)),
+                        "duration_ms": round(elapsed, 2),
+                        **payload,
+                    }
+                },
+            )
+        finally:
+            _span_stack.reset(token)
 
 
 class _JsonFormatter(logging.Formatter):
