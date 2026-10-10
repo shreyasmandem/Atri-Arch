@@ -88,6 +88,7 @@ export class Viewer3D {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.orthoKind) this.setOrtho(this.orthoKind, { cut: this.cut });
   }
 
   async load(url, { keepView = false } = {}) {
@@ -297,18 +298,130 @@ export class Viewer3D {
     for (const p of this.pins) {
       p.obj.getWorldPosition(v);
       v.y += p.dy;
-      v.project(this.camera);
+      v.project(this.orthoKind ? this.ortho : this.camera);
       const hidden = v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1;
       p.el.style.opacity = hidden ? "0" : "1";
       p.el.style.transform = `translate(-50%, -50%) translate(${(v.x * 0.5 + 0.5) * w}px, ${(-v.y * 0.5 + 0.5) * h}px)`;
     }
   }
 
+  // Drawings from the model itself: an elevation is the house seen square-on
+  // from one side, a section is the house cut through and seen from the cut,
+  // the roof and site plans are seen from directly above. All orthographic,
+  // all lit by a sun you can move, so the shadows read the depth of every
+  // projection - the way a rendered presentation elevation does.
+  setOrtho(kind, { cut = 0.5 } = {}) {
+    if (!this.model) return;
+    this.cut = cut;
+    this.orthoKind = kind;
+    this.controls.autoRotate = false;
+    const box = new THREE.Box3().setFromObject(this.model);
+    const size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+    const W = this.host.clientWidth || 1, H = this.host.clientHeight || 1, aspect = W / H;
+    const top = kind === "roof" || kind === "site";
+    // What the frame must hold: width x height of the projection.
+    const span = top ? [size.x, size.z] : kind === "E" || kind === "W" || kind === "sectionB" ? [size.z, size.y] : [size.x, size.y];
+    const fit = kind === "site" ? 1.15 : 1.25;
+    let hw = (span[0] / 2) * fit, hh = (span[1] / 2) * fit;
+    if (hw / hh > aspect) hh = hw / aspect; else hw = hh * aspect;
+    const cam = (this.ortho ||= new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000));
+    cam.left = -hw; cam.right = hw; cam.top = hh; cam.bottom = -hh;
+    const far = Math.max(size.x, size.y, size.z) * 4;
+    cam.up.set(0, 1, 0);
+    const look = mid.clone();
+    if (top) { cam.position.set(mid.x, mid.y + far, mid.z + 0.001); cam.up.set(0, 0, -1); look.copy(mid); }
+    else if (kind === "S" || kind === "sectionA") cam.position.set(mid.x, mid.y, mid.z + far);
+    else if (kind === "N") cam.position.set(mid.x, mid.y, mid.z - far);
+    else if (kind === "E" || kind === "sectionB") cam.position.set(mid.x + far, mid.y, mid.z);
+    else cam.position.set(mid.x - far, mid.y, mid.z);
+    cam.far = far * 3;
+    cam.lookAt(look);
+    cam.updateProjectionMatrix();
+    this.controls.object = cam;
+    this.controls.target.copy(look);
+    this.controls.enableRotate = false;
+    this.controls.screenSpacePanning = true;
+    this.controls.update();
+    // A section: everything nearer than the cut is clipped away.
+    this.renderer.localClippingEnabled = true;
+    const plane = kind === "sectionA" ? new THREE.Plane(new THREE.Vector3(0, 0, -1), box.min.z + size.z * cut)
+      : kind === "sectionB" ? new THREE.Plane(new THREE.Vector3(-1, 0, 0), box.min.x + size.x * cut) : null;
+    this.renderer.clippingPlanes = plane ? [plane] : [];
+    // Roof plan: the whole house. Site plan: the same, wider. Elevations and
+    // sections show every floor.
+    this.model.traverse((o) => { if (/^level_\d+$/.test(o.name) || o.name === "roof") o.visible = true; });
+    this.ground.visible = kind === "site";
+    // The compound wall and planting would hide the ground floor in an
+    // elevation; drawings show the building alone, the site plan shows all.
+    const site = this.model.getObjectByName("site");
+    if (site) site.visible = kind === "site" || kind === "roof";
+    this._datums(kind, box);
+    this.setSun(this.sunHour ?? 15);
+  }
+
+  // Level datums down the side of an elevation or section: FFL heights.
+  _datums(kind, box) {
+    (this.datums || []).forEach((d) => d.el.remove());
+    this.datums = [];
+    if (kind === "roof" || kind === "site") return;
+    const levels = [];
+    this.model.traverse((o) => {
+      const m = /^level_(\d+)$/.exec(o.name);
+      if (m) { const b = new THREE.Box3().setFromObject(o); if (!b.isEmpty()) levels.push([+m[1], b.min.y]); }
+    });
+    levels.sort((a, b) => a[0] - b[0]);
+    const roof = this.model.getObjectByName("roof");
+    if (roof) { const b = new THREE.Box3().setFromObject(roof); if (!b.isEmpty()) levels.push(["Top", b.max.y]); }
+    const ground = box.min.y + 0.12;
+    for (const [i, yv] of levels) {
+      const el = document.createElement("div");
+      el.className = "v3-datum";
+      el.innerHTML = `<b>${i === "Top" ? "TOP" : i === 0 ? "GROUND FFL" : `LEVEL ${i} FFL`}</b><span>+${(yv - ground).toFixed(2)} m</span>`;
+      this.host.append(el);
+      this.datums.push({ el, y: yv });
+    }
+  }
+
+  // The sun's position for an hour of a summer day, as an arc east to west.
+  setSun(hour) {
+    this.sunHour = hour;
+    const t = (hour - 6) / 12, a = Math.PI * Math.min(1, Math.max(0, t));
+    const box = new THREE.Box3().setFromObject(this.model);
+    const span = box.getSize(new THREE.Vector3()).length();
+    this.sun.position.set(Math.cos(a) * span * 1.2, Math.sin(a) * span * 1.1 + span * 0.15, span * 0.55);
+    this.sun.intensity = 0.4 + 1.9 * Math.sin(a);
+    const low = Math.sin(a) < 0.35;
+    this.sun.color.setHex(low ? 0xffc690 : 0xfff1dc);
+  }
+
+  exitOrtho() {
+    this.orthoKind = null;
+    this.renderer.clippingPlanes = [];
+    this.controls.object = this.camera;
+    this.controls.enableRotate = true;
+    (this.datums || []).forEach((d) => d.el.remove());
+    this.datums = [];
+    if (this.ground) this.ground.visible = true;
+    const site = this.model?.getObjectByName("site");
+    if (site) site.visible = true;
+  }
+
+  _datumTick() {
+    if (!this.datums?.length || !this.ortho) return;
+    const h = this.host.clientHeight;
+    const v = new THREE.Vector3();
+    for (const d of this.datums) {
+      v.set(this.controls.target.x, d.y, this.controls.target.z).project(this.ortho);
+      d.el.style.transform = `translate(0, -50%) translate(16px, ${(-v.y * 0.5 + 0.5) * h}px)`;
+    }
+  }
+
   _tick(now) {
     this.raf = requestAnimationFrame(this._tick);
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.orthoKind ? this.ortho : this.camera);
     this._pinsTick(now || performance.now());
+    this._datumTick();
   }
 
   dispose() {

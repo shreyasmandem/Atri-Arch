@@ -1085,6 +1085,7 @@ function showView(v) {
   if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
   if (v !== "model" && S.viewer) { S.viewer.dispose(); S.viewer = null; window.speechSynthesis?.cancel(); }
   if (v !== "air" && S.air) { S.air.dispose(); S.air = null; }
+  if (v !== "drawings" && S.sheetViewer) { S.sheetViewer.dispose(); S.sheetViewer = null; S.sheetViewerPlan = null; }
   S.view = v;
   const g = groupOf(v);
   (S.lastIn ||= {})[g] = v;
@@ -1197,12 +1198,15 @@ function initPlate() {
     const r = plate.getBoundingClientRect();
     return [e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2];
   };
+  // The 3D sheets handle their own pan and zoom.
+  const own = (e) => e.target.closest?.(".plate3d, .plate3d__tools");
   plate.addEventListener("wheel", (e) => {
+    if (own(e)) return;
     e.preventDefault();
     zoomPlate(plateView.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), ...centre(e));
   }, { passive: false });
   plate.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || own(e)) return;
     plateView.drag = { x: e.clientX - plateView.x, y: e.clientY - plateView.y };
     plate.setPointerCapture(e.pointerId);
     plate.classList.add("is-panning");
@@ -1225,9 +1229,62 @@ function initPlate() {
   $("zoom-val")?.addEventListener("click", () => resetPlate());
 }
 
+// Elevations, sections, roof and site are drawn from the 3D model in
+// orthographic projection, lit by a sun the reader can move.
+const ORTHO = { elevation_N: "N", elevation_E: "E", elevation_S: "S", elevation_W: "W",
+  section_aa: "sectionA", section_bb: "sectionB", roof_plan: "roof", site_plan: "site" };
+
+async function loadOrthoSheet(key) {
+  const plate = $("plate");
+  const kind = ORTHO[key];
+  const id = S.activeId;
+  let host = plate.querySelector(".plate3d");
+  if (!host || S.sheetViewerPlan !== id) {
+    S.sheetViewer?.dispose(); S.sheetViewer = null;
+    plate.innerHTML = "";
+    host = el("div", "plate3d");
+    const tools = el("div", "plate3d__tools");
+    const sun = el("label", "plate3d__ctl");
+    sun.append(el("span", null, "Sun"));
+    const sunIn = el("input"); sunIn.type = "range"; sunIn.min = "6.5"; sunIn.max = "18.5"; sunIn.step = "0.1"; sunIn.value = "15";
+    const sunOut = el("b", null, "15:00");
+    sun.append(sunIn, sunOut);
+    const cut = el("label", "plate3d__ctl plate3d__ctl--cut");
+    cut.append(el("span", null, "Cut"));
+    const cutIn = el("input"); cutIn.type = "range"; cutIn.min = "0.05"; cutIn.max = "0.95"; cutIn.step = "0.01"; cutIn.value = "0.5";
+    cut.append(cutIn);
+    tools.append(sun, cut);
+    plate.append(host, tools);
+    const { Viewer3D } = await import("./viewer3d.js");
+    if (S.sheet !== key) return;
+    S.sheetViewer = new Viewer3D(host);
+    S.sheetViewerPlan = id;
+    host.append(el("p", "model-cap", "Building the model…"));
+    const pal = S.palette || {};
+    const q = new URLSearchParams(); if (pal.id) q.set("palette", pal.id); if (pal.text) q.set("colours", pal.text);
+    await S.sheetViewer.load(`${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`);
+    host.querySelector(".model-cap")?.remove();
+    sunIn.addEventListener("input", () => {
+      const h = +sunIn.value; sunOut.textContent = `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
+      S.sheetViewer?.setSun(h);
+    });
+    cutIn.addEventListener("input", () => S.sheetViewer?.setOrtho(S.sheetViewer.orthoKind, { cut: +cutIn.value }));
+  }
+  if (S.sheet !== key || !S.sheetViewer) return;
+  plate.querySelector(".plate3d__ctl--cut").hidden = !kind.startsWith("section");
+  S.sheetViewer.setOrtho(kind, { cut: +(plate.querySelector(".plate3d__ctl--cut input")?.value || 0.5) });
+  const [set, items] = sheetSets().find(([, it]) => it.some(([k]) => k === key)) || ["", []];
+  const label = items.find(([k]) => k === key)?.[1] || "";
+  $("plate-caption").textContent = `${set === label ? set : `${set} · ${label}`}  ·  drag to pan, scroll to zoom${kind.startsWith("section") ? ", slide the cut" : ""}, move the sun`;
+}
+
 async function loadSheet(key) {
   S.sheet = key;
   buildSheetTabs();
+  if (ORTHO[key]) return loadOrthoSheet(key).catch((err) => {
+    $("plate").innerHTML = ""; $("plate").append(el("p", "empty-note", `That view could not be built (${err.message}).`));
+  });
+  S.sheetViewer?.dispose(); S.sheetViewer = null; S.sheetViewerPlan = null;
   const plate = $("plate");
   const ghost = plate.querySelector(".plate__ghost");
   if (!ghost) {
