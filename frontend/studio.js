@@ -10,10 +10,18 @@
 const API = (() => {
   const o = new URLSearchParams(location.search).get("api");
   if (o) return o.replace(/\/$/, "");
+  if (location.port === "8080" || location.port === "3000" || location.port === "5500") {
+    return `http://${location.hostname || "127.0.0.1"}:8000/api/v1`;
+  }
   return `${location.origin}/api/v1`;
 })();
 
 const $ = (id) => document.getElementById(id);
+// Write text to an element that a redesign may have removed. The boot sequence
+// runs inside one try/catch whose failure message is "cannot reach the engine",
+// so a null-reference on a retired element is reported to the user as a dead
+// backend - which is what a removed cost ledger did.
+const setText = (id, value) => { const n = $(id); if (n) n.textContent = value; };
 const el = (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x != null) n.textContent = x; return n; };
 const frag = () => document.createDocumentFragment();
 
@@ -47,7 +55,11 @@ const S = {
   committee: [], phase: "compose", view: "drawings",
   planIds: [], activeId: null, winnerId: null,
   consensus: null, explanation: "", recommendations: [],
+  negotiation: null, negotiationOutcome: "", exportUrls: {},
+  candidateId: null,   // the scheme the committee voted for, before negotiation changed it
   projectId: null, sessionId: null, briefSent: null,
+  imported: null,     // { file, source, rooms_read, rooms_kept, unrecognised, warnings, scale_note } for an uploaded plan
+  mode: "brief",      // "brief" | "upload"
   plans: {},          // id -> { plan, vastu, cost, interior, analysis, drawing }
   sheet: "plan_level_0",
 };
@@ -68,6 +80,7 @@ function phase(p) { S.phase = p; document.body.dataset.phase = p; }
 /* ═══ MANDALA ════════════════════════════════════════════════════════ */
 
 function strike(svg) {
+  if (!svg) return;
   const N = 9, U = 900 / N, out = [];
   for (let r = 0; r < N; r++)
     for (let c = 0; c < N; c++)
@@ -131,24 +144,538 @@ function lightPadas(svg, plan) {
   return { occupied, sectors };
 }
 
-/* ═══ BOOT ═══════════════════════════════════════════════════════════ */
+/* ═══ COSMIC STAR-FIELD RENDERER ═════════════════════════════════════ */
+
+function initStarField() {
+  if (window.self !== window.top) return { spread: () => {} };
+  const canvas = document.getElementById("space-stars");
+  if (!canvas) return { spread: () => {} };
+  const ctx = canvas.getContext("2d");
+
+  const INTRO_STAR_COUNT = 0; // Pure black void during intro; only the logo is visible
+  const BURST_STAR_COUNT = 240; // All stars are born directly when the logo splits
+  const stars = [];
+  let state = "forming"; // "forming" | "splitting" | "ambient"
+  let spreadStart = 0;
+  let birthTime = performance.now();
+  let cx = window.innerWidth / 2;
+  let cy = window.innerHeight / 2;
+  let dpr = 1;
+  let mouse = { x: -1000, y: -1000, active: false };
+
+  function updateCenter() {
+    const stage = document.querySelector(".intro-brand-stage");
+    if (stage && state === "forming") {
+      const rect = stage.getBoundingClientRect();
+      cx = rect.left + rect.width / 2;
+      cy = rect.top + rect.height / 2;
+    } else {
+      cx = window.innerWidth / 2;
+      cy = window.innerHeight / 2;
+    }
+  }
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width  = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width  = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    updateCenter();
+  }
+
+  // Celestial palette: Gold, Diamond White, Sapphire
+  const COLORS = [
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
+    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
+    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.35)" },
+    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.55)" },
+    { rgb: "229, 169, 88",  glow: "rgba(229, 169, 88, 0.50)" },
+    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.40)" },
+  ];
+
+  // Creates stars that burst directly out from the logo when it splits
+  function createBurstStar() {
+    const angle = Math.random() * Math.PI * 2;
+    // Spawns right inside the logo boundary so they literally split from the logo
+    const rx = (Math.random() - 0.5) * 50;
+    const ry = (Math.random() - 0.5) * 50;
+    const targetX = Math.random() * window.innerWidth;
+    const targetY = Math.random() * window.innerHeight;
+
+    const isHero = Math.random() < 0.12;
+    const radius = isHero
+      ? Math.random() * 0.9 + 1.6
+      : Math.random() * 0.8 + 0.6;
+
+    const col = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const speed = Math.random() * 26 + 12;
+
+    return {
+      x: cx + rx,
+      y: cy + ry,
+      orbitR: 0, orbitAngle: angle, orbitSpeed: 0,
+      targetX, targetY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: radius,
+      isHero,
+      introAlpha: Math.random() * 0.35 + 0.65,
+      ambientAlpha: Math.random() * 0.10 + 0.14,
+      color: col,
+      phase: Math.random() * Math.PI * 2,
+      twinkleSpeed: Math.random() * 0.002 + 0.001,
+      driftX: (Math.random() - 0.5) * 0.08,
+      driftY: (Math.random() - 0.5) * 0.08,
+      popDelay: 0,
+      popDuration: 0,
+    };
+  }
+
+  function seed() {
+    stars.length = 0;
+    updateCenter();
+    birthTime = performance.now();
+    for (let i = 0; i < INTRO_STAR_COUNT; i++) {
+      stars.push(createIntroStar(i));
+    }
+  }
+
+  function spread(fast = false) {
+    if (state === "ambient") return;
+    state = "splitting";
+    spreadStart = performance.now();
+    updateCenter();
+
+    // 1. Give existing wide stars an outward impulse
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.25;
+      const speed = fast ? (Math.random() * 20 + 14) : (Math.random() * 15 + 8);
+      s.vx = Math.cos(angle) * speed;
+      s.vy = Math.sin(angle) * speed;
+    }
+
+    // 2. Dynamically generate full cosmos burst stars erupting from center outward
+    const burstCount = fast ? Math.floor(BURST_STAR_COUNT * 0.75) : BURST_STAR_COUNT;
+    for (let i = 0; i < burstCount; i++) {
+      stars.push(createBurstStar());
+    }
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    if (state === "forming") {
+      updateCenter();
+    }
+
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const elapsed = t - birthTime;
+
+    for (let i = 0; i < stars.length; i++) {
+      const s = stars[i];
+
+      // ─── 1. FORMING: Minimal, wide-spaced stars softly popping in around perimeter ───
+      if (state === "forming") {
+        if (elapsed < s.popDelay) continue;
+
+        const popAge = elapsed - s.popDelay;
+        const popFade = Math.min(popAge / s.popDuration, 1);
+        const popEase = 1 - Math.pow(1 - popFade, 3);
+
+        s.orbitAngle += s.orbitSpeed;
+        s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
+        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.75);
+
+        const alpha = s.introAlpha * popEase;
+        const rNow = s.r * (0.4 + 0.6 * popEase);
+
+        if (rNow > 0.7) {
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, rNow * 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = s.color.glow;
+          ctx.globalAlpha = popEase * 0.6;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, rNow, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
+        ctx.fill();
+      }
+
+      // ─── 2. SPLITTING: Dynamic star eruption & settling into wide positions ───
+      else if (state === "splitting") {
+        s.x += s.vx;
+        s.y += s.vy;
+        s.vx *= 0.91;
+        s.vy *= 0.91;
+
+        s.x += (s.targetX - s.x) * 0.055;
+        s.y += (s.targetY - s.y) * 0.055;
+
+        const splitAge = performance.now() - spreadStart;
+        const fadeProgress = Math.min(splitAge / 1800, 1);
+        const alpha = s.introAlpha * (1 - fadeProgress) + s.ambientAlpha * fadeProgress;
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
+        ctx.fill();
+
+        if (splitAge > 1850) {
+          state = "ambient";
+        }
+      }
+
+      // ─── 3. AMBIENT: Dull, subtle, wide-apart peaceful starry void ───
+      else {
+        s.x += s.driftX;
+        s.y += s.driftY;
+
+        if (s.x < 0) s.x = w;
+        if (s.x > w) s.x = 0;
+        if (s.y < 0) s.y = h;
+        if (s.y > h) s.y = 0;
+
+        if (mouse.active) {
+          const mdx = s.x - mouse.x;
+          const mdy = s.y - mouse.y;
+          const mdist = Math.hypot(mdx, mdy);
+          if (mdist < 100 && mdist > 0) {
+            const push = (1 - mdist / 100) * 1.2;
+            s.x += (mdx / mdist) * push;
+            s.y += (mdy / mdist) * push;
+          }
+        }
+
+        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.05 + 0.95;
+        const alpha = s.ambientAlpha * twinkle;
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+    requestAnimationFrame(draw);
+  }
+
+  resize();
+  seed();
+  requestAnimationFrame(draw);
+
+  window.addEventListener("resize", () => {
+    resize();
+    if (state === "ambient") seed();
+  });
+
+  window.addEventListener("mousemove", (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.active = true;
+    document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
+    document.documentElement.style.setProperty("--mouse-y", `${e.clientY}px`);
+  });
+  window.addEventListener("mouseleave", () => { mouse.active = false; });
+
+  return { spread };
+}
+
+/* ═══ BOOT & STUDIO INTERACTION ═════════════════════════════════════ */
+
+const DIR_LABELS = {
+  N: "North Facing",
+  NE: "North-East Facing",
+  E: "East Facing",
+  SE: "South-East Facing",
+  S: "South Facing",
+  SW: "South-West Facing",
+  W: "West Facing",
+  NW: "North-West Facing"
+};
+
+const ORIENTATION_DATA = {
+  N: { azimuth: "000°", angle: 0, label: "North Facing", frontageClass: "frontage--n" },
+  NE: { azimuth: "045°", angle: 45, label: "North-East Facing", frontageClass: "frontage--ne" },
+  E: { azimuth: "090°", angle: 90, label: "East Facing", frontageClass: "frontage--e" },
+  SE: { azimuth: "135°", angle: 135, label: "South-East Facing", frontageClass: "frontage--se" },
+  S: { azimuth: "180°", angle: 180, label: "South Facing", frontageClass: "frontage--s" },
+  SW: { azimuth: "225°", angle: 225, label: "South-West Facing", frontageClass: "frontage--sw" },
+  W: { azimuth: "270°", angle: 270, label: "West Facing", frontageClass: "frontage--w" },
+  NW: { azimuth: "315°", angle: 315, label: "North-West Facing", frontageClass: "frontage--nw" }
+};
+
+function updateOrientationDial(dir = "N") {
+  const data = ORIENTATION_DATA[dir] || ORIENTATION_DATA.N;
+
+  // 1. Rotate Needle Vector
+  const needle = $("compass-needle-stage");
+  if (needle) {
+    needle.style.transform = `rotate(${data.angle}deg)`;
+  }
+
+  // 2. Bearing Digital Readout
+  const bearing = $("compass-bearing-readout");
+  if (bearing) {
+    bearing.textContent = `${data.azimuth} ${dir}`;
+  }
+
+  // 3. Top Orientation Badge
+  const badgeVal = $("orientation-badge-text");
+  if (badgeVal) {
+    badgeVal.textContent = `${DIR_LABELS[dir] || dir} · ${data.azimuth}`;
+  }
+
+  // 4. Update Center Plot Dimensions & Dynamic Frontage Curb
+  const w = parseFloat($("inp-plot-width")?.value || 12);
+  const d = parseFloat($("inp-plot-depth")?.value || 18);
+  const metric = $("compass-plot-metric");
+  if (metric) {
+    metric.textContent = `${w}×${d}m`;
+  }
+  const frame = $("compass-plot-frame");
+  if (frame) {
+    const ratio = Math.max(0.7, Math.min(1.3, d / w));
+    frame.style.height = `${Math.round(38 * ratio)}px`;
+    frame.className = `compass-plot-frame ${data.frontageClass || "frontage--n"}`;
+  }
+}
+
+const PRESETS = {
+  "vastu-villa": {
+    prompt: "Contemporary 3BHK duplex with open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
+    width: 12, depth: 18, levels: "2", dir: "N", bedrooms: 3, bathrooms: 3, kitchen: "open_modular",
+    budget: 6500000, finish: "premium", style: "tropical_modern", stance: 2
+  },
+  "compact-urban": {
+    prompt: "2BHK urban residence with efficient open kitchen, master bedroom with balcony, attached bathrooms, and covered car porch.",
+    width: 9, depth: 14, levels: "2", dir: "E", bedrooms: 2, bathrooms: 2, kitchen: "open_modular",
+    budget: 4500000, finish: "standard", style: "contemporary", stance: 1
+  },
+  "biophilic-retreat": {
+    prompt: "4BHK courtyard villa with central lightwell, generous verandahs, double-height living area, and senior accessibility.",
+    width: 15, depth: 22, levels: "2", dir: "NE", bedrooms: 4, bathrooms: 4, kitchen: "wet_dry",
+    budget: 9000000, finish: "luxury", style: "biophilic", stance: 3
+  },
+  "kerala-vernacular": {
+    prompt: "Kerala vernacular residence with timber joinery, pitched terracotta tile roofs, central courtyard, and natural cross-ventilation.",
+    width: 14, depth: 20, levels: "2", dir: "E", bedrooms: 3, bathrooms: 3, kitchen: "closed",
+    budget: 7500000, finish: "premium", style: "kerala_vernacular", stance: 3
+  },
+  "modern-studio": {
+    prompt: "Modern compact single-floor residence with open minimalist floorplan, seamless indoor-outdoor connection, and efficient footprint.",
+    width: 8, depth: 12, levels: "1", dir: "N", bedrooms: 1, bathrooms: 1, kitchen: "open_modular",
+    budget: 3500000, finish: "standard", style: "modern_minimal", stance: 0
+  }
+};
+
+function updateStudioHUD() {
+  const w = parseFloat($("inp-plot-width")?.value || 12);
+  const d = parseFloat($("inp-plot-depth")?.value || 18);
+  const areaM2 = (w * d).toFixed(0);
+  const areaSqFt = (w * d * 10.7639).toFixed(0);
+  const badge = $("plot-area-calc");
+  if (badge) {
+    badge.textContent = `${areaM2} m² · ${Number(areaSqFt).toLocaleString()} sq ft (Aspect 1:${(d/w).toFixed(2)})`;
+  }
+
+  // Orientation
+  const checkedRadio = document.querySelector('input[name="road_direction"]:checked');
+  const dir = checkedRadio?.value || "N";
+  const hudOri = $("hud-orientation");
+  if (hudOri) hudOri.textContent = DIR_LABELS[dir] || `${dir} Facing`;
+  updateOrientationDial(dir);
+
+  // Program
+  const bhk = $("inp-bedrooms")?.value || "3";
+  const baths = $("inp-bathrooms")?.value || "3";
+  const levels = $("inp-levels")?.value || "2";
+  const levelText = levels === "1" ? "Ground" : levels === "2" ? "Duplex" : levels === "3" ? "Triplex" : "Multi-level";
+  const hudProg = $("hud-program");
+  if (hudProg) hudProg.textContent = `${bhk} BHK ${levelText} · ${baths} Baths`;
+
+  // Vastu Stance
+  const stanceVal = +($("stance")?.value ?? 2);
+  const hudVastu = $("hud-vastu");
+  if (hudVastu && STANCES[stanceVal]) hudVastu.textContent = STANCES[stanceVal][0];
+
+  // Budget
+  const budget = parseFloat($("inp-budget")?.value || 6500000);
+  const tier = $("inp-finish-tier")?.value || "premium";
+  const hudBudget = $("hud-budget");
+  if (hudBudget) hudBudget.textContent = `${inr(budget)} · ${cap(tier)}`;
+}
 
 (async function boot() {
+  // Cosmic Star-field Engine
+  const starField = initStarField();
+
+  // Intro Screen Controller
+  const curtain = $("intro-curtain");
+  const inIframe = window.self !== window.top;
+
+  if (curtain) {
+    if (inIframe) {
+      curtain.style.display = "none";
+      document.body.classList.remove("is-loading");
+      starField.spread(true);
+    } else {
+      let isDismissed = false;
+      const triggerBlast = () => {
+        starField.spread(false);
+      };
+
+      const dismissIntro = (fast = false) => {
+        if (isDismissed) return;
+        isDismissed = true;
+        starField.spread(fast);
+        document.body.classList.remove("is-loading");
+        curtain.classList.add("is-fading");
+        setTimeout(() => { curtain.style.display = "none"; }, 850);
+      };
+
+      // 1. Trigger Star Blast when silver locks with gold (both visible, 1.3s)
+      const blastTimer = setTimeout(triggerBlast, 1300);
+
+      // 2. Smoothly transition into home studio after stars settle (3.15s)
+      const introTimer = setTimeout(() => dismissIntro(false), 3150);
+
+      curtain.addEventListener("click", () => {
+        clearTimeout(blastTimer);
+        clearTimeout(introTimer);
+        dismissIntro(true);
+      });
+    }
+  }
+
   strike($("hero-mandala"));
   strike($("review-mandala"));
+  updateStudioHUD();
+
+  // Dynamic plot inputs
+  $("inp-plot-width")?.addEventListener("input", updateStudioHUD);
+  $("inp-plot-depth")?.addEventListener("input", updateStudioHUD);
+  $("inp-bedrooms")?.addEventListener("input", updateStudioHUD);
+  $("inp-bathrooms")?.addEventListener("input", updateStudioHUD);
+  $("inp-levels")?.addEventListener("change", updateStudioHUD);
+  $("inp-budget")?.addEventListener("input", updateStudioHUD);
+  $("inp-finish-tier")?.addEventListener("change", updateStudioHUD);
+
+  // Direction grid radios with dynamic tactile hover preview & click commit
+  document.querySelectorAll(".dir-radio").forEach((card) => {
+    const radio = card.querySelector('input[type="radio"]');
+    const val = card.dataset.val || radio?.value;
+
+    card.addEventListener("mouseenter", () => {
+      if (!val) return;
+      const data = ORIENTATION_DATA[val];
+      if (data) {
+        const needle = $("compass-needle-stage");
+        if (needle) needle.style.transform = `rotate(${data.angle}deg)`;
+        const bearing = $("compass-bearing-readout");
+        if (bearing) bearing.textContent = `${data.azimuth} ${val}`;
+      }
+    });
+
+    card.addEventListener("mouseleave", () => {
+      const activeRadio = document.querySelector('input[name="road_direction"]:checked');
+      if (activeRadio) {
+        const activeData = ORIENTATION_DATA[activeRadio.value] || ORIENTATION_DATA.N;
+        const needle = $("compass-needle-stage");
+        if (needle) needle.style.transform = `rotate(${activeData.angle}deg)`;
+        const bearing = $("compass-bearing-readout");
+        if (bearing) bearing.textContent = `${activeData.azimuth} ${activeRadio.value}`;
+      }
+    });
+
+    radio?.addEventListener("change", () => {
+      document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
+      card.classList.add("is-selected");
+      updateOrientationDial(radio.value);
+      updateStudioHUD();
+    });
+  });
+
+  // Amenities checkboxes
+  document.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => {
+    chk.addEventListener("change", () => {
+      chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
+    });
+  });
+
+  // Architectural presets
+  document.querySelectorAll(".preset-chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.preset;
+      const p = PRESETS[key];
+      if (!p) return;
+
+      document.querySelectorAll(".preset-chip").forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+
+      if ($("client-prompt")) $("client-prompt").value = p.prompt;
+      if ($("inp-plot-width")) $("inp-plot-width").value = p.width;
+      if ($("inp-plot-depth")) $("inp-plot-depth").value = p.depth;
+      if ($("inp-levels")) $("inp-levels").value = p.levels;
+      if ($("inp-bedrooms")) $("inp-bedrooms").value = p.bedrooms;
+      if ($("inp-bathrooms")) $("inp-bathrooms").value = p.bathrooms;
+      if (document.querySelector('select[name="kitchen_type"]')) {
+        document.querySelector('select[name="kitchen_type"]').value = p.kitchen;
+      }
+      if ($("inp-budget")) $("inp-budget").value = p.budget;
+      if ($("inp-finish-tier")) $("inp-finish-tier").value = p.finish;
+      if ($("inp-styles")) $("inp-styles").value = p.style;
+      if ($("stance")) {
+        $("stance").value = p.stance;
+        const [n, , note] = STANCES[p.stance];
+        if ($("stance-name")) $("stance-name").textContent = n;
+        if ($("stance-note")) $("stance-note").textContent = note;
+      }
+
+      // Update Direction Radio
+      const radio = document.querySelector(`.dir-radio[data-val="${p.dir}"] input[type="radio"]`);
+      if (radio) {
+        radio.checked = true;
+        document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
+        radio.closest(".dir-radio")?.classList.add("is-selected");
+        updateOrientationDial(p.dir);
+      }
+
+      updateStudioHUD();
+    });
+  });
 
   $("stance").addEventListener("input", (e) => {
     const [n, , note] = STANCES[+e.target.value];
     $("stance-name").textContent = n; $("stance-note").textContent = note;
+    updateStudioHUD();
   });
   $("brief").addEventListener("submit", onSubmit);
+  $("upload")?.addEventListener("submit", onUpload);
+  document.querySelectorAll(".mode-tab").forEach((t) =>
+    t.addEventListener("click", () => setMode(t.dataset.mode)));
+  initDropzone();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
   $("restart").addEventListener("click", () => phase("compose"));
   $("see-why").addEventListener("click", openWhy);
   $("why-close").addEventListener("click", () => { $("why").hidden = true; });
   $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("why").hidden = true; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      $("why").hidden = true;
+      if (compareModal) compareModal.hidden = true;
+    }
+  });
   $("dl-svg").addEventListener("click", downloadSheet);
+  $("dl-dxf").addEventListener("click", downloadDxf);
   $("zoom").addEventListener("click", () => {
     const on = $("plate").classList.toggle("is-zoomed");
     $("zoom").textContent = on ? "Fit to frame" : "Actual size";
@@ -162,7 +689,7 @@ function lightPadas(svg, plan) {
       fetch(`${API}/capabilities`).then((r) => r.json()),
     ]);
     S.committee = c.committee || [];
-    $("ledger-cost").textContent = (h.total_model_cost_usd || 0).toFixed(2);
+    setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
     $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
 
     const note = $("engine-note");
@@ -203,17 +730,52 @@ function seatCritics() {
 /* ═══ RUN ════════════════════════════════════════════════════════════ */
 
 function readBrief() {
-  const d = new FormData($("brief")); const n = (k) => Number(d.get(k) || 0);
+  const d = new FormData($("brief"));
+  const n = (k, def = 0) => {
+    const raw = d.get(k);
+    if (raw === null || raw === undefined || raw === "") return def;
+    const val = Number(raw);
+    return isNaN(val) ? def : val;
+  };
+  const stanceIdx = Math.max(0, Math.min(4, Math.round(n("vastu_slider", 2))));
+  const vastu = (STANCES[stanceIdx] && STANCES[stanceIdx][1]) || "balanced";
+
+  const amenities = [];
+  if (d.get("amenity_pooja")) amenities.push("pooja");
+  if (d.get("amenity_dining")) amenities.push("dining");
+  if (d.get("amenity_study")) amenities.push("study");
+  if (d.get("amenity_utility")) amenities.push("utility");
+  if (d.get("amenity_balcony")) amenities.push("balcony");
+  if (d.get("amenity_parking")) amenities.push("parking");
+
+  const setbackSide = n("setback_side", 1.2);
+  const elderlyAccess = Boolean(d.get("elderly_access"));
+
   return {
     project_name: "Studio scheme",
-    plot_width: n("plot_width"), plot_depth: n("plot_depth"),
-    locality: String(d.get("locality") || ""), road_direction: String(d.get("road_direction") || "N"),
-    levels: n("levels") || 1, bedrooms: n("bedrooms"), bathrooms: n("bathrooms"),
-    styles: [String(d.get("styles") || "contemporary")],
-    budget: n("budget"), currency: "INR",
-    vastu: STANCES[n("vastu_slider")][1],
-    occupant_adults: n("occupant_adults"), occupant_children: n("occupant_children"),
-    occupant_elders: n("occupant_elders"),
+    plot_width: Math.max(3, n("plot_width", 12) || 12),
+    plot_depth: Math.max(3, n("plot_depth", 18) || 18),
+    locality: String(d.get("locality") || "Bengaluru, Karnataka"),
+    road_direction: String(d.get("road_direction") || "N"),
+    levels: Math.max(1, Math.min(6, n("levels", 2) || 2)),
+    bedrooms: Math.max(1, n("bedrooms", 3) || 3),
+    bathrooms: Math.max(1, n("bathrooms", 3) || 3),
+    styles: [String(d.get("styles") || "tropical_modern")],
+    budget: Math.max(500000, n("budget", 6500000) || 6500000),
+    currency: "INR",
+    vastu: vastu,
+    accessibility: elderlyAccess ? "universal" : "basic",
+    occupant_adults: Math.max(1, n("occupant_adults", 2) || 2),
+    occupant_children: Math.max(0, n("occupant_children", 1)),
+    occupant_elders: Math.max(0, n("occupant_elders", 1)),
+    setback_front: Math.max(0.5, n("setback_front", 2.5)),
+    setback_rear: Math.max(0.5, n("setback_rear", 1.5)),
+    setback_left: Math.max(0.5, setbackSide),
+    setback_right: Math.max(0.5, setbackSide),
+    finish_tier: String(d.get("finish_tier") || "premium"),
+    kitchen_type: String(d.get("kitchen_type") || "open_modular"),
+    amenities: amenities,
+    must_haves: amenities,
   };
 }
 
@@ -222,11 +784,99 @@ async function onSubmit(e) {
   if (S.phase === "running") return;
 
   S.briefSent = readBrief();
-  S.plans = {}; S.planIds = []; S.activeId = null;
+  S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
   phase("running");
+  resetRunScreen("The committee is sitting", "Interpreting the brief…");
+
+  try {
+    await stream(`${API}/design/stream`, S.briefSent);
+  } catch (err) {
+    toast(`The engine could not complete this design: ${err.message}`);
+    $("run-title").textContent = "The run failed";
+    $("restart").hidden = false;
+  }
+}
+
+/* ═══ UPLOAD ═════════════════════════════════════════════════════════ */
+
+function setMode(mode) {
+  S.mode = mode === "upload" ? "upload" : "brief";
+  document.querySelectorAll(".mode-tab").forEach((t) =>
+    t.setAttribute("aria-selected", String(t.dataset.mode === S.mode)));
+  $("brief").hidden = S.mode !== "brief";
+  $("upload").hidden = S.mode !== "upload";
+  document.body.dataset.mode = S.mode;
+}
+
+function initDropzone() {
+  const zone = $("dropzone"), input = $("inp-file");
+  if (!zone || !input) return;
+  const show = () => {
+    const f = input.files?.[0];
+    zone.classList.toggle("has-file", Boolean(f));
+    $("drop-file").hidden = !f;
+    if (f) {
+      $("drop-file").textContent = `${f.name} · ${(f.size / 1024).toFixed(0)} KB`;
+      $("drop-title").textContent = "Ready to review";
+      $("drop-sub").textContent = describeUpload(f);
+    }
+    $("import-report").hidden = true;
+  };
+  input.addEventListener("change", show);
+  for (const ev of ["dragenter", "dragover"]) {
+    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("is-over"); });
+  }
+  for (const ev of ["dragleave", "drop"]) {
+    zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove("is-over"); });
+  }
+  zone.addEventListener("drop", (e) => {
+    if (e.dataTransfer?.files?.length) { input.files = e.dataTransfer.files; show(); }
+  });
+}
+
+function describeUpload(f) {
+  const ext = (f.name.split(".").pop() || "").toLowerCase();
+  if (ext === "dxf") return "A CAD drawing. Rooms are read from closed outlines and their labels, at the drawing's own scale.";
+  if (ext === "svg") return "A vector drawing. Rooms are read from shapes and the text inside them; the plot size sets the scale.";
+  if (ext === "json") return "A plan exported from this studio. It is loaded exactly as saved.";
+  return "An image. A vision model reads the rooms; it can take a minute, and every room it names is listed for you to check.";
+}
+
+function renderImportReport(imp, rooms, error) {
+  const box = $("import-report"); box.innerHTML = ""; box.hidden = false;
+  box.classList.toggle("is-error", Boolean(error));
+  if (error) {
+    box.append(el("h4", null, "The plan could not be read"), el("p", "bad", error));
+    return;
+  }
+  const src = { dxf: "DXF", svg: "SVG", image: "image (vision model)", json: "plan JSON" }[imp.source] || imp.source;
+  box.append(el("h4", null, `Read ${imp.rooms_kept} room${imp.rooms_kept === 1 ? "" : "s"} from the ${src}`));
+  if (imp.rooms_read !== imp.rooms_kept) {
+    box.append(el("p", "note", `${imp.rooms_read} outlines were found; ${imp.rooms_read - imp.rooms_kept} were too small to be rooms or could not be placed.`));
+  }
+  if (imp.scale_note) box.append(el("p", "note", imp.scale_note));
+  if (imp.unrecognised?.length) {
+    box.append(el("p", "warn", `Labels not recognised as rooms (kept as "other"): ${imp.unrecognised.join(", ")}.`));
+  }
+  for (const w of imp.warnings || []) box.append(el("p", "warn", w));
+  if (rooms?.length) {
+    const wrap = el("div", "import-rooms");
+    for (const r of rooms) {
+      const chip = el("span", "import-room");
+      if ((r.confidence ?? 1) < 0.6) chip.dataset.low = "1";
+      chip.append(el("b", null, r.name), document.createTextNode(` ${r.area.toFixed(1)} m²`));
+      chip.title = (r.confidence ?? 1) < 1 ? `Read with ${Math.round(r.confidence * 100)}% confidence` : cap(r.type);
+      wrap.append(chip);
+    }
+    box.append(wrap);
+  }
+}
+
+function resetRunScreen(title, stage) {
   $("run-log").innerHTML = "";
   $("run-fill").style.transform = "scaleX(0)";
-  $("run-title").textContent = "The committee is sitting";
+  $("run-title").textContent = title;
+  $("run-stage").textContent = stage;
   document.querySelectorAll(".rc").forEach((r) => {
     r.classList.remove("is-in"); r.querySelector(".rc__s").textContent = "—";
   });
@@ -235,20 +885,80 @@ async function onSubmit(e) {
     r.querySelector(".cr__s").textContent = "—";
     r.querySelector(".cr__b i").style.transform = "scaleX(0)";
   });
+}
 
+async function onUpload(e) {
+  e.preventDefault();
+  if (S.phase === "running") return;
+  const file = $("inp-file").files?.[0];
+  if (!file) { toast("Choose a plan file first."); return; }
+
+  const f = new FormData($("upload"));
+  const num = (k) => { const v = Number(f.get(k)); return Number.isFinite(v) && v > 0 ? v : null; };
+  const budget = num("budget") || 0;
+  const vastu = String(f.get("vastu") || "balanced");
+  const body = new FormData();
+  body.append("file", file);
+  if (num("plot_width")) body.append("plot_width", String(num("plot_width")));
+  if (num("plot_depth")) body.append("plot_depth", String(num("plot_depth")));
+  body.append("road_direction", String(f.get("road_direction") || "N"));
+  if (f.get("name")) body.append("name", String(f.get("name")));
+
+  S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
+  phase("running");
+  resetRunScreen("Reading the plan", `Reading ${file.name}…`);
+
+  let up;
   try {
-    await stream(S.briefSent);
+    const res = await fetch(`${API}/plans/import`, { method: "POST", body });
+    const text = await res.text();
+    let data = {}; try { data = JSON.parse(text); } catch { /* not json */ }
+    if (!res.ok) throw new Error(data.detail || `${res.status} ${text.slice(0, 160)}`);
+    up = data;
   } catch (err) {
-    toast(`The engine could not complete this design: ${err.message}`);
-    $("run-title").textContent = "The run failed";
+    phase("compose"); setMode("upload");
+    renderImportReport(null, null, err.message);
+    toast("The plan could not be read.");
+    return;
+  }
+
+  S.imported = { file: file.name, ...up.import };
+  renderImportReport(up.import, up.rooms, null);
+  const site = up.plan?.site || {};
+  // Points serialise as [x, y] pairs.
+  const pt = (p) => (Array.isArray(p) ? p : [p.x, p.y]);
+  const xs = (site.boundary || []).map((p) => pt(p)[0]), ys = (site.boundary || []).map((p) => pt(p)[1]);
+  S.briefSent = {
+    project_name: up.plan?.name || file.name,
+    plot_width: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+    plot_depth: ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
+    road_direction: site.road_direction || String(f.get("road_direction") || "N"),
+    levels: up.plan?.levels?.length || 1,
+    bedrooms: up.rooms.filter((r) => /bedroom/.test(r.type)).length,
+    bathrooms: up.rooms.filter((r) => /bathroom|toilet/.test(r.type)).length,
+    budget, vastu, locality: "—", styles: [],
+  };
+  const p = el("p");
+  p.append(el("b", null, "import "), document.createTextNode(
+    `${up.import.rooms_kept} rooms read from ${up.import.source}. ${up.import.scale_note || ""}`.trim()));
+  $("run-log").append(p);
+  $("run-title").textContent = "The committee is sitting";
+  $("run-stage").textContent = "Reviewing the uploaded plan…";
+
+  const q = new URLSearchParams({ vastu, budget: String(budget), include_generative_critics: "true" });
+  try {
+    await stream(`${API}/plans/${up.plan_id}/review/stream?${q}`, null);
+  } catch (err) {
+    toast(`The engine could not review this plan: ${err.message}`);
+    $("run-title").textContent = "The review failed";
     $("restart").hidden = false;
   }
 }
 
-async function stream(simple) {
-  const res = await fetch(`${API}/design/stream`, {
+async function stream(url, simple) {
+  const res = await fetch(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ simple, candidates: 3, include_generative_critics: true }),
+    body: simple ? JSON.stringify({ simple, candidates: 3, include_generative_critics: true }) : undefined,
   });
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
 
@@ -334,12 +1044,20 @@ async function applyResult(d) {
   S.winnerId = d.winner_plan_id;
   S.activeId = d.winner_plan_id;
   S.consensus = d.consensus;
+  // The committee ranks *candidates*. Refinement and negotiation each mint a new
+  // plan with a new id, so the returned plan is usually not in the ranking at
+  // all. Keeping the candidate id separate is what stops every consensus lookup
+  // silently missing the moment the agents actually improve the design.
+  S.candidateId = d.selected_candidate_id || d.consensus?.winner_id || d.winner_plan_id;
+  S.negotiation = d.negotiation || null;
+  S.negotiationOutcome = d.negotiation_outcome || "";
+  S.exportUrls = d.export_urls || {};
   S.explanation = d.explanation || "";
   S.recommendations = d.recommendations || [];
   S.projectId = d.project_id; S.sessionId = d.trace_id;
 
   S.plans[d.winner_plan_id] = { plan: d.plan, vastu: d.vastu, cost: d.cost };
-  $("ledger-cost").textContent = (d.model_cost_usd || 0).toFixed(2);
+  setText("ledger-cost", (d.model_cost_usd || 0).toFixed(2));
   if (d.degraded) toast(d.degraded_reason || "Some critics ran in degraded mode.");
 
   phase("review");
@@ -358,15 +1076,16 @@ function buildSchemeTabs() {
   S.planIds.forEach((id, i) => {
     const row = ranked.find((r) => r.candidate_id === id);
     const b = el("button", "scheme-tab"); b.type = "button"; b.setAttribute("role", "tab");
-    b.setAttribute("aria-selected", String(id === S.activeId));
-    b.append(document.createTextNode(`Scheme ${String.fromCharCode(65 + i)}`));
+    b.setAttribute("aria-selected", String(id === activeCandidate()));
+    b.append(document.createTextNode(S.imported && i === 0 ? "Uploaded plan" : `Scheme ${String.fromCharCode(65 + i)}`));
+    if (S.imported && i === 0) b.dataset.imported = "1";
 
     // A scheme with no score was not merely last - it was disqualified for a
     // critical finding and never entered the ranking. Leaving the score blank
     // reads as a rendering fault; saying so is the honest signal.
     if (row) {
       b.append(el("b", null, row.score.toFixed(2)));
-      b.title = id === S.winnerId ? "Selected by the committee" : "On the trade-off frontier";
+      b.title = id === S.candidateId ? "Selected by the committee" : "On the trade-off frontier";
     } else if (dq.has(id)) {
       b.dataset.dq = "1";
       b.append(el("b", null, "DQ"));
@@ -406,6 +1125,13 @@ async function selectScheme(id) {
 
 const cur = () => S.plans[S.activeId] || {};
 
+// Map whatever is on screen back to the candidate the committee scored. The
+// winner tab shows a post-negotiation plan; every other tab is a candidate and
+// maps to itself.
+const activeCandidate = () => (S.activeId === S.winnerId ? S.candidateId : S.activeId);
+const rankingRow = () =>
+  (S.consensus?.ranking || []).find((r) => r.candidate_id === activeCandidate());
+
 function renderAll() {
   renderRail();
   renderCritics();
@@ -415,16 +1141,29 @@ function renderAll() {
 
 function renderRail() {
   const { plan } = cur();
-  const idx = S.planIds.indexOf(S.activeId);
-  $("pick-name").textContent = `Scheme ${String.fromCharCode(65 + Math.max(0, idx))}`;
-  const dq = (S.consensus?.disqualified || []).find((d) => d.candidate_id === S.activeId);
+  const idx = S.planIds.indexOf(activeCandidate());
+  $("pick-name").textContent = S.imported
+    ? (S.briefSent?.project_name || "Uploaded plan")
+    : idx >= 0 ? `Scheme ${String.fromCharCode(65 + idx)}` : "Selected scheme";
+  const dq = (S.consensus?.disqualified || []).find((d) => d.candidate_id === activeCandidate());
   $("pick-why").textContent = dq
     ? `Disqualified. ${dq.reasons[0] || "It carries a critical finding."} A statutory or physical breach removes a scheme regardless of how it scores elsewhere.`
-    : S.activeId === S.winnerId
-      ? "Selected by the committee as the best trade-off across every measured axis."
-      : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
+    : S.imported
+      ? (S.negotiationOutcome && S.negotiationOutcome !== "unchanged"
+        ? "Your drawing, reviewed as drawn, then adjusted by the committee where it could satisfy a finding without redrawing the plan."
+        : "Your drawing, reviewed as drawn. Every critic, the Vastu graph, the cost takeoff and the airflow solve ran on it unchanged.")
+      : S.activeId === S.winnerId
+        ? "Selected by the committee as the best trade-off across every measured axis."
+        : "An alternative on the trade-off frontier. Compare it against the selected scheme.";
 
-  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  // A scheme the generator could not make clean says so, in the words of
+  // the rule it broke. It is offered only when nothing clean was left.
+  const guard = plan?.metadata?.guardrail || [];
+  if (guard.length) {
+    $("pick-why").textContent += ` Offered with reservations: ${guard.slice(0, 3).join("; ")}.`;
+  }
+
+  const row = rankingRow();
   const bars = $("axis-bars"); bars.innerHTML = "";
   const axes = Object.entries(row?.axis_scores || {}).sort((a, b) => a[1] - b[1]);
   for (const [axis, v] of axes) {
@@ -439,7 +1178,16 @@ function renderRail() {
 
   const b = S.briefSent || {};
   const recap = $("brief-recap"); recap.innerHTML = "";
-  const rows = [
+  const rows = S.imported ? [
+    ["Source", `${S.imported.file} (${S.imported.source})`],
+    ["Rooms read", `${S.imported.rooms_kept} of ${S.imported.rooms_read} outlines`],
+    ["Plot", `${(+b.plot_width).toFixed(1)} × ${(+b.plot_depth).toFixed(1)} m`],
+    ["Road", b.road_direction],
+    ["Bedrooms", b.bedrooms], ["Bathrooms", b.bathrooms],
+    ["Floors", b.levels],
+    ["Budget", b.budget ? inr(b.budget) : "not set"], ["Vastu", cap(b.vastu || "")],
+    ["Openings", S.imported.openings_added ? "placed by the studio" : "as drawn"],
+  ] : [
     ["Plot", `${b.plot_width} × ${b.plot_depth} m`],
     ["Locality", b.locality], ["Road", b.road_direction],
     ["Bedrooms", b.bedrooms], ["Bathrooms", b.bathrooms],
@@ -452,7 +1200,7 @@ function renderRail() {
 }
 
 function renderCritics() {
-  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const row = rankingRow();
   const scores = row?.axis_scores || {};
   document.querySelectorAll(".cr").forEach((el2) => {
     const c = S.committee.find((x) => x.id === el2.dataset.critic);
@@ -468,7 +1216,7 @@ function renderCritics() {
 
 function renderVerdict() {
   const { plan, vastu, cost } = cur();
-  const row = (S.consensus?.ranking || []).find((r) => r.candidate_id === S.activeId);
+  const row = rankingRow();
 
   $("v-score").textContent = row ? row.score.toFixed(2) : "—";
   $("v-agree").textContent = S.consensus ? `${Math.round(S.consensus.overall_agreement * 100)}% committee agreement` : "—";
@@ -478,10 +1226,57 @@ function renderVerdict() {
     $("v-area").textContent = `${Math.round(plan.total_built_area)} m²`;
     $("v-far").textContent = `FAR ${(plan.achieved_far || 0).toFixed(2)} of ${plan.site?.max_far ?? "—"}`;
   }
-  const h = row?.finding_counts || {};
-  const total = Object.values(h).reduce((a, b) => a + b, 0);
+  // Finding counts must describe the plan being shown, not the candidate the
+  // committee voted on. Negotiation routinely clears a critical breach and
+  // returns a new plan; reading the counts off the ranking row would keep
+  // telling the client their scheme is blocked after the agents unblocked it.
+  paintFindingCounts();
+}
+
+function paintFindingCounts() {
+  const analysis = cur().analysis;
+  if (!analysis) {
+    $("v-find").textContent = "…";
+    $("v-find-note").textContent = "counting";
+    loadAnalysis();
+    return;
+  }
+
+  let total = 0;
+  let critical = 0;
+  const tally = (list) => {
+    for (const f of list || []) {
+      total += 1;
+      if (f.severity === "critical") critical += 1;
+    }
+  };
+  for (const report of Object.values(analysis.metrics || {})) tally(report.findings);
+  tally(analysis.compliance?.findings);
+
   $("v-find").textContent = total;
-  $("v-find-note").textContent = h.critical ? `${h.critical} critical · blocks delivery` : total ? "none critical" : "nothing outstanding";
+  $("v-find-note").textContent = critical
+    ? `${critical} critical · blocks delivery`
+    : total ? "none critical" : "nothing outstanding";
+}
+
+async function loadAnalysis() {
+  const id = S.activeId;
+  if (!id || S.plans[id]?.analysisPending) return;
+  S.plans[id] = S.plans[id] || {};
+  S.plans[id].analysisPending = true;
+  try {
+    const r = await fetch(`${API}/plans/${id}/analysis`);
+    if (!r.ok) throw new Error(String(r.status));
+    S.plans[id].analysis = await r.json();
+    if (S.activeId === id) paintFindingCounts();
+  } catch {
+    if (S.activeId === id) {
+      $("v-find").textContent = "—";
+      $("v-find-note").textContent = "could not load";
+    }
+  } finally {
+    S.plans[id].analysisPending = false;
+  }
 }
 
 /* ═══ VIEWS ══════════════════════════════════════════════════════════ */
@@ -497,6 +1292,7 @@ function showView(v) {
   if (v === "interior") renderInterior();
   if (v === "model") renderModel();
   if (v === "findings") renderFindings();
+  if (v === "negotiation") renderNegotiation();
   if (v === "audit") renderAudit();
 }
 
@@ -517,6 +1313,7 @@ function buildSheetTabs() {
     ...levels.map((lv) => [`plan_level_${lv.index}`, lv.index === 0 ? "Ground plan" : `Level ${lv.index}`]),
     ["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"],
     ["section_aa", "Section A–A"], ["section_bb", "Section B–B"], ["roof_plan", "Roof"], ["site_plan", "Site"],
+    ...levels.map((lv) => [`airflow_level_${lv.index}`, levels.length > 1 ? `Airflow L${lv.index}` : "Airflow"]),
   ];
   for (const [key, label] of sheets) {
     const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
@@ -555,6 +1352,20 @@ function downloadSheet() {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `${S.sheet}.svg`; a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function downloadDxf() {
+  // The sheet tabs cover elevations and sections too; DXF is emitted per floor
+  // plan, so fall back to the ground floor when the current sheet is not one.
+  const m = /^plan_level_(\d+)$/.exec(S.sheet);
+  const level = m ? m[1] : 0;
+  const url = S.exportUrls[`dxf_level_${level}`]
+    || `${API}/plans/${S.activeId}/level-${level}.dxf`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${S.activeId}_level_${level}.dxf`;
+  a.click();
+  toast(`Level ${level} exported as editable CAD geometry.`);
 }
 
 /* ── mandala ───────────────────────────────────────────────────────── */
@@ -666,6 +1477,75 @@ function renderVastu() {
       s.append(d);
     }
   }
+
+  // ── knowledge graph ──────────────────────────────────────────────
+  // The rule corpus can only speak where a text speaks. The graph derives a
+  // verdict for every room by reasoning through what it is used for, and shows
+  // the chain that produced it — which is the part a client can actually argue
+  // with.
+  const gp = v.graph_placements || [];
+  if (gp.length) {
+    s.append(el("h3", "sec", "Knowledge graph — every room, derived"));
+
+    const gstats = el("div", "stat-row");
+    const derived = gp.filter((p) => p.derived).length;
+    const undet = gp.filter((p) => p.verdict === "undetermined").length;
+    const cov = v.graph_coverage || {};
+    for (const [pig, k, val, sub] of [
+      ["indigo", "Graph score", `${Math.round(v.graph_score)}/100`, "area-weighted"],
+      ["ochre", "Rooms derived", `${derived}`, "no rule enumerates these"],
+      ["chalk", "Coverage", `${cov.coverage_gain || "—"}×`,
+        `${cov.placements_derivable_by_graph || 0} vs ${cov.placements_asserted_by_text || 0} placements`],
+      [undet ? "hingula" : "orpiment", "Undetermined", `${undet}`, "excluded from score"],
+    ]) {
+      const d = el("dl", "stat"); d.dataset.pig = pig;
+      d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); gstats.append(d);
+    }
+    s.append(gstats);
+    if (v.graph_note) s.append(el("p", "note-card", v.graph_note));
+
+    for (const p of gp) {
+      const box = el("div", "deriv");
+      box.dataset.v = p.verdict;
+
+      const h = el("div", "deriv__h");
+      h.append(el("b", null, p.room));
+      h.append(el("span", "deriv__dir", `${p.direction} · ${p.quarter}`));
+      h.append(el("span", "deriv__sc", p.verdict === "undetermined" ? "—" : p.score.toFixed(2)));
+      h.append(el("span", "deriv__tag", p.derived ? "derived" : "cited"));
+      box.append(h);
+
+      if (p.derivation) box.append(chainRow("supports", p.derivation));
+      if (p.objection) box.append(chainRow("objects", p.objection));
+      if (!p.derivation && !p.objection) {
+        box.append(el("p", "deriv__x", p.explanation));
+      }
+
+      if (p.agrees_with_text === false) {
+        box.append(el("p", "deriv__warn",
+          "The derivation disagrees with a cited text. The text governs the score; the disagreement is shown rather than hidden."));
+      }
+      if (p.better_directions?.length) {
+        box.append(el("p", "deriv__alt",
+          "Better: " + p.better_directions
+            .map((b) => `${b.direction} (${b.score.toFixed(2)})`).join(", ")));
+      }
+      if (p.citations?.length) box.append(el("p", "deriv__cite", p.citations.join(" · ")));
+      s.append(box);
+    }
+  }
+}
+
+function chainRow(kind, chain) {
+  const row = el("div", "chain"); row.dataset.k = kind;
+  // Render "A -[edge]-> B" as alternating node / edge tokens so the reasoning
+  // reads as a path rather than a string.
+  const parts = chain.split(/\s*-\[|\]->\s*/);
+  parts.forEach((tok, i) => {
+    if (!tok) return;
+    row.append(el("span", i % 2 ? "chain__e" : "chain__n", tok));
+  });
+  return row;
 }
 
 function vastuRow(x, sev) {
@@ -910,6 +1790,41 @@ async function renderFindings() {
     if (S.view !== "findings") return;
   }
 
+  // How you get to each room. Shown first, because it is the question a
+  // client asks of a plan before any number: what do I walk through.
+  const lay = a.layout;
+  if (lay?.routes?.length) {
+    s.append(el("h3", "sec", "How you move through it"));
+    const stats = el("div", "stat-row");
+    const illegal = lay.routes.filter((r) => !r.legal).length;
+    for (const [pig, k, v, sub] of [
+      [illegal ? "hingula" : "ochre", "Walkable", `${Math.round(lay.walkable * 100)}%`,
+        illegal ? `${illegal} room(s) reached the wrong way` : "every room reached correctly"],
+      ["indigo", "Adjacency", `${Math.round(lay.adjacency * 100)}%`, "programme honoured"],
+      ["chalk", "Zoning", `${Math.round(lay.zoning * 100)}%`, "front-to-back order"],
+    ]) {
+      const d = el("dl", "stat"); d.dataset.pig = pig;
+      d.append(el("dt", null, k), el("dd", null, v), el("small", null, sub)); stats.append(d);
+    }
+    s.append(stats);
+    const routes = [...lay.routes].sort((x, y) => (x.legal - y.legal) || (x.path.length - y.path.length));
+    for (const r of routes) {
+      const row = el("div", "route"); row.dataset.ok = r.legal ? "y" : "n";
+      row.append(el("b", "route__room", r.room));
+      const chain = el("span", "route__path");
+      r.path.forEach((step, i) => {
+        if (i) chain.append(el("i", "route__arrow", "›"));
+        chain.append(el("span", i === r.path.length - 1 ? "route__end" : "route__step", step));
+      });
+      row.append(chain);
+      if (!r.legal) row.append(el("span", "route__why", r.reason));
+      s.append(row);
+    }
+    if (lay.broken?.length) {
+      s.append(el("p", "note-card", lay.broken[0]));
+    }
+  }
+
   const all = [];
   for (const [axis, rep] of Object.entries(a.metrics || {}))
     for (const f of rep.findings || []) all.push({ ...f, axis });
@@ -947,6 +1862,112 @@ async function renderFindings() {
     if (cite) d.append(el("span", "find__c", cite));
     s.append(d);
   }
+}
+
+/* ── audit ─────────────────────────────────────────────────────────── */
+
+/* ── negotiation ───────────────────────────────────────────────────── */
+
+const OUTCOME_COPY = {
+  satisfied: ["Settled", "Every hard and soft constraint holds."],
+  converged: ["Converged", "Further rounds stopped paying for themselves."],
+  converged_with_open_constraints: ["Open", "No agent could improve the design further."],
+  exhausted: ["Timed out", "The round budget ran out before settling."],
+};
+
+function renderNegotiation() {
+  const s = scrollPane("negotiation");
+  const n = S.negotiation;
+
+  s.append(el("h3", "sec", "The agents negotiating"));
+  s.append(el("p", "lede",
+    "Everything before this point is one forward pass — generate, critique, vote, repair. " +
+    "It produces a scheme that is good on average but can still carry a specific unsatisfied " +
+    "constraint, because no stage looks at the design again after changing it. " +
+    "Here the manager measures every constraint, hands each failure to the agent that owns it, " +
+    "and accepts a proposal only when re-measuring shows the whole design improved."));
+
+  if (!n) { s.append(el("p", "empty-note", "No negotiation record for this scheme.")); return; }
+
+  const [word, sub] = OUTCOME_COPY[n.outcome] || [cap(n.outcome || "—"), ""];
+  const stats = el("div", "stat-row");
+  const accepted = (n.log || []).reduce(
+    (a, r) => a + r.mutations.filter((m) => m.accepted).length, 0);
+  const proposed = (n.log || []).reduce((a, r) => a + r.mutations.length, 0);
+  for (const [pig, k, v, sm] of [
+    ["indigo", "Outcome", word, sub],
+    ["chalk", "Rounds", `${n.rounds}`, `${n.seconds}s`],
+    ["orpiment", "Proposals", `${accepted}/${proposed}`, "accepted"],
+    [n.hard_constraints_open ? "hingula" : "ochre", "Hard open",
+      `${n.hard_constraints_open}`, n.hard_constraints_open ? "unresolved" : "all satisfied"],
+  ]) {
+    const d = el("dl", "stat"); d.dataset.pig = pig;
+    d.append(el("dt", null, k), el("dd", null, v), el("small", null, sm)); stats.append(d);
+  }
+  s.append(stats);
+
+  if (!n.log?.length) {
+    s.append(el("p", "note-card",
+      "The scheme satisfied every constraint on first measurement, so no negotiation was needed. " +
+      "The protocol still ran — a clean measurement is a result, not a skipped step."));
+    return;
+  }
+
+  for (const r of n.log) {
+    const card = el("div", "round");
+
+    const head = el("div", "round__h");
+    head.append(el("span", "round__n", `Round ${r.round}`));
+    const [from, to] = String(r.score).split(" -> ");
+    const delta = (+to) - (+from);
+    const chip = el("span", "round__d", `${from} → ${to}`);
+    chip.dataset.dir = delta > 0.0001 ? "up" : "flat";
+    head.append(chip);
+    if (r.hard_open !== "0 -> 0") head.append(el("span", "round__hard", `hard ${r.hard_open}`));
+    card.append(head);
+
+    if (r.unsatisfied?.length) {
+      const ul = el("ul", "round__open");
+      for (const c of r.unsatisfied) {
+        const li = el("li");
+        li.dataset.sev = c.severity;
+        li.append(el("b", null, c.id), el("span", null, c.detail),
+          el("em", null, `owner: ${c.owner}`));
+        ul.append(li);
+      }
+      card.append(el("p", "round__lab", `${r.unsatisfied.length} constraint(s) open at the start of this round`));
+      card.append(ul);
+    }
+
+    if (r.mutations?.length) {
+      card.append(el("p", "round__lab", "Proposals"));
+      for (const m of r.mutations) {
+        const row = el("div", "mut");
+        row.dataset.ok = m.accepted ? "y" : "n";
+        row.append(el("span", "mut__w", m.worker.replace(/_/g, " ")));
+        row.append(el("span", "mut__c", m.change));
+        row.append(el("span", "mut__f", `for ${m["for"]}`));
+        row.append(el("span", "mut__d", `${m.delta >= 0 ? "+" : ""}${m.delta.toFixed(4)}`));
+        row.append(el("span", "mut__v", m.accepted ? "accepted" : "rejected"));
+        card.append(row);
+      }
+    } else if (!r.notes?.length) {
+      card.append(el("p", "round__lab", "No agent proposed a change in this round."));
+    }
+
+    // An agent that owns a failing constraint and cannot help has to say why.
+    // Silence from the responsible agent looks identical to the agent not running.
+    for (const note of r.notes || []) {
+      card.append(el("p", "round__note", note));
+    }
+    s.append(card);
+  }
+
+  s.append(el("p", "note-card",
+    "A proposal is accepted only when re-measuring the whole design shows a net gain, and hard " +
+    "constraints are weighted three times a soft one. That is what makes the loop safe to run " +
+    "unattended: no accumulation of small comfort gains can ever outrank fixing a statutory breach, " +
+    "and the design can never end a round worse than it began."));
 }
 
 /* ── audit ─────────────────────────────────────────────────────────── */

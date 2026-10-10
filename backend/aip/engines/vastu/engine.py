@@ -119,6 +119,37 @@ class ReconciliationEntry(BaseModel):
     basis: str                      # why it kept or lost weight
 
 
+class GraphPlacement(BaseModel):
+    """One room's placement as derived by the knowledge graph.
+
+    The rule corpus can only speak about placements a text actually enumerates.
+    The graph derives a verdict for every room in every sector by reasoning
+    through activity, element and quality, and carries the derivation with it.
+    Where the two overlap they are compared; where only the graph can answer,
+    the entry is marked `derived` so nobody mistakes an inference for a citation.
+    """
+
+    room_id: str
+    room: str
+    direction: str
+    quarter: str
+
+    score: float = Field(default=0.5, ge=0.0, le=1.0)
+    verdict: str = ""
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    derived: bool = False           # no text speaks to this; the graph inferred it
+    asserted: str = ""              # favour | prohibit | "" from the corpus
+    agrees_with_text: bool | None = None
+
+    derivation: str = ""            # the strongest supporting chain, rendered
+    objection: str = ""             # the strongest contradicting chain, if any
+    citations: list[str] = Field(default_factory=list)
+    explanation: str = ""
+
+    better_directions: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class VastuReport(BaseModel):
     """Complete, explainable Vastu assessment of a plan."""
 
@@ -143,6 +174,14 @@ class VastuReport(BaseModel):
     summary: str = ""
     top_remedies: list[dict[str, Any]] = Field(default_factory=list)
     corpus: dict[str, Any] = Field(default_factory=dict)
+
+    # Knowledge-graph layer. Runs alongside the rule corpus rather than
+    # replacing it: the rules carry citations, the graph carries derivations,
+    # and the report shows where they agree.
+    graph_placements: list[GraphPlacement] = Field(default_factory=list)
+    graph_score: float = Field(default=0.0, ge=0.0, le=100.0)
+    graph_coverage: dict[str, Any] = Field(default_factory=dict)
+    graph_note: str = ""
 
     @property
     def violated(self) -> list[RuleVerdict]:
@@ -325,6 +364,7 @@ class VastuEngine:
             1 for v in report.violated if v.verdict == "prohibited" and v.effective_weight > 0.4
         )
         report.top_remedies = self._counterfactuals(report, weight_total)
+        self._attach_graph_layer(report, plan)
         report.summary = self._summarise(report)
 
         log_event(
@@ -902,6 +942,98 @@ class VastuEngine:
             )
         return out[:8]
 
+    # ------------------------------------------------------- graph layer --
+
+    def _attach_graph_layer(self, report: VastuReport, plan: FloorPlan) -> None:
+        """Derive a verdict for every room from the knowledge graph.
+
+        The rule corpus is authoritative but sparse: it can only judge a
+        placement some text troubled to write down. Every other room falls
+        through as "not assessable", which is honest but not useful. The graph
+        reasons from what the room *does* - its activities, their elements and
+        the qualities they demand - to a verdict for any room in any sector,
+        and shows the derivation chain that produced it.
+        """
+        from aip.engines.vastu.reasoner import get_reasoner
+
+        reasoner = get_reasoner()
+        placements: list[GraphPlacement] = []
+        weighted = total_weight = 0.0
+
+        for level in plan.levels:
+            for room in level.rooms:
+                if not reasoner.graph.has(f"room_{room.type.value}"):
+                    continue
+                direction = plan.direction_of_room(room)
+                verdict = reasoner.evaluate(room.type, direction)
+                if verdict.verdict == "not modelled":
+                    continue
+
+                support = next((d for d in verdict.derivations if d.supports), None)
+                against = next((d for d in verdict.derivations if not d.supports), None)
+
+                better = [
+                    {"direction": alt.direction, "score": round(alt.score, 3),
+                     "verdict": alt.verdict}
+                    for alt in reasoner.best_directions(room.type, top=3)
+                    if alt.score > verdict.score + 0.08
+                ]
+
+                placements.append(GraphPlacement(
+                    room_id=room.id,
+                    room=room.display_name(),
+                    direction=verdict.direction,
+                    quarter=verdict.quarter,
+                    score=verdict.score,
+                    verdict=verdict.verdict,
+                    confidence=verdict.confidence,
+                    derived=verdict.derived,
+                    asserted=verdict.asserted,
+                    agrees_with_text=verdict.agrees_with_text,
+                    derivation=support.chain if support else "",
+                    objection=against.chain if against else "",
+                    citations=sorted({c for d in verdict.derivations for c in d.citations})[:4],
+                    explanation=verdict.explanation,
+                    better_directions=better,
+                ))
+
+                # Area-weighted: misplacing a master bedroom matters more than
+                # misplacing a wardrobe, and an unweighted mean hides that.
+                # Undetermined placements are excluded outright: folding a
+                # 0.5 placeholder into the mean would let rooms the graph
+                # cannot reason about quietly pull the score toward average.
+                if verdict.verdict != "undetermined":
+                    weight = max(room.area, 1.0)
+                    weighted += verdict.score * weight
+                    total_weight += weight
+
+        placements.sort(key=lambda p: p.score)
+        report.graph_placements = placements
+        report.graph_score = round((weighted / total_weight * 100) if total_weight else 0.0, 1)
+        report.graph_coverage = reasoner.coverage()
+
+        derived_only = sum(1 for p in placements if p.derived)
+        undetermined = sum(1 for p in placements if p.verdict == "undetermined")
+        disagreements = sum(1 for p in placements if p.agrees_with_text is False)
+        scored = len(placements) - undetermined
+        report.graph_note = (
+            f"The knowledge graph scored {scored} room placement(s), "
+            f"{derived_only} of which no rule in the corpus addresses at all. "
+            f"Each carries the derivation chain that produced it, so the score is "
+            f"reproducible rather than asserted."
+        )
+        if undetermined:
+            report.graph_note += (
+                f" {undetermined} further room(s) are recorded as undetermined - the "
+                f"graph holds no path linking them to their sector - and are left out "
+                f"of the score rather than counted as average."
+            )
+        if disagreements:
+            report.graph_note += (
+                f" {disagreements} derivation(s) disagree with a cited text; the text "
+                f"governs the score and the disagreement is shown rather than hidden."
+            )
+
     def _summarise(self, report: VastuReport) -> str:
         parts = [
             f"Vastu score {report.score:.0f}/100 ({report.grade}), assessed at a "
@@ -923,6 +1055,13 @@ class VastuEngine:
             parts.append(
                 f"{len(report.conflicts)} genuine conflict(s) between rules were "
                 f"detected and resolved explicitly rather than ignored."
+            )
+        if report.graph_placements:
+            derived = sum(1 for p in report.graph_placements if p.derived)
+            parts.append(
+                f"Separately, the knowledge graph scored every room's placement "
+                f"({report.graph_score:.0f}/100), deriving verdicts for {derived} room(s) "
+                f"that no classical rule enumerates."
             )
         climatic = [
             v for v in report.compliant

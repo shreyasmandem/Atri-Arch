@@ -14,12 +14,13 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from aip import __version__
-from aip.api.routers import admin, design, plans, system
+from aip.api.routers import admin, design, imports, plans, system
 from aip.core.config import get_settings
 from aip.core.llm import shutdown_router
 from aip.core.logging import configure_logging, get_logger, log_event, set_trace_id
@@ -135,6 +136,17 @@ def create_app() -> FastAPI:
             )
         return response
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+        log_event(
+            logger, "request.validation_failed", level=30,
+            path=request.url.path, errors=str(exc.errors())[:1000],
+        )
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.errors()},
+        )
+
     @app.exception_handler(Exception)
     async def unhandled(request: Request, exc: Exception) -> JSONResponse:
         log_event(
@@ -151,6 +163,9 @@ def create_app() -> FastAPI:
     prefix = settings.api_prefix
     app.include_router(system.router, prefix=prefix)
     app.include_router(design.router, prefix=prefix)
+    # Before plans: its fixed path /plans/import must not be swallowed by
+    # the /plans/{plan_id} route.
+    app.include_router(imports.router, prefix=prefix)
     app.include_router(plans.router, prefix=prefix)
     app.include_router(admin.router, prefix=prefix)
 
@@ -188,7 +203,39 @@ def _mount_studio(app: FastAPI) -> bool:
     studio_dir = Path(__file__).resolve().parents[3] / "frontend"
     if not (studio_dir / "index.html").exists():
         return False
-    app.mount("/", StaticFiles(directory=str(studio_dir), html=True), name="studio")
+
+    from aip.core.config import get_settings
+
+    class _Studio(StaticFiles):
+        """StaticFiles that refuses to be cached in development.
+
+        The studio has no build step and no content hashing, so a browser that
+        heuristically caches studio.js keeps serving yesterday's file after an
+        edit. That failure is silent and expensive: the page looks like the code
+        on disk, behaves like the code that was cached, and every conclusion
+        drawn from it is wrong. In production the assets are versioned by
+        deployment and cache normally.
+        """
+
+        def __init__(self, *args, no_store: bool, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.no_store = no_store
+
+        def file_response(self, *args, **kwargs):  # type: ignore[override]
+            response = super().file_response(*args, **kwargs)
+            if self.no_store:
+                response.headers["Cache-Control"] = "no-store, must-revalidate"
+            return response
+
+    app.mount(
+        "/",
+        _Studio(
+            directory=str(studio_dir),
+            html=True,
+            no_store=get_settings().environment == "development",
+        ),
+        name="studio",
+    )
     return True
 
 

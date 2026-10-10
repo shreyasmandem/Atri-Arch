@@ -87,6 +87,29 @@ def _drawing_urls(prefix: str, plan) -> dict[str, str]:
     for name in ("elevation_N", "elevation_E", "elevation_S", "elevation_W",
                  "section_aa", "section_bb", "roof_plan", "site_plan"):
         urls[name] = f"{prefix}/plans/{plan.id}/drawings/{name}.svg"
+    # Animated airflow, one per level: the ventilation analysis drawn rather
+    # than tabulated, because a stagnant corner argues for itself.
+    for level in plan.levels:
+        urls[f"airflow_level_{level.index}"] = (
+            f"{prefix}/plans/{plan.id}/drawings/airflow_level_{level.index}.svg"
+        )
+    return urls
+
+
+def _export_urls(prefix: str, plan) -> dict[str, str]:
+    """Editable formats, kept apart from the rendered drawings.
+
+    `drawing_urls` is a contract for SVG the client can display inline. CAD and
+    mesh exports are downloads with different media types, so mixing them into
+    the same map would break any consumer that assumes it can render what it
+    finds there.
+    """
+    urls = {
+        f"dxf_level_{level.index}": f"{prefix}/plans/{plan.id}/level-{level.index}.dxf"
+        for level in plan.levels
+    }
+    urls["model_glb"] = f"{prefix}/plans/{plan.id}/model.glb"
+    urls["model_obj"] = f"{prefix}/plans/{plan.id}/model.obj"
     return urls
 
 
@@ -171,6 +194,7 @@ async def create_design(
         trace_id=result.trace_id,
         plan_ids=[p.id for p in result.plans],
         winner_plan_id=result.winner.id if result.winner else "",
+        selected_candidate_id=result.consensus.winner_id if result.consensus else "",
         plan=winner_dump,
         consensus=consensus_dump,
         vastu=result.vastu,
@@ -179,11 +203,14 @@ async def create_design(
         recommendations=result.recommendations,
         committee=result.committee,
         evidence=[json.loads(e.model_dump_json()) for e in result.evidence[:20]],
+        negotiation=result.negotiation,
+        negotiation_outcome=result.negotiation_outcome,
         duration_ms=round(result.duration_ms, 1),
         model_cost_usd=result.total_cost_usd,
         degraded=result.degraded,
         degraded_reason=result.degraded_reason,
         drawing_urls=_drawing_urls(prefix, result.winner) if result.winner else {},
+        export_urls=_export_urls(prefix, result.winner) if result.winner else {},
         model_url=f"{prefix}/plans/{result.winner.id}/model.glb" if result.winner else "",
     )
 
@@ -191,6 +218,7 @@ async def create_design(
 @router.post("/stream")
 async def stream_design(
     payload: DesignRequest,
+    request: Request,
     principal: Principal = Depends(get_principal),
     session: AsyncSession = Depends(get_session),
 ) -> StreamingResponse:
@@ -215,6 +243,10 @@ async def stream_design(
     firm_id = principal.firm.id
     project_id = project.id
     pipeline = DesignPipeline(_pipeline_config(payload), ledger=ledger)
+
+    from aip.core.config import get_settings
+
+    prefix = request.scope.get("root_path", "") + get_settings().api_prefix
 
     async def events():
         def sse(event: str, data: dict[str, Any]) -> str:
@@ -244,6 +276,25 @@ async def stream_design(
                             "cost": result.cost,
                             "explanation": result.explanation,
                             "recommendations": result.recommendations,
+                            "committee": result.committee,
+                            "evidence": [
+                                json.loads(e.model_dump_json()) for e in result.evidence[:20]
+                            ],
+                            "negotiation": result.negotiation,
+                            "negotiation_outcome": result.negotiation_outcome,
+                            "drawing_urls": (
+                                _drawing_urls(prefix, result.winner) if result.winner else {}
+                            ),
+                            "export_urls": (
+                                _export_urls(prefix, result.winner) if result.winner else {}
+                            ),
+                            "selected_candidate_id": (
+                                result.consensus.winner_id if result.consensus else ""
+                            ),
+                            "model_url": (
+                                f"{prefix}/plans/{result.winner.id}/model.glb"
+                                if result.winner else ""
+                            ),
                             "duration_ms": round(result.duration_ms, 1),
                             "model_cost_usd": result.total_cost_usd,
                             "degraded": result.degraded,
