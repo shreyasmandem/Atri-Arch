@@ -9,17 +9,21 @@ and it gets every analysis the generator's own schemes get.
 Four sources, in order of how much they can be trusted:
 
 * **JSON** - the platform's own schema. Lossless.
-* **DXF** - rooms as closed polylines, names as TEXT inside them. What every
-  CAD package exports. Read directly: the R12 subset the platform itself
+* **DXF** - rooms as closed polylines, names as TEXT inside them, which is what
+  the platform itself writes. A draughtsperson's file has no such polylines:
+  it has walls as LINEs with gaps at the doors. Those are read by finding the
+  spaces the walls enclose (`recover.rooms_from_linework`), with the drawing's
+  own `$INSUNITS` giving the scale. Read directly - the R12 subset the platform
   writes plus LWPOLYLINE and MTEXT, which cover what AutoCAD and its clones
   actually emit for a plan.
-* **SVG** - rectangles, polygons and simple paths with text labels. What plan
-  tools and drawing apps export.
-* **Image** - a scan or a photograph. Read by a vision model into the same
-  room list the vector parsers produce, then validated the same way. It is
-  the least certain path and it says so in the result: every room carries the
-  confidence the model gave it, and the whole import carries a note on what
-  was assumed.
+* **SVG** - rectangles, polygons and simple paths with text labels, or walls as
+  stroked lines, with transforms applied down the tree. What plan tools and
+  drawing apps export.
+* **Image** - a scan or a photograph. Read on this machine with OpenCV and OCR
+  (`raster`), and only if that finds nothing is a remote vision model asked,
+  with a time limit. It is the least certain path and it says so in the
+  result: every room carries a confidence, and the whole import carries a note
+  on what was assumed and how the scale was read.
 
 None of the parsers invent doors and windows the source did not draw. Where
 they are absent the generator's own placer adds them under the same rules the
@@ -31,6 +35,7 @@ door tree - and the result records that it did so.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from xml.etree import ElementTree
@@ -196,13 +201,43 @@ def _dxf_pairs(text: str) -> list[tuple[int, str]]:
     return pairs
 
 
+#: $INSUNITS codes a plan can plausibly use, as (metres per unit, name).
+_DXF_UNITS: dict[int, tuple[float, str]] = {
+    1: (0.0254, "inches"), 2: (0.3048, "feet"), 4: (0.001, "millimetres"),
+    5: (0.01, "centimetres"), 6: (1.0, "metres"),
+}
+
+#: Layers that carry the walls, and layers that never do.
+_WALL_LAYER = re.compile(r"wall|mur|wand|a-wall", re.I)
+_NOT_WALL_LAYER = re.compile(r"dim|anno|text|furn|door|hatch|grid|axis|title", re.I)
+
+
+def dxf_units(text: str) -> tuple[float, str] | None:
+    """The drawing's own statement of its units ($INSUNITS), when it makes one."""
+    pairs = _dxf_pairs(text)
+    for i, (code, value) in enumerate(pairs[:-1]):
+        if code == 9 and value == "$INSUNITS":
+            try:
+                return _DXF_UNITS.get(int(pairs[i + 1][1]))
+            except ValueError:
+                return None
+    return None
+
+
 def parse_dxf(text: str) -> tuple[list[ParsedRoom], list[str]]:
-    """Rooms from closed polylines, labelled by the text sitting inside them."""
+    """Rooms from closed polylines, or else from wall linework, labelled by the text inside them.
+
+    A file the platform wrote has one closed polyline per room. A file from a
+    draughtsperson has walls as lines and the rooms are what they enclose; that
+    is read by `rooms_from_linework` when the closed-outline path finds fewer
+    than two rooms.
+    """
     pairs = _dxf_pairs(text)
     polylines: list[tuple[str, list[Vec2], bool]] = []   # (layer, points, closed)
     texts: list[tuple[str, Vec2]] = []
     lines_by_layer: dict[str, list[tuple[Vec2, Vec2]]] = {}
 
+    section = ""
     i = 0
     n = len(pairs)
     while i < n:
@@ -219,6 +254,16 @@ def parse_dxf(text: str) -> tuple[list[ParsedRoom], list[str]]:
             c, v = pairs[i]
             attrs.setdefault(c, []).append(v)
             i += 1
+
+        if entity == "SECTION":
+            section = (attrs.get(2) or [""])[0]
+            continue
+        if entity == "ENDSEC":
+            section = ""
+            continue
+        # Block definitions hold furniture and symbols drawn once and inserted
+        # many times; their geometry is not part of the plan.
+        skip = section in ("BLOCKS", "CLASSES", "OBJECTS", "TABLES", "HEADER")
 
         if entity == "POLYLINE":
             layer = attrs.get(8, ["0"])[0]
@@ -240,7 +285,11 @@ def parse_dxf(text: str) -> tuple[list[ParsedRoom], list[str]]:
                 i += 1
                 while i < n and pairs[i][0] != 0:
                     i += 1
-            polylines.append((layer, vertices, closed))
+            if not skip:
+                polylines.append((layer, vertices, closed))
+
+        elif skip:
+            continue
 
         elif entity == "LWPOLYLINE":
             layer = attrs.get(8, ["0"])[0]
@@ -251,11 +300,16 @@ def parse_dxf(text: str) -> tuple[list[ParsedRoom], list[str]]:
             polylines.append((layer, vertices, closed))
 
         elif entity in ("TEXT", "MTEXT"):
-            content = " ".join(attrs.get(1, []) + attrs.get(3, []))
-            content = re.sub(r"\\[A-Za-z][^;]*;", "", content)   # MTEXT formatting codes
-            content = content.replace("\\P", " ").strip("{}")
-            x = float(attrs.get(10, ["0"])[0])
-            y = float(attrs.get(20, ["0"])[0])
+            # MTEXT splits long content into group-3 chunks before the final group 1.
+            content = _strip_mtext(" ".join(attrs.get(3, []) + attrs.get(1, [])))
+            try:
+                # A TEXT with an alignment is placed by its second point.
+                aligned = entity == "TEXT" and 11 in attrs and (
+                    int(attrs.get(72, ["0"])[0]) or int(attrs.get(73, ["0"])[0]))
+                x = float(attrs.get(11 if aligned else 10, ["0"])[0])
+                y = float(attrs.get(21 if aligned else 20, ["0"])[0])
+            except ValueError:
+                continue
             if content:
                 texts.append((content, Vec2(x, y)))
 
@@ -311,11 +365,16 @@ def parse_dxf(text: str) -> tuple[list[ParsedRoom], list[str]]:
             continue
         rooms.append(ParsedRoom(label="", polygon=list(pts)))
 
-    if not rooms:
-        raise ImportError_(
-            "No closed room outlines found. Export rooms as closed polylines "
-            "(one per room) with the room name as text inside each."
-        )
+    if len(rooms) < 2:
+        recovered = _dxf_from_linework(polylines, lines_by_layer, texts, dxf_units(text))
+        if recovered is not None:
+            return recovered
+        if not rooms:
+            raise ImportError_(
+                "No closed room outlines found, and the walls do not enclose any room. "
+                "Export rooms as closed polylines (one per room) with the room name as "
+                "text inside each, or close the door gaps in the wall layer and try again."
+            )
 
     # Attach each text to the smallest room that contains it: dimension
     # strings sit outside rooms and are ignored; a title block is not a room.
@@ -326,6 +385,44 @@ def parse_dxf(text: str) -> tuple[list[ParsedRoom], list[str]]:
         holder = min(holders, key=lambda r: r.area)
         holder.label = (holder.label + " " + content).strip() if holder.label else content
 
+    return rooms, warnings
+
+
+def _strip_mtext(content: str) -> str:
+    from aip.engines.architecture.recover import strip_cad_formatting
+
+    return strip_cad_formatting(content)
+
+
+def _dxf_from_linework(
+    polylines: list[tuple[str, list[Vec2], bool]],
+    lines_by_layer: dict[str, list[tuple[Vec2, Vec2]]],
+    texts: list[tuple[str, Vec2]],
+    units: tuple[float, str] | None,
+) -> tuple[list[ParsedRoom], list[str]] | None:
+    """Rooms from the wall layers' lines, or None when they enclose fewer than two."""
+    from aip.engines.architecture.recover import rooms_from_linework
+
+    by_layer: dict[str, list[tuple[Vec2, Vec2]]] = {k: list(v) for k, v in lines_by_layer.items()}
+    for layer, pts, closed in polylines:
+        edges = list(zip(pts, pts[1:], strict=False))
+        if closed and len(pts) > 2:
+            edges.append((pts[-1], pts[0]))
+        by_layer.setdefault(layer, []).extend(edges)
+
+    wall_layers = [k for k in by_layer if _WALL_LAYER.search(k)]
+    layers = wall_layers or [k for k in by_layer if not _NOT_WALL_LAYER.search(k)]
+    segments = [seg for k in layers for seg in by_layer[k]]
+    if len(segments) < 4:
+        return None
+
+    # About a metre in the drawing's own units, when it says what they are.
+    door_gap = 1.2 / units[0] if units else None
+    rooms, warnings = rooms_from_linework(segments, texts, door_gap=door_gap)
+    if len(rooms) < 2:
+        return None
+    where = ", ".join(sorted(layers)) if wall_layers else "all layers except annotation and furniture"
+    warnings.insert(0, f"No closed room outlines were drawn, so rooms were read from wall linework on {where}.")
     return rooms, warnings
 
 
@@ -376,54 +473,225 @@ def _svg_path_points(d: str) -> list[Vec2] | None:
     return points if len(points) >= 3 else None
 
 
+_NUM = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
+
+#: (a, b, c, d, e, f): x' = a*x + c*y + e, y' = b*x + d*y + f, as in SVG.
+Matrix = tuple[float, float, float, float, float, float]
+_IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+
+
+def _mat_mul(m: Matrix, n: Matrix) -> Matrix:
+    """The transform that applies `n` first and then `m`."""
+    a1, b1, c1, d1, e1, f1 = m
+    a2, b2, c2, d2, e2, f2 = n
+    return (a1 * a2 + c1 * b2, b1 * a2 + d1 * b2,
+            a1 * c2 + c1 * d2, b1 * c2 + d1 * d2,
+            a1 * e2 + c1 * f2 + e1, b1 * e2 + d1 * f2 + f1)
+
+
+def _parse_transform(text: str | None) -> Matrix:
+    """A `transform` attribute - matrix, translate, scale, rotate, skew, any number of them."""
+    m = _IDENTITY
+    for name, args in re.findall(r"([A-Za-z]+)\s*\(([^)]*)\)", text or ""):
+        v = [float(x) for x in re.findall(_NUM, args)]
+        name = name.lower()
+        if name == "matrix" and len(v) == 6:
+            t: Matrix = (v[0], v[1], v[2], v[3], v[4], v[5])
+        elif name == "translate" and v:
+            t = (1.0, 0.0, 0.0, 1.0, v[0], v[1] if len(v) > 1 else 0.0)
+        elif name == "scale" and v:
+            t = (v[0], 0.0, 0.0, v[1] if len(v) > 1 else v[0], 0.0, 0.0)
+        elif name == "rotate" and v:
+            c, s = math.cos(math.radians(v[0])), math.sin(math.radians(v[0]))
+            t = (c, s, -s, c, 0.0, 0.0)
+            if len(v) >= 3:                    # about (cx, cy)
+                t = _mat_mul(_mat_mul((1.0, 0.0, 0.0, 1.0, v[1], v[2]), t),
+                             (1.0, 0.0, 0.0, 1.0, -v[1], -v[2]))
+        elif name == "skewx" and v:
+            t = (1.0, 0.0, math.tan(math.radians(v[0])), 1.0, 0.0, 0.0)
+        elif name == "skewy" and v:
+            t = (1.0, math.tan(math.radians(v[0])), 0.0, 1.0, 0.0, 0.0)
+        else:
+            continue
+        m = _mat_mul(m, t)
+    return m
+
+
+def _apply(m: Matrix, p: Vec2) -> Vec2:
+    return Vec2(m[0] * p.x + m[2] * p.y + m[4], m[1] * p.x + m[3] * p.y + m[5])
+
+
+def _svg_path_edges(d: str) -> list[tuple[list[Vec2], bool]]:
+    """Sub-paths of a path as (points, closed). M/L/H/V/Z in both cases; a
+    curve (C, S, Q, T, A) is approximated by its end point, which is all a
+    wall drawn with a door-swing arc needs."""
+    tokens = re.findall(r"[MmLlHhVvCcSsQqTtAaZz]|" + _NUM, d)
+    out: list[tuple[list[Vec2], bool]] = []
+    pts: list[Vec2] = []
+    x = y = sx = sy = 0.0
+    cmd = ""
+    k = 0
+    arity = {"m": 2, "l": 2, "h": 1, "v": 1, "c": 6, "s": 4, "q": 4, "t": 2, "a": 7}
+
+    def flush(closed: bool) -> None:
+        nonlocal pts
+        if len(pts) >= 2:
+            out.append((pts, closed))
+        pts = []
+
+    while k < len(tokens):
+        t = tokens[k]
+        if t.isalpha():
+            cmd = t
+            k += 1
+            if cmd in "Zz":
+                flush(True)
+                x, y = sx, sy
+                pts = [Vec2(sx, sy)]           # a command after Z continues from the start
+            continue
+        low = cmd.lower()
+        if low not in arity or k + arity[low] > len(tokens):
+            break
+        try:
+            v = [float(tokens[k + j]) for j in range(arity[low])]
+        except ValueError:
+            break
+        k += arity[low]
+        rel = cmd.islower()
+        if low == "h":
+            x = x + v[0] if rel else v[0]
+        elif low == "v":
+            y = y + v[0] if rel else v[0]
+        else:
+            ex, ey = v[-2], v[-1]
+            x, y = (x + ex, y + ey) if rel else (ex, ey)
+        if low == "m":
+            flush(False)
+            sx, sy = x, y
+            cmd = "l" if rel else "L"          # further pairs after M are implicit L
+        if not pts or (x, y) != (pts[-1].x, pts[-1].y):
+            pts.append(Vec2(x, y))
+    flush(False)
+    return out
+
+
+def _style_of(node: ElementTree.Element, inherited: dict[str, str]) -> dict[str, str]:
+    """Presentation properties this importer cares about, inherited down the tree."""
+    props = dict(inherited)
+    for key in ("stroke", "stroke-width", "display", "visibility"):
+        if node.get(key) is not None:
+            props[key] = node.get(key, "").strip()
+    for decl in (node.get("style") or "").split(";"):
+        if ":" in decl:
+            key, _, value = decl.partition(":")
+            if key.strip() in ("stroke", "stroke-width", "display", "visibility"):
+                props[key.strip()] = value.strip()
+    return props
+
+
+def _float(value: str | None, default: float = 0.0) -> float:
+    """A length attribute; a percentage (the page-sized background rect) is not a length here."""
+    text = (value or "").strip()
+    if text.endswith("%"):
+        return default
+    match = re.match(_NUM, text)
+    return float(match.group(0)) if match else default
+
+
+_SVG_SKIP = {"defs", "clippath", "mask", "symbol", "pattern", "marker", "style", "title", "desc",
+             "metadata", "lineargradient", "radialgradient", "filter"}
+
+
 def parse_svg(text: str) -> tuple[list[ParsedRoom], list[str]]:
+    """Rooms from an SVG: closed shapes when there are some, else enclosed by wall lines.
+
+    Transforms are composed down the element tree, so a plan inside a
+    translated, scaled or rotated group lands where it is drawn. Closed
+    rect/polygon/path outlines are tried first; a file whose walls are strokes
+    (`<line>`s with a stroke width) is read by `rooms_from_linework`.
+    """
     try:
         root = ElementTree.fromstring(text)
     except ElementTree.ParseError as exc:
         raise ImportError_(f"Not well-formed SVG: {exc}") from exc
 
     def local(tag: str) -> str:
-        return tag.rsplit("}", 1)[-1]
+        return tag.rsplit("}", 1)[-1].lower()
 
     shapes: list[list[Vec2]] = []
     texts: list[tuple[str, Vec2]] = []
+    # Linework as (a, b, stroke width in user space).
+    strokes: list[tuple[Vec2, Vec2, float]] = []
     warnings: list[str] = []
 
-    for node in root.iter():
+    def walk(node: ElementTree.Element, m: Matrix, inherited: dict[str, str]) -> None:
         tag = local(node.tag)
+        if tag in _SVG_SKIP:
+            return
+        m = _mat_mul(m, _parse_transform(node.get("transform")))
+        props = _style_of(node, inherited)
+        if props.get("display") == "none" or props.get("visibility") in ("hidden", "collapse"):
+            return
+        # How much a transform stretches a stroke: the square root of its area scale.
+        stretch = math.sqrt(abs(m[0] * m[3] - m[1] * m[2])) or 1.0
+        visible = props.get("stroke", "") != "none"
+        width = _float(props.get("stroke-width"), 1.0) * stretch
+
+        def edges(pts: list[Vec2], closed: bool) -> None:
+            if not visible:
+                return
+            pairs = list(zip(pts, pts[1:], strict=False)) + ([(pts[-1], pts[0])] if closed and len(pts) > 2 else [])
+            strokes.extend((a, b, width) for a, b in pairs)
+
         try:
             if tag == "rect":
-                x, y = float(node.get("x", 0)), float(node.get("y", 0))
-                w, h = float(node.get("width", 0)), float(node.get("height", 0))
+                x, y = _float(node.get("x")), _float(node.get("y"))
+                w, h = _float(node.get("width")), _float(node.get("height"))
                 if w > 0 and h > 0:
-                    shapes.append([Vec2(x, y), Vec2(x + w, y), Vec2(x + w, y + h), Vec2(x, y + h)])
-            elif tag == "polygon":
-                nums = [float(v) for v in re.findall(r"-?\d*\.?\d+(?:e-?\d+)?", node.get("points", ""))]
-                pts = [Vec2(nums[i], nums[i + 1]) for i in range(0, len(nums) - 1, 2)]
-                if len(pts) >= 3:
+                    pts = [_apply(m, p) for p in (Vec2(x, y), Vec2(x + w, y), Vec2(x + w, y + h), Vec2(x, y + h))]
                     shapes.append(pts)
+                    edges(pts, True)
+            elif tag in ("polygon", "polyline"):
+                nums = [float(v) for v in re.findall(_NUM, node.get("points", ""))]
+                pts = [_apply(m, Vec2(nums[i], nums[i + 1])) for i in range(0, len(nums) - 1, 2)]
+                if tag == "polygon" and len(pts) >= 3:
+                    shapes.append(pts)
+                edges(pts, tag == "polygon")
+            elif tag == "line":
+                a = _apply(m, Vec2(_float(node.get("x1")), _float(node.get("y1"))))
+                b = _apply(m, Vec2(_float(node.get("x2")), _float(node.get("y2"))))
+                edges([a, b], False)
             elif tag == "path":
-                pts = _svg_path_points(node.get("d", ""))
+                d = node.get("d", "")
+                pts = _svg_path_points(d)
                 if pts:
-                    shapes.append(pts)
+                    shapes.append([_apply(m, p) for p in pts])
+                for sub, closed in _svg_path_edges(d):
+                    edges([_apply(m, p) for p in sub], closed)
             elif tag == "text":
                 content = "".join(node.itertext()).strip()
                 if content:
-                    texts.append((content, Vec2(float(node.get("x", 0)), float(node.get("y", 0)))))
-        except ValueError:
-            continue
+                    first = node if node.get("x") is not None else next(
+                        (c for c in node.iter() if c.get("x") is not None), node)
+                    at = _apply(m, Vec2(_float((first.get("x") or "0").replace(",", " ").split()[0]),
+                                        _float((first.get("y") or "0").replace(",", " ").split()[0])))
+                    texts.append((content, at))
+        except (ValueError, IndexError):
+            pass
+        for child in node:
+            walk(child, m, props)
 
-    if root.get("transform") or any(n.get("transform") for n in root.iter()):
-        warnings.append(
-            "The SVG uses transform attributes, which this importer does not apply. "
-            "If rooms look misplaced, export with transforms flattened."
-        )
+    walk(root, _IDENTITY, {})
 
     # SVG's y axis points down; the platform's points up. Flip once here.
-    if shapes:
-        top = max(p.y for s in shapes for p in s)
-        shapes = [[Vec2(p.x, top - p.y) for p in s] for s in shapes]
-        texts = [(t, Vec2(at.x, top - at.y)) for t, at in texts]
+    everything = [p for s in shapes for p in s] + [p for a, b, _ in strokes for p in (a, b)]
+    top = max((p.y for p in everything), default=0.0)
+
+    def flip(pts: list[Vec2]) -> list[Vec2]:
+        return [Vec2(p.x, top - p.y) for p in pts]
+
+    texts = [(t, Vec2(at.x, top - at.y)) for t, at in texts]
+    shapes = [flip(s) for s in shapes]
 
     rooms: list[ParsedRoom] = []
     for pts in shapes:
@@ -431,8 +699,6 @@ def parse_svg(text: str) -> tuple[list[ParsedRoom], list[str]]:
         if min(box.width, box.height) < max(box.width, box.height) * 0.06:
             continue
         rooms.append(ParsedRoom(label="", polygon=pts))
-    if not rooms:
-        raise ImportError_("No room shapes found in the SVG (looked for rect, polygon and simple path).")
 
     # The outermost shape that contains every other is the plot or the
     # building outline, not a room.
@@ -441,12 +707,47 @@ def parse_svg(text: str) -> tuple[list[ParsedRoom], list[str]]:
         if all(point_in_polygon(centroid(r.polygon), biggest.polygon) for r in rooms if r is not biggest):
             rooms.remove(biggest)
 
+    if len(rooms) < 2:
+        recovered = _svg_from_strokes(strokes, texts, top)
+        if recovered is not None:
+            return recovered
+        if not rooms:
+            raise ImportError_(
+                "No room shapes found in the SVG: no closed rect, polygon or path outlines, "
+                "and no wall lines that enclose rooms. Export the plan with one closed shape "
+                "per room, or draw the walls as continuous lines with the door gaps no wider "
+                "than a door."
+            )
+
     for content, at in texts:
         holders = [r for r in rooms if point_in_polygon(at, r.polygon)]
         if holders:
             holder = min(holders, key=lambda r: r.area)
             holder.label = (holder.label + " " + content).strip() if holder.label else content
 
+    return rooms, warnings
+
+
+def _svg_from_strokes(
+    strokes: list[tuple[Vec2, Vec2, float]], texts: list[tuple[str, Vec2]], top: float
+) -> tuple[list[ParsedRoom], list[str]] | None:
+    """Rooms enclosed by an SVG's stroked wall lines, or None when they enclose fewer than two."""
+    from aip.engines.architecture.recover import rooms_from_linework
+
+    if len(strokes) < 4:
+        return None
+    widths = sorted(w for _, _, w in strokes)
+    median = widths[len(widths) // 2]
+    # Where the widths split into a thick and a thin population, the thin
+    # lines are dimension leaders and hatching, not walls.
+    kept = [(a, b, w) for a, b, w in strokes if w >= 0.25 * median]
+    segments = [(Vec2(a.x, top - a.y), Vec2(b.x, top - b.y)) for a, b, _ in kept]
+    thickness = sorted(w for _, _, w in kept)[len(kept) // 2]
+    rooms, warnings = rooms_from_linework(segments, texts, wall_thickness=thickness)
+    if len(rooms) < 2:
+        return None
+    if len(kept) < len(strokes):
+        warnings.append(f"Ignored {len(strokes) - len(kept)} thin line(s) as dimension or hatch lines.")
     return rooms, warnings
 
 
@@ -550,6 +851,7 @@ def _scale_to_plot(
     *,
     unitless: bool,
     setbacks: tuple[float, float, float, float],
+    unit_scale: tuple[float, str] | None = None,
 ) -> tuple[list[ParsedRoom], str]:
     """Bring source units to metres.
 
@@ -559,7 +861,9 @@ def _scale_to_plot(
     footprint, never inflated to fill it - inflating a 9 m house to a 12 m
     plot is how the first round-trip came back 54% larger than it went out.
     A unitless drawing has nothing to be faithful to, so it is fitted to the
-    footprint exactly.
+    footprint exactly. A source that states its own scale (a DXF's $INSUNITS,
+    # a raster plan whose dimension strings were read) is a drawing with units
+    # whatever its format, and is scaled as one.
     """
     # Measure the extent from shapes that are plausibly rooms. Wall slivers,
     # door swings and frame lines survive to this point in a vector export
@@ -582,7 +886,7 @@ def _scale_to_plot(
         sy = buildable_d / box.height if buildable_d and box.height else float("inf")
         return min(sx, sy)
 
-    if unitless:
+    if unitless and unit_scale is None:
         if buildable_w and buildable_d:
             scale = fit_scale()
             note = (f"Fitted the drawing to the {buildable_w:.1f} x {buildable_d:.1f} m "
@@ -592,7 +896,9 @@ def _scale_to_plot(
             scale = 9.0 / extent
             note = "No plot size given for a unitless drawing; scaled so the longer side is 9 m."
     else:
-        if extent > 2000:
+        if unit_scale is not None:
+            scale, note = unit_scale[0], f"Units taken from the file: {unit_scale[1]}."
+        elif extent > 2000:
             scale, note = 0.001, "Extent exceeds 2000 units; read as millimetres."
         elif extent > 200:
             scale, note = 0.3048 / 12, "Extent in the hundreds; read as inches."
@@ -638,6 +944,7 @@ def assemble(
     warnings: list[str],
     setbacks: tuple[float, float, float, float] = (3.0, 1.5, 1.2, 1.2),
     add_openings: bool = True,
+    unit_scale: tuple[float, str] | None = None,
 ) -> ImportResult:
     """Turn parsed rooms into a full FloorPlan with walls and openings."""
     from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
@@ -664,7 +971,8 @@ def assemble(
         raise ImportError_("None of the outlines could be used as rooms.")
 
     kept, scale_note = _scale_to_plot(
-        kept, plot_width, plot_depth, unitless=source in ("svg", "image"), setbacks=setbacks
+        kept, plot_width, plot_depth, unitless=source in ("svg", "image"), setbacks=setbacks,
+        unit_scale=unit_scale,
     )
     # Only now are the units metres, so only now can a column footprint or
     # a stray rectangle be told from a room by size.
@@ -790,6 +1098,54 @@ def assemble(
 # ---------------------------------------------------------------------------
 
 
+#: How long the remote vision model gets before an upload gives up on it. The
+#: free tiers rate-limit and queue; an upload should not hang a minute on one.
+VISION_TIMEOUT_S = 20.0
+
+
+def parse_image_local(data: bytes) -> tuple[list[ParsedRoom], list[str], dict[str, object]]:
+    """Rooms from an image using OpenCV and OCR on this machine; see `raster`."""
+    from aip.engines.architecture.raster import parse_image_local as _parse
+
+    return _parse(data)
+
+
+async def _read_image(
+    data: bytes, mime: str
+) -> tuple[list[ParsedRoom], list[str], dict[str, object]]:
+    """Local computer vision first, the remote vision model only if that fails.
+
+    The local reader is deterministic and offline; the model is rate-limited
+    and slow, so it is a fallback for the plans the local reader cannot make
+    sense of (hand sketches without clear walls, photographs at an angle).
+    """
+    import asyncio
+
+    from aip.engines.architecture.raster import INSTALL_HINT, LocalVisionUnavailable
+
+    local_note = ""
+    try:
+        rooms, warnings, meta = await asyncio.to_thread(parse_image_local, data)
+        if len(rooms) >= 2:
+            return rooms, warnings, meta
+        local_note = warnings[-1] if warnings else "No rooms were found."
+    except LocalVisionUnavailable:
+        local_note = INSTALL_HINT
+
+    try:
+        return await asyncio.wait_for(parse_image(data, mime), timeout=VISION_TIMEOUT_S)
+    except TimeoutError as exc:
+        raise ImportError_(
+            f"The image could not be read here ({local_note}) and the remote vision model did "
+            f"not answer within {VISION_TIMEOUT_S:.0f} s. Try again shortly, or upload the DXF "
+            f"or SVG of this plan, which needs no model at all."
+        ) from exc
+    except ImportError_ as exc:
+        raise ImportError_(
+            f"The image could not be read here ({local_note}) and {str(exc)[:1].lower()}{str(exc)[1:]}"
+        ) from exc
+
+
 async def import_floorplan(
     data: bytes,
     filename: str,
@@ -804,6 +1160,7 @@ async def import_floorplan(
     """Read any supported file into a FloorPlan."""
     lower = filename.lower()
     warnings: list[str] = []
+    unit_scale: tuple[float, str] | None = None
 
     if lower.endswith(".json"):
         try:
@@ -817,23 +1174,41 @@ async def import_floorplan(
                             rooms_kept=len(plan.all_rooms), scale_note="Native schema; no scaling.")
 
     if lower.endswith(".dxf"):
-        rooms, warnings = parse_dxf(data.decode("utf-8", errors="replace"))
+        text = data.decode("utf-8", errors="replace")
+        rooms, warnings = parse_dxf(text)
         source = "dxf"
+        unit_scale = dxf_units(text)
+        if unit_scale:
+            # A header that says metres over coordinates in the thousands is a
+            # stale header, and the extent is the better witness.
+            box = bounding_box([p for r in rooms for p in r.polygon])
+            if not 3.0 <= max(box.width, box.height) * unit_scale[0] <= 300.0:
+                unit_scale = None
     elif lower.endswith(".svg"):
         rooms, warnings = parse_svg(data.decode("utf-8", errors="replace"))
         source = "svg"
     elif lower.endswith((".png", ".jpg", ".jpeg", ".webp")) or mime.startswith("image/"):
-        mime = mime or {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}[lower.rsplit(".", 1)[-1]]
-        rooms, warnings, meta = await parse_image(data, mime)
+        mime = mime or {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(
+            lower.rsplit(".", 1)[-1], "image/png")
+        rooms, warnings, meta = await _read_image(data, mime)
         source = "image"
-        # Trust the drawing's own dimension strings when the caller gave none.
-        plot_width = plot_width or (float(meta["plot_width_m"]) if meta.get("plot_width_m") else None)
-        plot_depth = plot_depth or (float(meta["plot_depth_m"]) if meta.get("plot_depth_m") else None)
-        if not (plot_width and plot_depth):
-            warnings.append(
-                "No plot size was given and none could be read from the image, so the "
-                "scale is a guess. Give the plot size for a correct area and cost."
-            )
+        extent_m = meta.get("extent_m")
+        if extent_m:
+            # The drawing stated its own scale: rooms are fractions of the
+            # building's longer side, so the building is exactly that long.
+            k = float(extent_m)  # type: ignore[arg-type]
+            for r in rooms:
+                r.polygon = [Vec2(p.x * k, p.y * k) for p in r.polygon]
+            unit_scale = (1.0, "scale read from the drawing's own dimension strings")
+        else:
+            # Trust the drawing's own dimension strings when the caller gave none.
+            plot_width = plot_width or (float(meta["plot_width_m"]) if meta.get("plot_width_m") else None)  # type: ignore[arg-type]
+            plot_depth = plot_depth or (float(meta["plot_depth_m"]) if meta.get("plot_depth_m") else None)  # type: ignore[arg-type]
+            if not (plot_width and plot_depth):
+                warnings.append(
+                    "No plot size was given and none could be read from the image, so the "
+                    "scale is a guess. Give the plot size for a correct area and cost."
+                )
     else:
         raise ImportError_(
             "Unsupported file. Upload a DXF, SVG, PNG/JPG image, or the platform's own plan JSON."
@@ -842,4 +1217,5 @@ async def import_floorplan(
     return assemble(
         rooms, source=source, plot_width=plot_width, plot_depth=plot_depth,
         road=road, north_angle=north_angle, name=name, warnings=warnings,
+        unit_scale=unit_scale,
     )

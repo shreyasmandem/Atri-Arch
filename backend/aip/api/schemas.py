@@ -277,6 +277,7 @@ class DesignResponse(BaseModel):
     explanation: str = ""
     recommendations: list[str] = Field(default_factory=list)
     committee: list[dict[str, Any]] = Field(default_factory=list)
+    voices: list[dict[str, Any]] = Field(default_factory=list)
     evidence: list[dict[str, Any]] = Field(default_factory=list)
 
     #: Manager-worker negotiation record: which constraints were open, which

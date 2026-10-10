@@ -90,17 +90,22 @@ async def get_drawing(
     plan = _load(plan_id, principal)
     style = DrawingStyle()
     if dark:
-        # Inverted palette for embedding in dark-themed practice websites.
-        style.background = "#12161b"
-        style.wall_fill = "#e6e9ec"
-        style.wall_stroke = "#ffffff"
-        style.room_fill = "#1c2229"
-        style.room_fill_wet = "#182430"
-        style.room_fill_outdoor = "#1a2620"
-        style.room_fill_circulation = "#20262d"
-        style.text = "#e6e9ec"
-        style.text_muted = "#8f9aa6"
-        style.grid = "#2a323b"
+        # Inverted palette for dark themes: the studio's warm black and
+        # cream, with wet rooms and circulation told apart by value alone.
+        style.background = "#141312"
+        style.wall_fill = "#ede6dc"
+        style.wall_stroke = "#f6f1ea"
+        style.room_fill = "#1d1c1a"
+        style.room_fill_wet = "#22221f"
+        style.room_fill_outdoor = "#1a1a17"
+        style.room_fill_circulation = "#181715"
+        style.text = "#ede6dc"
+        style.text_muted = "#9a948b"
+        style.dimension = "#8a847b"
+        style.glass = "#a9b8c2"
+        style.accent = "#c4553f"
+        style.grid = "#2a2724"
+        style.font = "'Geist', 'Segoe UI', system-ui, sans-serif"
 
     try:
         if name.startswith("plan_level_"):

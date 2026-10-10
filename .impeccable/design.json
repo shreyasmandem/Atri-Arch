@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-10T00:00:00Z",
+  "title": "Design System: Atri Arch Studio",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "neutral", "displayName": "Warm Ink", "canonical": "#0b0a09", "tonalRamp": ["#0b0a09", "#141312", "#1a1919", "#2a2724", "#57524b", "#8a847b", "#c2bbb1", "#ede6dc"] },
+      "cream": { "role": "primary", "displayName": "Paper Cream", "canonical": "#ede6dc", "tonalRamp": ["#3b3833", "#57524b", "#77716a", "#9a948b", "#bdb6ac", "#d7d0c6", "#ede6dc", "#f8f4ee"] },
+      "brick": { "role": "tertiary", "displayName": "Brick Signal", "canonical": "#c4553f", "tonalRamp": ["#3a1610", "#5e2419", "#833324", "#a74430", "#c4553f", "#d47866", "#e3a193", "#f1cdc5"] },
+      "stone": { "role": "neutral", "displayName": "Stone", "canonical": "#a39c92" },
+      "sand": { "role": "neutral", "displayName": "Sand", "canonical": "#c9b497" },
+      "pale-cream": { "role": "neutral", "displayName": "Pale Cream", "canonical": "#e8dcc6" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The one large uppercase statement per screen." },
+      "soft": { "displayName": "Soft line", "purpose": "Archivo italic beside or above the display line." },
+      "label": { "displayName": "Label", "purpose": "Row keys, tabs, buttons and captions; never under 11px." }
+    },
+    "shadows": [
+      { "name": "float", "value": "0 12px 32px rgba(0,0,0,0.5)", "purpose": "Speech bubbles, toasts and dialogs floating over the board." },
+      { "name": "sheet", "value": "drop-shadow(0 24px 48px rgba(0,0,0,0.55))", "purpose": "A drawing resting on the plate." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Every reveal, underline draw and geometry change." },
+      { "name": "ease-in-out", "value": "cubic-bezier(0.87, 0, 0.13, 1)", "purpose": "Looping cues such as the engine beat." },
+      { "name": "grain", "value": "1.2s steps(6) infinite", "purpose": "Film grain over the whole page." }
+    ],
+    "breakpoints": [
+      { "name": "narrow-side", "value": "1180px" },
+      { "name": "stack", "value": "980px" },
+      { "name": "phone", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button", "kind": "button", "refersTo": "button-primary",
+      "description": "The one action that moves the work forward.",
+      "html": "<button class=\"ds-btn\">Convene the studio <svg viewBox=\"0 0 24 24\"><path d=\"M4 12h15M13 6l6 6-6 6\"/></svg></button>",
+      "css": ".ds-btn { display:inline-flex; align-items:center; gap:12px; height:56px; padding:0 30px; border:0; border-radius:999px; background:#ede6dc; color:#0b0a09; font:600 12px Geist, Helvetica, sans-serif; letter-spacing:.14em; text-transform:uppercase; cursor:pointer; transition:background-color .3s; } .ds-btn svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.6; transition:transform .45s cubic-bezier(.16,1,.3,1); } .ds-btn:hover { background:#fff; } .ds-btn:hover svg { transform:translateX(4px); } .ds-btn:focus-visible { outline:1px solid #ede6dc; outline-offset:3px; }"
+    },
+    {
+      "name": "Line Button", "kind": "button", "refersTo": "button-line",
+      "description": "Secondary actions: cancel, new brief.",
+      "html": "<button class=\"ds-line\">Cancel</button>",
+      "css": ".ds-line { height:40px; padding:0 20px; border:0; border-radius:999px; background:transparent; color:#ede6dc; box-shadow:inset 0 0 0 1px rgba(237,230,220,.2); font:600 11px Geist, Helvetica, sans-serif; letter-spacing:.14em; text-transform:uppercase; cursor:pointer; } .ds-line:hover { box-shadow:inset 0 0 0 1px rgba(237,230,220,.5); } .ds-line:focus-visible { outline:1px solid #ede6dc; outline-offset:3px; }"
+    },
+    {
+      "name": "Toggle", "kind": "chip", "refersTo": "toggle-on",
+      "description": "A room or option that is in or out.",
+      "html": "<span class=\"ds-chip\">Study</span> <span class=\"ds-chip is-on\">Pooja room</span>",
+      "css": ".ds-chip { display:inline-block; padding:8px 15px; border-radius:999px; font:400 13px Geist, Helvetica, sans-serif; color:rgba(237,230,220,.74); box-shadow:inset 0 0 0 1px rgba(237,230,220,.2); } .ds-chip:hover { color:#ede6dc; } .ds-chip.is-on { background:#ede6dc; color:#0b0a09; box-shadow:none; }"
+    },
+    {
+      "name": "Underline Number", "kind": "input", "refersTo": "input-underline",
+      "description": "A quantity in the specification sheet.",
+      "html": "<label class=\"ds-num\"><input value=\"12\"><i>m wide</i></label>",
+      "css": ".ds-num { display:inline-flex; align-items:baseline; gap:8px; } .ds-num input { width:4.6ch; border:0; border-bottom:1px solid rgba(237,230,220,.2); background:transparent; color:#ede6dc; font:400 24px Geist, Helvetica, sans-serif; } .ds-num input:focus { outline:none; border-color:#ede6dc; } .ds-num i { font:400 13px Geist, Helvetica, sans-serif; font-style:normal; color:rgba(237,230,220,.5); }"
+    },
+    {
+      "name": "View Tab", "kind": "nav",
+      "description": "Header and pane tabs: selected by an underline drawn from the left.",
+      "html": "<nav class=\"ds-tabs\"><button class=\"is-on\">Drawings</button><button>Vastu</button><button>Cost</button></nav>",
+      "css": ".ds-tabs { display:flex; gap:2px; } .ds-tabs button { position:relative; height:36px; padding:0 12px; border:0; background:none; color:rgba(237,230,220,.5); font:600 11.5px Geist, Helvetica, sans-serif; letter-spacing:.14em; text-transform:uppercase; cursor:pointer; } .ds-tabs button::after { content:''; position:absolute; left:12px; right:12px; bottom:4px; height:1px; background:#ede6dc; transform:scaleX(0); transform-origin:left; transition:transform .5s cubic-bezier(.16,1,.3,1); } .ds-tabs button:hover, .ds-tabs .is-on { color:#ede6dc; } .ds-tabs .is-on::after { transform:scaleX(1); }"
+    },
+    {
+      "name": "Chapter Caption", "kind": "custom",
+      "description": "The run's stage: an informative index over one large uppercase word.",
+      "html": "<div class=\"ds-ch\"><p>Stage 4 of 9</p><h3>Review</h3><span>13 critics reviewing 3 schemes</span></div>",
+      "css": ".ds-ch p { display:flex; align-items:center; gap:14px; margin:0 0 14px; font:600 11px Geist, Helvetica, sans-serif; letter-spacing:.16em; text-transform:uppercase; color:rgba(237,230,220,.74); } .ds-ch p::after { content:''; width:56px; height:1px; background:rgba(237,230,220,.5); } .ds-ch h3 { margin:0; font:500 72px/.92 Archivo, Helvetica, sans-serif; font-stretch:94%; letter-spacing:-.025em; text-transform:uppercase; color:#ede6dc; } .ds-ch span { display:block; margin-top:14px; font:400 15px Geist, Helvetica, sans-serif; color:rgba(237,230,220,.74); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Studio After Dark",
+    "overview": "The studio runs in the Studio Rabbit world: warm black, cream type, film grain, nothing that glows. What matters is set large, uppercase and tight in Archivo with an italic soft line; everything you operate is quiet Geist. Structure comes from hairline rules, not boxes, and the only colour that speaks is brick red, for failure.",
+    "keyCharacteristics": ["Warm black ground and cream type", "Archivo uppercase display with an italic soft line", "Hairline rules and pill controls", "Brick red as the only signal", "One authored moment per screen"],
+    "rules": [
+      { "name": "The One Signal Rule", "body": "Brick red appears only where something fails.", "section": "colors" },
+      { "name": "The Chapter Rule", "body": "A screen's subject is said once, large and uppercase; an index line sits above it only when the index carries information.", "section": "typography" }
+    ],
+    "dos": ["Do set each screen's subject large, uppercase and once.", "Do separate with hairlines and space before containers.", "Do keep numbers tabular and labels at 11px or larger.", "Do keep red for failure only."],
+    "donts": ["Don't add cards, glass, glow, gradient text or coloured borders thicker than 1px.", "Don't put a kicker or eyebrow above a heading.", "Don't use emoji or glyphs as icons.", "Don't bring back the navy, gold-on-black or starfield looks."]
+  }
+}

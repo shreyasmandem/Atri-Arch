@@ -107,9 +107,11 @@ async def import_plan(
         raise HTTPException(
             status_code=502,
             detail=(
-                "The plan could not be read. For an image this usually means no free "
-                "vision model was reachable just now; try again shortly, or upload the "
-                "DXF or SVG instead, which needs no model at all."
+                "The plan could not be read. For an image, the server reads walls and "
+                "labels itself and only asks a remote vision model when that fails, so "
+                "this usually means the remote model was unreachable too. Try a straighter, "
+                "higher-contrast image with the walls as dark lines, or upload the DXF or "
+                "SVG of this plan, which needs no model at all."
             ),
         ) from exc
 
@@ -211,6 +213,7 @@ async def review_stream(
                         "explanation": result.explanation,
                         "recommendations": result.recommendations,
                         "committee": result.committee,
+                        "voices": result.voices,
                         "evidence": [json.loads(e.model_dump_json()) for e in result.evidence[:20]],
                         "negotiation": result.negotiation,
                         "negotiation_outcome": result.negotiation_outcome,

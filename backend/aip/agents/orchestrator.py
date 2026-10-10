@@ -92,6 +92,10 @@ class DesignResult(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
     committee: list[dict[str, Any]] = Field(default_factory=list)
+    #: What each critic said about the scheme the committee chose, in one
+    #: line each - the review rail shows the committee as people, and people
+    #: say why, not just how much.
+    voices: list[dict[str, Any]] = Field(default_factory=list)
 
     debate_rounds: int = 0
     refinement_applied: bool = False
@@ -187,6 +191,7 @@ class DesignPipeline:
                     0.34,
                     schemes=[{"id": p.id, "name": p.name, "area": p.total_built_area}
                              for p in plans],
+                    sketches=[plan_sketch(p) for p in plans],
                 )
             else:
                 plans = await self._stage_generate(brief, ctx, emit)
@@ -257,6 +262,8 @@ class DesignPipeline:
 
             result.evidence = merge_evidence(candidates)[:40]
             result.committee = committee_charter()
+            chosen = next((c for c in candidates if c.id == consensus.winner_id), candidates[0])
+            result.voices = [critic_voice(c, full=True) for c in chosen.critiques]
             result.duration_ms = (time.perf_counter() - started) * 1000
             result.model_usage = self.router.ledger.summary()
             result.total_cost_usd = self.router.ledger.total_cost_usd
@@ -387,6 +394,7 @@ class DesignPipeline:
                  "fitness": p.metadata.get("fitness")}
                 for p in plans
             ],
+            sketches=[plan_sketch(p) for p in plans],
         )
         return plans
 
@@ -422,6 +430,7 @@ class DesignPipeline:
                 0.36 + 0.18 * (index + 1) / len(plans),
                 plan=plan.id,
                 scores={c.axis: round(c.score, 3) for c in critiques},
+                remarks=[critic_voice(c) for c in critiques],
             )
 
         total = sum(len(c.critiques) for c in candidates)
@@ -833,3 +842,94 @@ async def design(
 ) -> DesignResult:
     """One-call entry point used by the API and the CLI."""
     return await DesignPipeline(config).run(brief, on_progress=on_progress)
+
+
+# ---------------------------------------------------------------------------
+# What the studio screen is shown while the committee works
+# ---------------------------------------------------------------------------
+
+
+def _first_sentence(text: str, limit: int) -> str:
+    text = " ".join(text.split())
+    for stop in (". ", "; "):
+        if stop in text:
+            text = text.split(stop, 1)[0] + "."
+            break
+    if len(text) > limit:
+        text = text[: limit - 1].rsplit(" ", 1)[0] + "…"
+    return text
+
+
+def critic_voice(critique: Critique, *, full: bool = False) -> dict[str, Any]:
+    """One critic's verdict as a person would say it: a score and a line.
+
+    The line is the critic's own rationale, cut to its first sentence; when
+    the critic found something specific, that finding is what it leads with,
+    because "kitchen lacks cross ventilation" is what a reviewer would say
+    out loud, not "mean ventilation score 0.74".
+    """
+    worst = (
+        max(critique.findings, key=lambda f: f.severity.weight) if critique.findings else None
+    )
+    line = (
+        worst.message if worst is not None and worst.severity.weight >= Severity.MODERATE.weight
+        else critique.rationale or (worst.message if worst else "")
+    )
+    voice: dict[str, Any] = {
+        "critic": critique.critic_id,
+        "axis": critique.axis,
+        "score": round(critique.score, 3),
+        "line": _first_sentence(line, 150),
+        "analytical": critique.analytical,
+    }
+    if full:
+        voice["detail"] = _first_sentence(critique.rationale, 320) if critique.rationale else ""
+        voice["finding"] = (
+            {"severity": worst.severity.value, "message": worst.message,
+             "where": worst.target_label or ""}
+            if worst is not None else None
+        )
+        voice["suggestion"] = critique.suggestions[0] if critique.suggestions else ""
+    return voice
+
+
+def plan_sketch(plan: FloorPlan) -> dict[str, Any]:
+    """The plan's line work, small enough to stream while it is reviewed.
+
+    The studio draws the real candidate room by room while the committee
+    reads it, so the drawing a client watches is the scheme being judged,
+    not an illustration of one. Rounded to centimetres: the board draws at a
+    few hundred pixels, and the full model is fetched afterwards anyway.
+    """
+    def pt(p) -> list[float]:
+        return [round(p.x, 2), round(p.y, 2)]
+
+    levels = []
+    for level in plan.levels:
+        levels.append({
+            "index": level.index,
+            "rooms": [
+                {"id": r.id, "name": r.display_name(), "type": r.type.value,
+                 "poly": [pt(p) for p in r.polygon], "area": round(r.area, 1)}
+                for r in level.rooms
+            ],
+            "walls": [
+                {"a": pt(w.start), "b": pt(w.end), "t": round(w.thickness, 2),
+                 "ext": w.kind.value == "exterior",
+                 "open": [{"k": o.kind.value, "p": round(o.position, 3), "w": round(o.width, 2)}
+                          for o in w.openings]}
+                for w in level.walls
+            ],
+        })
+    bbox = plan.site.bbox
+    return {
+        "id": plan.id,
+        "name": plan.name,
+        "area": round(plan.total_built_area, 1),
+        "site": [pt(p) for p in plan.site.boundary],
+        "bbox": [round(bbox.min_x, 2), round(bbox.min_y, 2),
+                 round(bbox.max_x, 2), round(bbox.max_y, 2)],
+        "road": [d.value for d in plan.site.road_directions],
+        "north": plan.site.north_angle,
+        "levels": levels,
+    }

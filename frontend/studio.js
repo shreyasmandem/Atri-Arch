@@ -7,6 +7,8 @@
    just quiet.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { atelier, person, avatar } from "./atelier.js";
+
 const API = (() => {
   const o = new URLSearchParams(location.search).get("api");
   if (o) return o.replace(/\/$/, "");
@@ -33,7 +35,9 @@ const PIG = {
   SSW: "ochre", SW: "ochre", WSW: "ochre", W: "ochre",
   WNW: "orpiment", NW: "orpiment", NNW: "orpiment", CENTRE: "chalk",
 };
-const HEX = { indigo: "#7FA3D4", hingula: "#E4694C", ochre: "#DFA85C", orpiment: "#F0D165", chalk: "#9C9078" };
+// Pigments, read in the studio's monochrome: stone, sand and cream, with brick
+// red kept for the one thing that must stand out, a breach.
+const HEX = { indigo: "#A39C92", hingula: "#C4553F", ochre: "#C9B497", orpiment: "#E8DCC6", chalk: "#6F6A63" };
 
 const CRITIC_PIG = {
   "critic.compliance": "hingula", "critic.daylight": "indigo", "critic.ventilation": "indigo",
@@ -61,6 +65,9 @@ const S = {
   imported: null,     // { file, source, rooms_read, rooms_kept, unrecognised, warnings, scale_note } for an uploaded plan
   mode: "brief",      // "brief" | "upload"
   plans: {},          // id -> { plan, vastu, cost, interior, analysis, drawing }
+  remarks: {},        // candidate id -> { critic id -> { score, line } }, as spoken during the run
+  voices: [],         // what each critic said about the chosen scheme, in full
+  abort: null,        // the running stream, so "back to the brief" really stops it
   sheet: "plan_level_0",
 };
 
@@ -75,7 +82,47 @@ function toast(msg) {
   clearTimeout(t._t); t._t = setTimeout(() => { t.hidden = true; }, 8000);
 }
 
-function phase(p) { S.phase = p; document.body.dataset.phase = p; }
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// Phases change through a view transition where the browser has one: the
+// page cross-fades, the header holds still, and the drawn sheet on the
+// atelier board travels into the review's drawing plate as one object.
+function phase(p) {
+  S.phase = p;
+  if (document.body.dataset.phase === p) return;
+  const apply = () => { document.body.dataset.phase = p; };
+  if (document.startViewTransition && !reducedMotion() && !document.hidden) {
+    document.documentElement.dataset.vt = p;
+    const t = document.startViewTransition(apply);
+    // A transition the browser skips (a hidden tab, a slow frame) still
+    // applies the phase; it only loses the animation, so it is not an error.
+    t.ready.catch(() => {});
+    t.updateCallbackDone.catch(() => {});
+    t.finished.catch(() => {}).finally(() => { delete document.documentElement.dataset.vt; });
+  } else {
+    apply();
+  }
+}
+
+function cancelRun() {
+  if (S.abort) { S.abort.abort(); S.abort = null; }
+}
+
+function backToBrief() {
+  cancelRun();
+  atelier.stop();
+  S.isGenerating = false;
+  const btn = $("convene");
+  if (btn) {
+    btn.classList.remove("is-loading");
+    btn.disabled = false;
+    const txt = btn.querySelector(".convene__title-text");
+    if (txt) txt.textContent = "Convene the studio";
+  }
+  const up = $("review-btn");
+  if (up) { up.classList.remove("is-loading"); up.disabled = false; }
+  phase("compose");
+}
 
 /* ═══ MANDALA ════════════════════════════════════════════════════════ */
 
@@ -84,9 +131,9 @@ function strike(svg) {
   const N = 9, U = 900 / N, out = [];
   for (let r = 0; r < N; r++)
     for (let c = 0; c < N; c++)
-      out.push(`<rect class="pada" data-r="${r}" data-c="${c}" x="${c * U}" y="${r * U}" width="${U}" height="${U}" fill="transparent" stroke="#2E2517" stroke-width="1"/>`);
-  out.push(`<path d="M0 0L900 900M900 0L0 900" stroke="#2E2517" stroke-width="1" opacity=".45"/>`);
-  out.push(`<rect x="${3 * U}" y="${3 * U}" width="${3 * U}" height="${3 * U}" fill="none" stroke="#453724" stroke-width="2"/>`);
+      out.push(`<rect class="pada" data-r="${r}" data-c="${c}" x="${c * U}" y="${r * U}" width="${U}" height="${U}" fill="transparent" stroke="#2A2724" stroke-width="1"/>`);
+  out.push(`<path d="M0 0L900 900M900 0L0 900" stroke="#2A2724" stroke-width="1" opacity=".45"/>`);
+  out.push(`<rect x="${3 * U}" y="${3 * U}" width="${3 * U}" height="${3 * U}" fill="none" stroke="#57524B" stroke-width="2"/>`);
   svg.innerHTML = out.join("");
 }
 
@@ -94,7 +141,7 @@ function strike(svg) {
 function lightPadas(svg, plan) {
   if (!svg || !plan?.levels?.length) return { occupied: 0, sectors: [] };
   svg.querySelectorAll(".pada").forEach((p) => {
-    p.setAttribute("fill", "transparent"); p.setAttribute("stroke", "#2E2517"); p.removeAttribute("data-lit");
+    p.setAttribute("fill", "transparent"); p.setAttribute("stroke", "#2A2724"); p.removeAttribute("data-lit");
   });
 
   const rooms = plan.levels[0].rooms || [];
@@ -139,590 +186,262 @@ function lightPadas(svg, plan) {
     if (p.getAttribute("data-lit")) {
       occupied++;
       p.setAttribute("fill", HEX.hingula); p.setAttribute("fill-opacity", ".34"); p.setAttribute("stroke", HEX.hingula);
-    } else { p.setAttribute("stroke", "#9C9078"); }
+    } else { p.setAttribute("stroke", "#8A847B"); }
   }
   return { occupied, sectors };
 }
 
-/* ═══ COSMIC STAR-FIELD RENDERER ═════════════════════════════════════ */
+/* ═══ THE BRIEF ══════════════════════════════════════════════════════ */
 
-function initStarField() {
-  if (window.self !== window.top) return { spread: () => {} };
-  const canvas = document.getElementById("space-stars");
-  if (!canvas) return { spread: () => {} };
-  const ctx = canvas.getContext("2d");
+const ROAD_WORD = { N: "north", NE: "north-east", E: "east", SE: "south-east", S: "south", SW: "south-west", W: "west", NW: "north-west" };
+const NUMWORD = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"];
+const fmtM = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+const lakh = (n) => n >= 1e7 ? `${(n / 1e7).toFixed(2).replace(/\.?0+$/, "")} crore` : `${Math.round(n / 1e5)} lakh`;
 
-  const INTRO_STAR_COUNT = 0; // Pure black void during intro; only the logo is visible
-  const BURST_STAR_COUNT = 240; // All stars are born directly when the logo splits
-  const stars = [];
-  let state = "forming"; // "forming" | "splitting" | "ambient"
-  let spreadStart = 0;
-  let birthTime = performance.now();
-  let cx = window.innerWidth / 2;
-  let cy = window.innerHeight / 2;
-  let dpr = 1;
-  let mouse = { x: -1000, y: -1000, active: false };
+// The headline and the plot drawing are the brief itself, set large, so the
+// first screen already shows the house being asked for.
+function renderBrief() {
+  const f = $("brief");
+  if (!f) return;
+  const v = (n) => f.elements[n]?.value;
+  const w = Math.max(3, +v("plot_width") || 12), d = Math.max(3, +v("plot_depth") || 18);
+  const road = f.querySelector('input[name="road_direction"]:checked')?.value || "N";
+  const levels = +v("levels") || 2;
+  const beds = Math.max(1, +v("bedrooms") || 1);
+  const budget = +v("budget") || 0;
+  const stance = STANCES[+(f.querySelector('input[name="vastu_slider"]:checked')?.value ?? 2)] || STANCES[2];
 
-  function updateCenter() {
-    const stage = document.querySelector(".intro-brand-stage");
-    if (stage && state === "forming") {
-      const rect = stage.getBoundingClientRect();
-      cx = rect.left + rect.width / 2;
-      cy = rect.top + rect.height / 2;
-    } else {
-      cx = window.innerWidth / 2;
-      cy = window.innerHeight / 2;
-    }
+  setText("hl-plot", `${fmtM(w)} × ${fmtM(d)} m`);
+  setText("hl-road", ROAD_WORD[road]);
+  const storeys = levels === 1 ? "one storey" : `${NUMWORD[levels] || levels} storeys`;
+  setText("hl-prog", `${NUMWORD[beds] || beds} bedroom${beds > 1 ? "s" : ""}, ${storeys}`);
+  setText("budget-words", budget ? lakh(budget) : "");
+  setText("stance-note", stance[2]);
+  setText("sum-line", `${Math.round(w * d)} m² plot · ${beds} bed · ₹${lakh(budget)} · Vastu ${stance[0].toLowerCase()}`);
+  drawPlot({ w, d, road, levels,
+    front: +v("setback_front") || 0, rear: +v("setback_rear") || 0, side: +v("setback_side") || 0 });
+}
+
+// The plot to scale: boundary, setback envelope, the road on its side, the
+// floors stacked behind, dimensions and a north point. Geometry is set with
+// CSS-transitionable attributes so a change of input redraws smoothly.
+function drawPlot({ w, d, road, levels, front, rear, side }) {
+  const svg = $("plot-svg");
+  if (!svg) return;
+  const VW = 420, VH = 340, M = 56;
+  const k = Math.min((VW - M * 2) / w, (VH - M * 2) / d);
+  const pw = w * k, pd = d * k;
+  const x0 = (VW - pw) / 2, y0 = (VH - pd) / 2;
+  // Which sides face the road: the letters of the direction.
+  const has = (s) => road.includes(s);
+  const inset = {
+    t: has("N") ? front : has("S") ? rear : side,
+    b: has("S") ? front : has("N") ? rear : side,
+    l: has("W") ? front : has("E") ? rear : side,
+    r: has("E") ? front : has("W") ? rear : side,
+  };
+  if (road.length === 1 && (road === "N" || road === "S")) { inset.l = side; inset.r = side; }
+  if (road.length === 1 && (road === "E" || road === "W")) { inset.t = side; inset.b = side; }
+
+  if (!svg.dataset.built) {
+    svg.innerHTML = `
+      <g class="pf-floors"></g>
+      <rect class="pf-plot" />
+      <rect class="pf-env" />
+      <g class="pf-road"></g>
+      <g class="pf-dims">
+        <line class="pf-dim" data-d="w" /><text class="pf-t" data-d="w"></text>
+        <line class="pf-dim" data-d="d" /><text class="pf-t" data-d="d"></text>
+      </g>
+      <g class="pf-north" transform="translate(${VW - 26} 30)">
+        <path d="M0 -14 L5 6 L0 2 L-5 6 Z" /><text y="22">N</text>
+      </g>`;
+    svg.dataset.built = "1";
   }
-
-  function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width  = Math.floor(window.innerWidth * dpr);
-    canvas.height = Math.floor(window.innerHeight * dpr);
-    canvas.style.width  = window.innerWidth + "px";
-    canvas.style.height = window.innerHeight + "px";
-    updateCenter();
-  }
-
-  // Celestial palette: Gold, Diamond White, Sapphire
-  const COLORS = [
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
-    { rgb: "255, 255, 255", glow: "rgba(255, 255, 255, 0.45)" },
-    { rgb: "245, 248, 255", glow: "rgba(200, 225, 255, 0.35)" },
-    { rgb: "245, 205, 130", glow: "rgba(229, 169, 88, 0.55)" },
-    { rgb: "229, 169, 88",  glow: "rgba(229, 169, 88, 0.50)" },
-    { rgb: "170, 205, 255", glow: "rgba(127, 163, 212, 0.40)" },
-  ];
-
-  // Creates stars that burst directly out from the logo when it splits
-  function createBurstStar() {
-    const angle = Math.random() * Math.PI * 2;
-    // Spawns right inside the logo boundary so they literally split from the logo
-    const rx = (Math.random() - 0.5) * 50;
-    const ry = (Math.random() - 0.5) * 50;
-    const targetX = Math.random() * window.innerWidth;
-    const targetY = Math.random() * window.innerHeight;
-
-    const isHero = Math.random() < 0.12;
-    const radius = isHero
-      ? Math.random() * 0.9 + 1.6
-      : Math.random() * 0.8 + 0.6;
-
-    const col = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const speed = Math.random() * 26 + 12;
-
-    return {
-      x: cx + rx,
-      y: cy + ry,
-      orbitR: 0, orbitAngle: angle, orbitSpeed: 0,
-      targetX, targetY,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      r: radius,
-      isHero,
-      introAlpha: Math.random() * 0.35 + 0.65,
-      ambientAlpha: Math.random() * 0.10 + 0.14,
-      color: col,
-      phase: Math.random() * Math.PI * 2,
-      twinkleSpeed: Math.random() * 0.002 + 0.001,
-      driftX: (Math.random() - 0.5) * 0.08,
-      driftY: (Math.random() - 0.5) * 0.08,
-      popDelay: 0,
-      popDuration: 0,
-    };
-  }
-
-  function seed() {
-    stars.length = 0;
-    updateCenter();
-    birthTime = performance.now();
-    for (let i = 0; i < INTRO_STAR_COUNT; i++) {
-      stars.push(createIntroStar(i));
-    }
-  }
-
-  function spread(fast = false) {
-    if (state === "ambient") return;
-    state = "splitting";
-    spreadStart = performance.now();
-    updateCenter();
-
-    // 1. Give existing wide stars an outward impulse
-    for (let i = 0; i < stars.length; i++) {
-      const s = stars[i];
-      const angle = Math.atan2(s.y - cy, s.x - cx) + (Math.random() - 0.5) * 0.25;
-      const speed = fast ? (Math.random() * 20 + 14) : (Math.random() * 15 + 8);
-      s.vx = Math.cos(angle) * speed;
-      s.vy = Math.sin(angle) * speed;
-    }
-
-    // 2. Dynamically generate full cosmos burst stars erupting from center outward
-    const burstCount = fast ? Math.floor(BURST_STAR_COUNT * 0.75) : BURST_STAR_COUNT;
-    for (let i = 0; i < burstCount; i++) {
-      stars.push(createBurstStar());
-    }
-  }
-
-  function draw(t) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.scale(dpr, dpr);
-
-    if (state === "forming") {
-      updateCenter();
-    }
-
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const elapsed = t - birthTime;
-
-    for (let i = 0; i < stars.length; i++) {
-      const s = stars[i];
-
-      // ─── 1. FORMING: Minimal, wide-spaced stars softly popping in around perimeter ───
-      if (state === "forming") {
-        if (elapsed < s.popDelay) continue;
-
-        const popAge = elapsed - s.popDelay;
-        const popFade = Math.min(popAge / s.popDuration, 1);
-        const popEase = 1 - Math.pow(1 - popFade, 3);
-
-        s.orbitAngle += s.orbitSpeed;
-        s.x = cx + Math.cos(s.orbitAngle) * s.orbitR;
-        s.y = cy + Math.sin(s.orbitAngle) * (s.orbitR * 0.75);
-
-        const alpha = s.introAlpha * popEase;
-        const rNow = s.r * (0.4 + 0.6 * popEase);
-
-        if (rNow > 0.7) {
-          ctx.beginPath();
-          ctx.arc(s.x, s.y, rNow * 2.2, 0, Math.PI * 2);
-          ctx.fillStyle = s.color.glow;
-          ctx.globalAlpha = popEase * 0.6;
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, rNow, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-      }
-
-      // ─── 2. SPLITTING: Dynamic star eruption & settling into wide positions ───
-      else if (state === "splitting") {
-        s.x += s.vx;
-        s.y += s.vy;
-        s.vx *= 0.91;
-        s.vy *= 0.91;
-
-        s.x += (s.targetX - s.x) * 0.055;
-        s.y += (s.targetY - s.y) * 0.055;
-
-        const splitAge = performance.now() - spreadStart;
-        const fadeProgress = Math.min(splitAge / 1800, 1);
-        const alpha = s.introAlpha * (1 - fadeProgress) + s.ambientAlpha * fadeProgress;
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-
-        if (splitAge > 1850) {
-          state = "ambient";
-        }
-      }
-
-      // ─── 3. AMBIENT: Dull, subtle, wide-apart peaceful starry void ───
-      else {
-        s.x += s.driftX;
-        s.y += s.driftY;
-
-        if (s.x < 0) s.x = w;
-        if (s.x > w) s.x = 0;
-        if (s.y < 0) s.y = h;
-        if (s.y > h) s.y = 0;
-
-        if (mouse.active) {
-          const mdx = s.x - mouse.x;
-          const mdy = s.y - mouse.y;
-          const mdist = Math.hypot(mdx, mdy);
-          if (mdist < 100 && mdist > 0) {
-            const push = (1 - mdist / 100) * 1.2;
-            s.x += (mdx / mdist) * push;
-            s.y += (mdy / mdist) * push;
-          }
-        }
-
-        const twinkle = Math.sin(t * s.twinkleSpeed + s.phase) * 0.05 + 0.95;
-        const alpha = s.ambientAlpha * twinkle;
-
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${s.color.rgb}, ${alpha.toFixed(3)})`;
-        ctx.fill();
-      }
-    }
-
-    ctx.restore();
-    requestAnimationFrame(draw);
-  }
-
-  resize();
-  seed();
-  requestAnimationFrame(draw);
-
-  window.addEventListener("resize", () => {
-    resize();
-    if (state === "ambient") seed();
+  const set = (el, a) => { for (const [n, val] of Object.entries(a)) el.setAttribute(n, typeof val === "number" ? val.toFixed(1) : val); };
+  set(svg.querySelector(".pf-plot"), { x: x0, y: y0, width: pw, height: pd });
+  set(svg.querySelector(".pf-env"), {
+    x: x0 + inset.l * k, y: y0 + inset.t * k,
+    width: Math.max(0, pw - (inset.l + inset.r) * k), height: Math.max(0, pd - (inset.t + inset.b) * k),
   });
 
-  window.addEventListener("mousemove", (e) => {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-    mouse.active = true;
-    document.documentElement.style.setProperty("--mouse-x", `${e.clientX}px`);
-    document.documentElement.style.setProperty("--mouse-y", `${e.clientY}px`);
-  });
-  window.addEventListener("mouseleave", () => { mouse.active = false; });
+  // Upper floors, stacked behind like sheets on a table.
+  const floors = svg.querySelector(".pf-floors");
+  floors.innerHTML = "";
+  for (let i = levels - 1; i >= 1; i--) {
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    set(r, { x: x0 + i * 9, y: y0 - i * 9, width: pw, height: pd, class: "pf-floor" });
+    floors.append(r);
+  }
 
-  return { spread };
+  // The road: a band along each road side, with its name.
+  const g = svg.querySelector(".pf-road");
+  g.innerHTML = "";
+  const band = (x, y, bw, bh, label, lx, ly, rot = 0) => {
+    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    set(r, { x, y, width: bw, height: bh, class: "pf-band" });
+    const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    set(t, { x: lx, y: ly, class: "pf-t pf-t--road", transform: rot ? `rotate(${rot} ${lx} ${ly})` : "" });
+    t.textContent = label;
+    g.append(r, t);
+  };
+  const B = 14, G = 8;
+  if (has("N")) band(x0 - 20, y0 - G - B, pw + 40, B, "ROAD", x0 + pw / 2, y0 - G - B / 2 + 3);
+  if (has("S")) band(x0 - 20, y0 + pd + G, pw + 40, B, "ROAD", x0 + pw / 2, y0 + pd + G + B / 2 + 3);
+  if (has("W")) band(x0 - G - B, y0 - 20, B, pd + 40, "ROAD", x0 - G - B / 2 + 3, y0 + pd / 2, -90);
+  if (has("E")) band(x0 + pw + G, y0 - 20, B, pd + 40, "ROAD", x0 + pw + G + B / 2 + 3, y0 + pd / 2, -90);
+
+  // Dimensions on the sides away from the road.
+  const dimY = has("S") ? y0 - 22 : y0 + pd + 26;
+  const dimX = has("E") ? x0 - 26 : x0 + pw + 26;
+  set(svg.querySelector('.pf-dim[data-d="w"]'), { x1: x0, x2: x0 + pw, y1: dimY, y2: dimY });
+  set(svg.querySelector('.pf-dim[data-d="d"]'), { x1: dimX, x2: dimX, y1: y0, y2: y0 + pd });
+  const tw = svg.querySelector('.pf-t[data-d="w"]');
+  set(tw, { x: x0 + pw / 2, y: dimY - 6 });
+  tw.textContent = `${fmtM(w)} m`;
+  const td = svg.querySelector('.pf-t[data-d="d"]');
+  set(td, { x: dimX + 6, y: y0 + pd / 2, transform: `rotate(-90 ${(dimX + 6).toFixed(1)} ${(y0 + pd / 2).toFixed(1)})` });
+  td.textContent = `${fmtM(d)} m`;
 }
 
-/* ═══ BOOT & STUDIO INTERACTION ═════════════════════════════════════ */
-
-const DIR_LABELS = {
-  N: "North Facing",
-  NE: "North-East Facing",
-  E: "East Facing",
-  SE: "South-East Facing",
-  S: "South Facing",
-  SW: "South-West Facing",
-  W: "West Facing",
-  NW: "North-West Facing"
-};
-
-const ORIENTATION_DATA = {
-  N: { azimuth: "000°", angle: 0, label: "North Facing", frontageClass: "frontage--n" },
-  NE: { azimuth: "045°", angle: 45, label: "North-East Facing", frontageClass: "frontage--ne" },
-  E: { azimuth: "090°", angle: 90, label: "East Facing", frontageClass: "frontage--e" },
-  SE: { azimuth: "135°", angle: 135, label: "South-East Facing", frontageClass: "frontage--se" },
-  S: { azimuth: "180°", angle: 180, label: "South Facing", frontageClass: "frontage--s" },
-  SW: { azimuth: "225°", angle: 225, label: "South-West Facing", frontageClass: "frontage--sw" },
-  W: { azimuth: "270°", angle: 270, label: "West Facing", frontageClass: "frontage--w" },
-  NW: { azimuth: "315°", angle: 315, label: "North-West Facing", frontageClass: "frontage--nw" }
-};
-
-function updateOrientationDial(dir = "N") {
-  const data = ORIENTATION_DATA[dir] || ORIENTATION_DATA.N;
-
-  // 1. Rotate Needle Vector
-  const needle = $("compass-needle-stage");
-  if (needle) {
-    needle.style.transform = `rotate(${data.angle}deg)`;
-  }
-
-  // 2. Bearing Digital Readout
-  const bearing = $("compass-bearing-readout");
-  if (bearing) {
-    bearing.textContent = `${data.azimuth} ${dir}`;
-  }
-
-  // 3. Top Orientation Badge
-  const badgeVal = $("orientation-badge-text");
-  if (badgeVal) {
-    badgeVal.textContent = `${DIR_LABELS[dir] || dir} · ${data.azimuth}`;
-  }
-
-  // 4. Update Center Plot Dimensions & Dynamic Frontage Curb
-  const w = parseFloat($("inp-plot-width")?.value || 12);
-  const d = parseFloat($("inp-plot-depth")?.value || 18);
-  const metric = $("compass-plot-metric");
-  if (metric) {
-    metric.textContent = `${w}×${d}m`;
-  }
-  const frame = $("compass-plot-frame");
-  if (frame) {
-    const ratio = Math.max(0.7, Math.min(1.3, d / w));
-    frame.style.height = `${Math.round(38 * ratio)}px`;
-    frame.className = `compass-plot-frame ${data.frontageClass || "frontage--n"}`;
-  }
+function initBrief() {
+  const f = $("brief");
+  if (!f) return;
+  f.addEventListener("input", renderBrief);
+  f.addEventListener("change", renderBrief);
+  // Steppers: the − and + beside a number.
+  f.querySelectorAll(".step").forEach((b) => b.addEventListener("click", () => {
+    const input = b.parentElement.querySelector("input");
+    if (+b.dataset.step > 0) input.stepUp(); else input.stepDown();
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  }));
+  f.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => chk.addEventListener("change", () => {
+    chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
+  }));
+  $("upload")?.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => chk.addEventListener("change", () => {
+    chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
+  }));
+  renderBrief();
 }
 
-const PRESETS = {
-  "vastu-villa": {
-    prompt: "Contemporary 3BHK duplex with open-plan kitchen in Agneya (SE), ground-floor master suite for senior parents, dedicated East-facing pooja mandir, natural cross-ventilation, under ₹65 Lakhs.",
-    width: 12, depth: 18, levels: "2", dir: "N", bedrooms: 3, bathrooms: 3, kitchen: "open_modular",
-    budget: 6500000, finish: "premium", style: "tropical_modern", stance: 2
-  },
-  "compact-urban": {
-    prompt: "2BHK urban residence with efficient open kitchen, master bedroom with balcony, attached bathrooms, and covered car porch.",
-    width: 9, depth: 14, levels: "2", dir: "E", bedrooms: 2, bathrooms: 2, kitchen: "open_modular",
-    budget: 4500000, finish: "standard", style: "contemporary", stance: 1
-  },
-  "biophilic-retreat": {
-    prompt: "4BHK courtyard villa with central lightwell, generous verandahs, double-height living area, and senior accessibility.",
-    width: 15, depth: 22, levels: "2", dir: "NE", bedrooms: 4, bathrooms: 4, kitchen: "wet_dry",
-    budget: 9000000, finish: "luxury", style: "biophilic", stance: 3
-  },
-  "kerala-vernacular": {
-    prompt: "Kerala vernacular residence with timber joinery, pitched terracotta tile roofs, central courtyard, and natural cross-ventilation.",
-    width: 14, depth: 20, levels: "2", dir: "E", bedrooms: 3, bathrooms: 3, kitchen: "closed",
-    budget: 7500000, finish: "premium", style: "kerala_vernacular", stance: 3
-  },
-  "modern-studio": {
-    prompt: "Modern compact single-floor residence with open minimalist floorplan, seamless indoor-outdoor connection, and efficient footprint.",
-    width: 8, depth: 12, levels: "1", dir: "N", bedrooms: 1, bathrooms: 1, kitchen: "open_modular",
-    budget: 3500000, finish: "standard", style: "modern_minimal", stance: 0
-  }
-};
-
-function updateStudioHUD() {
-  const w = parseFloat($("inp-plot-width")?.value || 12);
-  const d = parseFloat($("inp-plot-depth")?.value || 18);
-  const areaM2 = (w * d).toFixed(0);
-  const areaSqFt = (w * d * 10.7639).toFixed(0);
-  const badge = $("plot-area-calc");
-  if (badge) {
-    badge.textContent = `${areaM2} m² · ${Number(areaSqFt).toLocaleString()} sq ft (Aspect 1:${(d/w).toFixed(2)})`;
-  }
-
-  // Orientation
-  const checkedRadio = document.querySelector('input[name="road_direction"]:checked');
-  const dir = checkedRadio?.value || "N";
-  const hudOri = $("hud-orientation");
-  if (hudOri) hudOri.textContent = DIR_LABELS[dir] || `${dir} Facing`;
-  updateOrientationDial(dir);
-
-  // Program
-  const bhk = $("inp-bedrooms")?.value || "3";
-  const baths = $("inp-bathrooms")?.value || "3";
-  const levels = $("inp-levels")?.value || "2";
-  const levelText = levels === "1" ? "Ground" : levels === "2" ? "Duplex" : levels === "3" ? "Triplex" : "Multi-level";
-  const hudProg = $("hud-program");
-  if (hudProg) hudProg.textContent = `${bhk} BHK ${levelText} · ${baths} Baths`;
-
-  // Vastu Stance
-  const stanceVal = +($("stance")?.value ?? 2);
-  const hudVastu = $("hud-vastu");
-  if (hudVastu && STANCES[stanceVal]) hudVastu.textContent = STANCES[stanceVal][0];
-
-  // Budget
-  const budget = parseFloat($("inp-budget")?.value || 6500000);
-  const tier = $("inp-finish-tier")?.value || "premium";
-  const hudBudget = $("hud-budget");
-  if (hudBudget) hudBudget.textContent = `${inr(budget)} · ${cap(tier)}`;
-}
+/* ═══ BOOT ═══════════════════════════════════════════════════════════ */
 
 (async function boot() {
-  // Cosmic Star-field Engine
-  const starField = initStarField();
-
-  // Intro Screen Controller
-  const curtain = $("intro-curtain");
-  const inIframe = window.self !== window.top;
-
-  if (curtain) {
-    if (inIframe) {
-      curtain.style.display = "none";
-      document.body.classList.remove("is-loading");
-      starField.spread(true);
-    } else {
-      let isDismissed = false;
-      const triggerBlast = () => {
-        starField.spread(false);
-      };
-
-      const dismissIntro = (fast = false) => {
-        if (isDismissed) return;
-        isDismissed = true;
-        starField.spread(fast);
-        document.body.classList.remove("is-loading");
-        curtain.classList.add("is-fading");
-        setTimeout(() => { curtain.style.display = "none"; }, 850);
-      };
-
-      // 1. Trigger Star Blast when silver locks with gold (both visible, 1.3s)
-      const blastTimer = setTimeout(triggerBlast, 1300);
-
-      // 2. Smoothly transition into home studio after stars settle (3.15s)
-      const introTimer = setTimeout(() => dismissIntro(false), 3150);
-
-      curtain.addEventListener("click", () => {
-        clearTimeout(blastTimer);
-        clearTimeout(introTimer);
-        dismissIntro(true);
-      });
-    }
-  }
-
-  strike($("hero-mandala"));
+  atelier.mount($("atelier"));
   strike($("review-mandala"));
-  updateStudioHUD();
+  initBrief();
 
-  // Dynamic plot inputs
-  $("inp-plot-width")?.addEventListener("input", updateStudioHUD);
-  $("inp-plot-depth")?.addEventListener("input", updateStudioHUD);
-  $("inp-bedrooms")?.addEventListener("input", updateStudioHUD);
-  $("inp-bathrooms")?.addEventListener("input", updateStudioHUD);
-  $("inp-levels")?.addEventListener("change", updateStudioHUD);
-  $("inp-budget")?.addEventListener("input", updateStudioHUD);
-  $("inp-finish-tier")?.addEventListener("change", updateStudioHUD);
-
-  // Direction grid radios with dynamic tactile hover preview & click commit
-  document.querySelectorAll(".dir-radio").forEach((card) => {
-    const radio = card.querySelector('input[type="radio"]');
-    const val = card.dataset.val || radio?.value;
-
-    card.addEventListener("mouseenter", () => {
-      if (!val) return;
-      const data = ORIENTATION_DATA[val];
-      if (data) {
-        const needle = $("compass-needle-stage");
-        if (needle) needle.style.transform = `rotate(${data.angle}deg)`;
-        const bearing = $("compass-bearing-readout");
-        if (bearing) bearing.textContent = `${data.azimuth} ${val}`;
-      }
-    });
-
-    card.addEventListener("mouseleave", () => {
-      const activeRadio = document.querySelector('input[name="road_direction"]:checked');
-      if (activeRadio) {
-        const activeData = ORIENTATION_DATA[activeRadio.value] || ORIENTATION_DATA.N;
-        const needle = $("compass-needle-stage");
-        if (needle) needle.style.transform = `rotate(${activeData.angle}deg)`;
-        const bearing = $("compass-bearing-readout");
-        if (bearing) bearing.textContent = `${activeData.azimuth} ${activeRadio.value}`;
-      }
-    });
-
-    radio?.addEventListener("change", () => {
-      document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
-      card.classList.add("is-selected");
-      updateOrientationDial(radio.value);
-      updateStudioHUD();
-    });
-  });
-
-  // Amenities checkboxes
-  document.querySelectorAll('.amenity-chip input[type="checkbox"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      chk.closest(".amenity-chip")?.classList.toggle("is-checked", chk.checked);
-    });
-  });
-
-  // Architectural presets
-  document.querySelectorAll(".preset-chip").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const key = btn.dataset.preset;
-      const p = PRESETS[key];
-      if (!p) return;
-
-      document.querySelectorAll(".preset-chip").forEach((b) => b.classList.remove("is-active"));
-      btn.classList.add("is-active");
-
-      if ($("client-prompt")) $("client-prompt").value = p.prompt;
-      if ($("inp-plot-width")) $("inp-plot-width").value = p.width;
-      if ($("inp-plot-depth")) $("inp-plot-depth").value = p.depth;
-      if ($("inp-levels")) $("inp-levels").value = p.levels;
-      if ($("inp-bedrooms")) $("inp-bedrooms").value = p.bedrooms;
-      if ($("inp-bathrooms")) $("inp-bathrooms").value = p.bathrooms;
-      if (document.querySelector('select[name="kitchen_type"]')) {
-        document.querySelector('select[name="kitchen_type"]').value = p.kitchen;
-      }
-      if ($("inp-budget")) $("inp-budget").value = p.budget;
-      if ($("inp-finish-tier")) $("inp-finish-tier").value = p.finish;
-      if ($("inp-styles")) $("inp-styles").value = p.style;
-      if ($("stance")) {
-        $("stance").value = p.stance;
-        const [n, , note] = STANCES[p.stance];
-        if ($("stance-name")) $("stance-name").textContent = n;
-        if ($("stance-note")) $("stance-note").textContent = note;
-      }
-
-      // Update Direction Radio
-      const radio = document.querySelector(`.dir-radio[data-val="${p.dir}"] input[type="radio"]`);
-      if (radio) {
-        radio.checked = true;
-        document.querySelectorAll(".dir-radio").forEach((r) => r.classList.remove("is-selected"));
-        radio.closest(".dir-radio")?.classList.add("is-selected");
-        updateOrientationDial(p.dir);
-      }
-
-      updateStudioHUD();
-    });
-  });
-
-  $("stance").addEventListener("input", (e) => {
-    const [n, , note] = STANCES[+e.target.value];
-    $("stance-name").textContent = n; $("stance-note").textContent = note;
-    updateStudioHUD();
-  });
   $("brief").addEventListener("submit", onSubmit);
   $("upload")?.addEventListener("submit", onUpload);
   document.querySelectorAll(".mode-tab").forEach((t) =>
     t.addEventListener("click", () => setMode(t.dataset.mode)));
   initDropzone();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
-  $("restart").addEventListener("click", () => phase("compose"));
-  $("see-why").addEventListener("click", openWhy);
+  $("see-why")?.addEventListener("click", openWhy);
+  $("restart")?.addEventListener("click", () => {
+    cancelRun();
+    atelier.stop();
+    S.isGenerating = false;
+    const btn = $("convene");
+    if (btn) { btn.classList.remove("is-loading"); btn.disabled = false; }
+    phase("compose");
+  });
   $("why-close").addEventListener("click", () => { $("why").hidden = true; });
   $("why").addEventListener("click", (e) => { if (e.target === $("why")) $("why").hidden = true; });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
       $("why").hidden = true;
-      if (compareModal) compareModal.hidden = true;
     }
   });
   $("dl-svg").addEventListener("click", downloadSheet);
   $("dl-dxf").addEventListener("click", downloadDxf);
-  $("zoom").addEventListener("click", () => {
-    const on = $("plate").classList.toggle("is-zoomed");
-    $("zoom").textContent = on ? "Fit to frame" : "Actual size";
-  });
+  initPlate();
   document.querySelectorAll(".view-tab").forEach((t) =>
     t.addEventListener("click", () => showView(t.dataset.view)));
 
-  try {
-    const [h, c] = await Promise.all([
-      fetch(`${API}/health`).then((r) => r.json()),
-      fetch(`${API}/capabilities`).then((r) => r.json()),
-    ]);
-    S.committee = c.committee || [];
-    setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
-    $("convene-sub").textContent = `${S.committee.length} critics · 3 schemes · ₹0 to run`;
-
+  const updateEngineStatus = (tone, text) => {
     const note = $("engine-note");
-    if (h.degraded_mode) {
-      note.textContent = "Engine ready. No hosted model provider is configured, so the three judgement critics will run in a labelled degraded mode. Every computed result — geometry, daylight, compliance, Vastu, cost — is unaffected.";
-    } else {
-      note.dataset.tone = "ok";
-      note.textContent = `Engine ready · ${h.providers_configured.length} free provider(s) · ${h.corpus.total} corpus passages · $0.00 spent.`;
+    const dot = $("engine-dot");
+    if (note) {
+      note.dataset.tone = tone;
+      note.textContent = text;
     }
-    seatCritics();
-  } catch {
-    const note = $("engine-note");
-    note.dataset.tone = "bad";
-    note.textContent = `Cannot reach the engine at ${API}. Start it with:  uvicorn aip.api.app:app --port 8000`;
+    if (dot) {
+      dot.dataset.tone = tone;
+    }
+  };
+
+  async function checkEngineHealth(retries = 4) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const [h, c] = await Promise.all([
+          fetch(`${API}/health`).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }),
+          fetch(`${API}/capabilities`).then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+          }),
+        ]);
+        S.committee = c.committee || [];
+        setText("ledger-cost", (h.total_model_cost_usd || 0).toFixed(2));
+        setText("convene-sub", `${S.committee.length || 13} specialists · 3 schemes · costs nothing to run`);
+        const critStat = $("convene-critics-status");
+        if (critStat) {
+          critStat.textContent = `${S.committee.length} PARALLEL CRITICS ARMED`;
+        }
+
+        if (h.degraded_mode) {
+          updateEngineStatus("ok", "Engine ready");
+        } else {
+          updateEngineStatus("ok", "Engine ready");
+        }
+        seatCritics();
+        return;
+      } catch (err) {
+        console.warn(`Health check attempt ${attempt} failed:`, err);
+        if (attempt < retries) {
+          updateEngineStatus("bad", "Connecting…");
+          await new Promise((res) => setTimeout(res, 1200));
+        } else {
+          updateEngineStatus("bad", "Engine offline");
+          toast(`The engine is not answering at ${API}. Start the backend and reload.`);
+        }
+      }
+    }
   }
+
+  checkEngineHealth();
 })();
 
+// The committee sits twice: around the atelier table during the run, and in
+// the review's east rail, where each person keeps what they said.
 function seatCritics() {
-  const run = $("run-critics"); run.innerHTML = "";
-  const rail = $("critics"); rail.innerHTML = "";
+  atelier.seat(S.committee);
+  const rail = $("critics"); if (!rail) return;
+  rail.innerHTML = "";
   for (const c of S.committee) {
-    const pig = CRITIC_PIG[c.id] || "chalk";
-
-    const li = el("li", "rc"); li.dataset.critic = c.id; li.dataset.pig = pig;
-    li.append(el("i", "rc__g"), el("span", "rc__n", c.name), el("span", "rc__s", "—"));
-    run.append(li);
-
-    const row = el("li", "cr"); row.dataset.critic = c.id; row.dataset.pig = pig;
-    row.title = c.charter || "";
-    const bar = el("span", "cr__b"); bar.append(el("i"));
-    row.append(el("i", "cr__g"), el("span", "cr__n", c.name),
-      el("span", "cr__k", c.analytical ? "computed" : "judged"),
-      el("span", "cr__s", "—"), bar);
+    const p = person(c.id, S.committee);
+    const row = el("li", "tm");
+    row.dataset.critic = c.id;
+    row.dataset.pig = p.pig;
+    const head = el("button", "tm__head");
+    head.type = "button";
+    head.setAttribute("aria-expanded", "false");
+    head.append(avatar(p, 26));
+    const who = el("span", "tm__who");
+    who.append(el("b", null, p.name), el("small", null, p.role));
+    head.append(who, el("span", "tm__sc", "—"));
+    const line = el("p", "tm__line", "");
+    const bar = el("span", "tm__bar"); bar.append(el("i"));
+    const more = el("div", "tm__more"); more.hidden = true;
+    head.addEventListener("click", () => {
+      const open = row.classList.toggle("is-open");
+      head.setAttribute("aria-expanded", String(open));
+      more.hidden = !open;
+    });
+    row.append(head, line, bar, more);
     rail.append(row);
   }
 }
@@ -781,19 +500,57 @@ function readBrief() {
 
 async function onSubmit(e) {
   e.preventDefault();
-  if (S.phase === "running") return;
+  if (S.isGenerating) return;
+
+  S.isGenerating = true;
+  const btn = $("convene");
+  const dot = $("engine-dot");
+  const note = $("engine-note");
+
+  if (btn) {
+    btn.classList.add("is-loading");
+    btn.disabled = true;
+    const txt = btn.querySelector(".convene__title-text");
+    if (txt) txt.textContent = "Convening the studio…";
+  }
+  if (dot) dot.dataset.tone = "running";
+  if (note) {
+    note.dataset.tone = "running";
+    note.textContent = "Designing";
+  }
 
   S.briefSent = readBrief();
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
+  S.remarks = {}; S.voices = [];
+
+  atelier.begin({ brief: S.briefSent, onCancel: backToBrief });
   phase("running");
-  resetRunScreen("The committee is sitting", "Interpreting the brief…");
 
   try {
     await stream(`${API}/design/stream`, S.briefSent);
   } catch (err) {
+    if (err.name === "AbortError") return;
     toast(`The engine could not complete this design: ${err.message}`);
-    $("run-title").textContent = "The run failed";
-    $("restart").hidden = false;
+    atelier.fail("The run stopped", `The engine could not complete this design: ${err.message}`, { onBack: backToBrief });
+    if (dot) dot.dataset.tone = "bad";
+    if (note) {
+      note.dataset.tone = "bad";
+      note.textContent = "Run stopped";
+    }
+  } finally {
+    S.isGenerating = false;
+    if (S.phase !== "review" && btn) {
+      btn.classList.remove("is-loading");
+      btn.disabled = false;
+      const txt = btn.querySelector(".convene__title-text");
+      if (txt) txt.textContent = "Convene the studio";
+      setText("convene-sub", `${S.committee.length || 13} specialists · 3 schemes · costs nothing to run`);
+      if (dot) dot.dataset.tone = "ok";
+      if (note) {
+        note.dataset.tone = "ok";
+        note.textContent = "Engine ready";
+      }
+    }
   }
 }
 
@@ -872,26 +629,25 @@ function renderImportReport(imp, rooms, error) {
   }
 }
 
-function resetRunScreen(title, stage) {
-  $("run-log").innerHTML = "";
-  $("run-fill").style.transform = "scaleX(0)";
-  $("run-title").textContent = title;
-  $("run-stage").textContent = stage;
-  document.querySelectorAll(".rc").forEach((r) => {
-    r.classList.remove("is-in"); r.querySelector(".rc__s").textContent = "—";
-  });
-  document.querySelectorAll(".cr").forEach((r) => {
-    r.classList.remove("is-low");
-    r.querySelector(".cr__s").textContent = "—";
-    r.querySelector(".cr__b i").style.transform = "scaleX(0)";
-  });
-}
-
 async function onUpload(e) {
   e.preventDefault();
-  if (S.phase === "running") return;
+  if (S.isGenerating) return;
   const file = $("inp-file").files?.[0];
   if (!file) { toast("Choose a plan file first."); return; }
+
+  S.isGenerating = true;
+  const upBtn = $("review-btn");
+  if (upBtn) {
+    upBtn.classList.add("is-loading");
+    upBtn.disabled = true;
+  }
+  const dot = $("engine-dot");
+  const note = $("engine-note");
+  if (dot) dot.dataset.tone = "running";
+  if (note) {
+    note.dataset.tone = "running";
+    note.textContent = "Reading the drawing";
+  }
 
   const f = new FormData($("upload"));
   const num = (k) => { const v = Number(f.get(k)); return Number.isFinite(v) && v > 0 ? v : null; };
@@ -905,8 +661,9 @@ async function onUpload(e) {
   if (f.get("name")) body.append("name", String(f.get("name")));
 
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
+  S.remarks = {}; S.voices = [];
+  atelier.begin({ upload: true, fileName: file.name, onCancel: backToBrief });
   phase("running");
-  resetRunScreen("Reading the plan", `Reading ${file.name}…`);
 
   let up;
   try {
@@ -916,7 +673,11 @@ async function onUpload(e) {
     if (!res.ok) throw new Error(data.detail || `${res.status} ${text.slice(0, 160)}`);
     up = data;
   } catch (err) {
-    phase("compose"); setMode("upload");
+    S.isGenerating = false;
+    atelier.stop();
+    if (upBtn) { upBtn.classList.remove("is-loading"); upBtn.disabled = false; }
+    phase("compose");
+    setMode("upload");
     renderImportReport(null, null, err.message);
     toast("The plan could not be read.");
     return;
@@ -938,27 +699,34 @@ async function onUpload(e) {
     bathrooms: up.rooms.filter((r) => /bathroom|toilet/.test(r.type)).length,
     budget, vastu, locality: "—", styles: [],
   };
-  const p = el("p");
-  p.append(el("b", null, "import "), document.createTextNode(
-    `${up.import.rooms_kept} rooms read from ${up.import.source}. ${up.import.scale_note || ""}`.trim()));
-  $("run-log").append(p);
-  $("run-title").textContent = "The committee is sitting";
-  $("run-stage").textContent = "Reviewing the uploaded plan…";
+  atelier.say("d.nikhil",
+    `${up.import.rooms_kept} rooms read from your ${String(up.import.source).toUpperCase()}. ${up.import.scale_note || ""}`.trim());
 
   const q = new URLSearchParams({ vastu, budget: String(budget), include_generative_critics: "true" });
   try {
     await stream(`${API}/plans/${up.plan_id}/review/stream?${q}`, null);
   } catch (err) {
+    if (err.name === "AbortError") return;
     toast(`The engine could not review this plan: ${err.message}`);
-    $("run-title").textContent = "The review failed";
-    $("restart").hidden = false;
+    atelier.fail("The review stopped", `The engine could not review this plan: ${err.message}`, { onBack: backToBrief });
+    if (dot) dot.dataset.tone = "bad";
+    if (note) { note.dataset.tone = "bad"; note.textContent = `Review failed: ${err.message}`; }
+  } finally {
+    S.isGenerating = false;
+    if (upBtn && S.phase !== "review") {
+      upBtn.classList.remove("is-loading");
+      upBtn.disabled = false;
+    }
   }
 }
 
 async function stream(url, simple) {
+  cancelRun();
+  S.abort = new AbortController();
   const res = await fetch(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: simple ? JSON.stringify({ simple, candidates: 3, include_generative_critics: true }) : undefined,
+    signal: S.abort.signal,
   });
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`);
 
@@ -974,11 +742,10 @@ async function stream(url, simple) {
   const kick = () => {
     clearTimeout(idle);
     idle = setTimeout(() => {
-      if (sawResult || S.phase !== "running") return;
-      $("run-title").textContent = "The engine stopped responding";
-      $("run-stage").textContent =
-        "No update for three minutes. The run may still be finishing on the server; check its log, or start again.";
-      $("restart").hidden = false;
+      if (sawResult || (!S.isGenerating && S.phase !== "running")) return;
+      atelier.fail("The engine stopped responding",
+        "No update for three minutes. The run may still be finishing on the server; check its log, or start again.",
+        { onBack: backToBrief });
     }, 180000);
   };
   kick();
@@ -996,11 +763,10 @@ async function stream(url, simple) {
     window.removeEventListener("aip:result", seen);
   }
 
-  if (!sawResult && S.phase === "running") {
-    $("run-title").textContent = "The run ended without a scheme";
-    $("run-stage").textContent =
-      "The engine closed the connection before returning a design. Check the server log, then try again.";
-    $("restart").hidden = false;
+  if (!sawResult && (S.isGenerating || S.phase === "running")) {
+    atelier.fail("The run ended without a scheme",
+      "The engine closed the connection before returning a design. Check the server log, then try again.",
+      { onBack: backToBrief });
   }
 }
 
@@ -1014,32 +780,38 @@ function handle(frame) {
   let d; try { d = JSON.parse(raw); } catch { return; }
 
   if (name === "progress") {
-    if (d.status !== "running" || d.stage === "critique") {
-      const p = el("p"); p.append(el("b", null, `${d.stage} `), document.createTextNode(d.message));
-      $("run-log").append(p); $("run-log").scrollTop = $("run-log").scrollHeight;
+    const note = $("engine-note");
+    if (note) { note.dataset.tone = "running"; note.textContent = d.message; }
+    const dot = $("engine-dot");
+    if (dot) dot.dataset.tone = "running";
+    if (d.detail?.plan && d.detail?.remarks) {
+      S.remarks[d.detail.plan] = Object.fromEntries(d.detail.remarks.map((r) => [r.critic, r]));
     }
-    $("run-stage").textContent = d.message;
-    $("run-fill").style.transform = `scaleX(${d.percent || 0})`;
-    if (d.detail?.scores) markScores(d.detail.scores);
+    atelier.progress(d);
   } else if (name === "result") {
-    applyResult(d);
+    window.dispatchEvent(new Event("aip:result"));
+    atelier.result(d, { onOpen: () => applyResult(d) });
   } else if (name === "error") {
     toast(d.message || "The engine reported an error.");
-  }
-}
-
-function markScores(scores) {
-  for (const [axis, score] of Object.entries(scores)) {
-    const c = S.committee.find((x) => x.axis === axis); if (!c) return;
-    const rc = document.querySelector(`.rc[data-critic="${c.id}"]`);
-    if (rc) { rc.classList.add("is-in"); rc.querySelector(".rc__s").textContent = score.toFixed(2); }
   }
 }
 
 /* ═══ RESULT ═════════════════════════════════════════════════════════ */
 
 async function applyResult(d) {
-  window.dispatchEvent(new Event("aip:result"));
+  if (S.phase !== "running") return;   // the user went back to the brief meanwhile
+  S.isGenerating = false;
+  S.abort = null;
+  const btn = $("convene");
+  if (btn) {
+    btn.classList.remove("is-loading");
+    btn.disabled = false;
+  }
+  const upBtn = $("review-btn");
+  if (upBtn) {
+    upBtn.classList.remove("is-loading");
+    upBtn.disabled = false;
+  }
   S.planIds = d.plan_ids || [];
   S.winnerId = d.winner_plan_id;
   S.activeId = d.winner_plan_id;
@@ -1055,11 +827,24 @@ async function applyResult(d) {
   S.explanation = d.explanation || "";
   S.recommendations = d.recommendations || [];
   S.projectId = d.project_id; S.sessionId = d.trace_id;
+  S.voices = d.voices || [];
 
   S.plans[d.winner_plan_id] = { plan: d.plan, vastu: d.vastu, cost: d.cost };
   setText("ledger-cost", (d.model_cost_usd || 0).toFixed(2));
   if (d.degraded) toast(d.degraded_reason || "Some critics ran in degraded mode.");
 
+  // The sheet the team just drew goes into the plate as a stand-in, so the
+  // view transition carries one drawing across rather than a blank box; the
+  // full drawing replaces it the moment it arrives.
+  const drawn = atelier.currentSheet();
+  if (drawn) {
+    const ghost = drawn.cloneNode(true);
+    ghost.classList.remove("is-on");
+    ghost.classList.add("plate__ghost");
+    $("plate").replaceChildren(ghost);
+  }
+  S.sheet = "plan_level_0";
+  atelier.stop();
   phase("review");
   $("restart").hidden = false;
   buildSchemeTabs();
@@ -1163,19 +948,6 @@ function renderRail() {
     $("pick-why").textContent += ` Offered with reservations: ${guard.slice(0, 3).join("; ")}.`;
   }
 
-  const row = rankingRow();
-  const bars = $("axis-bars"); bars.innerHTML = "";
-  const axes = Object.entries(row?.axis_scores || {}).sort((a, b) => a[1] - b[1]);
-  for (const [axis, v] of axes) {
-    const d = el("div", "abar");
-    const top = el("div", "abar__top");
-    top.append(el("span", null, cap(axis)), el("b", null, v.toFixed(2)));
-    const t = el("div", "abar__t"); const i = el("i");
-    i.style.background = v < 0.5 ? HEX.hingula : v < 0.75 ? HEX.ochre : HEX.indigo;
-    t.append(i); d.append(top, t); bars.append(d);
-    requestAnimationFrame(() => { i.style.transform = `scaleX(${v})`; });
-  }
-
   const b = S.briefSent || {};
   const recap = $("brief-recap"); recap.innerHTML = "";
   const rows = S.imported ? [
@@ -1202,16 +974,38 @@ function renderRail() {
 function renderCritics() {
   const row = rankingRow();
   const scores = row?.axis_scores || {};
-  document.querySelectorAll(".cr").forEach((el2) => {
-    const c = S.committee.find((x) => x.id === el2.dataset.critic);
-    const v = c ? scores[c.axis] : undefined;
-    el2.querySelector(".cr__s").textContent = v == null ? "—" : v.toFixed(2);
-    el2.classList.toggle("is-low", v != null && v < 0.55);
-    const fill = el2.querySelector(".cr__b i");
-    requestAnimationFrame(() => { fill.style.transform = `scaleX(${v ?? 0})`; });
+  const cand = activeCandidate();
+  const spoken = S.remarks[cand] || {};
+  const full = cand === S.candidateId
+    ? Object.fromEntries((S.voices || []).map((v) => [v.critic, v]))
+    : {};
+
+  document.querySelectorAll(".tm").forEach((tm) => {
+    const id = tm.dataset.critic;
+    const c = S.committee.find((x) => x.id === id);
+    const v = full[id] || spoken[id];
+    const score = v?.score ?? (c ? scores[c.axis] : undefined);
+    tm.querySelector(".tm__sc").textContent = score == null ? "—" : score.toFixed(2);
+    tm.dataset.low = score != null && score < 0.55 ? "1" : "0";
+    tm.querySelector(".tm__line").textContent = v?.line || (score == null ? "Did not review this scheme." : "");
+    const fill = tm.querySelector(".tm__bar i");
+    requestAnimationFrame(() => { fill.style.transform = `scaleX(${score ?? 0})`; });
+
+    const more = tm.querySelector(".tm__more");
+    more.innerHTML = "";
+    if (v?.detail && v.detail !== v.line) more.append(el("p", "tm__detail", v.detail));
+    if (v?.finding) {
+      const f = el("p", "tm__finding");
+      const sev = el("span", "sev", v.finding.severity);
+      sev.dataset.sev = v.finding.severity;
+      f.append(sev, document.createTextNode(` ${v.finding.where ? `${v.finding.where}: ` : ""}${v.finding.message}`));
+      more.append(f);
+    }
+    if (v?.suggestion) more.append(el("p", "tm__fix", v.suggestion));
+    if (!more.childElementCount) {
+      more.append(el("p", "tm__detail", c?.charter || "No specific concern on this scheme."));
+    }
   });
-  const ag = S.consensus?.overall_agreement;
-  $("agree-chip").textContent = ag == null ? "" : `${Math.round(ag * 100)}% agreed`;
 }
 
 function renderVerdict() {
@@ -1281,10 +1075,31 @@ async function loadAnalysis() {
 
 /* ═══ VIEWS ══════════════════════════════════════════════════════════ */
 
+const VIEW_GROUPS = {
+  vastu: [["vastu", "Score"], ["mandala", "Mandala"]],
+  report: [["findings", "Findings"], ["negotiation", "Negotiation"], ["audit", "Audit"]],
+};
+const groupOf = (v) => Object.keys(VIEW_GROUPS).find((g) => VIEW_GROUPS[g].some(([k]) => k === v)) || v;
+
 function showView(v) {
+  if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
+  if (v !== "model" && S.viewer) { S.viewer.dispose(); S.viewer = null; window.speechSynthesis?.cancel(); }
   S.view = v;
-  document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("is-on", t.dataset.view === v));
+  const g = groupOf(v);
+  (S.lastIn ||= {})[g] = v;
+  document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("is-on", t.dataset.view === g));
   document.querySelectorAll(".pane").forEach((p) => { p.hidden = p.dataset.view !== v; });
+  const sub = $("subnav");
+  sub.hidden = !VIEW_GROUPS[g];
+  sub.innerHTML = "";
+  for (const [k, label] of VIEW_GROUPS[g] || []) {
+    const b = el("button", null, label);
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(k === v));
+    b.addEventListener("click", () => showView(k));
+    sub.append(b);
+  }
 
   if (v === "mandala") renderMandala();
   if (v === "vastu") renderVastu();
@@ -1305,17 +1120,37 @@ function scrollPane(v) {
 
 /* ── drawings ──────────────────────────────────────────────────────── */
 
-function buildSheetTabs() {
-  const { plan } = cur();
-  const tabs = $("sheet-tabs"); tabs.innerHTML = "";
-  const levels = plan?.levels || [];
-  const sheets = [
-    ...levels.map((lv) => [`plan_level_${lv.index}`, lv.index === 0 ? "Ground plan" : `Level ${lv.index}`]),
-    ["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"],
-    ["section_aa", "Section A–A"], ["section_bb", "Section B–B"], ["roof_plan", "Roof"], ["site_plan", "Site"],
-    ...levels.map((lv) => [`airflow_level_${lv.index}`, levels.length > 1 ? `Airflow L${lv.index}` : "Airflow"]),
+const floorName = (i) => (i === 0 ? "Ground" : `Level ${i}`);
+
+function sheetSets() {
+  const levels = cur().plan?.levels || [];
+  return [
+    ["Plans", levels.map((lv) => [`plan_level_${lv.index}`, floorName(lv.index)])],
+    ["Elevations", [["elevation_N", "North"], ["elevation_E", "East"], ["elevation_S", "South"], ["elevation_W", "West"]]],
+    ["Sections", [["section_aa", "A–A"], ["section_bb", "B–B"]]],
+    ["Roof", [["roof_plan", "Roof"]]],
+    ["Site", [["site_plan", "Site"]]],
+    ["Airflow", levels.map((lv) => [`airflow_level_${lv.index}`, floorName(lv.index)])],
   ];
-  for (const [key, label] of sheets) {
+}
+
+function buildSheetTabs() {
+  const sets = sheetSets();
+  const inSet = sets.find(([, items]) => items.some(([k]) => k === S.sheet)) || sets[0];
+  const groups = $("sheet-groups"); groups.innerHTML = "";
+  for (const [name, items] of sets) {
+    if (!items.length) continue;
+    const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(name === inSet[0]));
+    b.addEventListener("click", () => {
+      const keep = items.find(([k]) => k.replace(/^\w+_level_/, "") === S.sheet.replace(/^\w+_level_/, ""));
+      loadSheet((keep || items[0])[0]);
+    });
+    groups.append(b);
+  }
+  const tabs = $("sheet-tabs"); tabs.innerHTML = "";
+  tabs.hidden = inSet[1].length < 2;
+  for (const [key, label] of inSet[1]) {
     const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
     b.dataset.sheet = key;
     b.setAttribute("aria-selected", String(key === S.sheet));
@@ -1324,21 +1159,95 @@ function buildSheetTabs() {
   }
 }
 
+/* ── drawings: pan and zoom ─────────────────────────────────────────── */
+
+// Scroll to zoom toward the pointer, drag to pan, double-click to step in
+// or back to fit. The drawing moves; the plate stays put.
+const plateView = { z: 1, x: 0, y: 0, drag: null };
+
+function applyPlate(animate = false) {
+  const art = $("plate")?.querySelector("svg, img");
+  if (art) {
+    art.style.transition = animate ? "transform .45s cubic-bezier(.16,1,.3,1)" : "none";
+    art.style.transform = `translate(${plateView.x}px, ${plateView.y}px) scale(${plateView.z})`;
+  }
+  setText("zoom-val", `${Math.round(plateView.z * 100)}%`);
+}
+
+function zoomPlate(z, cx = 0, cy = 0, animate = false) {
+  const next = Math.max(0.5, Math.min(5, z));
+  const f = next / plateView.z;
+  plateView.x = cx - (cx - plateView.x) * f;
+  plateView.y = cy - (cy - plateView.y) * f;
+  plateView.z = next;
+  applyPlate(animate);
+}
+
+function resetPlate(animate = true) {
+  Object.assign(plateView, { z: 1, x: 0, y: 0 });
+  applyPlate(animate);
+}
+
+function initPlate() {
+  const plate = $("plate");
+  if (!plate) return;
+  const centre = (e) => {
+    const r = plate.getBoundingClientRect();
+    return [e.clientX - r.left - r.width / 2, e.clientY - r.top - r.height / 2];
+  };
+  plate.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    zoomPlate(plateView.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), ...centre(e));
+  }, { passive: false });
+  plate.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    plateView.drag = { x: e.clientX - plateView.x, y: e.clientY - plateView.y };
+    plate.setPointerCapture(e.pointerId);
+    plate.classList.add("is-panning");
+  });
+  plate.addEventListener("pointermove", (e) => {
+    if (!plateView.drag) return;
+    plateView.x = e.clientX - plateView.drag.x;
+    plateView.y = e.clientY - plateView.drag.y;
+    applyPlate();
+  });
+  const end = () => { plateView.drag = null; plate.classList.remove("is-panning"); };
+  plate.addEventListener("pointerup", end);
+  plate.addEventListener("pointercancel", end);
+  plate.addEventListener("dblclick", (e) => {
+    if (plateView.z > 1.05) resetPlate();
+    else zoomPlate(2, ...centre(e), true);
+  });
+  $("zoom-in")?.addEventListener("click", () => zoomPlate(plateView.z * 1.3, 0, 0, true));
+  $("zoom-out")?.addEventListener("click", () => zoomPlate(plateView.z / 1.3, 0, 0, true));
+  $("zoom-val")?.addEventListener("click", () => resetPlate());
+}
+
 async function loadSheet(key) {
   S.sheet = key;
-  $("sheet-tabs").querySelectorAll("button").forEach((b) =>
-    b.setAttribute("aria-selected", String(b.dataset.sheet === key)));
+  buildSheetTabs();
   const plate = $("plate");
-  plate.innerHTML = "";
-  plate.append(el("p", "empty-note", "Drawing…"));
+  const ghost = plate.querySelector(".plate__ghost");
+  if (!ghost) {
+    plate.innerHTML = "";
+    plate.append(el("p", "empty-note", "Drawing…"));
+  }
   try {
     const r = await fetch(`${API}/plans/${S.activeId}/drawings/${key}.svg?dark=true`);
     if (!r.ok) throw new Error(String(r.status));
-    plate.innerHTML = await r.text();
+    const text = await r.text();
+    if (S.sheet !== key) return;   // another sheet was asked for meanwhile
+    plate.innerHTML = text;
+    resetPlate(false);
+    const fresh = plate.querySelector("svg");
+    if (fresh && ghost && !reducedMotion()) {
+      fresh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });
+    }
     const { plan } = cur();
-    $("plate-caption").textContent =
-      `${(plan?.total_built_area || 0).toFixed(1)} m² built-up · FAR ${(plan?.achieved_far || 0).toFixed(2)} · ` +
-      `${(plan?.levels || []).length} level(s) · ${plan?.style ? cap(plan.style) : ""}`;
+    const [set, items] = sheetSets().find(([, it]) => it.some(([k]) => k === key)) || ["", []];
+    const label = items.find(([k]) => k === key)?.[1] || "";
+    $("plate-caption").textContent = [set === label ? set : `${set} · ${label}`, plan?.style ? cap(plan.style) : ""]
+      .filter(Boolean).join("  ·  ");
   } catch (err) {
     plate.innerHTML = "";
     plate.append(el("p", "empty-note", `That drawing could not be produced (${err.message}).`));
@@ -1727,51 +1636,49 @@ async function renderInterior() {
 /* ── 3D ────────────────────────────────────────────────────────────── */
 
 async function renderModel() {
-  const s = scrollPane("model");
-  s.append(el("h3", "sec", "Three-dimensional model"));
-  s.append(el("p", "lede", "Exported as glTF, which every browser, phone and XR headset reads natively. Open it on a phone to place the scheme in a real room."));
-
-  const links = el("div"); links.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px";
-  for (const [label, href] of [
-    ["Download model (.glb)", `${API}/plans/${S.activeId}/model.glb`],
-    ["Download for CAD (.obj)", `${API}/plans/${S.activeId}/model.obj`],
-  ]) {
-    const a = el("a", "ghost-btn", label); a.href = href; a.style.textDecoration = "none"; links.append(a);
+  S.viewer?.dispose();
+  S.viewer = null;
+  const p = pane("model"); p.innerHTML = "";
+  const bar = el("div", "pane__bar");
+  bar.append(el("span", "model-hint", "Drag to orbit, scroll to zoom"));
+  const tools = el("div", "pane__tools");
+  const play = el("button", "ghost-btn", "Play walkthrough"); play.type = "button";
+  tools.append(play);
+  for (const [label, href] of [[".glb", `${API}/plans/${S.activeId}/model.glb`], [".obj", `${API}/plans/${S.activeId}/model.obj`]]) {
+    const a = el("a", "ghost-btn", label); a.href = href; a.download = ""; a.title = `Download the model as ${label}`;
+    tools.append(a);
   }
-  s.append(links);
+  bar.append(tools);
+  const stage = el("div", "model-stage");
+  const cap = el("p", "model-cap", "Loading the model…");
+  const say = el("p", "model-say"); say.setAttribute("aria-live", "polite");
+  stage.append(cap, say);
+  p.append(bar, stage);
 
+  const id = S.activeId;
   try {
-    const d = await fetch(`${API}/plans/${S.activeId}/walkthrough`).then((r) => r.json());
-    const st = d.statistics || {};
-    const stats = el("div", "stat-row");
-    for (const [pig, k, v2, sub] of [
-      ["indigo", "Triangles", (st.triangles || 0).toLocaleString(), `${st.parts || 0} parts`],
-      ["chalk", "Height", `${(st.height_m || 0).toFixed(2)} m`, `${st.bounds?.width_m ?? "—"} × ${st.bounds?.depth_m ?? "—"} m`],
-      ["orpiment", "Waypoints", `${(d.waypoints || []).length}`, "narrated route"],
-    ]) {
-      const dl = el("dl", "stat"); dl.dataset.pig = pig;
-      dl.append(el("dt", null, k), el("dd", null, v2), el("small", null, sub)); stats.append(dl);
-    }
-    s.append(stats);
+    const { Viewer3D } = await import("./viewer3d.js");
+    if (S.view !== "model" || S.activeId !== id) return;
+    S.viewer = new Viewer3D(stage);
+    const st = await S.viewer.load(`${API}/plans/${id}/model.glb`);
+    cap.textContent = `${st.width.toFixed(1)} × ${st.depth.toFixed(1)} m  ·  ${st.height.toFixed(1)} m high  ·  ${st.triangles.toLocaleString()} triangles`;
+  } catch (err) {
+    cap.textContent = `The model could not be shown here (${err.message}). It can still be downloaded.`;
+  }
 
-    s.append(el("h3", "sec", "Narrated walkthrough"));
-    const play = el("button", "ghost-btn", "Play narration"); play.type = "button";
-    play.style.marginBottom = "16px";
+  fetch(`${API}/plans/${id}/walkthrough`).then((r) => r.json()).then((d) => {
+    const lines = (d.narration || []).map((l) => l.text);
+    play.disabled = !lines.length;
     play.addEventListener("click", () => {
       if (!("speechSynthesis" in window)) return toast("This browser has no speech synthesis.");
       speechSynthesis.cancel();
-      for (const line of d.narration || []) speechSynthesis.speak(new SpeechSynthesisUtterance(line.text));
+      for (const text of lines) {
+        const u = new SpeechSynthesisUtterance(text);
+        u.onstart = () => { say.textContent = text; };
+        speechSynthesis.speak(u);
+      }
     });
-    s.append(play);
-    for (const line of d.narration || []) {
-      const p = el("p", "find__t", line.text);
-      p.style.cssText = "padding:10px 0;border-bottom:1px solid var(--rule);margin:0";
-      s.append(p);
-    }
-    if (d.ar?.note) s.append(el("p", "note-card", d.ar.note));
-  } catch (err) {
-    s.append(el("p", "empty-note", `Walkthrough data unavailable (${err.message}).`));
-  }
+  }).catch(() => { play.disabled = true; });
 }
 
 /* ── findings ──────────────────────────────────────────────────────── */
