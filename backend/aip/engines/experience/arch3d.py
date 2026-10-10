@@ -835,7 +835,9 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
 
     def part(m: str, u: float, v: float, y0: float, sw: float, sd: float, sh: float) -> None:
         """A box at (u across, v front-to-back from the back edge) in the item's frame."""
-        lx, lz = u, (d / 2 - v - sd / 2)       # local: +z is the item's back
+        # The engine puts an item's back on its local -y (rotation 0 is against a
+        # south wall, facing north), so the back edge is at lz = -d/2.
+        lx, lz = u, -(d / 2 - v - sd / 2)
         x = cx + lx * math.cos(rot) - lz * math.sin(rot)
         z = cz - (lx * math.sin(rot) + lz * math.cos(rot))
         b.box(node, m, (x, base + y0 + sh / 2, z), (sw, sh, sd), -rot)
