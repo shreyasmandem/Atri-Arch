@@ -913,12 +913,14 @@ export class Stage3D {
         this._do(m, { type: "run", to: pts[0] }, { type: "draw", quick: true, pts: resample(pts), line: this._line(pts, COL.gold, 0.45) },
           { type: "point", t: 1.2 });
       },
-      // Where the breeze comes from: three arrows across the plot.
-      wind: (m) => {
-        say(m, pick(["Breeze comes from the south-west here.", "Let's catch the wind.", "Cross-ventilation first."]));
-        for (let i = 0; i < 3; i++) {
-          const y = d * (0.25 + i * 0.25), a = at(-0.5, y - 1.2), b = at(w * 0.55, y + 1.2);
-          quick(m, a, b, COL.indigo, 0.4, this.planning);
+      // Tape the frontage and a side: stakes every few metres, no lines.
+      measure: (m) => {
+        say(m, pick(["Checking the frontage.", "Let's confirm the dimensions.", "Measuring the setbacks."]));
+        const step = pick([2.5, 3, 3.5]);
+        const front = r === "S" ? 0 : d;
+        for (let x = 0; x <= w + 0.01; x += step) {
+          const p = at(x, front);
+          this._do(m, { type: "run", to: p, slow: true }, { type: "note", t: 0.5 }, { type: "call", fn: () => this._stake(p) });
         }
       },
       // The setback envelope, starting from a random corner.
@@ -1515,9 +1517,10 @@ export class Stage3D {
   _spawnCritic(now) {
     if (this.settling || !this.plot || !this.pending.length || now < (this.nextCritic || 0)) return;
     const live = this.critics.filter((c) => !c.leaving);
-    if (live.length >= 4) this._dismiss(live[0]);
+    if (live.length >= 3) this._dismiss(live[0]);
     const p = this.pending.shift();
-    this.nextCritic = now + 1900;
+    // Unhurried, so a reader can follow who said what to whom.
+    this.nextCritic = now + 3400;
     const { w, d, n } = this.plot;
     const lv = p.room ? p.room.li : Math.min(n - 1, this.focusLevel ?? 0);
     const enter = this.P(lv, 1 + Math.random() * (w - 2), d + 3.5 + Math.random() * 1.5);
@@ -1536,7 +1539,7 @@ export class Stage3D {
       { type: "call", fn: () => this._consult(c) },
       { type: "await", fn: () => !c.partner || c.partner.ready, t: 3.5 },
       { type: "face", fig: () => c.partner?.m.fig ?? c.peer?.fig },
-      { type: "say", head: p.short, text: brief(p.line), pig: p.pig, t: 2.2 + Math.min(2.4, p.line.length / 45) },
+      { type: "say", head: p.short, text: brief(p.line), pig: p.pig, t: 3.4 + Math.min(3.6, p.line.length / 32) },
       { type: "give", t: 0.8, fn: () => c.partner && this._paper(c.fig, c.partner.m.fig) },
       { type: "call", fn: () => { c.gave = true; } },
       { type: "wait", t: 0.5 },
@@ -1692,7 +1695,9 @@ export class Stage3D {
     if (!this.static) {
       this._spawnCritic(now);
       for (const m of this.team) this._member_tick(m, step, dt, now);
-      for (const c of this.critics.slice()) this._member_tick(c, step, dt, now);
+      // The specialists keep a human pace even when the drafting fast-forwards.
+      const calm = dt * Math.min(this.speed, 1.2);
+      for (const c of this.critics.slice()) this._member_tick(c, calm, dt, now);
     }
 
     this._keepPace(now);
