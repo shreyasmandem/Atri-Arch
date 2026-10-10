@@ -961,7 +961,8 @@ def _road(plan: FloorPlan) -> Vec2 | None:
 
 
 def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_ground: bool = True,
-                palette_id: str | None = None, colour_text: str | None = None):
+                palette_id: str | None = None, colour_text: str | None = None,
+                design_id: str | None = None):
     """The full presentation model as a trimesh Scene.
 
     Coloured with `palette_id` if given, otherwise with the scheme the palette
@@ -983,11 +984,13 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
         _site(b, plan, ground_fp, road)
 
     bases: list[float] = []
+    dressed: list[tuple[Level, float, Any]] = []
     y = PLINTH
     for level in plan.levels:
         bases.append(y)
         node = f"level_{level.index}"
         fp = _footprint(level)
+        dressed.append((level, y, fp))
         pts = _poly_pts(fp)
         if pts:
             # Floor slab with a projecting band at the edge.
@@ -1010,10 +1013,23 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
                 _stair(b, room, y, level.floor_to_floor, f"{node}/structure")
         y += level.floor_to_floor
 
+    # The facade language: one of several, chosen for the style and the plan.
+    from aip.engines.experience import facades
+
+    design = facades.choose(plan, design_id)
+    try:
+        over = facades.apply(b, plan, design, dressed, road, y)
+    except Exception as exc:  # noqa: BLE001 - a plain facade beats no model
+        log_event(logger, "arch3d.facade_failed", plan=plan.id, design=design, error=str(exc))
+        over = {}
+    roof_kind = over.get("roof", palette.roof_kind)
     if plan.levels:
         top = plan.levels[-1]
         fp = _footprint(top)
-        if palette.roof_kind == "hip":
+        if roof_kind == "pitch":
+            b.slab("roof", "slab", _poly_pts(fp), y - SLAB, y)
+            facades.pitch_roof(b, fp, y, road)
+        elif roof_kind == "hip":
             env = top.envelope()
             b.slab("roof", "slab", _poly_pts(fp), y - SLAB, y)
             _hip_roof(b, env, y)

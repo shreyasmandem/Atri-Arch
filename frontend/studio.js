@@ -1261,7 +1261,7 @@ async function loadOrthoSheet(key) {
     S.sheetViewerPlan = id;
     host.append(el("p", "model-cap", "Building the model…"));
     const pal = S.palette || {};
-    const q = new URLSearchParams(); if (pal.id) q.set("palette", pal.id); if (pal.text) q.set("colours", pal.text);
+    const q = new URLSearchParams(); if (pal.id) q.set("palette", pal.id); if (pal.text) q.set("colours", pal.text); if (pal.design) q.set("design", pal.design);
     await S.sheetViewer.load(`${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`);
     host.querySelector(".model-cap")?.remove();
     sunIn.addEventListener("input", () => {
@@ -1724,13 +1724,15 @@ async function renderModel() {
     const q = new URLSearchParams();
     if (pal.id) q.set("palette", pal.id);
     if (pal.text) q.set("colours", pal.text);
+    if (pal.design) q.set("design", pal.design);
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
     const { Viewer3D } = await import("./viewer3d.js");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage);
-    const st = await S.viewer.load(modelUrl());
+    const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
+    const st = await S.viewer.load(modelUrl(), { front: road });
     const levels = cur().plan?.levels?.length || 1;
     const options = [["exterior", 0, "Exterior"], ...Array.from({ length: levels }, (_, i) => ["interior", i, i ? `Level ${i} inside` : "Ground inside"]), ["night", 0, "Night"],
       ...Array.from({ length: levels }, (_, i) => ["vastu", i, i ? `Vastu L${i}` : "Vastu ground"])];
@@ -1791,6 +1793,7 @@ async function paletteCard(card, id, modelUrl) {
     living: "Living", master: "Master bed", bedroom: "Bedrooms", kitchen: "Kitchen", accent_wall: "Feature wall",
     floor_stone: "Floor", joinery: "Joinery", upholstery: "Fabric" };
   let list = [];
+  let designs = [];
   let busy = false;
   const fetchList = async () => {
     const q = new URLSearchParams(); if (pal.text) q.set("colours", pal.text);
@@ -1798,6 +1801,7 @@ async function paletteCard(card, id, modelUrl) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     list = d.schemes;
+    designs = d.designs || [];
     pal.prefs = d.preferences;
   };
   const apply = async (scheme) => {
@@ -1835,6 +1839,28 @@ async function paletteCard(card, id, modelUrl) {
     nav.append(prev, next);
     head.append(toggle, nav);
     card.append(head);
+    // The facade language, cycled the same way.
+    if (designs.length) {
+      const di = Math.max(0, designs.findIndex((x) => x.id === pal.design));
+      const row = el("div", "pal__head pal__design");
+      const lab = el("span", "pal__toggle");
+      lab.append(el("span", "pal__k", "Facade"), el("b", "pal__name", designs[di].name));
+      lab.title = designs[di].story;
+      const dn = el("div", "pal__nav");
+      for (const [t, step] of [["‹", -1], ["›", 1]]) {
+        const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", step < 0 ? "Previous facade" : "Next facade");
+        bt.addEventListener("click", async () => {
+          if (busy || !S.viewer) return;
+          pal.design = designs[(di + step + designs.length) % designs.length].id;
+          busy = true; card.classList.add("is-busy");
+          try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not rebuild the facade (${e.message}).`); }
+          busy = false; card.classList.remove("is-busy"); draw();
+        });
+        dn.append(bt);
+      }
+      row.append(lab, dn);
+      card.append(row);
+    }
     if (!pal.open) return;
     card.append(el("p", "pal__story", s.story));
     for (const [title, group] of [["Exterior", s.exterior], ["Interior", s.interior]]) {

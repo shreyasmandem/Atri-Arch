@@ -196,7 +196,10 @@ async def get_palettes(
     plan = _load(plan_id, principal)
     prefs = preferences_from_text(colours) if colours else ColourPrefs.from_dict(
         (plan.metadata or {}).get("colour_preferences"))
-    return {"preferences": prefs.as_dict(), "schemes": rank(plan, prefs)}
+    from aip.engines.experience.facades import DESIGNS, ranked_designs
+
+    return {"preferences": prefs.as_dict(), "schemes": rank(plan, prefs),
+            "designs": [{"id": k, "name": DESIGNS[k]["name"], "story": DESIGNS[k]["story"]} for k in ranked_designs(plan)]}
 
 
 @router.get("/{plan_id}/model.glb", response_class=Response)
@@ -207,13 +210,14 @@ async def get_model_glb(
     ground: bool = Query(default=True),
     palette: str | None = Query(default=None, description="Colour scheme id; the recommended one if omitted"),
     colours: str | None = Query(default=None, max_length=600, description="The client's colour preferences, in words"),
+    design: str | None = Query(default=None, description="Facade design language; the recommended one if omitted"),
 ) -> Response:
     """Binary glTF for the 3D viewer, VR walkthrough and AR placement."""
     import asyncio
 
     plan = _load(plan_id, principal)
     data = await asyncio.to_thread(export_glb, plan, include_furniture=furniture, include_ground=ground,
-                                   palette_id=palette, colour_text=colours)
+                                   palette_id=palette, colour_text=colours, design_id=design)
     return Response(
         content=data,
         media_type="model/gltf-binary",

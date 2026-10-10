@@ -91,7 +91,7 @@ export class Viewer3D {
     if (this.orthoKind) this.setOrtho(this.orthoKind, { cut: this.cut });
   }
 
-  async load(url, { keepView = false } = {}) {
+  async load(url, { keepView = false, front = null } = {}) {
     const gltf = await new GLTFLoader().loadAsync(url);
     keepView = keepView && !!this.model;
     this.lamps = [];
@@ -143,7 +143,11 @@ export class Viewer3D {
       return { triangles: Math.round(tris), width: size.x, depth: size.z, height: size.y };
     }
     const dist = span / (2 * Math.tan((this.camera.fov * Math.PI) / 360)) * 1.35;
-    this.camera.position.set(dist * 0.62, dist * 0.55, dist * 0.78);
+    // Open on the street side, three-quarters on: the face the house shows.
+    if (front) {
+      const a = Math.atan2(-front[1], front[0]) + 0.6;
+      this.camera.position.set(Math.cos(a) * dist, dist * 0.55, Math.sin(a) * dist);
+    } else this.camera.position.set(dist * 0.62, dist * 0.55, dist * 0.78);
     this.controls.target.set(0, size.y * 0.3, 0);
     this.controls.minDistance = span * 0.4;
     this.controls.maxDistance = span * 4;
