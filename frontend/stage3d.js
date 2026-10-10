@@ -129,6 +129,8 @@ const LOOKS = {
 const PIGMENT = { indigo: 0x4f6fa3, hingula: 0xb24a36, ochre: 0xa8733a, orpiment: 0xc29a2e, gold: 0xc48a3e, chalk: 0x7d8494 };
 const SKINS = [0xf0c6a4, 0xe8b894, 0xd29a6e, 0xb27a52, 0x8a5a3c];
 const HAIRS = [0x1b1511, 0x2b2118, 0x4a2c1c, 0x6b4a2e, 0x8b8f96];
+const IDLE = ["Bedrooms want the quiet side.", "Stair near the middle?", "Kitchen in the south-east.", "Let's keep the centre open.",
+  "That wall can carry the slab.", "Two windows, opposite walls.", "Parking off the drive.", "Light from the north for the study."];
 const ACKS = ["Noted.", "Good catch. We'll revise it.", "Understood.", "We'll take that on.", "Agreed, adjusting it."];
 
 function criticLook(pig) {
@@ -534,7 +536,8 @@ export class Stage3D {
     this.scene.add(fig);
     const m = { kind, fig, tasks: [], task: null, face: 0, vel: 0, moved: 0, busyUntil: 0 };
     // Where the pen point sits relative to the person holding it.
-    m.reach = look.tool === "staff" ? { f: 0.34, r: 0.27 } : { f: 0.9, r: 0.2 };
+    m.reach0 = look.tool === "staff" ? { f: 0.34, r: 0.27 } : { f: 0.9, r: 0.2 };
+    this._sizeFig(m);
     if (look.tool !== "pen") {
       // The mark being made, and for the architects a stylus beam to it.
       m.dot = new THREE.Mesh(new THREE.CircleGeometry(0.09, 20), new THREE.MeshBasicMaterial({
@@ -553,6 +556,15 @@ export class Stage3D {
       }
     }
     return m;
+  }
+
+  // People are sized to the board: on a large plot a life-size figure is a
+  // speck, so the team grows with the plot (and walks proportionally faster).
+  _sizeFig(m) {
+    const k = this.figS || 1;
+    m.fig.scale.setScalar(H * k);
+    m.reach = { f: m.reach0.f * k, r: m.reach0.r * k };
+    if (m.dot) m.dot.scale.setScalar(k);
   }
 
   /* ── framing: a drone over the work ───────────────────────────────── */
@@ -690,6 +702,8 @@ export class Stage3D {
     });
     this.resume();
     this.plot = { w, d, n: Math.max(1, levels), road };
+    this.figS = clamp(Math.sqrt(w * d * Math.max(1, levels)) / 17, 1, 3.4);
+    this.team.forEach((m) => this._sizeFig(m));
     const total = this.plot.n * w + (this.plot.n - 1) * GAP;
     this.origin = new THREE.Vector3(-total / 2, 0, d / 2);   // plan (0,0) of plate 0
     this.view.target.set(0, 0, 0);
@@ -804,7 +818,7 @@ export class Stage3D {
     }
     el.append(document.createTextNode(text));
     this.labelLayer.append(el);
-    const l = { el, world: fig.position.clone(), on: false, follow: fig, lift: H * 1.1, anchor: "translate(-50%, -100%)" };
+    const l = { el, world: fig.position.clone(), on: false, follow: fig, lift: H * 1.1 * (this.figS || 1), anchor: "translate(-50%, -100%)" };
     this.labels.push(l);
     this._labelsTick();
     void el.offsetWidth;
@@ -855,23 +869,19 @@ export class Stage3D {
   // until the schemes arrive, rather than drawing anything made up.
   plan(brief_) {
     const { w, d, n } = this.plot;
-    const eng = this._member("eng"), a1 = this._member("arch1"), a2 = this._member("arch2");
-    this.team.forEach((t, i) => { t.fig.position.copy(this.P(0, w * 0.3 + i * 1.4, -4)); this._clear(t); });
+    const team = [...this.team].sort(() => Math.random() - 0.5);
+    const [p1, p2, p3] = team;
+    // Each run starts from a different place, in a different formation.
+    const start = pick([[w * 0.3, -4], [-3, d * 0.4], [w + 3, d * 0.6], [w * 0.7, d + 3]]);
+    this.team.forEach((t, i) => { t.fig.position.copy(this.P(0, start[0] + i * 1.3 * (this.figS || 1), start[1])); this._clear(t); });
     const quick = (m, a, b, color, opacity, parent) => {
       this._drawLine(m, a, b, color, opacity, parent);
       m.tasks[m.tasks.length - 1].quick = true;
     };
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const at = (x, y, lv = 0) => this.P(lv, x, y);
+    const say = (m, text) => this._do(m, { type: "say", text, t: 1.6, team: true });
 
-    for (let i = 0; i < n; i++) {
-      const corners = [[0, 0], [w, 0], [w, d], [0, d]].map(([x, y]) => this.P(i, x, y));
-      corners.forEach((c, k) => {
-        const next = corners[(k + 1) % 4];
-        this._do(eng, { type: "run", to: this._standAt(eng, c, next) }, { type: "call", fn: () => this._stake(c) });
-        this._do(eng, { type: "draw", quick: true, pts: resample([c, next]), line: this._line([c, next], COL.line, i === 0 ? 0.55 : 0.32) });
-      });
-    }
-
-    // The setback envelope, on every floor plate.
     const sb = this.setbacks || { front: 0, rear: 0, left: 0, right: 0 };
     const r = this.plot.road;
     const inset = r === "N" ? { t: sb.front, b: sb.rear, l: sb.left, r: sb.right }
@@ -879,32 +889,90 @@ export class Stage3D {
         : r === "E" ? { t: sb.left, b: sb.right, l: sb.rear, r: sb.front }
           : { t: sb.right, b: sb.left, l: sb.front, r: sb.rear };
     const env = { x0: inset.l, x1: w - inset.r, y0: inset.b, y1: d - inset.t };
-    this._do(a1, { type: "wait", t: 1.2 });
-    for (let i = 0; i < n; i++) {
-      const pts = [[env.x0, env.y0], [env.x1, env.y0], [env.x1, env.y1], [env.x0, env.y1], [env.x0, env.y0]].map(([x, y]) => this.P(i, x, y));
-      for (let k = 1; k < pts.length; k++) quick(a1, pts[k - 1], pts[k], COL.gold, 0.55);
-    }
 
-    // Zones inside the envelope: living to the road, services behind,
-    // bedrooms at the back or upstairs, the order the generator starts from.
-    const zones = n > 1
-      ? [[0, "Living & arrival", 0.0, 0.5, COL.public], [0, "Kitchen & services", 0.5, 1.0, COL.service], [1, "Bedrooms", 0.0, 1.0, COL.private]]
-      : [[0, "Living & arrival", 0.0, 0.38, COL.public], [0, "Kitchen & services", 0.38, 0.62, COL.service], [0, "Bedrooms", 0.62, 1.0, COL.private]];
-    // A fraction of the envelope's depth from the road, as a plan y.
-    const ey = (f) => env.y0 + (env.y1 - env.y0) * (r === "S" ? f : 1 - f);
-    this._do(a2, { type: "wait", t: 2.4 });
-    for (const [lv, name, f0, f1, color] of zones) {
-      const ya = ey(f0), yb = ey(f1);
-      const rect = [[env.x0, ya], [env.x1, ya], [env.x1, yb], [env.x0, yb]].map(([x, y]) => this.P(lv, x, y));
-      const fill = shapeFill(rect, color, 0);
-      this.planning.add(fill);
-      // Only the dividing line is drawn; the envelope is already there.
-      if (f1 < 1) quick(a2, this.P(lv, env.x0, yb), this.P(lv, env.x1, yb), color, 0.6, this.planning);
-      else this._do(a2, { type: "run", to: rect.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(0.25) });
-      const centre = rect.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(0.25);
-      const lab = this._label(name, centre, "st-label--zone");
-      this._do(a2, { type: "call", fn: () => { this._fade(fill.material, 0.08, 600); this._show(lab); } });
-    }
+    // A repertoire of real first-day site work. Each render draws a different
+    // hand from it, deals the jobs to different people, in a different order.
+    const plays = {
+      // Pace the plot, drive a few stakes where the soil is tested.
+      survey: (m) => {
+        say(m, pick(["Walking the plot first.", "Let's see the ground.", "Checking levels."]));
+        const k = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < k; i++) {
+          const p = at(rnd(1, w - 1), rnd(1, d - 1));
+          this._do(m, { type: "run", to: p }, { type: "note", t: rnd(0.8, 1.6) }, { type: "call", fn: () => this._stake(p) });
+        }
+      },
+      // The sun's arc across the plot, east to west, and where it peaks.
+      sun: (m) => {
+        say(m, pick(["Where does the sun sit?", "Morning light from the east.", "Afternoon sun is the one to shade."]));
+        const pts = [];
+        for (let i = 0; i <= 24; i++) {
+          const t = i / 24, a = Math.PI * t;
+          pts.push(at(w / 2 - Math.cos(a) * w * 0.55, d * 0.5 - Math.sin(a) * d * 0.42));
+        }
+        this._do(m, { type: "run", to: pts[0] }, { type: "draw", quick: true, pts: resample(pts), line: this._line(pts, COL.gold, 0.45) },
+          { type: "point", t: 1.2 });
+      },
+      // Where the breeze comes from: three arrows across the plot.
+      wind: (m) => {
+        say(m, pick(["Breeze comes from the south-west here.", "Let's catch the wind.", "Cross-ventilation first."]));
+        for (let i = 0; i < 3; i++) {
+          const y = d * (0.25 + i * 0.25), a = at(-0.5, y - 1.2), b = at(w * 0.55, y + 1.2);
+          quick(m, a, b, COL.indigo, 0.4, this.planning);
+        }
+      },
+      // The setback envelope, starting from a random corner.
+      envelope: (m) => {
+        say(m, pick(["Marking the setbacks.", "This is what we can build on.", "Envelope first."]));
+        const c = [[env.x0, env.y0], [env.x1, env.y0], [env.x1, env.y1], [env.x0, env.y1]];
+        const s0 = Math.floor(Math.random() * 4), dir = Math.random() < 0.5 ? 1 : 3;
+        for (let k = 0; k < 4; k++) {
+          const a = c[(s0 + k * dir) % 4], b = c[(s0 + (k + 1) * dir) % 4];
+          quick(m, at(...a), at(...b), COL.gold, 0.5);
+        }
+      },
+      // A structural grid: column lines at a bay that suits the plot.
+      grid: (m) => {
+        say(m, pick(["Columns on a 4 m grid?", "Let's set out the bays.", "Grid lines for the frame."]));
+        const bay = pick([3.6, 4.0, 4.5]);
+        for (let x = env.x0; x <= env.x1 + 0.01; x += bay) quick(m, at(x, env.y0), at(x, env.y1), COL.chalk, 0.35, this.planning);
+      },
+      // Bubbles for the zones, placed loosely, joined by what must touch.
+      bubbles: (m) => {
+        say(m, pick(["Living near the road, bedrooms quiet.", "Rough zoning first.", "Public, service, private."]));
+        const zones = [["Living & arrival", COL.public, 0.25], ["Kitchen & services", COL.service, 0.55], ["Bedrooms", COL.private, 0.82]];
+        const near = r === "S" ? (f) => f : (f) => 1 - f;
+        const centres = [];
+        for (const [name, color, f] of zones) {
+          const lv = n > 1 && name === "Bedrooms" ? 1 : 0;
+          const cx = rnd(env.x0 + 1.5, env.x1 - 1.5), cy = env.y0 + (env.y1 - env.y0) * near(n > 1 && lv === 1 ? 0.5 : f);
+          const rad = Math.min(env.x1 - env.x0, env.y1 - env.y0) * rnd(0.16, 0.24);
+          const ring = [];
+          for (let i = 0; i <= 28; i++) { const a = (i / 28) * TAU; ring.push(at(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad, lv)); }
+          const fill = shapeFill(ring, color, 0);
+          this.planning.add(fill);
+          const lab = this._label(name, at(cx, cy, lv), "st-label--zone");
+          this._do(m, { type: "run", to: ring[0] }, { type: "draw", quick: true, pts: resample(ring), line: this._line(ring, color, 0.55, this.planning) },
+            { type: "call", fn: () => { this._fade(fill.material, 0.1, 600); this._show(lab); } });
+          centres.push(at(cx, cy, lv));
+        }
+        if (n === 1) quick(m, centres[0], centres[1], COL.chalk, 0.3, this.planning);
+      },
+      // Stand at the road and look back at the plot: the view from the gate.
+      gate: (m) => {
+        const g = at(w / 2 + rnd(-2, 2), r === "S" ? -1.2 : d + 1.2);
+        this._do(m, { type: "run", to: g }, { type: "face", to: at(w / 2, d / 2) }, { type: "point", t: 1.4 });
+        say(m, pick(["The approach matters.", "First thing a guest sees.", "The gate should frame the door."]));
+      },
+    };
+    const deck = Object.keys(plays).sort(() => Math.random() - 0.5);
+    // Everyone gets one or two jobs; the envelope is always somebody's.
+    if (!deck.slice(0, 4).includes("envelope")) deck.splice(Math.floor(Math.random() * 3), 0, "envelope");
+    [p1, p2, p3].forEach((m, i) => {
+      this._do(m, { type: "wait", t: rnd(0, 1.4) });
+      plays[deck[i]](m);
+      if (Math.random() < 0.6) plays[deck[i + 3] || "gate"](m);
+    });
     this.construction = [];
     this.planningActive = true;
   }
@@ -1562,7 +1630,7 @@ export class Stage3D {
     for (const c of this.critics.slice()) {
       if (c.bubble) this._drop(c.bubble);
       const f = c.fig;
-      this._tween(260, (k) => f.scale.setScalar(H * (1 - ease(k)) + 0.001), () => this._remove(c), { real: true });
+      this._tween(260, (k) => f.scale.setScalar(H * (this.figS || 1) * (1 - ease(k)) + 0.001), () => this._remove(c), { real: true });
     }
     const s = this.current;
     if (s && !s.drawn && !this.static) {
@@ -1642,7 +1710,14 @@ export class Stage3D {
       if (!m.task && m.kind !== "critic" && this.planningActive && this.plot) {
         // No invented lines and no aimless pacing: the team confers.
         const h = this._huddle(m);
-        if (fig.position.distanceTo(h.at) > 0.35) {
+        const roll = Math.random();
+        if (roll < 0.22) {
+          // Wander off to check something on the plot.
+          const { w, d } = this.plot;
+          m.tasks.push({ type: "run", to: this.P(0, Math.random() * w, Math.random() * d), slow: true }, { type: pick(["note", "point", "wait"]), t: 1 + Math.random() * 1.5 });
+        } else if (roll < 0.32) {
+          m.tasks.push({ type: "say", text: pick(IDLE), t: 1.8, team: true });
+        } else if (fig.position.distanceTo(h.at) > 0.35 * (this.figS || 1)) {
           m.tasks.push({ type: "run", to: h.at }, { type: "face", to: h.centre });
         } else if (m.kind === "arch1") {
           m.tasks.push(pick([{ type: "talk", t: 2.4 }, { type: "point", t: 1.4 }, { type: "talk", t: 1.8 }]));
@@ -1662,7 +1737,7 @@ export class Stage3D {
           const v = t.to.clone().sub(fig.position);
           v.y = 0;
           const dist = v.length();
-          t.max ??= t.slow ? 1.1 : dist > 7 ? RUN : WALK;
+          t.max ??= (t.slow ? 1.1 : dist > 7 * (this.figS || 1) ? RUN : WALK) * (this.figS || 1);
           // Ease in and out: never faster than lets you stop on the mark.
           const want = Math.min(t.max, Math.sqrt(2 * ACCEL * Math.max(0, dist - 0.02)) + 0.25);
           m.vel += clamp(want - m.vel, -ACCEL * step, ACCEL * step);
