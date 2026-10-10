@@ -448,7 +448,11 @@ class FloorplanArchitect(Worker):
         optimiser allocates cells proportionally, so a room asking for more area
         is given a fatter cell rather than a longer, thinner one.
         """
-        from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
+        from aip.engines.architecture.layout import (
+            GeneratorConfig,
+            InfeasibleBriefError,
+            LayoutGenerator,
+        )
 
         names = ", ".join(sorted(t.label for t in undersized))
         what = (
@@ -468,10 +472,15 @@ class FloorplanArchitect(Worker):
                 requirement.preferred_area = round(requirement.target_area * factor, 2)
                 requirement.priority = min(2.0, requirement.priority + 0.5)
 
-            generated = LayoutGenerator(
-                widened,
-                GeneratorConfig(population=28, generations=24, seed=_REPACK_SEED),
-            ).generate(count=1)
+            try:
+                generated = LayoutGenerator(
+                    widened,
+                    GeneratorConfig(population=28, generations=24, seed=_REPACK_SEED),
+                ).generate(count=1)
+            except InfeasibleBriefError:
+                # Widening the starved rooms made the programme too big for the
+                # plot: keep the plan we have rather than draw a worse one.
+                return p
             if not generated:
                 return p
             repacked = generated[0]

@@ -372,3 +372,58 @@ def test_widget_script_is_served_with_open_cors(client):
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "*"
     assert "attachShadow" in response.text
+
+
+# ══ Infeasible and advised briefs ═════════════════════════════════════
+
+_TOO_BIG = {"plot_width": 9, "plot_depth": 12, "bedrooms": 5, "bathrooms": 5, "levels": 1}
+
+
+def test_an_infeasible_brief_is_a_clear_422_not_a_500(client):
+    response = client.post(
+        "/api/v1/design",
+        json={"simple": _TOO_BIG, "candidates": 1, "include_generative_critics": False, "seed": 1},
+    )
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "infeasible_brief"
+    assert detail["message"].startswith("A 5-bedroom")
+    assert detail["needed_area_m2"] > detail["available_area_m2"] > 0
+
+
+def test_the_stream_reports_an_infeasible_brief_as_a_visible_error_event(client):
+    with client.stream(
+        "POST", "/api/v1/design/stream",
+        json={"simple": _TOO_BIG, "candidates": 1, "include_generative_critics": False, "seed": 1},
+    ) as response:
+        assert response.status_code == 200
+        events, payloads = [], []
+        for line in response.iter_lines():
+            if line.startswith("event:"):
+                events.append(line.split(":", 1)[1].strip())
+            elif line.startswith("data:"):
+                payloads.append(line.split(":", 1)[1].strip())
+
+    assert "error" in events and events[-1] == "done" and "result" not in events
+    error = json.loads(payloads[events.index("error")])
+    assert error["code"] == "infeasible_brief" and "buildable area" in error["message"]
+    # The generate stage was told, so the progress rail shows where it stopped.
+    failed = [json.loads(p) for e, p in zip(events, payloads, strict=False)
+              if e == "progress" and json.loads(p).get("status") == "failed"]
+    assert failed and failed[0]["stage"] == "generate"
+
+
+def test_advisories_reach_the_design_response(client):
+    response = client.post(
+        "/api/v1/design",
+        json={
+            "simple": {"plot_width": 10, "plot_depth": 14, "bedrooms": 4, "bathrooms": 3,
+                       "levels": 1, "amenities": ["utility"]},
+            "candidates": 1, "include_generative_critics": False, "seed": 2,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["advisories"], "the plan departed from the brief and the response did not say so"
+    assert any("floor" in a for a in body["advisories"])
+    assert body["plan"]["metadata"]["advisories"] == body["advisories"]

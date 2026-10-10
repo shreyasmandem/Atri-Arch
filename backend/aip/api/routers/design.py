@@ -17,7 +17,7 @@ from aip.api.store import get_plan_store
 from aip.core.logging import get_logger, log_event
 from aip.db.models import DesignSession, Project
 from aip.db.session import get_session
-from aip.engines.architecture.layout import GeneratorConfig
+from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefError
 
 logger = get_logger("aip.api.design")
 router = APIRouter(prefix="/design", tags=["design"])
@@ -134,6 +134,18 @@ async def create_design(
     pipeline = DesignPipeline(_pipeline_config(payload), ledger=ledger)
     try:
         result = await pipeline.run(brief)
+    except InfeasibleBriefError as exc:
+        # The plot cannot hold the programme. That is the client's answer, not a
+        # server fault: 422 with the numbers and what to change.
+        log_event(logger, "design.infeasible", level=30, error=str(exc))
+        session.add(
+            DesignSession(
+                project_id=project.id, status="infeasible",
+                brief=json.loads(brief.model_dump_json()), error=str(exc)[:2000],
+            )
+        )
+        await session.flush()
+        raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
     except Exception as exc:  # noqa: BLE001
         log_event(logger, "design.failed", level=40, error=f"{type(exc).__name__}: {exc}")
         session.add(
@@ -199,6 +211,7 @@ async def create_design(
         consensus=consensus_dump,
         vastu=result.vastu,
         cost=result.cost,
+        advisories=result.advisories,
         explanation=result.explanation,
         recommendations=result.recommendations,
         committee=result.committee,
@@ -275,6 +288,7 @@ async def stream_design(
                             if result.consensus else {},
                             "vastu": result.vastu,
                             "cost": result.cost,
+                            "advisories": result.advisories,
                             "explanation": result.explanation,
                             "recommendations": result.recommendations,
                             "committee": result.committee,
@@ -303,6 +317,11 @@ async def stream_design(
                             "degraded_reason": result.degraded_reason,
                         },
                     )
+        except InfeasibleBriefError as exc:
+            # A clean, visible refusal: the message, the numbers and the code the
+            # studio keys its "change the brief" panel on - not a stack trace.
+            log_event(logger, "design.infeasible", level=30, error=str(exc))
+            yield sse("error", {"message": str(exc), **exc.to_dict()})
         except Exception as exc:  # noqa: BLE001
             log_event(logger, "design.stream_failed", level=40, error=str(exc))
             yield sse("error", {"message": f"{type(exc).__name__}: {exc}"})

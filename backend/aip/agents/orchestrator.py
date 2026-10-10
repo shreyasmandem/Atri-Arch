@@ -51,7 +51,7 @@ from aip.core.logging import get_logger, log_event, span, trace_context
 from aip.core.providers import Capability
 from aip.domain.brief import ClientBrief
 from aip.domain.plan import FloorPlan
-from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
+from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefError, LayoutGenerator
 
 logger = get_logger("aip.pipeline")
 
@@ -87,6 +87,10 @@ class DesignResult(BaseModel):
 
     vastu: dict[str, Any] | None = None
     cost: dict[str, Any] | None = None
+
+    #: Plain-English notes on where the plan departs from the brief: a floor
+    #: added, a room left out, rooms drawn smaller, a house grown to its plot.
+    advisories: list[str] = Field(default_factory=list)
 
     explanation: str = ""
     recommendations: list[str] = Field(default_factory=list)
@@ -260,6 +264,7 @@ class DesignPipeline:
                     await asyncio.to_thread(estimate_cost, final, brief)
                 ).model_dump()
 
+            result.advisories = list(final.metadata.get("advisories", []))
             result.evidence = merge_evidence(candidates)[:40]
             result.committee = committee_charter()
             chosen = next((c for c in candidates if c.id == consensus.winner_id), candidates[0])
@@ -381,8 +386,17 @@ class DesignPipeline:
     ) -> list[FloorPlan]:
         emit("generate", "running", "Generating candidate schemes...", 0.18)
         with span("generate"):
-            generator = LayoutGenerator(brief, self.config.generator)
-            plans = await asyncio.to_thread(generator.generate, self.config.candidate_count)
+            try:
+                generator = LayoutGenerator(brief, self.config.generator)
+                plans = await asyncio.to_thread(generator.generate, self.config.candidate_count)
+            except InfeasibleBriefError as exc:
+                # A programme the plot cannot hold is an answer, not a crash: tell
+                # the stream why, in words the client can act on, then let the
+                # typed error carry on to the API.
+                emit("generate", "failed", str(exc), 0.18, code="infeasible_brief",
+                     needed_area=round(exc.needed_area, 1), available_area=round(exc.available_area, 1),
+                     advisories=exc.advisories)
+                raise
         if not plans:
             raise RuntimeError("the layout generator produced no viable schemes")
         emit(

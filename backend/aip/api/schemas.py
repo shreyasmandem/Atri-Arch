@@ -274,6 +274,9 @@ class DesignResponse(BaseModel):
     consensus: dict[str, Any] = Field(default_factory=dict)
     vastu: dict[str, Any] | None = None
     cost: dict[str, Any] | None = None
+    #: Where the plan departs from the brief, in plain English: a floor added,
+    #: a room left out, rooms drawn smaller, a house grown to fill its plot.
+    advisories: list[str] = Field(default_factory=list)
     explanation: str = ""
     recommendations: list[str] = Field(default_factory=list)
     committee: list[dict[str, Any]] = Field(default_factory=list)

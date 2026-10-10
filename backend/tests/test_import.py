@@ -46,7 +46,7 @@ def client():
 def original():
     brief = default_residence_brief()
     return LayoutGenerator(
-        brief, GeneratorConfig(population=36, generations=32, seed=23)
+        brief, GeneratorConfig(population=36, generations=32, seed=24)
     ).generate(1)[0]
 
 

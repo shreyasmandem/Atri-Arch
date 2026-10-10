@@ -22,7 +22,7 @@ from shapely.ops import unary_union
 from aip.api.schemas import SimpleBriefRequest
 from aip.domain.geometry import Direction
 from aip.domain.plan import FloorPlan, RoomType
-from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
+from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefError, LayoutGenerator
 
 OUT = Path(__file__).resolve().parent.parent / "var" / "sweep"
 
@@ -50,6 +50,32 @@ def briefs(n: int, seed: int = 11) -> list[SimpleBriefRequest]:
             setback_left=rng.choice([1.0, 1.2]), setback_right=rng.choice([1.0, 1.2]),
         ))
     return out
+
+
+def large_briefs() -> list[SimpleBriefRequest]:
+    """Generous plots: the house must grow to the site it is given, not sit in a corner of it."""
+    common = {"road_direction": Direction("N"), "vastu": "balanced", "occupant_elders": 1,
+              "amenities": ["pooja", "dining", "study", "utility", "balcony", "parking"],
+              "setback_front": 3.0, "setback_rear": 1.5, "setback_left": 1.2, "setback_right": 1.2}
+    return [
+        SimpleBriefRequest(project_name="large 40x60", plot_width=40, plot_depth=60, levels=4,
+                           bedrooms=6, bathrooms=6, **common),
+        SimpleBriefRequest(project_name="large 30x40", plot_width=30, plot_depth=40, levels=2,
+                           bedrooms=4, bathrooms=4, **common),
+    ]
+
+
+def footprint_report(plan: FloorPlan, gen: LayoutGenerator) -> dict[str, float]:
+    """How much of the plot's allowance the floor plate uses, and the largest room against its cap."""
+    from aip.engines.architecture.feasibility import luxury_max
+
+    site = plan.site
+    env = gen._envelope  # noqa: SLF001
+    allowed = min(gen._footprint_cap() or env.area, site.max_footprint)  # noqa: SLF001
+    over = [(r.display_name(), r.area, luxury_max(r.type)) for r in plan.all_rooms
+            if luxury_max(r.type) is not None and r.area > luxury_max(r.type) + 0.5]
+    return {"footprint_m2": round(env.area, 1), "allowed_m2": round(allowed, 1),
+            "fill": round(env.area / allowed, 3), "rooms_over_cap": len(over)}
 
 
 def defects(plan: FloorPlan, gen: LayoutGenerator) -> dict[str, list[str]]:
@@ -123,37 +149,57 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=30)
     ap.add_argument("--svg", action="store_true")
+    ap.add_argument("--large", action="store_true", help="run the generous-plot cases instead")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     rows = []
     tally: Counter[str] = Counter()
-    for i, req in enumerate(briefs(args.n)):
+    infeasible = 0
+    slowest = 0.0
+    for i, req in enumerate(large_briefs() if args.large else briefs(args.n)):
         brief = req.to_brief()
-        gen = LayoutGenerator(brief, GeneratorConfig(seed=100 + i))
         t0 = time.perf_counter()
         try:
+            gen = LayoutGenerator(brief, GeneratorConfig(seed=(900 if args.large else 100) + i))
             plan = gen.generate(1)[0]
+        except InfeasibleBriefError as exc:
+            # The typed refusal is the right answer for a programme that cannot
+            # be drawn on the plot, so it is counted apart from the defects.
+            infeasible += 1
+            secs = time.perf_counter() - t0
+            rows.append({"i": i, "plot": [req.plot_width, req.plot_depth], "levels": req.levels,
+                         "beds": req.bedrooms, "infeasible": str(exc)})
+            print(f"{i:2d} {req.plot_width:>4.0f}x{req.plot_depth:<4.0f} L{req.levels} {req.bedrooms}bhk road {req.road_direction.value:<2} {secs:5.1f}s  INFEASIBLE: {exc}")
+            continue
         except Exception as exc:  # noqa: BLE001
             rows.append({"i": i, "error": f"{type(exc).__name__}: {exc}"})
             tally["crash"] += 1
-            print(f"{i:2d} CRASH {exc}")
+            print(f"{i:2d} CRASH {type(exc).__name__}: {exc}")
             continue
         secs = time.perf_counter() - t0
+        slowest = max(slowest, secs)
         d = defects(plan, gen)
         for k in d:
             tally[k] += 1
+        advised = " +" + str(len(plan.metadata.get("advisories", []))) + "adv" if plan.metadata.get("advisories") else ""
         rows.append({"i": i, "plot": [req.plot_width, req.plot_depth], "levels": req.levels,
+                     "drawn_levels": len(plan.levels),
                      "beds": req.bedrooms, "road": req.road_direction.value, "secs": round(secs, 1),
-                     "defects": d})
+                     "advisories": plan.metadata.get("advisories", []), "defects": d})
         flag = " ".join(f"{k}:{len(v)}" for k, v in d.items()) or "clean"
-        print(f"{i:2d} {req.plot_width:>4.0f}x{req.plot_depth:<4.0f} L{req.levels} {req.bedrooms}bhk road {req.road_direction.value:<2} {secs:5.1f}s  {flag}")
+        print(f"{i:2d} {req.plot_width:>4.0f}x{req.plot_depth:<4.0f} L{req.levels}->{len(plan.levels)} {req.bedrooms}bhk road {req.road_direction.value:<2} {secs:5.1f}s  {flag}{advised}")
+        if args.large:
+            print("   footprint", footprint_report(plan, gen))
+            for adv in plan.metadata.get("advisories", []):
+                print("   -", adv)
         if args.svg:
             from aip.engines.architecture.drawings import floor_plan_svg
             for lv in plan.levels:
                 (OUT / f"p{i:02d}_L{lv.index}.svg").write_text(floor_plan_svg(plan, lv.index), encoding="utf-8")
-    clean = sum(1 for r in rows if not r.get("defects") and "error" not in r)
-    print(f"\nclean {clean}/{len(rows)}   defect frequency: {dict(tally.most_common())}")
-    (OUT / "report.json").write_text(json.dumps({"tally": tally, "rows": rows}, indent=1, default=str), encoding="utf-8")
+    clean = sum(1 for r in rows if "defects" in r and not r["defects"])
+    print(f"\nclean {clean}/{len(rows)}   infeasible (typed refusal) {infeasible}   "
+          f"slowest {slowest:.1f}s   defect frequency: {dict(tally.most_common())}")
+    (OUT / "report.json").write_text(json.dumps({"tally": tally, "infeasible": infeasible, "rows": rows}, indent=1, default=str), encoding="utf-8")
 
 
 if __name__ == "__main__":

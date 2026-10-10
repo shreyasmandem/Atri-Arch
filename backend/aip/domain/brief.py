@@ -131,6 +131,10 @@ class RoomRequirement(BaseModel):
     needs_daylight: bool = True
     attached_bathroom: bool = False
     level: int | None = Field(default=None, description="Pin to a level, or None to let the optimiser decide")
+    asked_area: float | None = Field(
+        default=None,
+        description="The area the programme asked for, before the generator scaled it to the plot",
+    )
     priority: float = Field(default=1.0, ge=0.0, le=2.0)
     notes: str = ""
 

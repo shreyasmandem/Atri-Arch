@@ -207,11 +207,15 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
     RoomType.PUJA: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
                               RoomType.DINING, RoomType.FAMILY}),
     RoomType.UTILITY: frozenset({RoomType.KITCHEN, RoomType.CORRIDOR}),
+    # A balcony or terrace opens off a landing as readily as off a bedroom: the
+    # upper floor of a one-bedroom house has a lobby, a bedroom and a terrace,
+    # and the terrace is reached from the lobby, not through the bed.
     RoomType.BALCONY: frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
                                  RoomType.CHILDREN_BEDROOM, RoomType.LIVING, RoomType.DINING,
-                                 RoomType.FAMILY}),
+                                 RoomType.FAMILY, RoomType.LOBBY, RoomType.CORRIDOR}),
     RoomType.TERRACE: frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.LIVING,
-                                 RoomType.FAMILY, RoomType.STAIRCASE, RoomType.CORRIDOR}),
+                                 RoomType.FAMILY, RoomType.STAIRCASE, RoomType.CORRIDOR,
+                                 RoomType.LOBBY, RoomType.FOYER}),
     RoomType.GARAGE: frozenset({RoomType.FOYER, RoomType.UTILITY, RoomType.LOBBY,
                                 RoomType.CORRIDOR}),
     RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR}),
@@ -477,6 +481,25 @@ def programme_for(kind: ProjectKind) -> tuple[Relation, ...]:
 # ---------------------------------------------------------------------------
 
 
+def passage_area(site) -> float:
+    """Area of the one passage a floor needs, from the plot rather than from a ratio.
+
+    A passage is a walkable width times the length of the private zone it
+    serves - about 45% of the depth of the house, never the whole frontage.
+    Sized as `frontage x 1.1` it came out at 11 m2 in a 70 m2 flat and was the
+    single largest reason plans failed the corridor-share check; sized as a
+    fraction of the programme it came out at half a metre wide.
+    """
+    box = site.bbox
+    margin = 2 * min(site.setback_front, site.setback_rear, site.setback_left, site.setback_right)
+    if site.road_directions and site.road_directions[0].value in ("E", "W"):
+        depth = box.width - margin
+    else:
+        depth = box.height - margin
+    run = min(7.0, max(3.0, 0.45 * depth))
+    return round(1.15 * run, 1)
+
+
 def apply_defaults(brief: ClientBrief) -> ClientBrief:
     """Fill in adjacency the client never thought to state.
 
@@ -508,29 +531,23 @@ def apply_defaults(brief: ClientBrief) -> ClientBrief:
 
     # With two or more bedrooms a passage exists in every real plan, because
     # they cannot all open off the living room and the alternative is a
-    # bedroom reached through another bedroom. Inject one when the client has
-    # not thought to ask; it is the architect's decision, not theirs.
-    private_count = sum(
-        req.count for req in updated
-        if req.type in (RoomType.MASTER_BEDROOM, RoomType.BEDROOM,
-                        RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM)
-    )
+    # bedroom reached through another bedroom, or a living room with five
+    # doors in it. Inject one when the client has not thought to ask; it is
+    # the architect's decision, not theirs.
+    #
+    # With one bedroom none is needed: the bedroom opens off the living room
+    # and its bathroom attaches to it, so a passage there is pure overhead.
+    # Multi-storey briefs are left to the generator, which knows which floor
+    # each room lands on.
+    bedroom_kinds = (RoomType.MASTER_BEDROOM, RoomType.BEDROOM,
+                     RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM)
+    private_count = sum(req.count for req in updated if req.type in bedroom_kinds)
     has_passage = any(req.type in (RoomType.CORRIDOR, RoomType.LOBBY) for req in updated)
-    if private_count >= 2 and not has_passage:
-        # A passage runs the full width of the house at a walkable width, so
-        # its area is fixed by the plot, not by a fraction of the programme.
-        # Sized as a fraction it comes out at half a metre wide, which draws
-        # as a line and walks as a gap.
-        site = brief.site
-        box = site.bbox
-        if site.road_directions and site.road_directions[0].value in ("E", "W"):
-            span = box.height - site.setback_front - site.setback_rear
-        else:
-            span = box.width - site.setback_left - site.setback_right
-        passage_width = 1.1
+    needs_passage = private_count >= 2
+    if brief.levels <= 1 and needs_passage and not has_passage:
         updated.append(RoomRequirement(
             type=RoomType.CORRIDOR,
-            preferred_area=round(max(3.5, span * passage_width), 1),
+            preferred_area=passage_area(brief.site),
             needs_daylight=False,
             needs_external_wall=False,
             priority=1.2,

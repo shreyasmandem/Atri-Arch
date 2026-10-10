@@ -1059,7 +1059,11 @@ def assemble(
         project_name=name, site=site, levels=1, requirements=requirements,
         vastu=VastuStance.BALANCED,
     )
-    generator = LayoutGenerator(brief, GeneratorConfig(population=4, generations=1, seed=1))
+    # An uploaded drawing is the architect's decision: the feasibility gate must not
+    # second-guess it by adding a floor or dropping a room.
+    generator = LayoutGenerator(
+        brief, GeneratorConfig(population=4, generations=1, seed=1, check_feasibility=False)
+    )
     envelope = bounding_box([p for r in domain_rooms for p in r.polygon])
     walls = generator._build_walls(domain_rooms, envelope, 0)
 
