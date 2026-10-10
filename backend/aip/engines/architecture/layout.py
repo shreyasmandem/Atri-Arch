@@ -1381,6 +1381,8 @@ class GeneratorConfig:
     #: Run the feasibility gate. Off only for callers that lay out a plan they
     #: were handed - an uploaded drawing - and must not be second-guessed.
     check_feasibility: bool = True
+    #: Try the spine planner (an architect's parti) before the search.
+    spine: bool = True
     #: Runs beyond the first three are made only while no clean plan has been
     #: found, and only while they fit the time budget (seconds, whole call).
     max_runs: int = 16
@@ -1675,12 +1677,23 @@ class LayoutGenerator:
 
         runs = max(3, count + 1)
         started = time.perf_counter()
+        # The spine planner first: an architect's parti fitted to the programme.
+        # When it yields enough clean, distinct schemes the search is skipped.
+        spine_clean = 0
+        for plan in self._spine_candidates():
+            signature = self._signature(plan)
+            if signature in signatures:
+                continue
+            signatures.add(signature)
+            exact, breakdown = fitness_fn(plan)
+            scored.append((exact - _QUALITY_WEIGHT * min(6.0, _severity(plan.metadata["quality"])), breakdown, plan))
+            spine_clean += not plan.metadata["guardrail"]
         # Most of the time goes to searching; the rest is kept for repairing the
         # near-misses the search leaves (see `_repair`).
         search_budget = 0.8 * self.config.time_budget
         run = 0
         tried: dict[int, float] = {}           # carve index -> best finding weight it produced
-        while True:
+        while spine_clean < count:
             if run >= 1:
                 # After the first run, another is made only if it fits the time
                 # budget - a tall house takes several seconds a run - and, once
@@ -1766,6 +1779,58 @@ class LayoutGenerator:
             best=max((p.metadata.get("fitness", 0.0) for p in plans), default=0.0),
         )
         return plans
+
+    def _spine_candidates(self) -> Iterator[FloorPlan]:
+        """Plans from the spine planner, one per variant that fits, judged."""
+        from aip.engines.architecture.spine import SpinePlanner, variants
+
+        if not self.config.spine:
+            return
+        try:
+            levels = [[self.requirements[i] for i in bucket] for bucket in self.level_buckets]
+            roads = self.brief.site.road_directions
+            planner = SpinePlanner(self._envelope, roads[0] if roads else None, len(levels) > 1)
+        except Exception as exc:  # noqa: BLE001 - the search is the fallback
+            log_event(logger, "layout.spine_failed", error=str(exc))
+            return
+        made = 0
+        for v in variants():
+            try:
+                rooms = planner.plan(levels, v)
+            except Exception as exc:  # noqa: BLE001
+                log_event(logger, "layout.spine_failed", error=str(exc))
+                continue
+            if not rooms:
+                continue
+            # Walls on the house's own outline are its outside walls; the
+            # buildable envelope may be larger (the rest is garden).
+            xs = [p.x for lv in rooms for r in lv for p in r.polygon]
+            ys = [p.y for lv in rooms for r in lv for p in r.polygon]
+            envelope = self._envelope
+            self._envelope = BoundingBox(min(xs), min(ys), max(xs), max(ys))
+            try:
+                plan = self._assemble(rooms)
+            finally:
+                self._envelope = envelope
+            plan.metadata["planner"] = "spine"
+            self._judge(plan)
+            # A toilet over the kitchen, the puja or the dining table is a
+            # plumbing leak waiting to happen and a Vastu fault: mark it so the
+            # variant without it wins.
+            from shapely.geometry import Polygon as _P
+            for lo, hi in zip(plan.levels, plan.levels[1:]):
+                below = [(r, _P([(q.x, q.y) for q in r.polygon])) for r in lo.rooms
+                         if r.type in (RoomType.KITCHEN, RoomType.PUJA, RoomType.DINING)]
+                for r in hi.rooms:
+                    if r.type in (RoomType.BATHROOM, RoomType.TOILET, RoomType.POWDER):
+                        pr = _P([(q.x, q.y) for q in r.polygon])
+                        for b_room, pb in below:
+                            if pr.intersection(pb).area > 0.3 * pr.area:
+                                plan.metadata["quality"].append(f"level {hi.index}: {r.display_name()} over the {b_room.display_name()}")
+                                break
+            made += 1
+            yield plan
+        log_event(logger, "layout.spine", variants=made)
 
     def _candidates(self, seed: int | None) -> Iterator[FloorPlan]:
         """One run of the search: the elite plans it converged on.

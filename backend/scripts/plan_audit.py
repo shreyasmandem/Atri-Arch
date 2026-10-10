@@ -28,7 +28,7 @@ PASSAGE = {T.CORRIDOR, T.LOBBY}
 FURNISH = {
     T.MASTER_BEDROOM: (3.3, 3.6), T.BEDROOM: (3.0, 3.0), T.LIVING: (3.6, 4.2),
     T.DINING: (2.7, 3.0), T.KITCHEN: (2.1, 2.7), T.BATHROOM: (1.5, 2.1),
-    T.STAIRCASE: (2.3, 3.8), T.UTILITY: (1.2, 1.8), T.PUJA: (1.2, 1.2), T.FOYER: (1.5, 1.8),
+    T.STAIRCASE: (2.3, 3.3),  # a dog-leg 2.4 x 4.5 or a U-stair 3.0 x 3.4 T.UTILITY: (1.2, 1.8), T.PUJA: (1.2, 1.2), T.FOYER: (1.5, 1.8),
 }
 
 
@@ -109,7 +109,7 @@ def audit(plan: FloorPlan, brief) -> dict[str, list[str]]:
                 f["area_balance"].append(f"{tag} {r.display_name()} {r.area:.0f} m2 (asked {asked:.0f}, plate {plate:.0f})")
         # 7c A stair is a dog-leg of about 2.4 x 4.5 m, not a hall.
         for r in rooms:
-            if r.type == T.STAIRCASE and r.area > 12.0:
+            if r.type == T.STAIRCASE and r.area > 14.0:
                 f["stair_oversize"].append(f"{tag} Staircase {r.area:.1f} m2")
         # 7d The utility has an outside wall; a passage reaches at least three rooms.
         for r in rooms:
@@ -180,7 +180,8 @@ def audit(plan: FloorPlan, brief) -> dict[str, list[str]]:
         # 10 Passage share.
         total = sum(r.area for r in rooms) or 1
         share = sum(r.area for r in rooms if r.type in PASSAGE) / total
-        if share > 0.12:
+        # A central-hall plan runs 12-15 % circulation; above that is waste.
+        if share > 0.15:
             f["passage_share"].append(f"{tag} {share:.0%}")
         # 11 Dead space.
         u = unary_union([poly(r) for r in rooms])

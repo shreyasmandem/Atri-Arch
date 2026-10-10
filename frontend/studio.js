@@ -498,8 +498,8 @@ function readBrief() {
   };
 }
 
-async function onSubmit(e) {
-  e.preventDefault();
+async function onSubmit(e, preset = null) {
+  e?.preventDefault?.();
   if (S.isGenerating) return;
 
   S.isGenerating = true;
@@ -519,7 +519,7 @@ async function onSubmit(e) {
     note.textContent = "Designing";
   }
 
-  S.briefSent = readBrief();
+  S.briefSent = preset || readBrief();
   S.plans = {}; S.planIds = []; S.activeId = null; S.imported = null;
   S.remarks = {}; S.voices = [];
 
@@ -950,6 +950,7 @@ function renderRail() {
 
   const b = S.briefSent || {};
   const recap = $("brief-recap"); recap.innerHTML = "";
+  reviseBox(recap);
   const rows = S.imported ? [
     ["Source", `${S.imported.file} (${S.imported.source})`],
     ["Rooms read", `${S.imported.rooms_kept} of ${S.imported.rooms_read} outlines`],
@@ -2277,4 +2278,44 @@ function openWhy() {
   for (const p of String(text).split(/\n{2,}/)) if (p.trim()) b.append(el("p", null, p.trim()));
   $("why").hidden = false;
   $("why-close").focus();
+}
+
+
+/* ── revise a finished design in words ─────────────────────────────── */
+
+// "Make the kitchen bigger", "add a balcony to the master bedroom", "no puja
+// room": the brief agent turns the sentence into a changed brief, says what it
+// changed, and the studio runs again on it.
+function reviseBox(after) {
+  if (S.imported) return;
+  document.getElementById("revise")?.remove();
+  const box = el("form", "revise"); box.id = "revise";
+  box.append(el("span", "revise__k", "Change something"));
+  const input = el("input", "revise__in"); input.type = "text"; input.maxLength = 2000;
+  input.placeholder = "e.g. make the kitchen bigger, add a balcony off the master bedroom";
+  input.setAttribute("aria-label", "Describe a change to this design");
+  const go = el("button", "ghost-btn", "Revise"); go.type = "submit";
+  const said = el("p", "revise__said"); said.setAttribute("aria-live", "polite");
+  box.append(input, go, said);
+  after.before(box);
+  box.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    go.disabled = true; said.textContent = "Reading that…";
+    try {
+      const r = await fetch(`${API}/design/revise`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction: text, brief: S.chatBrief || S.briefSent || {} }) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      said.textContent = d.changes.join(" · ");
+      if (!d.understood) { go.disabled = false; return; }
+      S.chatBrief = d.brief;
+      const next = { ...S.briefSent, ...d.request,
+        extra_rooms: [...(S.briefSent?.extra_rooms || []), ...(d.request.extra_rooms || [])].filter((x, i, a) => a.findIndex((y) => JSON.stringify(y) === JSON.stringify(x)) === i) };
+      setTimeout(() => onSubmit(null, next), 900);
+    } catch (err) {
+      said.textContent = `Could not read that change (${err.message}).`;
+    } finally { go.disabled = false; }
+  });
 }

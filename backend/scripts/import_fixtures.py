@@ -44,7 +44,7 @@ def site_wh(plan: FloorPlan) -> tuple[float, float]:
 
 def make_plan() -> FloorPlan:
     brief = default_residence_brief()
-    return LayoutGenerator(brief, GeneratorConfig(population=36, generations=32, seed=23)).generate(1)[0]
+    return LayoutGenerator(brief, GeneratorConfig(population=36, generations=32, seed=23, spine=False)).generate(1)[0]
 
 
 def wall_segments(plan: FloorPlan, level: int = 0) -> list[tuple[tuple[float, float], tuple[float, float], float, list[tuple[float, float]]]]:

@@ -336,3 +336,35 @@ async def stream_design(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --------------------------------------------------------------------- chat
+
+
+@router.post("/chat")
+async def design_chat(payload: dict[str, Any]) -> dict[str, Any]:
+    """One turn of the brief conversation: what was understood, what to ask next.
+
+    Body: {"message": str, "brief": {...so far}}. When `ready`, `request` is a
+    `SimpleBriefRequest` the design endpoint accepts as is.
+    """
+    from aip.agents.brief_agent import converse, to_request
+
+    message = str(payload.get("message", ""))[:4000]
+    turn = await converse(message, payload.get("brief") or {})
+    turn["request"] = to_request(turn["brief"]) if turn["ready"] else None
+    return turn
+
+
+@router.post("/revise")
+async def design_revise(payload: dict[str, Any]) -> dict[str, Any]:
+    """Change a finished design from a sentence: the new brief and what changed.
+
+    Body: {"instruction": str, "brief": {...}}. The client re-runs the design
+    with `request` to see the revision.
+    """
+    from aip.agents.brief_agent import revise, to_request
+
+    out = await revise(str(payload.get("instruction", ""))[:2000], payload.get("brief") or {})
+    out["request"] = to_request(out["brief"])
+    return out

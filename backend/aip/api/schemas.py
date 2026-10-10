@@ -34,6 +34,9 @@ class RoomRequest(BaseModel):
     area: float | None = Field(default=None, gt=0, le=500)
     direction: Direction | None = None
     attached_bathroom: bool = False
+    level: int | None = Field(default=None, ge=0, le=5, description="Pin to a floor (0 = ground)")
+    scale: float | None = Field(default=None, gt=0.3, le=3.0, description="Grow or shrink a room the programme already has")
+    attach_to: RoomType | None = Field(default=None, description="For a balcony: the room it opens off")
 
 
 class SimpleBriefRequest(BaseModel):
@@ -54,6 +57,10 @@ class SimpleBriefRequest(BaseModel):
     bedrooms: int = Field(default=3, ge=0, le=12)
     bathrooms: int = Field(default=2, ge=0, le=12)
     rooms: list[RoomRequest] = Field(default_factory=list)
+    #: Requests on top of the default programme - from the chat or a revision:
+    #: a room pinned to a floor or a quarter, resized, added, or removed.
+    extra_rooms: list[RoomRequest] = Field(default_factory=list)
+    remove_rooms: list[RoomType] = Field(default_factory=list)
 
     styles: list[DesignStyle] = Field(default_factory=lambda: [DesignStyle.CONTEMPORARY])
     materials_liked: list[str] = Field(default_factory=list)
@@ -85,6 +92,33 @@ class SimpleBriefRequest(BaseModel):
     @classmethod
     def _trim(cls, value: list[str]) -> list[str]:
         return [item.strip()[:200] for item in value if item.strip()][:20]
+
+    def _apply_extras(self, reqs: list[RoomRequirement]) -> list[RoomRequirement]:
+        """Fold the chat's room requests into the programme."""
+        reqs = [r for r in reqs if r.type not in set(self.remove_rooms)]
+        for x in self.extra_rooms:
+            same = [r for r in reqs if r.type is x.type]
+            if same and (x.scale or x.level is not None or x.direction) and x.count == 1 and x.area is None:
+                for r in same[:1]:
+                    if x.scale:
+                        r.preferred_area = round(r.target_area * x.scale, 2)
+                    if x.level is not None:
+                        r.level = x.level
+                    if x.direction:
+                        r.preferred_direction = x.direction
+                    if x.attached_bathroom:
+                        r.attached_bathroom = True
+                continue
+            if same and x.type not in {RoomType.BALCONY, RoomType.TERRACE, RoomType.STUDY, RoomType.GYM,
+                                       RoomType.HOME_THEATRE, RoomType.FAMILY, RoomType.STORE}:
+                continue
+            notes = f"opens off the {x.attach_to.value.replace('_', ' ')}" if x.attach_to else ""
+            reqs.append(RoomRequirement(
+                type=x.type, count=x.count, preferred_area=x.area, preferred_direction=x.direction,
+                attached_bathroom=x.attached_bathroom, level=x.level, notes=notes,
+                needs_external_wall=x.type.is_outdoor or x.type in {RoomType.STUDY, RoomType.GYM},
+            ))
+        return reqs
 
     def to_brief(self) -> ClientBrief:
         """Expand into a full professional brief.
@@ -202,6 +236,7 @@ class SimpleBriefRequest(BaseModel):
         elif self.finish_tier == "premium" and "vitrified_tiles" not in materials:
             materials.extend(["vitrified_tiles", "granite", "teak_wood"])
 
+        requirements = self._apply_extras(requirements)
         must_haves = list(self.must_haves)
         if self.kitchen_type and f"kitchen:{self.kitchen_type}" not in must_haves:
             must_haves.append(f"kitchen:{self.kitchen_type}")
