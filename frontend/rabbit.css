@@ -801,3 +801,57 @@ input[type="range"].stance::-moz-range-thumb { width: 16px; height: 16px; border
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .grain { display: none; }
 }
+
+/* ── air ──────────────────────────────────────────────────────────── */
+.pane[data-view="air"] { position: relative; }
+.air-stage { overflow: hidden; }
+.air-canvas { position: absolute; inset: 0; display: block; }
+.air-canvas--base, .air-canvas--trail { pointer-events: none; }
+.air-canvas--over { cursor: crosshair; }
+.air-rose { display: flex; align-items: center; gap: 2px; padding-bottom: 6px; }
+.air-rose__label { margin-right: 8px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cream-3); }
+.air-rose button { min-width: 34px; height: 30px; padding: 0 8px; border: 1px solid var(--rule); background: transparent; color: var(--cream-3); font: 600 11px/1 var(--ui); letter-spacing: 0.06em; cursor: pointer; transition: color .2s var(--ease), border-color .2s var(--ease), background .2s var(--ease); }
+.air-rose button:hover { color: var(--cream); border-color: var(--rule-2); }
+.air-rose button[aria-checked="true"] { color: var(--ink); background: var(--cream); border-color: var(--cream); }
+.air-tip { position: absolute; z-index: 2; display: grid; gap: 3px; min-width: 190px; padding: 10px 12px; background: rgba(11, 10, 9, 0.92); border: 1px solid var(--rule-2); font-size: 11px; color: var(--cream-2); pointer-events: none; }
+.air-tip b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cream); }
+.air-tip__here { color: var(--cream-3); }
+.air-rank { position: absolute; right: var(--gut); bottom: 52px; z-index: 2; display: grid; gap: 4px; width: min(280px, calc(100% - 32px)); padding: 12px 14px; background: rgba(11, 10, 9, 0.9); border: 1px solid var(--rule-2); }
+.air-rank__title { margin-bottom: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cream-3); }
+.air-rank__row { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 8px; padding: 2px 0; border: 0; background: none; color: var(--cream-2); font: 600 11px/1.4 var(--ui); cursor: pointer; text-align: left; }
+.air-rank__row:hover { color: var(--cream); }
+.air-rank__bar { height: 4px; background: linear-gradient(90deg, var(--cream) calc(var(--f) * 100%), var(--rule) 0); }
+.air-rank__n { text-align: right; color: var(--cream-3); }
+@media (max-width: 720px) { .air-rose__label { display: none; } .air-rose button { min-width: 30px; padding: 0 5px; } }
+
+/* ── 3D palette card ──────────────────────────────────────────────── */
+.pal { position: absolute; left: var(--gut); top: 16px; z-index: 2; display: grid; gap: 10px; width: min(340px, calc(100% - 32px)); padding: 14px 16px; background: rgba(11, 10, 9, 0.88); border: 1px solid var(--rule-2); backdrop-filter: blur(6px); transition: opacity .3s var(--ease); }
+.pal.is-busy { opacity: 0.6; pointer-events: none; }
+.pal.is-min { width: auto; padding: 6px 6px 6px 12px; gap: 0; }
+.pal__head { display: flex; align-items: center; gap: 10px; }
+.pal__toggle { display: grid; grid-template-columns: auto auto; align-items: center; gap: 1px 10px; flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+.pal__k { grid-column: 1; font-size: 9px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--cream-3); }
+.pal__name { grid-column: 1; font-family: var(--display); font-size: 14px; font-weight: 600; color: var(--cream); white-space: nowrap; }
+.pal__strip { grid-column: 2; grid-row: 1 / span 2; display: flex; }
+.pal__strip i { width: 12px; height: 22px; }
+.pal__strip i:first-child { border-radius: 2px 0 0 2px; } .pal__strip i:last-child { border-radius: 0 2px 2px 0; }
+.pal__toggle:hover .pal__name { text-decoration: underline; text-underline-offset: 3px; }
+.pal__nav { display: flex; gap: 2px; }
+.pal__nav .ghost-btn { width: 30px; height: 30px; padding: 0; font-size: 14px; }
+.pal__story { margin: 0; font-size: 12px; line-height: 1.45; color: var(--cream-2); }
+.pal__row { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 8px; }
+.pal__rk { font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-3); }
+.pal__sws { display: flex; gap: 3px; flex-wrap: wrap; }
+.pal__sw { width: 22px; height: 22px; border: 1px solid rgba(var(--c-rgb), 0.18); }
+.pal__why, .pal__heard { margin: 0; font-size: 11px; line-height: 1.45; color: var(--cream-3); }
+.pal__form { display: flex; gap: 4px; }
+.pal__input { flex: 1; min-width: 0; height: 32px; padding: 0 10px; background: transparent; border: 1px solid var(--rule-2); color: var(--cream); font: 500 12px var(--ui); }
+.pal__input:focus { outline: none; border-color: var(--cream-3); }
+.pal__form .ghost-btn { height: 32px; padding: 0 12px; font-size: 11px; }
+@media (max-width: 720px) { .pal { top: auto; bottom: 48px; } .pal__story, .pal__why { display: none; } }
+
+/* ── 3D Vastu pins ───────────────────────────────────────────────── */
+.v3-pin { position: absolute; left: 0; top: 0; z-index: 2; display: grid; gap: 1px; padding: 5px 8px; background: rgba(11, 10, 9, 0.86); border: 1px solid var(--rule-2); border-left: 3px solid #d9b45a; font-size: 10px; line-height: 1.35; color: var(--cream-2); white-space: nowrap; pointer-events: auto; cursor: help; transition: opacity .2s var(--ease); }
+.v3-pin b { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cream); }
+.v3-pin--ideal { border-left-color: #8fb27a; }
+.v3-pin--prohibited { border-left-color: #d2553f; }

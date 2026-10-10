@@ -329,6 +329,145 @@ const brief = (s, n = 92) => {
 
 /* ═══ THE STAGE ═════════════════════════════════════════════════════════ */
 
+/* ── fit-out: finishes and furniture by room ──────────────────────────── */
+
+const bounce = (t) => {
+  // Drops, touches down and settles once: the furniture has weight.
+  if (t < 0.72) return (t / 0.72) ** 2;
+  const k = (t - 0.72) / 0.28;
+  return 1 - Math.sin(k * Math.PI) * 0.08 * (1 - k);
+};
+const elastic = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(2, -9 * t) * Math.cos(t * 9.5));
+const GLOW = new THREE.MeshBasicMaterial({ color: 0xffc46b });
+
+const BEDS = new Set(["master_bedroom", "bedroom", "guest_bedroom", "children_bedroom"]);
+const FLOOR_OF = (t) => (BEDS.has(t) || t === "study" || t === "home_office" ? 0x9a6b45
+  : WET.has(t) ? 0xc9c4ba : t === "kitchen" || t === "store" ? 0x8f9a8e
+  : t === "balcony" || t === "terrace" || t === "verandah" || t === "courtyard" ? 0xa89a86
+  : t === "staircase" ? 0xb9ad9a : t === "garage" || t === "parking" ? 0x7d7a74 : 0xd8cab2);
+const PAINT_OF = (t) => ({
+  master_bedroom: 0xd6c6ae, bedroom: 0xdbe2d2, guest_bedroom: 0xe6dccc, children_bedroom: 0xefe2c6,
+  living: 0xefe7da, dining: 0xebe1d1, kitchen: 0xf3ede3, puja: 0xf1e0b6, study: 0xe2d6c3,
+  bathroom: 0xd9e3e8, toilet: 0xd9e3e8, powder: 0xd9e3e8,
+}[t] ?? 0xede6da);
+
+const C = {
+  wood: 0x8a5f3c, oak: 0xc2a37c, linen: 0xefe9df, fabric: 0x9c8a74, accent: 0x6f8662, dark: 0x2b2a29,
+  steel: 0xbfc3c6, gold: 0xc9a14a, white: 0xf5f4f0, leaf: 0x4f7a3a, pot: 0xa35a3a, rug: 0x8c6b52,
+  stone: 0x3a3a3c, blush: 0xc98f7a, glass: 0x9fb2bf,
+};
+
+// Pieces for a room, in the room's own frame: u runs along its long side,
+// v across it. Each is [u, v, y, size_u, size_v, size_y, colour, kind].
+function FURNISH(type, L, S) {
+  const m = 0.18;
+  const out = [];
+  const add = (...p) => out.push(p);
+  const plant = (u, v) => { add(u, v, 0, 0.32, 0.32, 0.3, C.pot, "cyl"); add(u, v, 0.28, 0.5, 0.5, 0.5, C.leaf, "ball"); };
+  if (L < 1.2 || S < 1.0) return out;
+  if (BEDS.has(type)) {
+    const bw = type === "master_bedroom" ? 1.8 : type === "children_bedroom" ? 1.1 : 1.6;
+    const bl = Math.min(2.05, L - 2 * m - 0.6);
+    const hu = -L / 2 + m;
+    add(hu + bl / 2 + 0.05, 0, 0, bl + 0.5, Math.min(S - 0.6, bw + 0.9), 0.012, C.rug);
+    add(hu + bl / 2, 0, 0, bl, bw, 0.3, C.wood);
+    add(hu + bl / 2 + 0.02, 0, 0.3, bl - 0.06, bw - 0.06, 0.16, C.linen);
+    add(hu + bl * 0.66, 0, 0.46, bl * 0.42, bw - 0.02, 0.05, type === "children_bedroom" ? 0xd6a23a : C.accent);
+    for (const s of bw > 1.3 ? [-bw / 4, bw / 4] : [0]) add(hu + 0.3, s, 0.46, 0.34, bw > 1.3 ? bw / 2 - 0.12 : 0.6, 0.1, C.white);
+    add(hu + 0.04, 0, 0, 0.08, bw + 0.1, 0.95, C.wood);
+    if (S >= bw + 1.1) for (const s of [-1, 1]) add(hu + 0.25, s * (bw / 2 + 0.3), 0, 0.42, 0.42, 0.45, C.oak);
+    if (S >= bw + 1.8 && L >= 3.2) add(L / 2 - m - 0.9, S / 2 - m - 0.3, 0, Math.min(1.8, L - bl - 0.9), 0.6, 1.0, C.oak);
+    if (L >= 3.6) plant(L / 2 - m - 0.3, -S / 2 + m + 0.3);
+  } else if (type === "living" || type === "family" || type === "drawing") {
+    const sl = Math.min(2.6, L - 1.4);
+    const sv = S / 2 - m - 0.45;
+    add(0, 0, 0, Math.min(2.6, L - 1.2), Math.min(2.0, S - 1.4), 0.012, C.rug);
+    add(0, sv, 0, sl, 0.9, 0.42, C.fabric);
+    add(0, sv + 0.36, 0.42, sl, 0.18, 0.4, C.fabric);
+    for (const s of [-1, 1]) add(s * (sl / 2 - 0.08), sv, 0.42, 0.16, 0.9, 0.2, C.fabric);
+    add(-sl / 4, sv - 0.05, 0.42, 0.4, 0.4, 0.12, C.accent);
+    add(sl / 4, sv - 0.05, 0.42, 0.4, 0.4, 0.12, C.blush);
+    add(0, 0.05, 0, 1.0, 0.6, 0.38, C.oak);
+    add(0, -S / 2 + m + 0.2, 0, Math.min(1.8, L - 1.5), 0.4, 0.5, C.wood);
+    add(0, -S / 2 + m + 0.08, 0.5, Math.min(1.3, L - 1.8), 0.06, 0.45, C.dark);
+    if (L >= 3.8) add(-L / 2 + m + 0.5, 0, 0, 0.8, 0.8, 0.45, C.fabric);
+    plant(L / 2 - m - 0.3, S / 2 - m - 0.3);
+    if (S >= 3.4) plant(-L / 2 + m + 0.3, -S / 2 + m + 0.3);
+  } else if (type === "dining") {
+    const tl = Math.min(1.8, L - 1.3), tw = Math.min(0.95, S - 1.3);
+    if (tl < 0.8 || tw < 0.6) return out;
+    add(0, 0, 0, tl, tw, 0.72, C.wood);
+    add(0, 0, 0.72, tl + 0.06, tw + 0.06, 0.04, C.oak);
+    const n = Math.max(1, Math.floor(tl / 0.62));
+    for (let k = 0; k < n; k++) {
+      const u = -tl / 2 + tl * (k + 0.5) / n;
+      for (const s of [-1, 1]) {
+        add(u, s * (tw / 2 + 0.28), 0, 0.42, 0.42, 0.45, C.oak);
+        add(u, s * (tw / 2 + 0.47), 0.45, 0.42, 0.06, 0.4, C.oak);
+      }
+    }
+    add(0, 0, 1.25, 0.3, 0.3, 0.12, C.gold, "cyl");
+    add(0, 0, 1.18, 0.12, 0.12, 0.12, C.gold, "glow");
+  } else if (type === "kitchen" || type === "pantry") {
+    const run = L - 2 * m;
+    add(0, -S / 2 + m + 0.3, 0, run, 0.6, 0.86, C.oak);
+    add(0, -S / 2 + m + 0.3, 0.86, run, 0.62, 0.04, C.stone);
+    add(-run / 4, -S / 2 + m + 0.3, 0.9, 0.6, 0.5, 0.02, C.dark);
+    if (S >= 2.6) {
+      add(-L / 2 + m + 0.3, 0.2, 0, 0.6, Math.min(S - 1.2, 2.0), 0.86, C.oak);
+      add(-L / 2 + m + 0.3, 0.2, 0.86, 0.62, Math.min(S - 1.2, 2.0), 0.04, C.stone);
+    }
+    add(L / 2 - m - 0.38, S / 2 - m - 0.38, 0, 0.7, 0.7, 1.0, C.steel, "gloss");
+    if (S >= 3.2) add(0.4, 0.3, 0, Math.min(1.6, L - 2.4), 0.8, 0.9, C.wood);
+  } else if (WET.has(type)) {
+    if (type === "utility" || type === "laundry") {
+      add(-L / 2 + m + 0.32, -S / 2 + m + 0.32, 0, 0.62, 0.62, 0.85, C.white, "gloss");
+      add(-L / 2 + m + 0.32, -S / 2 + m + 0.02, 0.4, 0.36, 0.04, 0.36, C.dark);
+      add(L / 2 - m - 0.3, -S / 2 + m + 0.25, 0, 0.6, 0.5, 0.85, C.steel);
+      return out;
+    }
+    add(-L / 2 + m + 0.35, S / 2 - m - 0.25, 0, 0.38, 0.38, 0.4, C.white, "cyl");
+    add(-L / 2 + m + 0.35, S / 2 - m - 0.05, 0.3, 0.4, 0.16, 0.42, C.white, "gloss");
+    add(0, -S / 2 + m + 0.25, 0, Math.min(0.9, L - 1.2), 0.48, 0.82, C.oak);
+    add(0, -S / 2 + m + 0.25, 0.82, 0.42, 0.34, 0.08, C.white, "gloss");
+    if (L >= 2.0) add(L / 2 - m - 0.45, 0, 0, 0.04, Math.min(1.0, S - 0.5), 1.0, C.glass, "gloss");
+  } else if (type === "puja") {
+    add(0, -S / 2 + m + 0.3, 0, 0.9, 0.55, 0.7, C.wood);
+    add(0, -S / 2 + m + 0.3, 0.7, 0.7, 0.45, 0.25, C.gold, "gloss");
+    add(0, -S / 2 + m + 0.3, 0.95, 0.5, 0.5, 0.3, C.gold, "cone");
+    for (const s of [-0.22, 0.22]) add(s, -S / 2 + m + 0.68, 0, 0.08, 0.08, 0.08, C.gold, "glow");
+    add(0, 0.1, 0, Math.min(1.2, L - 0.6), Math.min(0.8, S - 0.8), 0.012, 0xb6553a);
+  } else if (type === "study" || type === "home_office" || type === "library") {
+    add(0, -S / 2 + m + 0.3, 0, Math.min(1.4, L - 0.8), 0.6, 0.75, C.oak);
+    add(0, -S / 2 + m + 0.85, 0, 0.5, 0.5, 0.5, C.dark);
+    add(-L / 2 + m + 0.18, 0.2, 0, 0.35, Math.min(1.6, S - 1.2), 1.0, C.wood);
+    plant(L / 2 - m - 0.3, S / 2 - m - 0.3);
+  } else if (type === "staircase") {
+    const n = 9, run = Math.min(L - 0.4, 3.0), sw = Math.min(1.0, S / 2 - 0.1);
+    for (let k = 0; k < n; k++) {
+      add(-run / 2 + run * (k + 0.5) / n, -S / 4, 0, run / n, sw, 0.05 * (k + 1), C.oak);
+      add(run / 2 - run * (k + 0.5) / n, S / 4, 0, run / n, sw, 0.05 * (n + k + 1), C.oak);
+    }
+  } else if (type === "foyer" || type === "lobby") {
+    add(0, -S / 2 + m + 0.2, 0, Math.min(1.1, L - 0.8), 0.35, 0.8, C.wood);
+    add(0, 0, 0, Math.min(1.4, L - 0.6), Math.min(0.9, S - 0.6), 0.012, C.rug);
+    plant(L / 2 - m - 0.25, S / 2 - m - 0.25);
+  } else if (type === "balcony" || type === "terrace" || type === "verandah") {
+    for (let u = -L / 2 + 0.5; u <= L / 2 - 0.4; u += 0.9) plant(u, S / 2 - m - 0.25);
+    if (S >= 1.6 && L >= 2.2) {
+      add(0, -0.1, 0, 0.6, 0.6, 0.45, C.oak, "cyl");
+      for (const s of [-0.7, 0.7]) add(s, -0.1, 0, 0.55, 0.55, 0.45, C.fabric);
+    }
+  } else if (type === "garage" || type === "parking" || type === "car_porch") {
+    add(0, 0, 0.2, Math.min(4.3, L - 0.6), Math.min(1.8, S - 0.6), 0.55, 0x8a2f2a, "gloss");
+    add(0.2, 0, 0.75, Math.min(2.2, L - 2.0), Math.min(1.6, S - 0.8), 0.4, 0x2b3a44, "gloss");
+    for (const su of [-1, 1]) for (const sv of [-1, 1]) add(su * Math.min(1.4, L / 2 - 0.8), sv * Math.min(0.85, S / 2 - 0.35), 0, 0.6, 0.22, 0.6, C.dark);
+  } else if (type === "corridor") {
+    add(0, 0, 0, Math.max(0.6, L - 0.8), Math.min(0.8, S - 0.3), 0.012, C.rug);
+  }
+  return out;
+}
+
 export class Stage3D {
   constructor(host) {
     this.host = host;
@@ -980,8 +1119,9 @@ export class Stage3D {
       setTimeout(() => this._tween(520, (t) => { m.scale.y = Math.max(0.001, ease(t)); }), (k / span) * 900 / this.speed);
     }
     const done = () => {
-      this._standBack();
       s.resolve?.();
+      // The shell is up: now the fit-out. The team stands back when it is done.
+      if (this.settling) { this._finishFit(s); this._standBack(); } else this._fitOut(s, instant);
     };
     if (instant) done(); else setTimeout(done, 1100 / this.speed);
   }
@@ -999,6 +1139,275 @@ export class Stage3D {
       this._clear(t);
       t.tasks = [{ type: "run", to: spots[i] }, { type: "face", to: this.view.target }];
     });
+  }
+
+  /* ── fit-out: paint, furniture and the garden ─────────────────────── */
+
+  // Once the walls are up the team fits the house out room by room: each
+  // walks to a room, points, and its floor is laid in a sweep, its walls take
+  // their paint and its furniture is set down piece by piece. The garden
+  // grows in around the ground floor while they work.
+  _fitOut(s, instant = false) {
+    if (s.fitting) return;
+    s.fitting = true;
+    this.renderer.localClippingEnabled = true;
+    s.fit = new THREE.Group();
+    s.group.add(s.fit);
+    const rooms = [...s.rooms].sort((a, b) => a.li - b.li || a.centre.z - b.centre.z || a.centre.x - b.centre.x);
+    if (instant || this.static) {
+      this._landscape(s, true);
+      rooms.forEach((r) => this._fit(s, r, true));
+      this._standBack();
+      return;
+    }
+    this._landscape(s, false);
+    s.unfitted = rooms.length;
+    const team = this.team.filter((m) => !m.consulting);
+    rooms.forEach((r, i) => {
+      const m = team[i % Math.max(1, team.length)];
+      if (!m) { this._fit(s, r); return; }
+      const off = new THREE.Vector3(Math.sin(i * 2.1) * 0.5, 0, Math.cos(i * 2.1) * 0.5);
+      m.tasks.push(
+        { type: "run", to: r.centre.clone().add(off).setY(0) },
+        { type: "face", to: r.centre.clone() },
+        { type: "point", t: 0.7 },
+        { type: "call", fn: () => this._fit(s, r) },
+      );
+    });
+  }
+
+  // Whatever is left, quickly: the result is in and the board must settle.
+  _finishFit(s) {
+    if (!s) return;
+    if (!s.fitting) { this._fitOut(s, true); return; }
+    this.team.forEach((m) => { m.tasks = m.tasks.filter((t) => t.type !== "call" && t.type !== "point"); });
+    s.rooms.filter((r) => !r.fitted).forEach((r, i) => setTimeout(() => this._fit(s, r), i * 60));
+  }
+
+  _fit(s, r, instant = false) {
+    if (r.fitted) return;
+    r.fitted = true;
+    this._paintRoom(s, r, instant);
+    this._furnish(s, r, instant);
+    if (!instant && --s.unfitted <= 0) setTimeout(() => this._standBack(), 900 / this.speed);
+  }
+
+  // The floor is laid in a sweep across the room; the walls around it take
+  // their paint.
+  _paintRoom(s, r, instant) {
+    const t = r.room.type;
+    const floor = FLOOR_OF(t);
+    const xs = r.pts.map((p) => p.x), zs = r.pts.map((p) => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const plane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), instant ? x1 + 1 : x0);
+    const shape = new THREE.Shape(r.pts.map((p) => new THREE.Vector2(p.x, -p.z)));
+    const m = new THREE.MeshStandardMaterial({ color: floor, roughness: 0.75, clippingPlanes: [plane] });
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), m);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.016;
+    mesh.receiveShadow = true;
+    s.fit.add(mesh);
+    r.fill.visible = false;
+    if (!instant) this._tween(700, (k) => { plane.constant = lerp(x0, x1 + 0.05, ease(k)); });
+    // Wall paint: every leaf that bounds this room.
+    const paint = new THREE.Color(PAINT_OF(t));
+    const near = (seg) => {
+      const mid = seg[0].clone().lerp(seg[1], 0.5);
+      for (let i = 0; i < r.pts.length; i++) {
+        const a = r.pts[i], b = r.pts[(i + 1) % r.pts.length];
+        const ab = b.clone().sub(a), k = clamp(mid.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-9), 0, 1);
+        if (a.clone().addScaledVector(ab, k).distanceTo(mid) < 0.35) return true;
+      }
+      return false;
+    };
+    for (const w of s.walls) {
+      if (!w.userData.seg || w.material.transparent || !near(w.userData.seg)) continue;
+      if (!w.userData.own) { w.material = w.material.clone(); w.userData.own = true; }
+      const from = w.material.color.clone();
+      const to = from.clone().lerp(paint, 0.55);
+      if (instant) w.material.color.copy(to);
+      else this._tween(800, (k) => { w.material.color.copy(from).lerp(to, ease(k)); });
+    }
+  }
+
+  // Furniture: each piece is lowered in and lands with a small settle.
+  _furnish(s, r, instant) {
+    const xs = r.pts.map((p) => p.x), zs = r.pts.map((p) => p.z);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const wx = Math.max(...xs) - Math.min(...xs), wz = Math.max(...zs) - Math.min(...zs);
+    const alongX = wx >= wz;
+    const L = alongX ? wx : wz, S = alongX ? wz : wx;
+    const parts = FURNISH(r.room.type, L, S);
+    const g = new THREE.Group();
+    s.fit.add(g);
+    parts.forEach((p, i) => {
+      const [u, v, y, su, sv, sy, color, kind] = p;
+      let geom;
+      if (kind === "ball") geom = ball(su / 2);
+      else if (kind === "cyl") geom = cyl(su / 2, su / 2, sy, 14);
+      else if (kind === "cone") geom = cyl(0.001, su / 2, sy, 12);
+      else geom = box(alongX ? su : sv, sy, alongX ? sv : su);
+      const material = kind === "glow" ? GLOW : mat(color, kind === "gloss" ? 0.25 : 0.75);
+      const mesh = new THREE.Mesh(geom, material);
+      const x = cx + (alongX ? u : v), z = cz + (alongX ? v : u);
+      const rest = y + (kind === "ball" ? su / 2 : sy / 2);
+      mesh.position.set(x, rest, z);
+      mesh.castShadow = kind !== "glow" && sy > 0.05;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+      if (instant) return;
+      mesh.visible = false;
+      setTimeout(() => {
+        mesh.visible = true;
+        mesh.position.y = rest + 2.2;
+        mesh.scale.setScalar(0.6);
+        this._tween(520, (k) => {
+          mesh.position.y = rest + 2.2 * (1 - bounce(k));
+          mesh.scale.setScalar(lerp(0.6, 1, ease(Math.min(1, k * 1.6))));
+        }, () => { if (i === 0) this._puff(new THREE.Vector3(x, 0.02, z)); });
+      }, (380 + i * 85) / this.speed);
+    });
+  }
+
+  // A ring of dust where the first piece lands.
+  _puff(at) {
+    const m = new THREE.MeshBasicMaterial({ color: 0xede6dc, transparent: true, opacity: 0.5, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.28, 28), m);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(at);
+    this.root.add(ring);
+    this._tween(600, (k) => { ring.scale.setScalar(1 + k * 3); m.opacity = 0.5 * (1 - k); }, () => { this.root.remove(ring); ring.geometry.dispose(); m.dispose(); });
+  }
+
+  // The garden on the ground plate: lawn in the setbacks, a drive from the
+  // road, shrubs along the house and trees along the boundary, all growing in.
+  _landscape(s, instant) {
+    const { w, d, road } = this.plot;
+    const ground = s.rooms.filter((r) => r.li === 0);
+    if (!ground.length) return;
+    const xs = ground.flatMap((r) => r.pts.map((p) => p.x)), zs = ground.flatMap((r) => r.pts.map((p) => p.z));
+    const fx0 = Math.min(...xs) - 0.12, fx1 = Math.max(...xs) + 0.12, fz0 = Math.min(...zs) - 0.12, fz1 = Math.max(...zs) + 0.12;
+    const A = this.P(0, 0, 0), B = this.P(0, w, d);
+    const px0 = Math.min(A.x, B.x), px1 = Math.max(A.x, B.x), pz0 = Math.min(A.z, B.z), pz1 = Math.max(A.z, B.z);
+    const g = new THREE.Group();
+    s.fit.add(g);
+    const lawn = new THREE.MeshStandardMaterial({ color: 0x5e6c47, roughness: 1, transparent: true, opacity: 0.62, depthWrite: false });
+    // Each setback strip, anchored on its house edge so it can spread outward.
+    const strips = [
+      [px0, px1, pz0, fz0, "z", fz0], [px0, px1, fz1, pz1, "z", fz1],
+      [px0, fx0, fz0, fz1, "x", fx0], [fx1, px1, fz0, fz1, "x", fx1],
+    ];
+    const lawnMeshes = [];
+    for (const [a, b, c, e, axis, edge] of strips) {
+      if (b - a < 0.2 || e - c < 0.2) continue;
+      const geo = new THREE.PlaneGeometry(b - a, e - c);
+      geo.rotateX(-Math.PI / 2);
+      const pivot = new THREE.Group();
+      if (axis === "z") { pivot.position.set((a + b) / 2, 0.006, edge); geo.translate(0, 0, (c + e) / 2 - edge); }
+      else { pivot.position.set(edge, 0.006, (c + e) / 2); geo.translate((a + b) / 2 - edge, 0, 0); }
+      const m = new THREE.Mesh(geo, lawn);
+      m.receiveShadow = true;
+      pivot.add(m);
+      pivot.userData.axis = axis;
+      if (!instant) pivot.scale[axis] = 0.001;
+      g.add(pivot); lawnMeshes.push(pivot);
+    }
+    // The drive: from the road edge to the house, on the road's side.
+    const r0 = road || "N";
+    const roadPt = r0 === "S" ? new THREE.Vector3((fx0 + fx1) / 2, 0, pz1) : r0 === "E" ? new THREE.Vector3(px1, 0, (fz0 + fz1) / 2)
+      : r0 === "W" ? new THREE.Vector3(px0, 0, (fz0 + fz1) / 2) : new THREE.Vector3((fx0 + fx1) / 2, 0, pz0);
+    const houseEdge = r0 === "S" ? fz1 : r0 === "E" ? fx1 : r0 === "W" ? fx0 : fz0;
+    const vertical = r0 === "N" || r0 === "S";
+    const dlen = Math.abs((vertical ? roadPt.z : roadPt.x) - houseEdge);
+    if (dlen > 0.4) {
+      const drive = new THREE.Mesh(new THREE.PlaneGeometry(vertical ? 2.6 : dlen, vertical ? dlen : 2.6), mat(0x77726a, 0.95).clone());
+      drive.material.transparent = true; drive.material.opacity = instant ? 0.85 : 0;
+      drive.rotation.x = -Math.PI / 2;
+      drive.position.set(vertical ? roadPt.x : (roadPt.x + houseEdge) / 2, 0.009, vertical ? (roadPt.z + houseEdge) / 2 : roadPt.z);
+      g.add(drive);
+      if (!instant) this._tween(1600, (k) => { drive.material.opacity = 0.85 * ease(k); });
+    }
+    const inDrive = (x, z) => dlen > 0.4 && (vertical ? Math.abs(x - roadPt.x) < 2 && (z - roadPt.z) * (houseEdge - roadPt.z) >= -0.5
+      : Math.abs(z - roadPt.z) < 2 && (x - roadPt.x) * (houseEdge - roadPt.x) >= -0.5);
+    const inHouse = (x, z, pad) => x > fx0 - pad && x < fx1 + pad && z > fz0 - pad && z < fz1 + pad;
+    const plants = [];
+    // A few trees, where a setback is deep enough to hold a crown: the
+    // corners first, then the middle of a generous side. Never a hedge row.
+    const room = (x, z) => !inHouse(x, z, 0.8) && !inDrive(x, z) && x > px0 + 0.7 && x < px1 - 0.7 && z > pz0 + 0.7 && z < pz1 - 0.7;
+    const spots = [[px0 + 1.3, pz0 + 1.3], [px1 - 1.3, pz1 - 1.3], [px1 - 1.3, pz0 + 1.3], [px0 + 1.3, pz1 - 1.3],
+      [(px0 + fx0) / 2, (pz0 + pz1) / 2], [(fx1 + px1) / 2, (pz0 + pz1) / 2], [(px0 + px1) / 2, (fz1 + pz1) / 2]]
+      .map(([x, z]) => [x + (Math.random() - 0.5) * 0.8, z + (Math.random() - 0.5) * 0.8]).filter(([x, z]) => room(x, z));
+    const open = (px1 - px0) * (pz1 - pz0) - (fx1 - fx0) * (fz1 - fz0);
+    const nTrees = clamp(Math.round(open / 40), 1, 4);
+    const trees = [];
+    for (const [x, z] of spots) {
+      if (trees.length >= nTrees) break;
+      if (trees.some(([a, b]) => Math.hypot(a - x, b - z) < 4)) continue;
+      trees.push([x, z]);
+      plants.push(this._tree(g, x, z, Math.min(1, 0.5 + Math.min(Math.abs(x - (x < fx0 ? fx0 : fx1)), Math.abs(z - (z < fz0 ? fz0 : fz1))) * 0.18) * (0.85 + Math.random() * 0.2)));
+    }
+    // Shrubs in small clusters: either side of the entrance and at a corner or two.
+    const clusters = [];
+    if (dlen > 0.4) {
+      const side = vertical ? [[roadPt.x - 1.9, houseEdge + Math.sign(roadPt.z - houseEdge) * 0.5], [roadPt.x + 1.9, houseEdge + Math.sign(roadPt.z - houseEdge) * 0.5]]
+        : [[houseEdge + Math.sign(roadPt.x - houseEdge) * 0.5, roadPt.z - 1.9], [houseEdge + Math.sign(roadPt.x - houseEdge) * 0.5, roadPt.z + 1.9]];
+      clusters.push(...side);
+    }
+    clusters.push(pick([[fx0 - 0.5, fz1 + 0.5], [fx1 + 0.5, fz1 + 0.5], [fx0 - 0.5, fz0 - 0.5], [fx1 + 0.5, fz0 - 0.5]]));
+    for (const [x, z] of clusters) {
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let k = 0; k < n; k++) {
+        const sx = x + (Math.random() - 0.5) * 0.7, sz = z + (Math.random() - 0.5) * 0.7;
+        if (sx > px0 + 0.2 && sx < px1 - 0.2 && sz > pz0 + 0.2 && sz < pz1 - 0.2 && !inDrive(sx, sz)) plants.push(this._shrub(g, sx, sz));
+      }
+    }
+    if (instant) return;
+    // The garden grows across the whole fit-out, not in a burst: grass
+    // creeps out from the house, saplings appear and slowly fill out.
+    const span = Math.max(7000, s.rooms.length * 900) / this.speed;
+    lawnMeshes.forEach((m, i) => setTimeout(() => this._tween(span * 0.8, (k) => {
+      m.scale[m.userData.axis] = Math.max(0.001, 1 - Math.pow(1 - k, 2.2));
+    }), i * 400 / this.speed));
+    for (const p of plants) {
+      const full = p.userData.size;
+      const tree = p.isGroup;
+      p.scale.setScalar(0.001);
+      setTimeout(() => {
+        // A sapling first, then a long, slowing growth to its full size.
+        this._tween(tree ? span * 0.75 : span * 0.4, (k) => {
+          const grow = 1 - Math.pow(1 - k, 2.6);
+          p.scale.setScalar(Math.max(0.001, full * (0.18 + 0.82 * grow)));
+          if (tree) p.rotation.z = Math.sin(k * 9) * 0.02 * (1 - k);
+        });
+      }, (span * (tree ? 0.05 + Math.random() * 0.25 : 0.25 + Math.random() * 0.4)) / 1);
+    }
+  }
+
+  _tree(g, x, z, size) {
+    const t = new THREE.Group();
+    const trunk = new THREE.Mesh(cyl(0.07, 0.1, 0.9, 8), mat(0x6b4a2e, 0.9));
+    trunk.position.y = 0.45;
+    const leaf = mat(pick([0x52653d, 0x5d6f43, 0x4a5c39, 0x66764a]), 0.9);
+    const c1 = new THREE.Mesh(ball(0.75), leaf); c1.position.set(0, 1.35, 0);
+    const c2 = new THREE.Mesh(ball(0.5), leaf); c2.position.set(0.35, 1.05, 0.2);
+    const c3 = new THREE.Mesh(ball(0.45), leaf); c3.position.set(-0.3, 1.1, -0.2);
+    for (const m of [trunk, c1, c2, c3]) { m.castShadow = true; t.add(m); }
+    t.position.set(x, 0, z);
+    t.rotation.y = Math.random() * TAU;
+    t.userData.size = size;
+    t.scale.setScalar(size);
+    g.add(t);
+    return t;
+  }
+
+  _shrub(g, x, z) {
+    const m = new THREE.Mesh(ball(0.26), mat(pick([0x5b6b40, 0x667449, 0x50603a]), 0.95));
+    m.position.set(x + (Math.random() - 0.5) * 0.2, 0.2, z + (Math.random() - 0.5) * 0.2);
+    m.castShadow = true;
+    m.userData.size = 0.8 + Math.random() * 0.5;
+    m.scale.setScalar(m.userData.size);
+    g.add(m);
+    return m;
   }
 
   /* ── the committee on the board ───────────────────────────────────── */
@@ -1169,6 +1578,7 @@ export class Stage3D {
     }
     if (s && !s.drawn) s.rooms.forEach((x) => this._complete(x, true));
     if (s) this._rise(s, this.static);
+    if (s && s.risen) this._finishFit(s);
     await new Promise((resolve) => {
       if (this.static) { this.view.tilt = 0; resolve(); return; }
       const from = this.view.tilt;

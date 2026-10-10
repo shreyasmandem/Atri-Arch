@@ -138,16 +138,82 @@ async def get_drawing(
     )
 
 
+@router.get("/{plan_id}/airflow/{level_index}")
+async def get_airflow_field(
+    plan_id: str,
+    level_index: int,
+    principal: Principal = Depends(get_principal),
+    wind: str | None = Query(default=None, description="Compass point the wind blows from, or a bearing in degrees"),
+    speed: float = Query(default=2.0, gt=0, le=15),
+    doors_open: bool = Query(default=True),
+    rank: bool = Query(default=False, description="Also score the floor for each of the eight winds"),
+) -> dict[str, Any]:
+    """The solved wind field through one floor, for the live airflow view."""
+    import asyncio
+
+    from aip.engines.architecture.windflow import best_wind, solve_level
+
+    plan = _load(plan_id, principal)
+    w: Direction | float | None = None
+    if wind:
+        try:
+            w = Direction(wind.upper())
+        except ValueError:
+            try:
+                w = float(wind) % 360
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=f"Unknown wind '{wind}'.") from exc
+    try:
+        result = await asyncio.to_thread(solve_level, plan, level_index, wind=w, speed=speed, doors_open=doors_open)
+        if rank:
+            result["ranking"] = await asyncio.to_thread(best_wind, plan, level_index, speed=speed, doors_open=doors_open)
+    except IndexError as exc:
+        raise HTTPException(status_code=404, detail=f"No level {level_index}.") from exc
+    return result
+
+
+@router.get("/{plan_id}/vastu3d")
+async def get_vastu_placements(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    tradition: float = Query(default=0.5, ge=0.0, le=1.0),
+) -> dict[str, Any]:
+    """The Vastu zones and every assessed room's placement, as geometry for the 3D view."""
+    from aip.engines.vastu.placements import placements
+
+    return placements(_load(plan_id, principal), tradition)
+
+
+@router.get("/{plan_id}/palettes")
+async def get_palettes(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    colours: str | None = Query(default=None, max_length=600, description="The client's colour preferences, in words"),
+) -> dict[str, Any]:
+    """Coordinated exterior and interior colour schemes for this plan, best first, with reasons."""
+    from aip.engines.experience.palettes import ColourPrefs, preferences_from_text, rank
+
+    plan = _load(plan_id, principal)
+    prefs = preferences_from_text(colours) if colours else ColourPrefs.from_dict(
+        (plan.metadata or {}).get("colour_preferences"))
+    return {"preferences": prefs.as_dict(), "schemes": rank(plan, prefs)}
+
+
 @router.get("/{plan_id}/model.glb", response_class=Response)
 async def get_model_glb(
     plan_id: str,
     principal: Principal = Depends(get_principal),
     furniture: bool = Query(default=True),
     ground: bool = Query(default=True),
+    palette: str | None = Query(default=None, description="Colour scheme id; the recommended one if omitted"),
+    colours: str | None = Query(default=None, max_length=600, description="The client's colour preferences, in words"),
 ) -> Response:
     """Binary glTF for the 3D viewer, VR walkthrough and AR placement."""
+    import asyncio
+
     plan = _load(plan_id, principal)
-    data = export_glb(plan, include_furniture=furniture, include_ground=ground)
+    data = await asyncio.to_thread(export_glb, plan, include_furniture=furniture, include_ground=ground,
+                                   palette_id=palette, colour_text=colours)
     return Response(
         content=data,
         media_type="model/gltf-binary",

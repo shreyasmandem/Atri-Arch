@@ -1084,6 +1084,7 @@ const groupOf = (v) => Object.keys(VIEW_GROUPS).find((g) => VIEW_GROUPS[g].some(
 function showView(v) {
   if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
   if (v !== "model" && S.viewer) { S.viewer.dispose(); S.viewer = null; window.speechSynthesis?.cancel(); }
+  if (v !== "air" && S.air) { S.air.dispose(); S.air = null; }
   S.view = v;
   const g = groupOf(v);
   (S.lastIn ||= {})[g] = v;
@@ -1106,6 +1107,7 @@ function showView(v) {
   if (v === "cost") renderCost();
   if (v === "interior") renderInterior();
   if (v === "model") renderModel();
+  if (v === "air") renderAir();
   if (v === "findings") renderFindings();
   if (v === "negotiation") renderNegotiation();
   if (v === "audit") renderAudit();
@@ -1640,7 +1642,10 @@ async function renderModel() {
   S.viewer = null;
   const p = pane("model"); p.innerHTML = "";
   const bar = el("div", "pane__bar");
-  bar.append(el("span", "model-hint", "Drag to orbit, scroll to zoom"));
+  // Exterior, a cut-away interior per floor, and a night view with the lamps on.
+  const modes = el("div", "sheet-groups");
+  modes.setAttribute("role", "tablist");
+  bar.append(modes);
   const tools = el("div", "pane__tools");
   const play = el("button", "ghost-btn", "Play walkthrough"); play.type = "button";
   tools.append(play);
@@ -1652,16 +1657,51 @@ async function renderModel() {
   const stage = el("div", "model-stage");
   const cap = el("p", "model-cap", "Loading the model…");
   const say = el("p", "model-say"); say.setAttribute("aria-live", "polite");
-  stage.append(cap, say);
+  const card = el("div", "pal"); card.hidden = true;
+  stage.append(cap, say, card);
   p.append(bar, stage);
 
   const id = S.activeId;
+  const pal = (S.palette ||= {});
+  const modelUrl = () => {
+    const q = new URLSearchParams();
+    if (pal.id) q.set("palette", pal.id);
+    if (pal.text) q.set("colours", pal.text);
+    return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
+  };
   try {
     const { Viewer3D } = await import("./viewer3d.js");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage);
-    const st = await S.viewer.load(`${API}/plans/${id}/model.glb`);
+    const st = await S.viewer.load(modelUrl());
+    const levels = cur().plan?.levels?.length || 1;
+    const options = [["exterior", 0, "Exterior"], ...Array.from({ length: levels }, (_, i) => ["interior", i, i ? `Level ${i} inside` : "Ground inside"]), ["night", 0, "Night"],
+      ...Array.from({ length: levels }, (_, i) => ["vastu", i, i ? `Vastu L${i}` : "Vastu ground"])];
+    let vastu = null;
+    const pick = async (b, mode, lv) => {
+      modes.querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+      if (mode !== "vastu") { S.viewer.clearVastu(); S.viewer.setMode(mode, lv); return; }
+      // Vastu: the floor cut open, its grid laid on it and every room pinned.
+      S.viewer.setMode("interior", lv);
+      try {
+        vastu ||= await fetch(`${API}/plans/${id}/vastu3d`).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+        if (S.viewer && b.getAttribute("aria-selected") === "true") {
+          S.viewer.setVastu(vastu, lv);
+          const here = vastu.rooms.filter((r) => r.level === lv);
+          const off = here.filter((r) => r.ideal_point).length;
+          cap.textContent = `Vastu ${vastu.score.toFixed(0)} / 100  ·  ${here.length} rooms placed on this floor`
+            + (off ? `  ·  ${off} could move to a better quarter` : "  ·  every room in a good quarter");
+        }
+      } catch (e) { toast(`Vastu placements could not be loaded (${e.message}).`); }
+    };
+    for (const [mode, lv, label] of options) {
+      const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
+      b.addEventListener("click", () => pick(b, mode, lv));
+      modes.append(b);
+    }
+    modes.firstChild?.setAttribute("aria-selected", "true");
     cap.textContent = `${st.width.toFixed(1)} × ${st.depth.toFixed(1)} m  ·  ${st.height.toFixed(1)} m high  ·  ${st.triangles.toLocaleString()} triangles`;
+    paletteCard(card, id, modelUrl);
   } catch (err) {
     cap.textContent = `The model could not be shown here (${err.message}). It can still be downloaded.`;
   }
@@ -1679,6 +1719,191 @@ async function renderModel() {
       }
     });
   }).catch(() => { play.disabled = true; });
+}
+
+/* ── 3D: colour schemes, recommended and browsable ─────────────────── */
+
+// The palette card: the recommended scheme first, the others a click away,
+// and a line where the client can say what colours they like in words.
+async function paletteCard(card, id, modelUrl) {
+  const pal = S.palette;
+  const swatch = (hex, label) => {
+    const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
+  };
+  const LABELS = { plaster: "Walls", trim: "Bands", clad: "Cladding", roof: "Roof", frame: "Frames", door: "Main door",
+    living: "Living", master: "Master bed", bedroom: "Bedrooms", kitchen: "Kitchen", accent_wall: "Feature wall",
+    floor_stone: "Floor", joinery: "Joinery", upholstery: "Fabric" };
+  let list = [];
+  let busy = false;
+  const fetchList = async () => {
+    const q = new URLSearchParams(); if (pal.text) q.set("colours", pal.text);
+    const r = await fetch(`${API}/plans/${id}/palettes${q.size ? `?${q}` : ""}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    list = d.schemes;
+    pal.prefs = d.preferences;
+  };
+  const apply = async (scheme) => {
+    if (busy || !S.viewer) return;
+    busy = true; card.classList.add("is-busy");
+    pal.id = scheme.id;
+    try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not recolour the model (${e.message}).`); }
+    busy = false; card.classList.remove("is-busy");
+    draw();
+  };
+  const draw = () => {
+    const i = Math.max(0, list.findIndex((x) => x.id === pal.id));
+    const s = list[i];
+    if (!s) return;
+    card.hidden = false; card.innerHTML = "";
+    card.classList.toggle("is-min", !pal.open);
+    // Minimised: the name, one strip of colour and the arrows. Open: the
+    // story, both swatch rows, the reasons and the colours field.
+    const head = el("div", "pal__head");
+    const toggle = el("button", "pal__toggle"); toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(!!pal.open));
+    toggle.title = pal.open ? "Minimise" : "Show palette details";
+    toggle.append(el("span", "pal__k", i === 0 ? "Recommended" : `${i + 1} / ${list.length}`), el("b", "pal__name", s.name));
+    const strip = el("span", "pal__strip");
+    for (const hex of [s.exterior.plaster, s.exterior.clad, s.exterior.roof, s.interior.living, s.interior.master, s.interior.accent_wall]) {
+      const c = el("i"); c.style.background = hex; strip.append(c);
+    }
+    toggle.append(strip);
+    toggle.addEventListener("click", () => { pal.open = !pal.open; draw(); });
+    const nav = el("div", "pal__nav");
+    const prev = el("button", "ghost-btn", "‹"); prev.type = "button"; prev.title = "Previous palette"; prev.setAttribute("aria-label", "Previous palette");
+    const next = el("button", "ghost-btn", "›"); next.type = "button"; next.title = "Next palette"; next.setAttribute("aria-label", "Next palette");
+    prev.addEventListener("click", () => apply(list[(i - 1 + list.length) % list.length]));
+    next.addEventListener("click", () => apply(list[(i + 1) % list.length]));
+    nav.append(prev, next);
+    head.append(toggle, nav);
+    card.append(head);
+    if (!pal.open) return;
+    card.append(el("p", "pal__story", s.story));
+    for (const [title, group] of [["Exterior", s.exterior], ["Interior", s.interior]]) {
+      const row = el("div", "pal__row");
+      row.append(el("span", "pal__rk", title));
+      const sws = el("div", "pal__sws");
+      for (const [k, hex] of Object.entries(group)) sws.append(swatch(hex, LABELS[k] || k));
+      row.append(sws);
+      card.append(row);
+    }
+    if (s.reasons?.length) card.append(el("p", "pal__why", s.reasons.join(" · ")));
+    const form = el("form", "pal__form");
+    const input = el("input", "pal__input"); input.type = "text"; input.name = "colours"; input.maxLength = 600;
+    input.placeholder = "Colours you like… e.g. sage bedrooms, navy front door, no pink";
+    input.value = pal.text || "";
+    input.setAttribute("aria-label", "Colours you like, in your own words");
+    const go = el("button", "ghost-btn", "Apply"); go.type = "submit";
+    form.append(input, go);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      pal.text = input.value.trim();
+      pal.id = null;
+      try { await fetchList(); pal.id = list[0]?.id; await apply(list[0]); } catch (err) { toast(`Could not read those colours (${err.message}).`); }
+    });
+    card.append(form);
+    const pr = pal.prefs;
+    if (pr && (pr.likes?.length || pr.avoids?.length || pr.mentions?.length)) {
+      const bits = [];
+      if (pr.mentions?.length) bits.push(pr.mentions.join(", "));
+      if (pr.likes?.length) bits.push(`likes ${pr.likes.join(", ")}`);
+      if (pr.avoids?.length) bits.push(`avoids ${pr.avoids.join(", ")}`);
+      card.append(el("p", "pal__heard", `Heard: ${bits.join(" · ")}`));
+    }
+  };
+  try {
+    await fetchList();
+    if (!pal.id || !list.some((x) => x.id === pal.id)) pal.id = list[0]?.id;
+    draw();
+  } catch { card.hidden = true; }
+}
+
+/* ── air: the breeze through each floor, solved and set moving ─────── */
+
+const WINDS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+async function renderAir() {
+  S.air?.dispose();
+  S.air = null;
+  const p = pane("air"); p.innerHTML = "";
+  const id = S.activeId;
+  const levels = cur().plan?.levels || [];
+  const st = (S.airState ||= { level: 0, wind: null, doors: true });
+  if (!levels.some((lv) => lv.index === st.level)) st.level = levels[0]?.index ?? 0;
+
+  const bar = el("div", "pane__bar");
+  const floors = el("div", "sheet-groups"); floors.setAttribute("role", "tablist");
+  for (const lv of levels) {
+    const b = el("button", null, floorName(lv.index)); b.type = "button"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(lv.index === st.level));
+    b.addEventListener("click", () => { st.level = lv.index; renderAir(); });
+    floors.append(b);
+  }
+  const rose = el("div", "air-rose"); rose.setAttribute("role", "radiogroup"); rose.setAttribute("aria-label", "Wind from");
+  rose.append(el("span", "air-rose__label", "Wind from"));
+  const tools = el("div", "pane__tools");
+  const doors = el("button", "ghost-btn", st.doors ? "Doors open" : "Doors shut"); doors.type = "button";
+  doors.setAttribute("aria-pressed", String(st.doors));
+  doors.addEventListener("click", () => { st.doors = !st.doors; renderAir(); });
+  const best = el("button", "ghost-btn", "Best wind"); best.type = "button";
+  best.title = "Solve the floor for all eight winds and rank them";
+  const play = el("button", "ghost-btn", "Pause"); play.type = "button";
+  tools.append(doors, best, play);
+  bar.append(floors, rose, tools);
+  const stage = el("div", "model-stage air-stage");
+  const cap = el("p", "model-cap", "Solving the breeze…");
+  const rank = el("div", "air-rank"); rank.hidden = true;
+  p.append(bar, stage, rank);
+
+  const { AirflowView } = await import("./airflow.js");
+  if (S.view !== "air" || S.activeId !== id) return;
+  const view = (S.air = new AirflowView(stage));
+  stage.append(cap);
+  play.addEventListener("click", () => { view.setPlaying(!view.playing); play.textContent = view.playing ? "Pause" : "Play"; });
+
+  const fail = (e) => { cap.textContent = `The airflow could not be solved (${e.message}).`; };
+  const load = async (wind, ranking = false) => {
+    const q = new URLSearchParams({ doors_open: String(st.doors) });
+    if (wind) q.set("wind", wind);
+    if (ranking) q.set("rank", "true");
+    cap.textContent = ranking ? "Trying all eight winds…" : "Solving the breeze…";
+    const r = await fetch(`${API}/plans/${id}/airflow/${st.level}?${q}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if (S.air !== view) return null;
+    view.setData(d);
+    st.wind = d.wind.label;
+    rose.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.wind === d.wind.label)));
+    const s = d.summary;
+    cap.textContent = `Wind ${d.wind.speed} m/s from ${d.wind.label}  ·  ${s.cross_ventilated} of ${s.habitable} rooms cross-ventilated`
+      + (s.poor.length ? `  ·  stuffy: ${s.poor.join(", ")}` : "  ·  every habitable room gets air")
+      + `  ·  solved in ${s.solve_ms} ms`;
+    return d;
+  };
+  for (const w of WINDS) {
+    const b = el("button", null, w); b.type = "button"; b.dataset.wind = w; b.setAttribute("role", "radio");
+    b.addEventListener("click", () => load(w).catch(fail));
+    rose.append(b);
+  }
+  best.addEventListener("click", async () => {
+    best.disabled = true;
+    try {
+      const d = await load(st.wind, true);
+      if (!d) return;
+      const top = Math.max(...d.ranking.map((x) => x.score), 1e-6);
+      rank.hidden = false; rank.innerHTML = "";
+      rank.append(el("span", "air-rank__title", "How well each wind serves this floor"));
+      for (const x of [...d.ranking].sort((a, b) => b.score - a.score)) {
+        const row = el("button", "air-rank__row"); row.type = "button";
+        const barEl = el("span", "air-rank__bar"); barEl.style.setProperty("--f", (x.score / top).toFixed(3));
+        row.append(el("span", "air-rank__w", x.wind), barEl, el("span", "air-rank__n", `${Math.round(x.score * 100)}`));
+        row.addEventListener("click", () => load(x.wind).catch(fail));
+        rank.append(row);
+      }
+    } catch (e) { fail(e); } finally { best.disabled = false; }
+  });
+  load(st.wind).catch(fail);
 }
 
 /* ── findings ──────────────────────────────────────────────────────── */
