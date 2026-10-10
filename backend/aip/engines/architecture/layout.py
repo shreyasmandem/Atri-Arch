@@ -29,8 +29,8 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
-from typing import Callable, Iterator, Sequence
 
 from aip.core.logging import get_logger, log_event
 from aip.domain.brief import ClientBrief, RoomRequirement
@@ -52,7 +52,6 @@ from aip.domain.plan import (
     OpeningKind,
     Room,
     RoomType,
-    Site,
     Staircase,
     StructuralSystem,
     Wall,
@@ -93,8 +92,8 @@ class Split:
 
     vertical: bool
     ratio: float
-    left: "Node"
-    right: "Node"
+    left: Node
+    right: Node
 
     def leaves(self) -> Iterator[Leaf]:
         yield from self.left.leaves()

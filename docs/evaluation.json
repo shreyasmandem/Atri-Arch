@@ -1,0 +1,776 @@
+{
+  "harness_version": "1.0",
+  "briefs": 8,
+  "trials": 24,
+  "arms": {
+    "single_critic": {
+      "trials": 8,
+      "composite_quality": {
+        "mean": 0.8397,
+        "median": 0.8821,
+        "min": 0.595,
+        "max": 0.9033
+      },
+      "compliance": {
+        "mean": 0.808,
+        "median": 1.0,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "critical_breaches_total": 11,
+      "daylight": {
+        "mean": 0.7036,
+        "median": 0.6955,
+        "min": 0.6264,
+        "max": 0.8133
+      },
+      "ventilation": {
+        "mean": 0.7525,
+        "median": 0.7146,
+        "min": 0.6536,
+        "max": 0.891
+      },
+      "privacy": {
+        "mean": 0.8366,
+        "median": 0.852,
+        "min": 0.695,
+        "max": 0.936
+      },
+      "circulation": {
+        "mean": 0.9514,
+        "median": 0.9749,
+        "min": 0.8102,
+        "max": 1.0
+      },
+      "accessibility": {
+        "mean": 0.9964,
+        "median": 1.0,
+        "min": 0.9786,
+        "max": 1.0
+      },
+      "spatial": {
+        "mean": 0.8612,
+        "median": 0.9033,
+        "min": 0.7191,
+        "max": 0.9333
+      },
+      "vastu": {
+        "mean": 0.7355,
+        "median": 0.716,
+        "min": 0.633,
+        "max": 0.866
+      },
+      "programme_error": {
+        "mean": 0.146,
+        "median": 0.1215,
+        "min": 0.0599,
+        "max": 0.3207
+      },
+      "budget_error": {
+        "mean": 0.2296,
+        "median": 0.1731,
+        "min": 0.0283,
+        "max": 0.6788
+      },
+      "explainability": {
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "seconds": {
+        "mean": 1.6209,
+        "median": 1.6185,
+        "min": 0.662,
+        "max": 3.118
+      }
+    },
+    "no_pareto": {
+      "trials": 8,
+      "composite_quality": {
+        "mean": 0.8456,
+        "median": 0.8888,
+        "min": 0.5836,
+        "max": 0.9033
+      },
+      "compliance": {
+        "mean": 0.8421,
+        "median": 1.0,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "critical_breaches_total": 7,
+      "daylight": {
+        "mean": 0.7114,
+        "median": 0.705,
+        "min": 0.6264,
+        "max": 0.8016
+      },
+      "ventilation": {
+        "mean": 0.7348,
+        "median": 0.7084,
+        "min": 0.6536,
+        "max": 0.891
+      },
+      "privacy": {
+        "mean": 0.8216,
+        "median": 0.8186,
+        "min": 0.695,
+        "max": 0.936
+      },
+      "circulation": {
+        "mean": 0.9664,
+        "median": 0.9749,
+        "min": 0.9169,
+        "max": 1.0
+      },
+      "accessibility": {
+        "mean": 0.9957,
+        "median": 1.0,
+        "min": 0.9786,
+        "max": 1.0
+      },
+      "spatial": {
+        "mean": 0.8503,
+        "median": 0.9033,
+        "min": 0.5124,
+        "max": 0.9333
+      },
+      "vastu": {
+        "mean": 0.7401,
+        "median": 0.728,
+        "min": 0.625,
+        "max": 0.866
+      },
+      "programme_error": {
+        "mean": 0.1279,
+        "median": 0.1104,
+        "min": 0.0599,
+        "max": 0.233
+      },
+      "budget_error": {
+        "mean": 0.2316,
+        "median": 0.1731,
+        "min": 0.039,
+        "max": 0.6788
+      },
+      "explainability": {
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "seconds": {
+        "mean": 1.6364,
+        "median": 1.6385,
+        "min": 0.669,
+        "max": 3.136
+      }
+    },
+    "full": {
+      "trials": 8,
+      "composite_quality": {
+        "mean": 0.852,
+        "median": 0.8888,
+        "min": 0.5925,
+        "max": 0.9033
+      },
+      "compliance": {
+        "mean": 0.875,
+        "median": 1.0,
+        "min": 0.0,
+        "max": 1.0
+      },
+      "critical_breaches_total": 6,
+      "daylight": {
+        "mean": 0.7046,
+        "median": 0.6979,
+        "min": 0.6264,
+        "max": 0.822
+      },
+      "ventilation": {
+        "mean": 0.7485,
+        "median": 0.7279,
+        "min": 0.6536,
+        "max": 0.891
+      },
+      "privacy": {
+        "mean": 0.8021,
+        "median": 0.7896,
+        "min": 0.695,
+        "max": 0.9314
+      },
+      "circulation": {
+        "mean": 0.9368,
+        "median": 0.9506,
+        "min": 0.7947,
+        "max": 1.0
+      },
+      "accessibility": {
+        "mean": 0.9926,
+        "median": 1.0,
+        "min": 0.9786,
+        "max": 1.0
+      },
+      "spatial": {
+        "mean": 0.8812,
+        "median": 0.9149,
+        "min": 0.6635,
+        "max": 0.9359
+      },
+      "vastu": {
+        "mean": 0.722,
+        "median": 0.7105,
+        "min": 0.625,
+        "max": 0.866
+      },
+      "programme_error": {
+        "mean": 0.1329,
+        "median": 0.1104,
+        "min": 0.0465,
+        "max": 0.2566
+      },
+      "budget_error": {
+        "mean": 0.2263,
+        "median": 0.1731,
+        "min": 0.039,
+        "max": 0.6738
+      },
+      "explainability": {
+        "mean": 1.0,
+        "median": 1.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "seconds": {
+        "mean": 1.637,
+        "median": 1.634,
+        "min": 0.671,
+        "max": 3.138
+      }
+    }
+  },
+  "ablation_lift": {
+    "composite_quality": {
+      "full": 0.852,
+      "single_critic": 0.8397,
+      "absolute_gain": 0.0123,
+      "relative_gain_pct": 1.46
+    },
+    "compliance": {
+      "full": 0.875,
+      "single_critic": 0.808,
+      "absolute_gain": 0.067,
+      "relative_gain_pct": 8.29
+    },
+    "vastu": {
+      "full": 0.722,
+      "single_critic": 0.7355,
+      "absolute_gain": -0.0135,
+      "relative_gain_pct": -1.84
+    },
+    "explainability": {
+      "full": 1.0,
+      "single_critic": 1.0,
+      "absolute_gain": 0.0,
+      "relative_gain_pct": 0.0
+    },
+    "critical_breaches": {
+      "full": 6,
+      "single_critic": 11
+    }
+  },
+  "per_trial": [
+    {
+      "brief": "Compact 2BHK, north road",
+      "arm": "single_critic",
+      "plan_id": "plan_73e083233f",
+      "seconds": 1.664,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6501,
+      "ventilation": 0.7844,
+      "privacy": 0.88,
+      "circulation": 1.0,
+      "accessibility": 0.9786,
+      "spatial": 0.9333,
+      "vastu": 0.866,
+      "programme_error": 0.0861,
+      "cost_total": 5058022.32,
+      "budget_error": 0.3311,
+      "explainability": 1.0,
+      "composite": 0.9033
+    },
+    {
+      "brief": "Compact 2BHK, north road",
+      "arm": "no_pareto",
+      "plan_id": "plan_73e083233f",
+      "seconds": 1.688,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6501,
+      "ventilation": 0.7844,
+      "privacy": 0.88,
+      "circulation": 1.0,
+      "accessibility": 0.9786,
+      "spatial": 0.9333,
+      "vastu": 0.866,
+      "programme_error": 0.0861,
+      "cost_total": 5058022.32,
+      "budget_error": 0.3311,
+      "explainability": 1.0,
+      "composite": 0.9033
+    },
+    {
+      "brief": "Compact 2BHK, north road",
+      "arm": "full",
+      "plan_id": "plan_73e083233f",
+      "seconds": 1.679,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6501,
+      "ventilation": 0.7844,
+      "privacy": 0.88,
+      "circulation": 1.0,
+      "accessibility": 0.9786,
+      "spatial": 0.9333,
+      "vastu": 0.866,
+      "programme_error": 0.0861,
+      "cost_total": 5058022.32,
+      "budget_error": 0.3311,
+      "explainability": 1.0,
+      "composite": 0.9033
+    },
+    {
+      "brief": "Standard 3BHK, east road",
+      "arm": "single_critic",
+      "plan_id": "plan_5d85c9e745",
+      "seconds": 1.791,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6883,
+      "ventilation": 0.724,
+      "privacy": 0.824,
+      "circulation": 0.9833,
+      "accessibility": 1.0,
+      "spatial": 0.93,
+      "vastu": 0.74,
+      "programme_error": 0.0808,
+      "cost_total": 6753571.83,
+      "budget_error": 0.039,
+      "explainability": 1.0,
+      "composite": 0.8937
+    },
+    {
+      "brief": "Standard 3BHK, east road",
+      "arm": "no_pareto",
+      "plan_id": "plan_5d85c9e745",
+      "seconds": 1.806,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6883,
+      "ventilation": 0.724,
+      "privacy": 0.824,
+      "circulation": 0.9833,
+      "accessibility": 1.0,
+      "spatial": 0.93,
+      "vastu": 0.74,
+      "programme_error": 0.0808,
+      "cost_total": 6753571.83,
+      "budget_error": 0.039,
+      "explainability": 1.0,
+      "composite": 0.8937
+    },
+    {
+      "brief": "Standard 3BHK, east road",
+      "arm": "full",
+      "plan_id": "plan_5d85c9e745",
+      "seconds": 1.81,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6883,
+      "ventilation": 0.724,
+      "privacy": 0.824,
+      "circulation": 0.9833,
+      "accessibility": 1.0,
+      "spatial": 0.93,
+      "vastu": 0.74,
+      "programme_error": 0.0808,
+      "cost_total": 6753571.83,
+      "budget_error": 0.039,
+      "explainability": 1.0,
+      "composite": 0.8937
+    },
+    {
+      "brief": "Vastu-orthodox, south road (rule conflict)",
+      "arm": "single_critic",
+      "plan_id": "plan_67608209ab",
+      "seconds": 1.573,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7638,
+      "ventilation": 0.7052,
+      "privacy": 0.76,
+      "circulation": 0.9345,
+      "accessibility": 1.0,
+      "spatial": 0.9225,
+      "vastu": 0.833,
+      "programme_error": 0.233,
+      "cost_total": 8087909.18,
+      "budget_error": 0.1233,
+      "explainability": 1.0,
+      "composite": 0.8858
+    },
+    {
+      "brief": "Vastu-orthodox, south road (rule conflict)",
+      "arm": "no_pareto",
+      "plan_id": "plan_67608209ab",
+      "seconds": 1.589,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7638,
+      "ventilation": 0.7052,
+      "privacy": 0.76,
+      "circulation": 0.9345,
+      "accessibility": 1.0,
+      "spatial": 0.9225,
+      "vastu": 0.833,
+      "programme_error": 0.233,
+      "cost_total": 8087909.18,
+      "budget_error": 0.1233,
+      "explainability": 1.0,
+      "composite": 0.8858
+    },
+    {
+      "brief": "Vastu-orthodox, south road (rule conflict)",
+      "arm": "full",
+      "plan_id": "plan_67608209ab",
+      "seconds": 1.589,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7638,
+      "ventilation": 0.7052,
+      "privacy": 0.76,
+      "circulation": 0.9345,
+      "accessibility": 1.0,
+      "spatial": 0.9225,
+      "vastu": 0.833,
+      "programme_error": 0.233,
+      "cost_total": 8087909.18,
+      "budget_error": 0.1233,
+      "explainability": 1.0,
+      "composite": 0.8858
+    },
+    {
+      "brief": "Narrow urban plot",
+      "arm": "single_critic",
+      "plan_id": "plan_a0c7ea38c2",
+      "seconds": 0.662,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7074,
+      "ventilation": 0.891,
+      "privacy": 0.695,
+      "circulation": 0.9666,
+      "accessibility": 1.0,
+      "spatial": 0.9074,
+      "vastu": 0.695,
+      "programme_error": 0.0686,
+      "cost_total": 4803433.69,
+      "budget_error": 0.1437,
+      "explainability": 1.0,
+      "composite": 0.8959
+    },
+    {
+      "brief": "Narrow urban plot",
+      "arm": "no_pareto",
+      "plan_id": "plan_a0c7ea38c2",
+      "seconds": 0.669,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7074,
+      "ventilation": 0.891,
+      "privacy": 0.695,
+      "circulation": 0.9666,
+      "accessibility": 1.0,
+      "spatial": 0.9074,
+      "vastu": 0.695,
+      "programme_error": 0.0686,
+      "cost_total": 4803433.69,
+      "budget_error": 0.1437,
+      "explainability": 1.0,
+      "composite": 0.8959
+    },
+    {
+      "brief": "Narrow urban plot",
+      "arm": "full",
+      "plan_id": "plan_a0c7ea38c2",
+      "seconds": 0.671,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7074,
+      "ventilation": 0.891,
+      "privacy": 0.695,
+      "circulation": 0.9666,
+      "accessibility": 1.0,
+      "spatial": 0.9074,
+      "vastu": 0.695,
+      "programme_error": 0.0686,
+      "cost_total": 4803433.69,
+      "budget_error": 0.1437,
+      "explainability": 1.0,
+      "composite": 0.8959
+    },
+    {
+      "brief": "Multi-generational, accessible",
+      "arm": "single_critic",
+      "plan_id": "plan_1428f5e2d5",
+      "seconds": 2.633,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6264,
+      "ventilation": 0.6536,
+      "privacy": 0.9314,
+      "circulation": 0.9169,
+      "accessibility": 1.0,
+      "spatial": 0.8992,
+      "vastu": 0.726,
+      "programme_error": 0.157,
+      "cost_total": 8771287.86,
+      "budget_error": 0.2026,
+      "explainability": 1.0,
+      "composite": 0.8784
+    },
+    {
+      "brief": "Multi-generational, accessible",
+      "arm": "no_pareto",
+      "plan_id": "plan_1428f5e2d5",
+      "seconds": 2.65,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6264,
+      "ventilation": 0.6536,
+      "privacy": 0.9314,
+      "circulation": 0.9169,
+      "accessibility": 1.0,
+      "spatial": 0.8992,
+      "vastu": 0.726,
+      "programme_error": 0.157,
+      "cost_total": 8771287.86,
+      "budget_error": 0.2026,
+      "explainability": 1.0,
+      "composite": 0.8784
+    },
+    {
+      "brief": "Multi-generational, accessible",
+      "arm": "full",
+      "plan_id": "plan_1428f5e2d5",
+      "seconds": 2.653,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6264,
+      "ventilation": 0.6536,
+      "privacy": 0.9314,
+      "circulation": 0.9169,
+      "accessibility": 1.0,
+      "spatial": 0.8992,
+      "vastu": 0.726,
+      "programme_error": 0.157,
+      "cost_total": 8771287.86,
+      "budget_error": 0.2026,
+      "explainability": 1.0,
+      "composite": 0.8784
+    },
+    {
+      "brief": "Budget-constrained (deliberately under-funded)",
+      "arm": "single_critic",
+      "plan_id": "plan_5d3196fc46",
+      "seconds": 0.726,
+      "compliance": 0.7365,
+      "critical_breaches": 1,
+      "daylight": 0.7026,
+      "ventilation": 0.7037,
+      "privacy": 0.936,
+      "circulation": 1.0,
+      "accessibility": 1.0,
+      "spatial": 0.8395,
+      "vastu": 0.706,
+      "programme_error": 0.0599,
+      "cost_total": 4364770.98,
+      "budget_error": 0.6788,
+      "explainability": 1.0,
+      "composite": 0.8319
+    },
+    {
+      "brief": "Budget-constrained (deliberately under-funded)",
+      "arm": "no_pareto",
+      "plan_id": "plan_5d3196fc46",
+      "seconds": 0.742,
+      "compliance": 0.7365,
+      "critical_breaches": 1,
+      "daylight": 0.7026,
+      "ventilation": 0.7037,
+      "privacy": 0.936,
+      "circulation": 1.0,
+      "accessibility": 1.0,
+      "spatial": 0.8395,
+      "vastu": 0.706,
+      "programme_error": 0.0599,
+      "cost_total": 4364770.98,
+      "budget_error": 0.6788,
+      "explainability": 1.0,
+      "composite": 0.8319
+    },
+    {
+      "brief": "Budget-constrained (deliberately under-funded)",
+      "arm": "full",
+      "plan_id": "plan_22835488aa",
+      "seconds": 0.741,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.6277,
+      "ventilation": 0.7865,
+      "privacy": 0.766,
+      "circulation": 0.8985,
+      "accessibility": 0.9812,
+      "spatial": 0.9359,
+      "vastu": 0.647,
+      "programme_error": 0.0465,
+      "cost_total": 4351782.76,
+      "budget_error": 0.6738,
+      "explainability": 1.0,
+      "composite": 0.8745
+    },
+    {
+      "brief": "Two-storey villa",
+      "arm": "single_critic",
+      "plan_id": "plan_e1c5f861a2",
+      "seconds": 3.118,
+      "compliance": 0.0,
+      "critical_breaches": 9,
+      "daylight": 0.8133,
+      "ventilation": 0.6784,
+      "privacy": 0.7467,
+      "circulation": 0.8102,
+      "accessibility": 0.9925,
+      "spatial": 0.7191,
+      "vastu": 0.633,
+      "programme_error": 0.3207,
+      "cost_total": 9580530.67,
+      "budget_error": 0.2903,
+      "explainability": 1.0,
+      "composite": 0.595
+    },
+    {
+      "brief": "Two-storey villa",
+      "arm": "no_pareto",
+      "plan_id": "plan_dc61188a50",
+      "seconds": 3.136,
+      "compliance": 0.0,
+      "critical_breaches": 6,
+      "daylight": 0.8016,
+      "ventilation": 0.7045,
+      "privacy": 0.7333,
+      "circulation": 0.93,
+      "accessibility": 0.987,
+      "spatial": 0.5124,
+      "vastu": 0.73,
+      "programme_error": 0.2031,
+      "cost_total": 9674783.05,
+      "budget_error": 0.2833,
+      "explainability": 1.0,
+      "composite": 0.5836
+    },
+    {
+      "brief": "Two-storey villa",
+      "arm": "full",
+      "plan_id": "plan_3aeac88f3e",
+      "seconds": 3.138,
+      "compliance": 0.0,
+      "critical_breaches": 6,
+      "daylight": 0.822,
+      "ventilation": 0.7319,
+      "privacy": 0.7467,
+      "circulation": 0.7947,
+      "accessibility": 0.9812,
+      "spatial": 0.6635,
+      "vastu": 0.644,
+      "programme_error": 0.2566,
+      "cost_total": 10186677.65,
+      "budget_error": 0.2454,
+      "explainability": 1.0,
+      "composite": 0.5925
+    },
+    {
+      "brief": "Work-from-home couple",
+      "arm": "single_critic",
+      "plan_id": "plan_8306513dbc",
+      "seconds": 0.8,
+      "compliance": 0.7274,
+      "critical_breaches": 1,
+      "daylight": 0.6766,
+      "ventilation": 0.8799,
+      "privacy": 0.92,
+      "circulation": 1.0,
+      "accessibility": 1.0,
+      "spatial": 0.7383,
+      "vastu": 0.685,
+      "programme_error": 0.162,
+      "cost_total": 5636117.53,
+      "budget_error": 0.0283,
+      "explainability": 1.0,
+      "composite": 0.8337
+    },
+    {
+      "brief": "Work-from-home couple",
+      "arm": "no_pareto",
+      "plan_id": "plan_73204b6a24",
+      "seconds": 0.811,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7512,
+      "ventilation": 0.7116,
+      "privacy": 0.8133,
+      "circulation": 1.0,
+      "accessibility": 1.0,
+      "spatial": 0.858,
+      "vastu": 0.625,
+      "programme_error": 0.1346,
+      "cost_total": 5503267.28,
+      "budget_error": 0.0512,
+      "explainability": 1.0,
+      "composite": 0.8918
+    },
+    {
+      "brief": "Work-from-home couple",
+      "arm": "full",
+      "plan_id": "plan_73204b6a24",
+      "seconds": 0.815,
+      "compliance": 1.0,
+      "critical_breaches": 0,
+      "daylight": 0.7512,
+      "ventilation": 0.7116,
+      "privacy": 0.8133,
+      "circulation": 1.0,
+      "accessibility": 1.0,
+      "spatial": 0.858,
+      "vastu": 0.625,
+      "programme_error": 0.1346,
+      "cost_total": 5503267.28,
+      "budget_error": 0.0512,
+      "explainability": 1.0,
+      "composite": 0.8918
+    }
+  ],
+  "cost_usd": 0.0,
+  "not_measured_without_human_study": {
+    "user_satisfaction": "Requires a study with practising architects and their clients. No proxy is reported, because a synthetic stand-in for user satisfaction would be indistinguishable from an invented result.",
+    "expert_design_quality": "Requires blind rating by qualified architects against schemes produced by human designers for the same briefs.",
+    "recommendation_relevance": "Requires ground-truth relevance judgements on retrieved precedent. The corpus shipped here is too small to support a meaningful retrieval benchmark."
+  },
+  "notes": [
+    "All arms share the same generated candidate pool and the same seed, so differences isolate the selection procedure rather than the generator's luck.",
+    "Generative critics are excluded from the ablation so results are reproducible and independent of which free tier was reachable.",
+    "Cost error is measured against the client's stated budget, which is a constraint rather than ground truth. Accuracy against delivered cost requires completed projects and is what the calibration endpoint accumulates."
+  ]
+}

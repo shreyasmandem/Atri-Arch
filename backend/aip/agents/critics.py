@@ -23,8 +23,8 @@ from pydantic import BaseModel, Field
 
 from aip.agents.base import (
     AgentContext,
-    Critique,
     CriticAgent,
+    Critique,
     Evidence,
     EvidenceKind,
     Finding,
@@ -43,7 +43,6 @@ from aip.engines.architecture.metrics import (
     spatial_quality_analysis,
     ventilation_analysis,
 )
-
 
 # ---------------------------------------------------------------------------
 # Analytical critics
@@ -440,7 +439,7 @@ class _LLMVerdict(BaseModel):
 
     score: float = Field(ge=0.0, le=1.0, description="Overall quality on this axis")
     confidence: float = Field(default=0.7, ge=0.0, le=1.0)
-    rationale: str = Field(description="Two or three sentences justifying the score")
+    rationale: str = Field(default="", description="Two or three sentences justifying the score")
     strengths: list[str] = Field(default_factory=list)
     concerns: list[str] = Field(default_factory=list)
     suggestions: list[str] = Field(default_factory=list)
@@ -469,7 +468,10 @@ class _GenerativeCritic(CriticAgent):
             _LLMVerdict,
             capability=self.capability,
             temperature=self.temperature,
-            max_tokens=900,
+            # Generous enough that a considered critique is not severed
+            # mid-sentence. Truncation was the single largest cause of failed
+            # structured parses once real models were connected.
+            max_tokens=1800,
         )
 
         findings = [

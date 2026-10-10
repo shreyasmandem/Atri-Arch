@@ -25,8 +25,8 @@ Design commitments, each of which addresses a specific failure of existing tools
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from typing import Any, Iterable
+from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -38,7 +38,6 @@ from aip.engines.vastu.knowledge import (
     RULES,
     RULES_BY_ID,
     RuleCategory,
-    School,
     VastuRule,
     corpus_statistics,
 )
@@ -828,9 +827,9 @@ class VastuEngine:
 
         if self.tradition_weight >= 0.9:
             return (
-                f"At an orthodox stance every rule in the corpus retains its full "
-                f"classical authority; no rule was down-weighted. The score is a "
-                f"faithful reading of the texts."
+                "At an orthodox stance every rule in the corpus retains its full "
+                "classical authority; no rule was down-weighted. The score is a "
+                "faithful reading of the texts."
             )
         if not suppressed and not reduced:
             return "No rules were re-weighted at this stance."

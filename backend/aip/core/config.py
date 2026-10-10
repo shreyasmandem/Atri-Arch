@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -161,14 +162,59 @@ class Settings(BaseSettings):
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    """Process-wide settings singleton."""
+def _cached_settings() -> Settings:
     return Settings()
 
 
+#: Explicit override, used by tests and by anything that must not read the
+#: ambient environment. See `override_settings`.
+_override: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Process-wide settings singleton."""
+    return _override if _override is not None else _cached_settings()
+
+
+def override_settings(settings: Settings) -> None:
+    """Force `get_settings()` to return a specific instance.
+
+    This exists because environment-based configuration is not hermetic: the
+    test suite's whole premise is that it runs with *no* model provider
+    configured, which proves the analytical engines need no API. Relying on
+    unset environment variables to achieve that is a trap - the moment a
+    developer creates a `.env`, the suite silently starts calling live
+    providers, becoming slow, flaky, and quota-consuming while still passing.
+    An explicit override makes the isolation real rather than incidental.
+    """
+    global _override
+    _override = settings
+
+
+def clear_settings_override() -> None:
+    global _override
+    _override = None
+
+
+def hermetic_settings(**overrides: Any) -> Settings:
+    """A Settings instance that ignores `.env` and the ambient environment."""
+    base: dict[str, Any] = {
+        "environment": "test",
+        "debug": True,
+        "groq_api_key": "", "google_api_key": "", "openrouter_api_key": "",
+        "cerebras_api_key": "", "mistral_api_key": "", "together_api_key": "",
+        "huggingface_api_key": "", "github_token": "", "nvidia_api_key": "",
+        "ollama_enabled": False,
+        "database_url": "sqlite+aiosqlite:///:memory:",
+    }
+    base.update(overrides)
+    return Settings(_env_file=None, **base)
+
+
 def reload_settings() -> Settings:
-    """Clear the cache and re-read the environment. Used by tests."""
-    get_settings.cache_clear()
+    """Clear the cache and re-read the environment."""
+    clear_settings_override()
+    _cached_settings.cache_clear()
     return get_settings()
 
 

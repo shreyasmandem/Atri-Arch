@@ -39,7 +39,6 @@ from aip.core.providers import (
     PROVIDERS_BY_NAME,
     Capability,
     ModelSpec,
-    ProviderSpec,
     candidates_for,
     diversified,
 )
@@ -57,6 +56,10 @@ class LLMError(RuntimeError):
 
 class AllProvidersExhausted(LLMError):
     pass
+
+
+class ModelUnavailable(LLMError):
+    """This model id is gone. The provider itself may be perfectly healthy."""
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +150,14 @@ class RateLimiter:
 
 
 class CircuitBreaker:
-    """Parks a failing provider for an exponentially growing cool-off."""
+    """Parks a failing provider for an exponentially growing cool-off.
 
-    def __init__(self, threshold: int = 3, base_cooldown: float = 20.0) -> None:
+    The threshold is low deliberately. A committee fans thirteen critics across
+    three candidate schemes, so a provider that is simply not running would
+    otherwise be rediscovered dozens of times in a single design run.
+    """
+
+    def __init__(self, threshold: int = 2, base_cooldown: float = 30.0) -> None:
         self.threshold = threshold
         self.base_cooldown = base_cooldown
         self._failures: dict[str, int] = defaultdict(int)
@@ -197,6 +205,38 @@ class UsageRecord:
     latency_ms: float
     ok: bool
     degraded: bool = False
+
+
+class DeadModels:
+    """Model ids the provider says do not exist.
+
+    Free-tier catalogues churn constantly - ids are withdrawn without notice,
+    and this project has watched five Groq ids and every OpenRouter ':free'
+    variant disappear inside a fortnight. The important distinction is that a
+    withdrawn *model* is not a failed *provider*: treating a 404 as a provider
+    outage tripped the circuit breaker and took the whole of Groq offline
+    because one id in the registry had gone stale. This tracks the model
+    instead, so the router simply skips it and moves to the next one.
+    """
+
+    def __init__(self) -> None:
+        self._dead: set[str] = set()
+
+    def mark(self, model: ModelSpec, reason: str) -> None:
+        key = f"{model.provider}/{model.id}"
+        if key not in self._dead:
+            self._dead.add(key)
+            log_event(
+                logger, "model.retired", level=30, model=key, reason=reason[:160],
+                detail="Skipped for the rest of this process. Run scripts/verify_providers.py.",
+            )
+
+    def is_dead(self, model: ModelSpec) -> bool:
+        return f"{model.provider}/{model.id}" in self._dead
+
+    @property
+    def names(self) -> list[str]:
+        return sorted(self._dead)
 
 
 class UsageLedger:
@@ -296,6 +336,45 @@ def _json_candidates(text: str) -> list[str]:
     return unique
 
 
+def _coerce_keys(payload: Any, expected: list[str]) -> Any:
+    """Map near-miss key names onto the schema's actual field names.
+
+    Free models rename fields when the surrounding prompt is domain-heavy -
+    `score_brief_fidelity` for `score`, `reasoning` for `rationale`. The value is
+    correct; only the label drifted. Renaming is cheaper and more reliable than
+    spending a repair round asking the model to try again.
+    """
+    if not isinstance(payload, dict):
+        return payload
+
+    out = dict(payload)
+    lowered = {k.lower(): k for k in payload}
+
+    for name in expected:
+        if name in out:
+            continue
+        target = name.lower()
+        match = next(
+            (
+                original
+                for low, original in lowered.items()
+                if original not in expected
+                and (low.startswith(target) or low.endswith(target) or target in low)
+            ),
+            None,
+        )
+        if match is not None:
+            out[name] = out.pop(match)
+
+    # A common synonym the schema will never guess at from the field name alone.
+    if "rationale" in expected and "rationale" not in out:
+        for synonym in ("reasoning", "justification", "explanation", "summary"):
+            if synonym in out:
+                out["rationale"] = out[synonym]
+                break
+    return out
+
+
 def _repair_json(text: str) -> Any | None:
     """Fix the malformations free models actually produce."""
     attempts = [
@@ -306,14 +385,24 @@ def _repair_json(text: str) -> Any | None:
         text.replace("'", '"'),
         re.sub(r"(?<=[{,])\s*([A-Za-z_][A-Za-z0-9_]*)\s*:", r'"\1":', text),  # bare keys
     ]
-    # Close unbalanced brackets produced by truncation.
+    # Recover from truncation - the model hit its token ceiling mid-object.
+    # Closing brackets alone is not enough when the cut landed inside a string
+    # literal, which is the common case: the quote has to be closed first, and
+    # a dangling key with no value has to be dropped entirely.
     balanced = text
+    if balanced.count('"') % 2 == 1:
+        balanced += '"'
+    # Drop a trailing key that never received a value. The cut can land either
+    # after the colon ("rationale":) or before it ("rationale"), so both shapes
+    # have to go.
+    balanced = re.sub(r',\s*"[^"]*"\s*:?\s*$', "", balanced)
+    balanced = re.sub(r',\s*$', "", balanced)                    # dangling comma
     opens = balanced.count("{") - balanced.count("}")
-    if opens > 0:
-        balanced += "}" * opens
     brackets = balanced.count("[") - balanced.count("]")
     if brackets > 0:
         balanced += "]" * brackets
+    if opens > 0:
+        balanced += "}" * opens
     attempts.append(balanced)
 
     for attempt in attempts:
@@ -394,6 +483,7 @@ class LLMRouter:
         self.settings = settings or get_settings()
         self.limiter = RateLimiter()
         self.breaker = CircuitBreaker()
+        self.dead = DeadModels()
         self.ledger = UsageLedger()
         self.offline = OfflineBackend()
         self._client: httpx.AsyncClient | None = None
@@ -431,8 +521,14 @@ class LLMRouter:
         pin_model: ModelSpec | None = None,
         min_context: int = 0,
         cache_key: str | None = None,
+        latency_sensitive: bool = True,
     ) -> LLMResponse:
-        """Run a completion against the best available free model."""
+        """Run a completion against the best available free model.
+
+        `latency_sensitive` defaults to True because most calls are one of many
+        in a committee fan-out. Set it False for a single, user-visible call -
+        the final rationale - where the best model is worth waiting for.
+        """
         if self.settings.llm_cache_enabled:
             key = cache_key or self._cache_key(messages, capability, temperature, json_schema)
             hit = self._cache.get(key)
@@ -442,13 +538,16 @@ class LLMRouter:
             key = None
 
         models = [pin_model] if pin_model else candidates_for(
-            capability, self.settings, min_context=min_context
+            capability, self.settings, min_context=min_context,
+            latency_sensitive=latency_sensitive,
         )
         models = [m for m in models if m is not None]
 
         errors: list[str] = []
         attempts = 0
         for model in models:
+            if self.dead.is_dead(model):
+                continue
             if self.breaker.is_open(model.provider):
                 continue
             if not await self.limiter.try_acquire(model):
@@ -459,6 +558,12 @@ class LLMRouter:
                 response = await self._call(
                     model, messages, temperature, max_tokens, json_schema
                 )
+            except ModelUnavailable as exc:
+                # The id is gone, not the provider. Retire the model and keep
+                # every other model on this provider in play.
+                self.dead.mark(model, str(exc))
+                errors.append(f"{model.provider}/{model.id}: retired ({exc})")
+                continue
             except Exception as exc:  # noqa: BLE001 - failover is the point
                 self.breaker.record_failure(model.provider)
                 detail = f"{model.provider}/{model.id}: {type(exc).__name__}: {exc}"
@@ -523,11 +628,16 @@ class LLMRouter:
     ) -> tuple[T, LLMResponse]:
         """Completion validated into a Pydantic model, with guided repair."""
         schema = response_model.model_json_schema()
+        required = list(schema.get("properties", {}))
         instruction = Message(
             "system",
             "Reply with a single JSON object and nothing else. No prose, no code "
-            "fences, no explanation outside the JSON. It must validate against "
-            f"this JSON Schema:\n{json.dumps(schema, separators=(',', ':'))}",
+            "fences, no explanation outside the JSON.\n"
+            f"Use exactly these key names, spelled exactly like this: {required}.\n"
+            "Do not rename, prefix or suffix any key. Keep string values short "
+            "so the object is closed properly and never truncated.\n"
+            f"It must validate against this JSON Schema:\n"
+            f"{json.dumps(schema, separators=(',', ':'))}",
         )
         convo = [instruction, *messages]
 
@@ -540,12 +650,21 @@ class LLMRouter:
                 max_tokens=max_tokens,
                 json_schema=schema,
                 pin_model=pin_model,
-                cache_key=None if attempt else None,
+                cache_key=None,
             )
             try:
                 payload = extract_json(response.text)
                 return response_model.model_validate(payload), response
             except (ValueError, ValidationError) as exc:
+                # Models rename fields under pressure - `score_brief_fidelity`
+                # for `score` is a real observed case. Rather than burn a whole
+                # repair round on a spelling difference, map near-miss keys onto
+                # the schema before giving up on this attempt.
+                try:
+                    payload = _coerce_keys(extract_json(response.text), required)
+                    return response_model.model_validate(payload), response
+                except (ValueError, ValidationError):
+                    pass
                 last_error = str(exc)[:600]
                 if attempt >= repair_attempts:
                     break
@@ -640,17 +759,33 @@ class LLMRouter:
         for retry in range(self.settings.llm_max_retries):
             try:
                 res = await client.post(url, json=body, headers=provider.headers(self.settings))
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
+            except httpx.ConnectError as exc:
+                # Connection refused means nothing is listening - typically
+                # `ollama_enabled` is on but the daemon is not running. Retrying
+                # that with exponential backoff spends seconds per critic to
+                # rediscover the same fact, and with a committee of thirteen it
+                # was the single largest source of latency in the pipeline.
+                # Fail immediately and let the circuit breaker park the provider.
+                raise LLMError(f"connection refused at {provider.name}: {exc}") from exc
+            except httpx.TimeoutException as exc:
+                # A model that could not answer inside the timeout will almost
+                # certainly miss it again, and retrying costs the full duration
+                # each time. Three retries at 90s stranded whole runs for four
+                # minutes. Give up on this model and let the router fail over.
+                raise LLMError(f"timed out after {self.settings.llm_timeout_seconds:.0f}s") from exc
+            except httpx.TransportError as exc:
                 last_exc = exc
                 await asyncio.sleep(0.6 * (2**retry) + random.random() * 0.4)
                 continue
 
             if res.status_code == 429:
-                retry_after = _retry_after(res)
-                if retry_after > 30 or retry >= self.settings.llm_max_retries - 1:
-                    raise LLMError(f"rate limited (retry-after {retry_after}s)")
-                await asyncio.sleep(retry_after + random.random() * 0.5)
-                continue
+                # Do not sleep-and-retry a rate limit in place. The router's
+                # whole design is that another free provider is one hop away, so
+                # failing over immediately beats blocking this critic for
+                # seconds. It also matters for the case where a credential has a
+                # *zero* free-tier quota: that 429 never clears, and retrying it
+                # on every call was costing ~12s per generative critic.
+                raise LLMError(f"rate limited (retry-after {_retry_after(res)}s)")
             if res.status_code >= 500:
                 last_exc = LLMError(f"upstream {res.status_code}")
                 await asyncio.sleep(0.8 * (2**retry) + random.random() * 0.4)
@@ -661,7 +796,11 @@ class LLMRouter:
                 body.pop("response_format", None)
                 continue
             if res.status_code >= 400:
-                raise LLMError(f"http {res.status_code}: {res.text[:300]}")
+                body = res.text[:300]
+                lowered = body.lower()
+                if res.status_code == 404 or "does not exist" in lowered                         or "decommissioned" in lowered or "model_not_found" in lowered:
+                    raise ModelUnavailable(f"http {res.status_code}: {body}")
+                raise LLMError(f"http {res.status_code}: {body}")
 
             return self._parse(res, model, started)
 
@@ -680,8 +819,16 @@ class LLMRouter:
         raw = message.get("content") or ""
         if isinstance(raw, list):  # some gateways return content parts
             raw = "".join(part.get("text", "") for part in raw if isinstance(part, dict))
-        if not raw and message.get("reasoning_content"):
-            raw = message["reasoning_content"]
+        if not raw:
+            # Reasoning models split their output, and providers disagree on the
+            # field name: `reasoning_content` (Groq, DeepSeek) versus `reasoning`
+            # (OpenRouter). When `content` is empty the answer is usually in one
+            # of them, and discarding it would throw away a valid critique.
+            for key in ("reasoning_content", "reasoning"):
+                value = message.get(key)
+                if isinstance(value, str) and value.strip():
+                    raw = value
+                    break
         if not raw:
             raise LLMError("empty completion")
 
@@ -730,6 +877,7 @@ class LLMRouter:
             "configured_providers": self.settings.configured_providers(),
             "usage": self.ledger.summary(),
             "rate_limits": await self.limiter.snapshot(),
+            "retired_models": self.dead.names,
             "zero_cost_enforced": self.settings.enforce_zero_cost,
         }
 

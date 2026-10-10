@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kalpa Studio — Architecture</title>
+<style>
+  /* A deliberately different visual world from the widget's.
+     This page stands in for a real practice's website, and its whole job is to
+     prove the widget survives someone else's stylesheet: opinionated globals,
+     a light ground, a serif voice, and aggressive resets. If the widget is
+     isolated properly, none of this reaches it. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    background: #faf8f4; color: #2b2722; line-height: 1.65;
+  }
+  button, input { font-family: inherit !important; border-radius: 14px !important; }
+  header { padding: 26px 7vw; border-bottom: 1px solid #e2ddd4; display: flex; align-items: baseline; gap: 28px; }
+  header b { font-size: 19px; letter-spacing: .16em; text-transform: uppercase; }
+  nav a { margin-right: 22px; color: #6b6355; text-decoration: none; font-size: 14px; }
+  main { max-width: 780px; margin: 0 auto; padding: 9vh 7vw 22vh; }
+  h1 { font-size: clamp(2.1rem, 5vw, 3.4rem); line-height: 1.1; font-weight: 400; margin-bottom: 20px; }
+  p.lede { font-size: 1.16rem; color: #55503f; margin-bottom: 26px; }
+  .rule { height: 1px; background: #e2ddd4; margin: 44px 0; }
+  h2 { font-size: 1.25rem; font-weight: 400; margin-bottom: 10px; }
+  ul { padding-left: 1.2rem; color: #55503f; }
+  code {
+    display: block; white-space: pre-wrap; background: #17130E; color: #F2EBDC;
+    padding: 16px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px;
+    line-height: 1.7; border-radius: 0; overflow-x: auto; margin-top: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <b>Kalpa Studio</b>
+  <nav>
+    <a href="#">Work</a><a href="#">Practice</a><a href="#">Journal</a><a href="#">Contact</a>
+  </nav>
+</header>
+
+<main>
+  <h1>We design houses that stay cool without being sealed shut.</h1>
+  <p class="lede">
+    A Chennai practice working in tropical modern and Tamil vernacular idioms.
+    Twenty-two houses built since 2016.
+  </p>
+  <p>
+    Most people arrive at our studio with a plot, a budget and no drawing. So we
+    put our design engine on this page. Answer six questions and it will produce
+    a real scheme — plan, cost and Vastu report — before you have spoken to
+    anyone. Then we will sit down and go through it properly.
+  </p>
+
+  <div class="rule"></div>
+
+  <h2>This page is a demonstration</h2>
+  <ul>
+    <li>Kalpa Studio is a fictional practice, used here to show the widget in a real page.</li>
+    <li>The serif type, cream ground and forced 14px border-radius on every button are
+        deliberately hostile to the widget's own styling.</li>
+    <li>The widget renders inside a shadow root, so none of it leaks in either direction.</li>
+  </ul>
+
+  <div class="rule"></div>
+
+  <h2>Installation is one tag</h2>
+  <code>&lt;script src="https://your-aip-host/embed/aip-widget.js"
+        data-key="aip_pk_your_public_key"
+        data-practice="Kalpa Studio"
+        data-accent="#8a5a2b"
+        data-label="Design my home"
+        defer&gt;&lt;/script&gt;</code>
+
+  <p style="margin-top:26px;color:#6b6355;font-size:.95rem">
+    The public key is origin-bound server-side, so it is safe in page source.
+    Secret keys never leave your server.
+  </p>
+</main>
+
+<script src="/embed/aip-widget.js"
+        data-practice="Kalpa Studio"
+        data-accent="#8a5a2b"
+        data-label="Design my home"
+        defer></script>
+</body>
+</html>

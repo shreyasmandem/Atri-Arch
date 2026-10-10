@@ -14,16 +14,16 @@ abstract sets as an objective.
 """
 
 from aip.engines.vastu.engine import (
+    RuleVerdict,
     VastuEngine,
     VastuReport,
-    RuleVerdict,
     analyse_vastu,
     quick_vastu_score,
 )
 from aip.engines.vastu.knowledge import (
     RULES,
-    School,
     RuleCategory,
+    School,
     VastuRule,
     ideal_direction,
     rules_for_room,

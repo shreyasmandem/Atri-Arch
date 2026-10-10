@@ -25,7 +25,7 @@ from aip.domain.geometry import (
     distance_point_to_segment,
     segments_intersect,
 )
-from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, Wall, WallKind
+from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, Wall
 from aip.engines.architecture.solar import (
     average_daylight_factor,
     daylight_quality_by_orientation,
@@ -287,8 +287,6 @@ def ventilation_analysis(plan: FloorPlan) -> MetricReport:
     rooms = [r for r in plan.all_rooms if r.type.is_habitable or r.type.is_wet]
     if not rooms:
         return MetricReport("ventilation", 0.5, summary="No rooms requiring ventilation.")
-
-    connectivity_by_level = {lv.index: plan.connectivity(lv.index) for lv in plan.levels}
 
     for room in rooms:
         walls = _room_walls(plan, room)
@@ -1020,10 +1018,7 @@ def spatial_quality_analysis(plan: FloorPlan) -> MetricReport:
         square = room.usable_square()
 
         # 1:1 to 1:1.6 reads as generous; beyond 1:2.2 becomes a corridor.
-        if aspect <= 1.6:
-            aspect_score = 1.0
-        else:
-            aspect_score = _clamp(1.0 - (aspect - 1.6) / 1.4)
+        aspect_score = 1.0 if aspect <= 1.6 else _clamp(1.0 - (aspect - 1.6) / 1.4)
 
         required_square = _min_useful_square(room.type)
         furnish_score = _clamp(square / required_square) if required_square else 1.0

@@ -12,3 +12,4 @@ backend/var/
 .env.local
 .DS_Store
 _t_*.py
+docs/samples/gallery.html
