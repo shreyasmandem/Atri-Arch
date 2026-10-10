@@ -9,7 +9,8 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r1">
+<link rel="stylesheet" href="rabbit.css?v=r2">
+<link rel="icon" href="logo-arch.svg" type="image/svg+xml">
 </head>
 <body data-phase="compose" data-mode="brief">
 
@@ -19,7 +20,7 @@
 <!-- ═══ HEADER ═══ -->
 <header class="bar">
   <button type="button" class="wordmark" id="home" aria-label="Atri Arch, back to the brief">
-    <img src="logo_emblem.png" alt="" width="28" height="28">
+    <img src="logo-arch.svg" alt="" width="30" height="30">
     <span>Atri Arch</span>
   </button>
 
@@ -62,7 +63,12 @@
     </figure>
   </div>
 
-  <div class="compose__sheet">
+  <!-- The conversation: the default way in -->
+  <div class="chat" id="chat" aria-label="Describe your home"></div>
+
+  <!-- The specification sheet: one click away, for anyone who prefers fields -->
+  <div class="compose__sheet" id="sheet">
+    <button type="button" class="sheet__close" id="sheet-close" aria-label="Back to the conversation">×</button>
     <div class="modes" id="mode-switch" role="tablist" aria-label="How to begin">
       <button type="button" class="mode-tab" role="tab" data-mode="brief" aria-selected="true">Design from a brief</button>
       <button type="button" class="mode-tab" role="tab" data-mode="upload" aria-selected="false">Review a plan I have</button>
@@ -311,6 +317,16 @@
         </button>
       </div>
     </form>
+  </div>
+
+  <div class="explain" aria-label="How it works">
+    <h2 class="explain__h">From a sentence to a set of drawings, in about a minute</h2>
+    <ol class="steps">
+      <li class="step-card"><span class="step-card__n">01</span><b>Say it your way</b><p>Plot size in feet or metres, road side, floors, rooms - and anything you'd love. The studio asks only for what you left out.</p><i class="viz viz--type" aria-hidden="true"><em></em></i></li>
+      <li class="step-card"><span class="step-card__n">02</span><b>Three schemes, drawn live</b><p>A hall with rooms either side, every bedroom with its bath, the stair stacked floor to floor. Nothing you asked for is dropped.</p><i class="viz viz--plan" aria-hidden="true"><em></em><em></em><em></em><em></em></i></li>
+      <li class="step-card"><span class="step-card__n">03</span><b>Thirteen specialists argue</b><p>Code, structure, daylight, airflow, Vastu, cost, privacy and more review every scheme; the committee picks one and says why.</p><i class="viz viz--talk" aria-hidden="true"><em></em><em></em><em></em></i></li>
+      <li class="step-card"><span class="step-card__n">04</span><b>Explore, then change it</b><p>Walk the 3D model in seven facade styles and twelve palettes, watch the breeze move through each floor, see Vastu on the plan - then revise in a sentence.</p><i class="viz viz--air" aria-hidden="true"><em></em><em></em><em></em></i></li>
+    </ol>
   </div>
 </section>
 

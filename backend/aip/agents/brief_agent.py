@@ -297,7 +297,12 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
     rules = parse(message)
     model = await llm_parse(message, brief) if use_llm else {}
     # The rules win on numbers they read; the model fills what they could not.
-    model = {k: v for k, v in model.items() if k not in rules or k in ("rooms", "amenities", "notes")}
+    # and never overwrites what the conversation already settled - a model
+    # asked about "G+1" must not quietly re-guess the plot size.
+    lists = ("rooms", "amenities", "notes", "colours", "styles")
+    model = {k: v for k, v in model.items() if k in lists or (k not in rules and not brief.get(k))}
+    if "plot_width" in model and "plot_unit" not in model:
+        model["plot_unit"] = "m"
     merged = merge(brief, model, rules)
     go = bool(GO_AHEAD.search(message.lower()))
     need = missing(merged)

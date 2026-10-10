@@ -94,6 +94,9 @@ function phase(p) {
   if (document.startViewTransition && !reducedMotion() && !document.hidden) {
     document.documentElement.dataset.vt = p;
     const t = document.startViewTransition(apply);
+    // A page that is not painting (a backgrounded window) never runs the
+    // transition's callback; the phase must not wait on it.
+    setTimeout(() => { if (document.body.dataset.phase !== S.phase) document.body.dataset.phase = S.phase; }, 1500);
     // A transition the browser skips (a hidden tab, a slow frame) still
     // applies the phase; it only loses the animation, so it is not an error.
     t.ready.catch(() => {});
@@ -324,6 +327,50 @@ function initBrief() {
   renderBrief();
 }
 
+/* ═══ HOME: the brief as a conversation ═══════════════════════════════ */
+
+// The chat writes into the same sheet the manual mode edits, so the plot
+// drawing follows the conversation and the run reads one brief either way.
+function setField(name, value) {
+  const f = $("brief");
+  if (name === "vastu") {
+    const idx = Math.max(0, STANCES.findIndex(([, k]) => k === value));
+    const r = f.querySelector(`input[name="vastu_slider"][value="${idx}"]`);
+    if (r) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); }
+    return;
+  }
+  const inputs = f.querySelectorAll(`[name="${name}"]`);
+  if (!inputs.length) return;
+  for (const i of inputs) {
+    if (i.type === "radio") { if (i.value === value) { i.checked = true; i.dispatchEvent(new Event("change", { bubbles: true })); } }
+    else if (i.type === "checkbox") { i.checked = !!value; i.dispatchEvent(new Event("change", { bubbles: true })); }
+    else { i.value = value; i.dispatchEvent(new Event("input", { bubbles: true })); }
+  }
+}
+
+function openManual(mode) {
+  setMode(mode);
+  document.body.dataset.manual = "1";
+  $("sheet-close")?.focus();
+}
+
+async function initHome() {
+  const host = $("chat");
+  if (!host) return;
+  $("sheet-close")?.addEventListener("click", () => { delete document.body.dataset.manual; });
+  const { mountHome } = await import("./home.js");
+  mountHome({
+    host, api: API, setField, openManual,
+    start: (request, brief) => {
+      S.chatBrief = brief;
+      if (brief?.colours) S.palette = { ...(S.palette || {}), text: brief.colours };
+      const form = readBrief();
+      const amenities = [...new Set([...(form.amenities || []), ...(request?.amenities || [])])];
+      onSubmit(null, { ...form, ...request, amenities, must_haves: amenities });
+    },
+  });
+}
+
 /* ═══ BOOT ═══════════════════════════════════════════════════════════ */
 
 (async function boot() {
@@ -336,6 +383,7 @@ function initBrief() {
   document.querySelectorAll(".mode-tab").forEach((t) =>
     t.addEventListener("click", () => setMode(t.dataset.mode)));
   initDropzone();
+  initHome();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
   $("see-why")?.addEventListener("click", openWhy);
   $("restart")?.addEventListener("click", () => {

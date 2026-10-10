@@ -2536,6 +2536,10 @@ class LayoutGenerator:
                                "separate room did not fit the plot.",
             }
             for kind in OPTIONAL_ORDER:
+                # Only what the programme added is optional; a room the client
+                # asked for is kept (the plan gets smaller rooms or a floor instead).
+                if any(r.type is kind and "Requested" in (r.notes or "") for r in base):
+                    continue
                 while not comfy(cur) and any(r.type is kind for r in base):
                     drop(kind)
                     cur = self._assess(levels, base)
