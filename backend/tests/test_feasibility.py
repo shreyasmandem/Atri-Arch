@@ -132,7 +132,10 @@ def test_optional_rooms_go_in_the_stated_order_when_a_floor_is_not_enough():
                    amenities=["pooja", "study", "balcony", "utility"], road_direction="N")
     generator = LayoutGenerator(brief, GeneratorConfig(seed=1, **QUICK))
     dropped = generator.feasibility.dropped
-    assert dropped[:2] == ["study", "balcony"], dropped
+    # Rooms the client named go last, in the stated order, after anything the
+    # programme added on its own.
+    named = [d for d in dropped if d in ("study", "balcony")]
+    assert named == ["study", "balcony"], dropped
     kinds = _kinds(generator)
     assert RoomType.STUDY not in kinds and RoomType.BALCONY not in kinds
     text = " ".join(generator.advisories)

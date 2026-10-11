@@ -1544,6 +1544,33 @@ _PUBLIC_FOR_PASSAGE = frozenset({
 _QUALITY_WEIGHT = 0.02
 
 
+def _doors_to_hosts(plan: FloorPlan) -> None:
+    """A balcony asked for off a particular room opens from that room, not the hall."""
+    from aip.domain.plan import Opening, OpeningKind
+
+    for level in plan.levels:
+        by_id = {r.id: r for r in level.rooms}
+        for bal in level.rooms:
+            note = str(bal.metadata.get("notes", "")).lower()
+            if bal.type is not RoomType.BALCONY or "opens off the" not in note:
+                continue
+            host_name = note.split("opens off the", 1)[1].strip(" .")
+            hosts = [r for r in level.rooms if r.type.value.replace("_", " ") == host_name]
+            if not hosts:
+                continue
+            host = hosts[0]
+            shared = [w for w in level.walls if bal.id in w.rooms and host.id in w.rooms and w.length >= 1.0]
+            if not shared:
+                continue
+            for w in level.walls:
+                if bal.id in w.rooms:
+                    w.openings = [o for o in w.openings if not (o.kind.is_door and o.connects and bal.id in o.connects)]
+            wall = max(shared, key=lambda w: w.length)
+            wall.openings.append(Opening(kind=OpeningKind.SLIDING_DOOR, wall_id=wall.id, position=0.5,
+                                         width=min(1.8, wall.length - 0.3), height=2.1, sill_height=0.0,
+                                         connects=(host.id, bal.id)))
+
+
 def _pristine(plan: FloorPlan) -> bool:
     return not plan.metadata["guardrail"] and not plan.metadata["quality"]
 
@@ -1813,6 +1840,7 @@ class LayoutGenerator:
             finally:
                 self._envelope = envelope
             plan.metadata["planner"] = "spine"
+            _doors_to_hosts(plan)
             self._judge(plan)
             # A toilet over the kitchen, the puja or the dining table is a
             # plumbing leak waiting to happen and a Vastu fault: mark it so the
@@ -2535,11 +2563,12 @@ class LayoutGenerator:
                 RoomType.PUJA: "The puja room became a wall niche in the living room: a "
                                "separate room did not fit the plot.",
             }
-            for kind in OPTIONAL_ORDER:
-                # Only what the programme added is optional; a room the client
-                # asked for is kept (the plan gets smaller rooms or a floor instead).
-                if any(r.type is kind and "Requested" in (r.notes or "") for r in base):
-                    continue
+            # What the programme added goes first; a room the client asked for
+            # goes only if nothing else makes the house fit, and the advisory
+            # says so.
+            requested = {r.type for r in base if "Requested" in (r.notes or "")}
+            order = [k for k in OPTIONAL_ORDER if k not in requested] + [k for k in OPTIONAL_ORDER if k in requested]
+            for kind in order:
                 while not comfy(cur) and any(r.type is kind for r in base):
                     drop(kind)
                     cur = self._assess(levels, base)

@@ -44,7 +44,7 @@ WETS = {T.UTILITY, T.LAUNDRY, T.POWDER, T.TOILET, T.BATHROOM}
 MIN_DIM = {T.MASTER_BEDROOM: 3.4, T.BEDROOM: 3.0, T.GUEST_BEDROOM: 3.0, T.CHILDREN_BEDROOM: 3.0,
            T.LIVING: 4.2, T.DINING: 3.0, T.KITCHEN: 2.4, T.BATHROOM: 1.6, T.TOILET: 1.4, T.POWDER: 1.3,
            T.UTILITY: 1.4, T.PUJA: 1.4, T.STUDY: 2.6, T.FAMILY: 3.2, T.DRAWING: 3.4, T.GARAGE: 5.0,
-           T.STORE: 1.4, T.VERANDAH: 1.8, T.COURTYARD: 3.0, T.FOYER: 1.8, T.HOME_THEATRE: 3.6, T.GYM: 3.0, T.LIBRARY: 2.6, T.HOME_OFFICE: 2.6, T.SERVANT: 2.6}
+           T.STORE: 1.4, T.BALCONY: 1.5, T.VERANDAH: 1.8, T.COURTYARD: 3.0, T.FOYER: 1.8, T.HOME_THEATRE: 3.6, T.GYM: 3.0, T.LIBRARY: 2.6, T.HOME_OFFICE: 2.6, T.SERVANT: 2.6}
 #: How far a room may grow past its programme area; beyond it the plot is garden.
 GROW = 1.1
 SPINE = 1.4
@@ -176,7 +176,7 @@ class SpinePlanner:
                 rows.append(Row([it, nxt], depth=d, cap=d * 1.15, widths=[width - wk, wk]))
                 continue
             d = max(it.area / width, MIN_DIM.get(it.type, 2.4))
-            fixed = it.type in {T.VERANDAH, T.COURTYARD, T.GARAGE, T.FOYER}
+            fixed = it.type in {T.VERANDAH, T.COURTYARD, T.GARAGE, T.FOYER, T.BALCONY}
             asked = getattr(it.req, "asked_area", None) or it.area
             main = Row([it], depth=d, cap=d if fixed else max(d, min(it.area * GROW, asked * 1.45) / width), grow=not fixed)
             if it.bath is not None:
@@ -257,6 +257,21 @@ class SpinePlanner:
                     priv.insert(min(2, len(priv)), Item(T.COURTYARD, min(it.area, 16.0), it.req))
                 elif li > 0 and it.type in {T.BALCONY, T.TERRACE}:
                     fronts.append(Item(it.type, min(it.area, 8.0 if it.type is T.BALCONY else 14.0), it.req))
+            # A balcony that opens off a named room goes beside that room, in its
+            # stack, behind its suite - at the back wall, so it is open to the sky.
+            for it in list(fronts):
+                note = (getattr(it.req, "notes", "") or "").lower()
+                if "opens off the" not in note:
+                    continue
+                host_name = note.split("opens off the", 1)[1].strip(" .")
+                host_type = next((t for t in BEDS | {T.LIVING, T.FAMILY, T.STUDY, T.DINING, T.KITCHEN}
+                                  if t.value.replace("_", " ") == host_name), None)
+                for stack in (pub, priv):
+                    host = next((x for x in stack if x.type is host_type), None)
+                    if host is not None:
+                        fronts.remove(it)
+                        stack.insert(stack.index(host) + 1, Item(T.BALCONY, min(it.area, 7.0), it.req))
+                        break
             split.append((pub, priv, fronts))
 
         def want(items, lo, hi):
@@ -352,7 +367,8 @@ class SpinePlanner:
                 area = round((a1 - a0) * (b1 - b0), 2)
                 _rooms.append(Room(name=name or t.label, type=t, polygon=self._poly(a0, b0, a1, b1), level=_li,
                                    ceiling_height=3.0,
-                                   metadata={"_c": (a0, b0, a1, b1), "target_area": getattr(req, "target_area", None) or area,
+                                   metadata={"_c": (a0, b0, a1, b1), "notes": getattr(req, "notes", "") or "",
+                                             "target_area": getattr(req, "target_area", None) or area,
                                              "brief_area": getattr(req, "asked_area", None) or getattr(req, "target_area", None) or area,
                                              "planner": "spine"}))
             s0, s1 = spine
