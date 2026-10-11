@@ -1205,3 +1205,8 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 .editdrawer .revise { margin-top: 18px; }
 .editdrawer .edit { margin-bottom: 0; }
 .pane[data-view="drawings"] { position: relative; }
+
+/* one-tap starting briefs in the empty chat */
+.chat__starts { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 6px; }
+.chat__start { padding: 8px 14px; border: 1px solid var(--rule-2); border-radius: 999px; background: none; color: var(--cream-2); font: 500 13px var(--ui); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
+.chat__start:hover { border-color: var(--cream-3); color: var(--cream); background: rgba(var(--c-rgb), 0.06); }

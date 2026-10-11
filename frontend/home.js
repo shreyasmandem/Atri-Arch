@@ -47,6 +47,19 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
   const empty = el("div", "chat__empty");
   empty.append(el("h2", "chat__hello", "What are we building?"),
     el("p", "chat__lede", "Tell me about the plot and the home you have in mind - in any language, as much or as little as you like. I'll ask about whatever matters and leave the rest to sensible defaults."));
+  // Four whole briefs, one tap each: a place to start for anyone who has not got a plot in mind.
+  const starts = el("div", "chat__starts");
+  for (const [label, text] of [
+    ["30 x 40 ft, 3 bedrooms, parking", "30x40 ft plot, east facing, G+1, 3 bedrooms, car parking and a pooja room"],
+    ["40 x 60 ft family home", "40x60 ft plot, north road, G+1, 4 bedrooms, study, pooja room and parking, Vastu please"],
+    ["Gaming room and a laundry", "30x50 ft plot, south road, G+1, 3 bedrooms, a gaming room, a laundry and a balcony on the first floor"],
+    ["20 x 40 ft narrow plot", "20x40 ft plot, west road, G+2, 3 bedrooms and car parking"],
+  ]) {
+    const b = el("button", "chat__start", label); b.type = "button";
+    b.addEventListener("click", () => send(text));
+    starts.append(b);
+  }
+  empty.append(starts);
   empty.append(el("p", "chat__tip", "Already have a plan? Drop the drawing here - DXF, SVG or a photo - and the studio will review it."));
   log.append(empty);
 
