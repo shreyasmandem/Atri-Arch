@@ -39,6 +39,7 @@ PUBLIC = [T.LIVING, T.DRAWING, T.FAMILY, T.DINING, T.KITCHEN, T.PANTRY, T.UTILIT
 SKIP = {T.STAIRCASE, T.CORRIDOR, T.LOBBY, T.SHAFT, T.FOYER, T.WARDROBE}
 #: Rooms small enough to share a row with a neighbour.
 SMALL = {T.PUJA, T.UTILITY, T.LAUNDRY, T.POWDER, T.TOILET, T.STORE, T.PANTRY, T.BATHROOM}
+UNDER = {T.KITCHEN: 1.0, T.DINING: 1.0, T.PUJA: 1.5, T.LIVING: 0.4, T.DRAWING: 0.4}
 WETS = {T.UTILITY, T.LAUNDRY, T.POWDER, T.TOILET, T.BATHROOM}
 #: The smallest dimension a room can have and still be furnished.
 MIN_DIM = {T.MASTER_BEDROOM: 3.4, T.BEDROOM: 3.0, T.GUEST_BEDROOM: 3.0, T.CHILDREN_BEDROOM: 3.0,
@@ -447,8 +448,36 @@ class SpinePlanner:
                 if start > hc[1] + 0.05 and hc[3] - start > 1.0:
                     nc = (hc[0], start, hc[2], hc[3])
                     hall.polygon = self._poly(*nc); hall.metadata["_c"] = nc
+            if li == 0:
+                # What a bath upstairs must not sit over: a kitchen, a dining table, a shrine.
+                self.below = [(UNDER.get(r.type, 0.0), r.metadata["_c"]) for r in rooms
+                              if r.type in UNDER and r.metadata.get("_c")]
             out_levels.append(rooms)
+        self.below = []
         return out_levels
+
+    def _flip_suites(self, rs: list[Row], u0: float, u1: float, hi: float) -> None:
+        """Upstairs, put each suite's bath at whichever end of its bedroom sits
+        over less of the kitchen, dining and puja below."""
+        def bad(b0: float, b1: float) -> float:
+            return sum(w * max(0.0, min(u1, c[2]) - max(u0, c[0])) * max(0.0, min(b1, c[3]) - max(b0, c[1]))
+                       for w, c in self.below)
+        k, cursor = 0, hi
+        while k < len(rs):
+            pair = (k + 1 < len(rs) and rs[k].suite != rs[k + 1].suite
+                    and any(p.type in BEDS for p in (rs[k + 1] if rs[k].suite else rs[k]).parts))
+            if not pair:
+                cursor -= rs[k].depth; k += 1
+                continue
+            first, second = rs[k], rs[k + 1]
+            bath_first = first.suite
+            bd = (first if bath_first else second).depth
+            top = cursor - first.depth - second.depth
+            now = bad(cursor - bd, cursor) if bath_first else bad(top, top + bd)
+            alt = bad(top, top + bd) if bath_first else bad(cursor - bd, cursor)
+            if alt < now - 0.3:
+                rs[k], rs[k + 1] = second, first
+            cursor = top; k += 2
 
     def _fit_level(self, pub, priv, fronts, wp, wq, D, stair_len, v):
         """Make a floor's programme fit its two stacks, the way a designer would:
@@ -612,6 +641,8 @@ class SpinePlanner:
                 if 1e-3 < spare < 1.2 and growable:
                     max(growable, key=lambda r: r.depth).depth += spare
                     spare = 0.0
+            if self.level > 0 and getattr(self, "below", None):
+                self._flip_suites(rs, u0, u1, hi)
             cursor = hi
             lead = abs(hi - D) < 0.01          # rows from the front, for an L's reach
             for r in rs:

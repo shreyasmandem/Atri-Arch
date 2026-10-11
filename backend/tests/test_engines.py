@@ -93,8 +93,8 @@ def test_generated_schemes_are_distinct(plans):
 
 
 def test_generator_is_deterministic_under_a_seed(brief):
-    a = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99)).generate(1)
-    b = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99)).generate(1)
+    a = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99, time_budget=600)).generate(1)
+    b = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99, time_budget=600)).generate(1)
     assert [round(r.area, 3) for r in a[0].all_rooms] == [round(r.area, 3) for r in b[0].all_rooms]
 
 
