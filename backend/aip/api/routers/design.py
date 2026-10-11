@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 from typing import Any
 
@@ -21,6 +23,24 @@ from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefErro
 
 logger = get_logger("aip.api.design")
 router = APIRouter(prefix="/design", tags=["design"])
+
+# Drawing a scheme is CPU work. A small free instance that is asked for several
+# at once slows every one of them and can run out of memory, so runs take turns:
+# the ones waiting are told how many are ahead of them.
+_GATE: asyncio.Semaphore | None = None
+_WAITING = 0
+
+
+def _design_gate() -> asyncio.Semaphore:
+    global _GATE
+    if _GATE is None:
+        import os
+
+        from aip.core.config import get_settings
+
+        default = "1" if get_settings().public_demo else "3"
+        _GATE = asyncio.Semaphore(max(1, int(os.environ.get("MAX_CONCURRENT_DESIGNS", default))))
+    return _GATE
 
 
 def _pipeline_config(request: DesignRequest) -> PipelineConfig:
@@ -266,8 +286,30 @@ async def stream_design(
         def sse(event: str, data: dict[str, Any]) -> str:
             return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
+        global _WAITING
         yield sse("open", {"project_id": project_id})
+        gate = _design_gate()
+        held = False
         try:
+            if gate.locked():
+                _WAITING += 1
+                try:
+                    while True:
+                        try:
+                            await asyncio.wait_for(gate.acquire(), 2.5)
+                            held = True
+                            break
+                        except asyncio.TimeoutError:
+                            yield sse("progress", {
+                                "stage": "generate", "status": "running", "percent": 0.0,
+                                "message": f"Other designs are being drawn first - you are {_WAITING} in the queue.",
+                                "detail": {}, "elapsed_ms": 0.0,
+                            })
+                finally:
+                    _WAITING = max(0, _WAITING - 1)
+            else:
+                await gate.acquire()
+                held = True
             async for progress, result in pipeline.stream(brief):
                 if progress is not None:
                     yield sse("progress", json.loads(progress.model_dump_json()))
@@ -325,6 +367,9 @@ async def stream_design(
         except Exception as exc:  # noqa: BLE001
             log_event(logger, "design.stream_failed", level=40, error=str(exc))
             yield sse("error", {"message": f"{type(exc).__name__}: {exc}"})
+        finally:
+            if held:
+                gate.release()
         yield sse("done", {})
 
     return StreamingResponse(

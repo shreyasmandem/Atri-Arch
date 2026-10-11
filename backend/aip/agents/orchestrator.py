@@ -328,22 +328,29 @@ class DesignPipeline:
             queue.put_nowait(event)
 
         task = asyncio.create_task(self.run(brief, on_progress=on_progress, plans=plans))
-
-        while True:
-            drain = asyncio.create_task(queue.get())
-            done, _ = await asyncio.wait({drain, task}, return_when=asyncio.FIRST_COMPLETED)
-            if drain in done:
-                event = drain.result()
-                if event is not None:
-                    yield event, None
-                continue
-            drain.cancel()
-            while not queue.empty():
-                event = queue.get_nowait()
-                if event is not None:
-                    yield event, None
-            yield None, await task
-            return
+        drain: asyncio.Task | None = None
+        try:
+            while True:
+                drain = asyncio.create_task(queue.get())
+                done, _ = await asyncio.wait({drain, task}, return_when=asyncio.FIRST_COMPLETED)
+                if drain in done:
+                    event = drain.result()
+                    if event is not None:
+                        yield event, None
+                    continue
+                drain.cancel()
+                while not queue.empty():
+                    event = queue.get_nowait()
+                    if event is not None:
+                        yield event, None
+                yield None, await task
+                return
+        finally:
+            # A client that went away must not leave the run grinding on.
+            if drain is not None and not drain.done():
+                drain.cancel()
+            if not task.done():
+                task.cancel()
 
     # ------------------------------------------------------------- stages --
 
