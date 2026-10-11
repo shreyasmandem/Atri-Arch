@@ -896,7 +896,11 @@ class PartiPlanner:
         if any(d < -1e-6 for o in floors_d for d in o):
             return None
         Dh = max(sum(o) for o in floors_d)
-        if Dh > self.D + 1e-6 or Wh * Dh > self.cover * 1.02 + 1e-6:
+        if Dh > self.D + 1e-6:
+            self.why["deeper_than_plot"] = self.why.get("deeper_than_plot", 0) + 1
+            return None
+        if Wh * Dh > self.cover * 1.02 + 1e-6:
+            self.why["over_coverage"] = self.why.get("over_coverage", 0) + 1
             return None
         gap = self.D - Dh
         v_top = self.D - min(gap * 0.2, 3.0)       # the house at the front, a lawn on a deep plot

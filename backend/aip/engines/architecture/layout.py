@@ -124,6 +124,7 @@ def _min_clear_widths() -> dict[RoomType, float]:
         RoomType.PANTRY: 1.2, RoomType.LAUNDRY: 1.2,
         RoomType.FOYER: 1.5, RoomType.STAIRCASE: 2.0,
         RoomType.VERANDAH: 1.0, RoomType.BALCONY: 1.0, RoomType.TERRACE: 1.0,
+        RoomType.GARAGE: 2.4,
     })
     return widths
 

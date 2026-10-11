@@ -112,8 +112,11 @@ def test_generator_survives_an_over_constrained_brief(tight_brief):
 
 def test_the_gate_refuses_a_brief_the_plot_cannot_hold(tight_brief):
     """With the gate on, an impossible programme is a typed refusal, not a squeezed plan."""
+    from aip.domain.geometry import Vec2
     from aip.engines.architecture.layout import InfeasibleBriefError
 
+    # A plot that cannot hold even the four rooms, however they are relaxed.
+    tight_brief.site.boundary = [Vec2(0, 0), Vec2(4.0, 0), Vec2(4.0, 5.0), Vec2(0, 5.0)]
     with pytest.raises(InfeasibleBriefError) as caught:
         LayoutGenerator(tight_brief, GeneratorConfig(population=24, generations=20, seed=5))
     assert "buildable area" in str(caught.value)
