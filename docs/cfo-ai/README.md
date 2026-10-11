@@ -21,8 +21,8 @@ package mix, monthly P&L, and upside / downside scenarios:
 Scenarios: downside 5 % growth / 6 % conversion / 15 % full-set mix; upside 20 % / 10 % / 35 %.
 
 **What it caught that we had not priced in** - at 8 % conversion each paying customer has to fund the designs of
-12.5 free users, so AI/hosting is about INR 560 per buyer, not INR 40. That is why the public demo caps free
-generations and why the studio reuses its measured (non-model) reviews whenever a model is slow or rate-limited:
-the cost per design is the number the business lives on.
+12.5 free users, so AI/hosting is about INR 560 per buyer, not INR 40. That is why every design is metered against a per-firm monthly quota and why the studio falls back to its
+measured (non-model) reviews whenever a model is slow or rate-limited: the cost per design is the number the
+business lives on.
 
 Screenshot: `forecast-assumptions.jpg` (the assumptions table the model is driven by).
