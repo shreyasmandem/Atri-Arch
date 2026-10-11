@@ -430,7 +430,26 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
 
 
 async def revise(instruction: str, brief: dict[str, Any], *, use_llm: bool = True) -> dict[str, Any]:
-    """Change a finished design's brief from a sentence; say what changed."""
+    """Change a finished design's brief from a sentence; say what changed.
+
+    A model reads the instruction first - in any language, however phrased
+    ("the kitchen feels cramped", "puja room hatao", "move the master upstairs")
+    - and returns the brief fields it changes; the rules below are the
+    fallback when no model answers.
+    """
+    if use_llm:
+        turn = await llm_turn(
+            "The design already exists. The client now asks for this change - record only what changes "
+            "(use rooms[].scale for bigger/smaller, remove for rooms they no longer want, rooms[].level to move "
+            "a room to another floor): " + instruction, dict(brief), [])
+        if turn is not None:
+            upd = _clean(turn.get("updates") or {})
+            if upd:
+                after = merge(dict(brief), upd)
+                if upd.get("remove"):
+                    after["remove"] = sorted(set(brief.get("remove", [])) | set(upd["remove"]))
+                return {"brief": after, "changes": [str(turn.get("reply", "")).strip() or "Updated."],
+                        "understood": True}
     before = dict(brief)
     rules = parse(instruction)
     t = instruction.lower()
