@@ -35,7 +35,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 
 from aip.core.logging import get_logger, log_event
-from aip.domain.brief import ClientBrief, RoomRequirement
+from aip.domain.brief import NBC_MIN_AREAS, ClientBrief, RoomRequirement
 from aip.domain.geometry import (
     BoundingBox,
     Direction,
@@ -95,8 +95,8 @@ STAIR_AREA = STAIR_WIDTH * STAIR_LENGTH
 STAIR_WIDTH_COMPACT, STAIR_LENGTH_COMPACT = 2.0, 3.5
 #: A floor plate under this (m2) is a small plot.
 COMPACT_PLATE = 85.0
-_COMPACT_ROOMS = {RoomType.LIVING, RoomType.DINING, RoomType.KITCHEN, RoomType.FAMILY, RoomType.STUDY,
-                  RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM}
+# Bedrooms keep their statutory 9.5 m2: the code officer disqualifies a scheme under it.
+_COMPACT_ROOMS = {RoomType.LIVING, RoomType.DINING, RoomType.KITCHEN, RoomType.FAMILY, RoomType.STUDY}
 
 #: Marks the terrace the generator adds to fill a light upper floor, so the
 #: feasibility arithmetic can tell it from a room the client asked for.
@@ -2166,6 +2166,10 @@ class LayoutGenerator:
                 # live in and 4:1 for the rest; between the room's own cap and
                 # that it is only poor.
                 hard = None if limit is None else (3.5 if room.type.is_habitable else 4.0)
+                statutory = NBC_MIN_AREAS.get(room.type)
+                if statutory is not None and room.type.is_habitable and room.area < statutory - 0.05:
+                    # Under the code's own floor: the code officer would remove the scheme.
+                    problems.append(f"{tag}: {room.display_name()} is {room.area:.1f} m2, under the {statutory:.1f} m2 the code requires")
                 if short < floor - 0.05:
                     problems.append(f"{tag}: {room.display_name()} is {short:.1f} m wide")
                 elif hard is not None and aspect > hard:
@@ -2836,6 +2840,10 @@ class LayoutGenerator:
         original = {id(r): r.target_area for r in base}
         fixed: set[int] = set()            # rooms added below keep the size they were added at
         goal = footprint / 1.08
+        if self.brief.site.plot_area < 300.0:
+            # On a town plot the rooms are not stretched to the coverage the byelaw
+            # allows: a 135 m2 plot does not get a 48 m2 master bedroom. The rest is garden.
+            goal = min(goal, max(cur.target) * 1.45)
 
         def apply(f: float) -> _Assessment:
             self._stair_scale = 1.0              # a stair is a stair: never grown with the plot
