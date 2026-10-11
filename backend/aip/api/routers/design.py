@@ -31,6 +31,20 @@ _GATE: asyncio.Semaphore | None = None
 _WAITING = 0
 
 
+def _name_schemes(result) -> None:
+    """Scheme A, B, C in the order the studio lists them, and the winner under the
+    letter of the candidate it came from - so the tab, the rail and the drawing
+    title all say the same thing."""
+    letters = {p.id: chr(65 + i) for i, p in enumerate(result.plans)}
+    for p in result.plans:
+        p.name = f"Scheme {letters[p.id]}"
+    winner = result.winner
+    if winner is not None and winner.id not in letters:
+        origin = result.consensus.winner_id if result.consensus else ""
+        if origin in letters:
+            winner.name = f"Scheme {letters[origin]}"
+
+
 def _design_gate() -> asyncio.Semaphore:
     global _GATE
     if _GATE is None:
@@ -179,6 +193,7 @@ async def create_design(
         ) from exc
 
     store = get_plan_store()
+    _name_schemes(result)
     store.put_many(principal.firm.id, result.plans)
     if result.winner is not None:
         store.put(principal.firm.id, result.winner)
@@ -314,6 +329,7 @@ async def stream_design(
                 if progress is not None:
                     yield sse("progress", json.loads(progress.model_dump_json()))
                 elif result is not None:
+                    _name_schemes(result)
                     store = get_plan_store()
                     store.put_many(firm_id, result.plans)
                     if result.winner:
