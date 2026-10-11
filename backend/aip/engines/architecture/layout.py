@@ -1821,10 +1821,15 @@ class LayoutGenerator:
         except Exception as exc:  # noqa: BLE001 - the search is the fallback
             log_event(logger, "layout.spine_failed", error=str(exc))
             return
+        from aip.engines.architecture.rowhouse import RowHousePlanner, row_variants
+
+        row = RowHousePlanner(self._envelope, roads[0] if roads else None, len(levels) > 1, outer=self._site_box())
         made = 0
-        for v in variants():
+        # A narrow plot also gets the row house: no hall, a short passage between two bands.
+        tries = [(planner, v) for v in variants()] + ([(row, v) for v in row_variants()] if row.fits() else [])
+        for who, v in tries:
             try:
-                rooms = planner.plan(levels, v)
+                rooms = who.plan(levels, v)
             except Exception as exc:  # noqa: BLE001
                 log_event(logger, "layout.spine_failed", error=str(exc))
                 continue
@@ -1842,7 +1847,7 @@ class LayoutGenerator:
             finally:
                 self._envelope = envelope
                 self._open_outline = False
-            plan.metadata["planner"] = "spine"
+            plan.metadata["planner"] = "spine" if who is planner else "row"
             _doors_to_hosts(plan)
             self._judge(plan)
             # A toilet over the kitchen, the puja or the dining table is a
