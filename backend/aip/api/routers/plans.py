@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aip.api.schemas import CostRequest, VastuRequest
@@ -65,6 +68,44 @@ def _plan_from_payload(payload: dict[str, Any] | None, plan_id: str | None, prin
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=422, detail=f"Invalid plan payload: {exc}") from exc
     raise HTTPException(status_code=422, detail="Provide either 'plan_id' or 'plan'.")
+
+
+class EditRequest(BaseModel):
+    """Edits to a finished plan, applied in order. See `editor` for the kinds."""
+
+    ops: list[dict[str, Any]] = Field(default_factory=list, max_length=16)
+
+
+@router.get("/{plan_id}/rooms")
+async def plan_rooms(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """The rooms of a plan as the editor lists them."""
+    from aip.engines.architecture.editor import describe_rooms
+
+    plan = _load(plan_id, principal)
+    return {"plan_id": plan.id, "rooms": describe_rooms(plan),
+            "levels": [{"index": lv.index, "name": lv.display_name()} for lv in plan.levels]}
+
+
+@router.post("/{plan_id}/edit")
+async def edit_plan(
+    plan_id: str, payload: EditRequest, principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    """Change a finished plan in place - widen a room, swap two, rename, set a ceiling.
+
+    Returns a new plan id (the original is kept, so an edit can be undone) with
+    what was done and what was refused and why.
+    """
+    from aip.engines.architecture.editor import apply_edits, describe_rooms
+
+    plan = _load(plan_id, principal)
+    if not payload.ops:
+        raise HTTPException(status_code=422, detail="No edits were given.")
+    new, applied, refused = await asyncio.to_thread(apply_edits, plan, payload.ops)
+    if not applied:
+        raise HTTPException(status_code=422, detail=" ".join(refused) or "Nothing could be changed.")
+    get_plan_store().put(principal.firm.id, new)
+    return {"plan_id": new.id, "from_plan_id": plan.id, "applied": applied, "refused": refused,
+            "rooms": describe_rooms(new)}
 
 
 @router.get("/{plan_id}")

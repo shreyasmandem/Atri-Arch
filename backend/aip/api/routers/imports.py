@@ -147,8 +147,12 @@ async def review_stream(
     vastu: str = "balanced",
     budget: float = 0.0,
     include_generative_critics: bool = True,
+    keep: bool = False,
 ) -> StreamingResponse:
     """Run the committee, negotiation and rationale on an uploaded plan.
+
+    `keep` is for a plan the client edited by hand: it is scored as drawn and
+    neither refined nor renegotiated, so their edits are never undone.
 
     The same events the design stream emits, so the studio shows the same
     critics sitting on the same bench - only the generate stage reports that
@@ -177,7 +181,8 @@ async def review_stream(
     firm_id = principal.firm.id
     project_id = project.id
     pipeline = DesignPipeline(
-        PipelineConfig(candidate_count=1, include_generative_critics=include_generative_critics),
+        PipelineConfig(candidate_count=1, include_generative_critics=include_generative_critics,
+                       enable_refinement=not keep, enable_negotiation=not keep),
         ledger=ledger,
     )
     from aip.core.config import get_settings

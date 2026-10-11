@@ -8,9 +8,11 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { atelier, person, avatar } from "./atelier.js";
+import { mountEditor } from "./editor.js";
 
 const API = (() => {
-  const o = new URLSearchParams(location.search).get("api") || window.AIP_API;
+  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const o = new URLSearchParams(location.search).get("api") || (local ? "" : window.AIP_API);
   if (o) return o.replace(/\/$/, "");
   if (location.port === "8080" || location.port === "3000" || location.port === "5500") {
     return `http://${location.hostname || "127.0.0.1"}:8000/api/v1`;
@@ -451,6 +453,7 @@ async function initHome() {
   $("dl-svg").addEventListener("click", downloadSheet);
   $("dl-dxf").addEventListener("click", downloadDxf);
   initPlate();
+  initEditDrawer();
   document.querySelectorAll(".view-tab").forEach((t) =>
     t.addEventListener("click", () => showView(t.dataset.view)));
 
@@ -1053,7 +1056,19 @@ function renderRail() {
 
   const b = S.briefSent || {};
   const recap = $("brief-recap"); recap.innerHTML = "";
-  reviseBox(recap);
+  // The two ways to change a finished design live in the drawer beside the drawing.
+  const slot = $("edit-slot");
+  const anchor = document.createElement("span");
+  slot.replaceChildren(anchor);
+  if (!S.imported) {
+    mountEditor(anchor, {
+      api: API, getPlanId: () => S.activeId, selected: () => S.editSel, select: (id) => { S.editSel = id; },
+      canUndo: () => (S.editHistory || []).length > 0,
+      said: () => S.editSaid, setSaid: (t) => { S.editSaid = t; },
+      onEdited: adoptEdited, onUndo: undoEdit,
+    });
+  }
+  reviseBox(anchor);
   const rows = S.imported ? [
     ["Source", `${S.imported.file} (${S.imported.source})`],
     ["Rooms read", `${S.imported.rooms_kept} of ${S.imported.rooms_read} outlines`],
@@ -1073,6 +1088,90 @@ function renderRail() {
   for (const [k, v] of rows) {
     const d = el("div"); d.append(el("dt", null, k), el("dd", null, String(v ?? "—"))); recap.append(d);
   }
+}
+
+/* ── edits to the drawing ─────────────────────────────────────────── */
+
+// The edited plan takes the place of the one on screen, in its own tab, and is
+// re-scored in the background; the numbers beside it say so until they land.
+async function adoptEdited(newId) {
+  const oldId = S.activeId;
+  const snap = { planIds: [...S.planIds], winnerId: S.winnerId, candidateId: S.candidateId, activeId: oldId,
+    consensus: S.consensus ? structuredClone(S.consensus) : S.consensus, sheet: S.sheet };
+  (S.editHistory ||= []).push(snap);
+  S.plans[newId] = {};
+  const jf = (u, body) => fetch(u, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined)
+    .then((r) => r.json());
+  const [plan, vastu, cost] = await Promise.all([
+    jf(`${API}/plans/${newId}`),
+    jf(`${API}/plans/vastu`, { plan_id: newId, tradition_weight: 0.5 }),
+    jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0 }),
+  ]);
+  S.plans[newId] = { plan, vastu, cost };
+  // The winner on screen may be a refined copy of a candidate; its tab is the candidate's.
+  const slotId = S.planIds.includes(oldId) ? oldId : snap.candidateId;
+  const swap = (id) => (id === oldId || id === slotId ? newId : id);
+  S.planIds = S.planIds.map(swap);
+  if (!S.planIds.includes(newId)) S.planIds.push(newId);
+  S.winnerId = swap(S.winnerId);
+  S.candidateId = swap(S.candidateId);
+  S.activeId = newId;
+  if (S.consensus) {
+    S.consensus.ranking = (S.consensus.ranking || []).filter((r) => r.candidate_id !== oldId && r.candidate_id !== snap.candidateId);
+    if (S.consensus.winner_id === oldId) S.consensus.winner_id = newId;
+    S.consensus.disqualified = (S.consensus.disqualified || []).filter((d) => d.candidate_id !== oldId);
+  }
+  buildSchemeTabs();
+  renderAll();
+  showView(S.view);
+  rescoreEdited(newId);
+}
+
+async function rescoreEdited(id) {
+  const q = new URLSearchParams({ vastu: S.briefSent?.vastu || "balanced", budget: String(S.briefSent?.budget || 0),
+    include_generative_critics: "true", keep: "true" });
+  try {
+    const res = await fetch(`${API}/plans/${id}/review/stream?${q}`, { method: "POST" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const rd = res.body.getReader(); const dec = new TextDecoder(); let buf = "";
+    while (true) {
+      const { done, value } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) !== -1) {
+        const frame = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!/^event: result/m.test(frame)) continue;
+        const d = JSON.parse(frame.split("\n").find((l) => l.startsWith("data:")).slice(5));
+        if (S.activeId !== id) return;                       // the client moved on
+        const row = (d.consensus?.ranking || []).find((r) => r.candidate_id === d.selected_candidate_id) || d.consensus?.ranking?.[0];
+        if (row) {
+          S.consensus ||= { ranking: [], disqualified: [] };
+          S.consensus.ranking = [{ ...row, candidate_id: id }, ...(S.consensus.ranking || []).filter((r) => r.candidate_id !== id)];
+          S.consensus.winner_id = S.winnerId === id ? id : S.consensus.winner_id;
+        }
+        S.plans[id] = { plan: d.plan?.id ? d.plan : S.plans[id].plan, vastu: d.vastu || S.plans[id].vastu, cost: d.cost || S.plans[id].cost };
+        S.explanation = d.explanation || S.explanation;
+        S.recommendations = d.recommendations || S.recommendations;
+        S.voices = d.voices || S.voices;
+        S.candidateId = S.winnerId === id ? id : S.candidateId;
+        buildSchemeTabs();
+        renderAll();
+        return;
+      }
+    }
+  } catch (err) {
+    toast(`The edited plan could not be re-scored: ${err.message}`);
+  }
+}
+
+function undoEdit() {
+  const snap = (S.editHistory || []).pop();
+  if (!snap) return;
+  Object.assign(S, { planIds: snap.planIds, winnerId: snap.winnerId, candidateId: snap.candidateId,
+    activeId: snap.activeId, consensus: snap.consensus });
+  buildSchemeTabs();
+  renderAll();
+  showView(S.view);
 }
 
 function renderCritics() {
@@ -1293,6 +1392,16 @@ function zoomPlate(z, cx = 0, cy = 0, animate = false) {
 function resetPlate(animate = true) {
   Object.assign(plateView, { z: 1, x: 0, y: 0 });
   applyPlate(animate);
+}
+
+function initEditDrawer() {
+  const drawer = $("editdrawer"), open = $("edit-open");
+  if (!drawer || !open) return;
+  const set = (on) => { drawer.hidden = !on; open.setAttribute("aria-expanded", String(on)); };
+  open.addEventListener("click", () => set(drawer.hidden));
+  $("editdrawer-x")?.addEventListener("click", () => set(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) set(false); });
+  S.openEditor = () => set(true);
 }
 
 function initPlate() {

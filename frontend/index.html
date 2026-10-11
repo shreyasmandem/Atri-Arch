@@ -376,6 +376,7 @@
         <div class="sheet-groups" id="sheet-groups" role="tablist" aria-label="Drawing sets"></div>
         <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Sheets"></div>
         <div class="pane__tools">
+          <button type="button" class="btn btn--cream edit-open" id="edit-open" aria-expanded="false" aria-controls="editdrawer">Edit design</button>
           <button type="button" class="btn btn--quiet zoom-step" id="zoom-out" aria-label="Zoom out">−</button>
           <button type="button" class="btn btn--quiet" id="zoom-val" title="Fit to frame">100%</button>
           <button type="button" class="btn btn--quiet zoom-step" id="zoom-in" aria-label="Zoom in">+</button>
@@ -385,6 +386,10 @@
       </div>
       <div class="plate" id="plate"></div>
       <p class="plate__caption" id="plate-caption"></p>
+      <div class="editdrawer" id="editdrawer" role="dialog" aria-label="Edit this design" hidden>
+        <button type="button" class="editdrawer__x" id="editdrawer-x" aria-label="Close the editor">×</button>
+        <div id="edit-slot"></div>
+      </div>
     </div>
 
     <div class="pane" data-view="mandala" hidden>
