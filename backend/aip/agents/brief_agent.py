@@ -27,6 +27,7 @@ a list of what changed.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -36,6 +37,8 @@ from aip.core.logging import get_logger
 logger = get_logger("aip.agents.brief")
 
 FT = 0.3048
+#: Seconds a chat turn waits for a model before the rules reply on their own.
+CHAT_DEADLINE = 12.0
 
 ROOMS = {
     "master bedroom": "master_bedroom", "master": "master_bedroom", "guest room": "guest_bedroom",
@@ -57,6 +60,66 @@ ROOMS = {
 AMENITY = {"puja": "pooja", "garage": "parking", "study": "study", "utility": "utility", "balcony": "balcony",
            "dining": "dining", "courtyard": "courtyard", "verandah": "verandah", "gym": "gym",
            "home_theatre": "home theatre", "home_office": "study", "terrace": "terrace"}
+#: Rooms a house type list does not name, drawn as the room they behave like
+#: and called what the client called them: (behaves like, name, m2, opens off).
+NAMED = {
+    "gaming room": ("home_theatre", "Gaming Room", 13), "game room": ("home_theatre", "Game Room", 13),
+    "games room": ("home_theatre", "Games Room", 13), "gaming zone": ("home_theatre", "Gaming Room", 13),
+    "gaming": ("home_theatre", "Gaming Room", 13), "media room": ("home_theatre", "Media Room", 16),
+    "tv room": ("family", "TV Lounge", 14), "tv lounge": ("family", "TV Lounge", 14),
+    "play room": ("study", "Play Room", 12), "playroom": ("study", "Play Room", 12), "play area": ("study", "Play Room", 12),
+    "music room": ("study", "Music Room", 12), "art studio": ("study", "Art Studio", 12), "art room": ("study", "Art Room", 11),
+    "craft room": ("study", "Craft Room", 10), "hobby room": ("study", "Hobby Room", 11), "studio": ("study", "Studio", 12),
+    "spare room": ("study", "Spare Room", 10), "reading room": ("library", "Reading Room", 10),
+    "reading nook": ("library", "Reading Nook", 7), "yoga room": ("gym", "Yoga Room", 12), "yoga": ("gym", "Yoga Room", 12),
+    "meditation room": ("gym", "Meditation Room", 9), "meditation": ("gym", "Meditation Room", 9),
+    "home bar": ("family", "Bar Lounge", 14), "bar": ("family", "Bar Lounge", 14), "lounge": ("family", "Lounge", 15),
+    "party hall": ("family", "Party Hall", 22), "party room": ("family", "Party Room", 18),
+    "walk-in closet": ("store", "Walk-in Closet", 6, "master_bedroom"), "walk in closet": ("store", "Walk-in Closet", 6, "master_bedroom"),
+    "walk-in wardrobe": ("store", "Walk-in Wardrobe", 6, "master_bedroom"), "walk in wardrobe": ("store", "Walk-in Wardrobe", 6, "master_bedroom"),
+    "dressing room": ("store", "Dressing Room", 6, "master_bedroom"), "dressing area": ("store", "Dressing Room", 5, "master_bedroom"),
+    "wine cellar": ("store", "Wine Cellar", 6), "cellar": ("store", "Cellar", 8),
+    "workshop": ("utility", "Workshop", 9), "tool room": ("utility", "Tool Room", 6), "mud room": ("utility", "Mud Room", 5),
+    "mudroom": ("utility", "Mud Room", 5), "pet room": ("utility", "Pet Room", 6), "wet kitchen": ("utility", "Wet Kitchen", 6, "kitchen"),
+    "laundry room": ("laundry", "Laundry", 5), "laundry": ("laundry", "Laundry", 5),
+    "sauna": ("bathroom", "Sauna", 5), "steam room": ("bathroom", "Steam Room", 5), "spa": ("bathroom", "Spa Bath", 7),
+    "swimming pool": ("courtyard", "Pool", 30), "plunge pool": ("courtyard", "Plunge Pool", 14), "pool": ("courtyard", "Pool", 30),
+    "kitchen garden": ("courtyard", "Kitchen Garden", 10), "herb garden": ("courtyard", "Herb Garden", 8),
+    "deck": ("verandah", "Deck", 10), "patio": ("verandah", "Patio", 10),
+    "nursery": ("children_bedroom", "Nursery", 10), "clinic": ("home_office", "Clinic", 14),
+    "consulting room": ("home_office", "Consulting Room", 12), "conference room": ("home_office", "Conference Room", 16),
+    "office cabin": ("home_office", "Office Cabin", 10), "computer room": ("home_office", "Computer Room", 10),
+    "guest suite": ("guest_bedroom", "Guest Suite", 14),
+}
+#: Words before "room" that are not a room of their own ("more room", "bed room").
+_NOT_A_ROOM = {"living", "dining", "bed", "bath", "store", "drawing", "family", "guest", "kids", "master", "prayer",
+               "powder", "servant", "maid", "my", "a", "the", "one", "two", "three", "four", "extra", "big", "bigger",
+               "small", "smaller", "more", "separate", "each", "every", "own", "this", "that", "any", "other",
+               "another", "large", "open", "common", "wash", "utility", "puja", "pooja", "study", "enough", "some",
+               "no", "little", "plenty", "ample", "head", "leg", "elbow", "box", "storage", "children", "childrens",
+               "children's", "kid", "boys", "girls", "single", "double", "attached", "and", "with", "for", "new"}
+
+
+def named_room(text: str) -> dict[str, Any] | None:
+    """Any room the client names, as the room it behaves like plus its own name:
+    "a gaming room" is a media room called Gaming Room, "a pottery room" a study
+    called Pottery Room. None if the text names no such room."""
+    t = " " + text.lower().replace("_", " ") + " "
+    for phrase in sorted(NAMED, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(phrase)}s?\b", t):
+            kind, label, area, *host = NAMED[phrase]
+            r: dict[str, Any] = {"type": kind, "label": label, "area": area}
+            if host:
+                r["attach_to"] = host[0]
+            return r
+    for m in re.finditer(r"\b([a-z']+)\s+rooms?\b", t):
+        w = m.group(1)
+        if w in _NOT_A_ROOM or w in ROOMS or f"{w} room" in ROOMS or len(w) < 3:
+            continue
+        return {"type": "study", "label": f"{w.title()} Room", "area": 11}
+    return None
+
+
 DIRS = {"north east": "NE", "north-east": "NE", "northeast": "NE", "north west": "NW", "north-west": "NW",
         "northwest": "NW", "south east": "SE", "south-east": "SE", "southeast": "SE", "south west": "SW",
         "south-west": "SW", "southwest": "SW", "north": "N", "south": "S", "east": "E", "west": "W"}
@@ -77,6 +140,19 @@ QUESTIONS = {
     "bedrooms": ("How many bedrooms?", ["2", "3", "4", "5"]),
 }
 
+#: The rules' own reply, for when no model answers, in the languages clients
+#: most often write in. Options stay as the rules read them, so a tap parses.
+LOCAL = {
+    "Hinglish": {"noted": "Theek hai - {}.", "plot": "Plot ka size kya hai?",
+                 "road_direction": "Road plot ke kis taraf hai?", "levels": "Kitni manzil chahiye?",
+                 "bedrooms": "Kitne bedroom chahiye?",
+                 "done": "Sab kuch mil gaya. Taiyaar hon to Start designing dabaiye, ya kuch aur batana ho to bataiye."},
+    "Hindi": {"noted": "ठीक है - {}।", "plot": "प्लॉट का साइज़ क्या है?",
+              "road_direction": "सड़क प्लॉट के किस तरफ़ है?", "levels": "कितनी मंज़िलें चाहिए?",
+              "bedrooms": "कितने बेडरूम चाहिए?",
+              "done": "सब कुछ मिल गया। तैयार हों तो Start designing दबाइए, या कुछ और बताना हो तो बताइए।"},
+}
+
 
 def _num(s: str) -> float:
     return float(s.replace(",", ""))
@@ -88,6 +164,31 @@ FLOOR_RE = r"(ground|first|second|third|fourth|top|terrace|\d)"
 NEXT_TO = r"\b(?:next to|beside|adjacent to|adjoining|near|attached to|connected to|opening (?:in)?to|off|by) (?:the |a |my )?"
 VOCAB = sorted({w for k in ROOMS for w in k.split()} | set(FLOOR_WORDS) | {w.replace("-", " ") for k in DIRS for w in k.split()}
                | {"floor", "facing", "road", "plot", "bedrooms", "bathrooms", "garden", "vastu", "storey"})
+
+
+#: Hindi the rules can read, in Devanagari and in Latin letters, as the English
+#: they already parse ("दो मंज़िल" -> "two floor", "teen bedroom" -> "three bedroom").
+HINDI = {
+    "बेडरूम": "bedroom", "बेड रूम": "bedroom", "बाथरूम": "bathroom", "मंज़िलें": "floors", "मंजिलें": "floors",
+    "मंज़िल": "floor", "मंजिल": "floor", "एक": "one", "दो": "two", "तीन": "three", "चार": "four", "पांच": "five",
+    "पाँच": "five", "उत्तर": "north", "दक्षिण": "south", "पूर्व": "east", "पश्चिम": "west", "सड़क": "road",
+    "रोड": "road", "गैरेज": "garage", "पार्किंग": "parking", "रसोई": "kitchen", "किचन": "kitchen", "पूजा": "puja",
+    "बालकनी": "balcony", "फीट": "ft", "फुट": "ft", "मीटर": "m", "प्लॉट": "plot", "वास्तु": "vastu",
+    "बगीचा": "garden", "आंगन": "courtyard", "स्टडी": "study", "लिविंग": "living", "डाइनिंग": "dining",
+    "ड्राइंग रूम": "drawing room", "बच्चों": "children", "माता-पिता": "parents", "दादा-दादी": "grandparents",
+}
+HINGLISH = {"teen": "three", "char": "four", "paanch": "five", "panch": "five", "manzil": "floor",
+            "manzile": "floors", "manzilein": "floors", "uttar": "north", "dakshin": "south", "purab": "east",
+            "paschim": "west", "sadak": "road", "rasoi": "kitchen", "bagicha": "garden", "aangan": "courtyard"}
+
+
+def _hindi(t: str) -> str:
+    for w in sorted(HINDI, key=len, reverse=True):
+        t = t.replace(w, f" {HINDI[w]} ")
+    t = t.translate(str.maketrans("०१२३४५६७८९", "0123456789"))
+    t = re.sub(r"\b(" + "|".join(HINGLISH) + r")\b", lambda m: HINGLISH[m.group(1)], t)
+    # "do" is Hindi for two only before what is counted ("do manzil", "do bedroom").
+    return re.sub(r"\bdo(?=\s+(?:floors?|bedrooms?|bhk|bathrooms?|balcon))", "two", t)
 
 
 def _spell(t: str) -> str:
@@ -150,7 +251,7 @@ def _counted(t: str) -> tuple[list[dict[str, Any]], str]:
 
 def parse(text: str) -> dict[str, Any]:
     """What the rules can read with confidence. Keys only for what was said."""
-    t = " " + text.lower().replace("×", "x") + " "
+    t = " " + _hindi(text.lower().replace("×", "x")) + " "
     t = re.sub(r"\b(" + "|".join(WORDNUM) + r")\b(?=[\s-]*(?:bhk|bed|bath|floor|storey|stor|level|kids|children|elder|balcon))",
                lambda m: str(WORDNUM[m.group(1)]), t)
     t = _spell(t)
@@ -178,7 +279,8 @@ def parse(text: str) -> dict[str, Any]:
     elif re.search(r"\b(duplex|two[- ]storey|double[- ]storey)\b", t):
         out["levels"] = 2
     for word, d in DIRS.items():
-        if re.search(rf"\b{word}[- ]facing\b|\broad (?:on|to|at|along) the {word}\b|\b{word} road\b|\bfacing {word}\b", t):
+        if re.search(rf"\b{word}[- ]facing\b|\broad (?:on|to|at|along) the {word}\b|\b{word} road\b|\bfacing {word}\b"
+                     rf"|\b{word}\s+(?:mein|me|में|par|pe|ki taraf|side)\s+road\b|\broad\s+{word}\b", t):
             out["road_direction"] = d
             break
     if re.search(r"\bno vastu\b|\bignore vastu\b|\bdon'?t care about vastu\b", t):
@@ -210,15 +312,18 @@ def parse(text: str) -> dict[str, Any]:
     for clause in re.split(r"[.;,\n]| and | with | plus ", t):
         found = None
         host = None
+        named = named_room(clause)
+        if named:
+            found, host = named["type"], named.get("attach_to")
         # "a balcony off the master bedroom": the balcony is the room, the bedroom its host.
-        for extra in ("balcony", "terrace", "sit-out"):
+        for extra in (() if named else ("balcony", "terrace", "sit-out")):
             if re.search(rf"\b{extra}", clause):
                 found = ROOMS[extra]
                 rest = clause.replace(extra, " ")
                 host = next((ROOMS[w] for w in sorted(ROOMS, key=len, reverse=True)
                              if re.search(rf"\b{re.escape(w)}s?\b", rest) and ROOMS[w] not in {"balcony", "terrace"}), None)
                 break
-        if found is None:
+        if found is None and not named:
             # The room the clause is about is the first one it names
             # ("a utility next to the kitchen" is about the utility).
             hits = [(m.start(), -len(w), w) for w in ROOMS for m in [re.search(rf"\b{re.escape(w)}s?\b", clause)] if m]
@@ -226,7 +331,7 @@ def parse(text: str) -> dict[str, Any]:
                 found = ROOMS[min(hits)[2]]
         if not found or re.search(r"\b(no|without|don'?t want|skip)\b", clause):
             continue
-        if found in ("bedroom", "bathroom", "toilet") and not re.search(r"\b(ground|first|second|third|upstairs|downstairs|floor)\b", clause):
+        if found in ("bedroom", "bathroom", "toilet") and not named and not re.search(r"\b(ground|first|second|third|upstairs|downstairs|floor)\b", clause):
             continue                  # counts are read above; only pinned ones matter here
         level = None
         if m := re.search(r"\b(ground|first|second|third|top|upstairs|upper|downstairs)\b", clause):
@@ -234,6 +339,8 @@ def parse(text: str) -> dict[str, Any]:
         elif m := re.search(r"(?:floor|level)\s*(\d)", clause):
             level = int(m.group(1))
         req: dict[str, Any] = {"type": found}
+        if named:
+            req["label"], req["area"] = named["label"], named["area"]
         if level is not None:
             req["level"] = level
         if m := re.search(r"(\d+)\s*(?:balconies|balcony)", clause):
@@ -249,6 +356,10 @@ def parse(text: str) -> dict[str, Any]:
         elif m := re.search(NEXT_TO + r"(" + "|".join(re.escape(w) for w in sorted(ROOMS, key=len, reverse=True)) + r")s?\b", clause):
             if ROOMS[m.group(1)] != found:
                 req["attach_to"] = ROOMS[m.group(1)]
+        if named:
+            if not any(r.get("label") == req["label"] and r.get("level") == req.get("level") for r in rooms):
+                rooms.append(req)
+            continue            # its own room, not the amenity it behaves like
         if found in AMENITY:
             amen.add(AMENITY[found])
         if found in ALWAYS and level is None and "direction" not in req and "attach_to" not in req:
@@ -316,8 +427,9 @@ def merge(base: dict[str, Any], *layers: dict[str, Any]) -> dict[str, Any]:
             if v in (None, "", [], {}):
                 continue
             if k == "rooms":
-                seen = {(r.get("type"), r.get("level")) for r in out.get("rooms", [])}
-                out["rooms"] = list(out.get("rooms", [])) + [r for r in v if (r.get("type"), r.get("level")) not in seen]
+                key = lambda r: (r.get("type"), r.get("level"), r.get("label"))  # noqa: E731
+                seen = {key(r) for r in out.get("rooms", [])}
+                out["rooms"] = list(out.get("rooms", [])) + [r for r in v if key(r) not in seen]
             elif k in ("amenities", "styles"):
                 out[k] = sorted(set(out.get(k, [])) | set(v))
             elif k == "colours" and out.get("colours"):
@@ -352,9 +464,11 @@ def _summary(b: dict[str, Any]) -> str:
     if b.get("bedrooms"):
         bits.append(f"{b['bedrooms']} bedrooms")
     for r in b.get("rooms", []):
-        if r.get("level") is not None or r.get("direction"):
+        if r.get("label") and r.get("level") is None and not r.get("direction"):
+            bits.append(r["label"].lower())
+        elif r.get("level") is not None or r.get("direction"):
             where = (["ground floor", "first floor", "second floor", "third floor"][r["level"]] if isinstance(r.get("level"), int) and 0 <= r["level"] < 4 else "")
-            bits.append(f"{r['type'].replace('_', ' ')}{' on the ' + where if where else ''}{' in the ' + r['direction'] if r.get('direction') else ''}")
+            bits.append(f"{(r.get('label') or r['type'].replace('_', ' ')).lower()}{' on the ' + where if where else ''}{' in the ' + r['direction'] if r.get('direction') else ''}")
     if b.get("amenities"):
         bits.append(", ".join(a for a in b["amenities"]))
     return "; ".join(bits)
@@ -394,7 +508,7 @@ Return only JSON:
    "budget": rupees, "occupant_elders": int, "occupant_children": int,
    "amenities": [from pooja, parking, study, utility, balcony, courtyard, verandah, gym, home theatre, terrace, store, family lounge, library, servant room],
    "rooms": [{"type": a room type such as master_bedroom, bedroom, guest_bedroom, children_bedroom, kitchen, living, dining, puja, study, balcony, terrace, courtyard, verandah, garage, gym, home_theatre, store, utility, bathroom,
-              "level": 0 for ground, 1 for first..., "direction": compass quarter, "area": m2, "attach_to": room type it opens off, "scale": 1.3 for bigger / 0.8 for smaller}] - only rooms the client placed, sized or attached. A balcony off the master bedroom upstairs is {"type": "balcony", "level": 1, "attach_to": "master_bedroom"},
+              "level": 0 for ground, 1 for first..., "direction": compass quarter, "area": m2, "attach_to": room type it opens off, "scale": 1.3 for bigger / 0.8 for smaller}] - only rooms the client placed, sized or attached, and EVERY room the client names that is not in that list (gaming room, laundry, sauna, music room, pool, workshop, anything): give it "type" = the listed type it behaves most like and "label" = its name, e.g. {"type": "home_theatre", "label": "Gaming Room"}, {"type": "laundry", "label": "Laundry"}, {"type": "study", "label": "Music Room"}. Never turn one room into another the client did not ask for. A balcony off the master bedroom upstairs is {"type": "balcony", "level": 1, "attach_to": "master_bedroom"},
    "remove": [room types the client does not want],
    "colours": "the client's colour wishes in their words",
    "notes": "anything else they want that fits nowhere above"},
@@ -463,8 +577,11 @@ async def llm_turn(message: str, brief: dict[str, Any], history: list[dict[str, 
         msgs.append(user(message))
         router = LLMRouter()
         try:
-            resp = await router.complete(msgs, capability=Capability.STRUCTURED, temperature=0.3, max_tokens=900,
-                                         json_schema={"type": "object"}, latency_sensitive=True)
+            # A conversation cannot wait on a queue: past the deadline the rules answer.
+            resp = await asyncio.wait_for(
+                router.complete(msgs, capability=Capability.STRUCTURED, temperature=0.3, max_tokens=900,
+                                json_schema={"type": "object"}, latency_sensitive=True, interactive=True),
+                CHAT_DEADLINE)
         finally:
             await router.aclose()
         if getattr(resp, "provider", "") == "offline":
@@ -476,6 +593,31 @@ async def llm_turn(message: str, brief: dict[str, Any], history: list[dict[str, 
     except Exception as exc:  # noqa: BLE001 - the rules still answer
         logger.info("brief.chat_llm_unavailable %s", exc)
         return None
+
+
+def _resolve(r: dict[str, Any]) -> dict[str, Any]:
+    """A model's room as one the planner can draw: a type it does not know
+    ("gaming_room", "sauna") becomes the room it behaves like, keeping its name."""
+    from aip.domain.plan import RoomType
+
+    r = dict(r)
+    kind = str(r["type"]).lower().strip().replace(" ", "_")
+    label = str(r.get("label") or "").strip()[:40]
+    label = label.title() if label.islower() else label
+    if kind in {t.value for t in RoomType} and kind != "other":
+        r["type"] = kind
+        if label:
+            r["label"] = label
+        else:
+            r.pop("label", None)
+        return r
+    named = (named_room(label or kind) or named_room((label or kind.replace("_", " ")) + " room")
+             or {"type": "study", "label": (label or kind.replace("_", " ")).title(), "area": 11})
+    r["type"], r["label"] = named["type"], label or named["label"]
+    r.setdefault("area", named["area"])
+    if named.get("attach_to"):
+        r.setdefault("attach_to", named["attach_to"])
+    return r
 
 
 _TYPES = {"plot_width": float, "plot_depth": float, "levels": int, "bedrooms": int, "bathrooms": int,
@@ -502,7 +644,7 @@ def _clean(updates: dict[str, Any]) -> dict[str, Any]:
             elif k in ("amenities", "styles", "remove"):
                 v = [str(x).lower().replace("_", " ") if k == "amenities" else str(x).lower() for x in v]
             elif k == "rooms":
-                v = [r for r in v if isinstance(r, dict) and r.get("type")]
+                v = [_resolve(r) for r in v if isinstance(r, dict) and r.get("type")]
             out[k] = v
         except (TypeError, ValueError):
             continue
@@ -526,7 +668,9 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
         # room) are kept as read; the model adds the rooms the rules missed.
         if rules.get("rooms"):
             ruled = {r["type"] for r in rules["rooms"]}
-            model["rooms"] = [r for r in model.get("rooms", []) if r.get("type") not in ruled]
+            labels = {r["label"] for r in rules["rooms"] if r.get("label")}
+            model["rooms"] = [r for r in model.get("rooms", [])
+                              if (r["label"] not in labels if r.get("label") else r.get("type") not in ruled)]
         merged = merge(brief, {"rooms": rules.get("rooms", []), "amenities": rules.get("amenities", [])}, model)
         if model.get("remove"):
             merged["remove"] = sorted(set(brief.get("remove", [])) | set(model["remove"]))
@@ -548,12 +692,16 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
     if GO_AHEAD.search(message.lower()) and need:
         merged = apply_defaults(merged)
         need = []
-    questions = [{"key": k, "text": QUESTIONS[k][0], "options": QUESTIONS[k][1]} for k in need[:2]]
+    lang = reply_language(message)
+    say = next((v for k, v in LOCAL.items() if lang.startswith(k)), None)
+    questions = [{"key": k, "text": say[k] if say else QUESTIONS[k][0], "options": QUESTIONS[k][1]} for k in need[:2]]
     heard = _summary(rules) if rules else ""
     if questions:
-        reply = (f"Noted - {heard}. " if heard else "") + " ".join(q["text"] for q in questions)
+        noted = (say["noted"] if say else "Noted - {}.").format(heard) + " " if heard else ""
+        reply = noted + " ".join(q["text"] for q in questions)
     else:
-        reply = "That's everything I need. Press Start designing when you're ready, or tell me anything else you'd like."
+        reply = say["done"] if say else \
+            "That's everything I need. Press Start designing when you're ready, or tell me anything else you'd like."
     return {"brief": merged, "missing": need, "questions": questions, "ready": not need,
             "start": bool(START.search(message.lower())) and not need and bool(brief), "reply": reply, "by": "rules"}
 
@@ -622,7 +770,7 @@ def to_request(brief: dict[str, Any]) -> dict[str, Any]:
     extra = []
     for r in brief.get("rooms", []):
         x = {"type": r["type"]}
-        for k in ("count", "level", "direction", "area", "attached_bathroom", "scale", "attach_to"):
+        for k in ("count", "level", "direction", "area", "attached_bathroom", "scale", "attach_to", "label"):
             if r.get(k) not in (None, ""):
                 x[k] = r[k]
         extra.append(x)

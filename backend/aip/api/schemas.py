@@ -37,6 +37,7 @@ class RoomRequest(BaseModel):
     level: int | None = Field(default=None, ge=0, le=5, description="Pin to a floor (0 = ground)")
     scale: float | None = Field(default=None, gt=0.3, le=3.0, description="Grow or shrink a room the programme already has")
     attach_to: RoomType | None = Field(default=None, description="For a balcony: the room it opens off")
+    label: str | None = Field(default=None, max_length=40, description="The client's own name for it: Gaming Room, Sauna")
 
 
 class SimpleBriefRequest(BaseModel):
@@ -107,7 +108,9 @@ class SimpleBriefRequest(BaseModel):
             # request, takes this request's floor, size and side. A second
             # request of the same kind ("a kitchen on the second floor too")
             # adds a room rather than moving the first.
-            free = [r for r in reqs if r.type is x.type and id(r) not in claimed]
+            # A room with its own name (a gaming room drawn as a media room) is
+            # always a room of its own, never the programme's room of that kind.
+            free = [] if x.label else [r for r in reqs if r.type is x.type and id(r) not in claimed]
             if free:
                 r = free[0]
                 if r.count > 1:
@@ -136,11 +139,11 @@ class SimpleBriefRequest(BaseModel):
                                                 needs_external_wall=x.type.is_outdoor))
                     claimed.add(id(extra))
                 continue
-            if x.scale and not free and any(r.type is x.type for r in reqs):
+            if x.scale and not x.label and not free and any(r.type is x.type for r in reqs):
                 continue        # "make the kitchen bigger" twice: once is enough
             new = RoomRequirement(
                 type=x.type, count=x.count, preferred_area=x.area, preferred_direction=x.direction,
-                attached_bathroom=x.attached_bathroom, level=x.level, notes=notes,
+                attached_bathroom=x.attached_bathroom, level=x.level, notes=notes, label=x.label,
                 needs_external_wall=x.type.is_outdoor or x.type in {RoomType.STUDY, RoomType.GYM},
             )
             claimed.add(id(new))

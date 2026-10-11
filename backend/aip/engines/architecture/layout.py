@@ -1883,9 +1883,12 @@ class LayoutGenerator:
             have = {r.type for lv in plan.levels for r in lv.rooms}
             if RoomType.VERANDAH in have:
                 have.add(RoomType.BALCONY)          # on a single floor the balcony is the sit-out
+            names = {r.name for lv in plan.levels for r in lv.rooms}
             for req in self.requirements:
                 if "Requested" in (req.notes or "") and req.type not in have:
                     plan.metadata["guardrail"].append(f"the {req.type.label.lower()} the client asked for is missing")
+                elif req.label and req.label not in names:
+                    plan.metadata["guardrail"].append(f"the {req.label.lower()} the client asked for is missing")
             # A toilet over the kitchen, the puja or the dining table is a
             # plumbing leak waiting to happen and a Vastu fault: mark it so the
             # variant without it wins.
@@ -2633,7 +2636,7 @@ class LayoutGenerator:
         if not comfy(cur):
             def drop(kind: RoomType) -> None:
                 for pos in range(len(base) - 1, -1, -1):
-                    if base[pos].type is kind:
+                    if base[pos].type is kind and not base[pos].label:
                         base.pop(pos)
                         return
 
@@ -2651,13 +2654,13 @@ class LayoutGenerator:
             requested = {r.type for r in base if "Requested" in (r.notes or "")}
             order = [k for k in OPTIONAL_ORDER if k not in requested] + [k for k in OPTIONAL_ORDER if k in requested]
             for kind in order:
-                while not comfy(cur) and any(r.type is kind for r in base):
+                while not comfy(cur) and any(r.type is kind and not r.label for r in base):
                     drop(kind)
                     cur = self._assess(levels, base)
                     dropped.append(kind.value)
                     advisories.append(notes[kind])
             allowed = allowed_bathrooms(beds)
-            while not comfy(cur) and sum(1 for r in base if r.type is RoomType.BATHROOM) > allowed:
+            while not comfy(cur) and sum(1 for r in base if r.type is RoomType.BATHROOM and not r.label) > allowed:
                 drop(RoomType.BATHROOM)
                 cur = self._assess(levels, base)
                 dropped.append("bathroom")
@@ -4046,7 +4049,7 @@ class LayoutGenerator:
             req = self.requirements[genome.assignment[slot]]
             polygon = rectangle(Vec2(box.min_x, box.min_y), box.width, box.height)
             rooms.append(Room(
-                name=req.type.label,
+                name=req.label or req.type.label,
                 type=req.type,
                 polygon=polygon,
                 level=level_index,

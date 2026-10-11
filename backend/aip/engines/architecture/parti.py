@@ -248,7 +248,7 @@ class PartiPlanner:
                 continue
             if r.type is T.FOYER and self.W < 9.0 and "Requested" not in (r.notes or ""):
                 continue          # on a narrow plot the living room receives; the hall is not drawn
-            out.append(P(r.type, float(r.target_area), r))
+            out.append(P(r.type, float(r.target_area), r, name=getattr(r, "label", None)))
         return out
 
     @staticmethod

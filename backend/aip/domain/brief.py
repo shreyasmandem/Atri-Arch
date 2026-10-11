@@ -137,6 +137,7 @@ class RoomRequirement(BaseModel):
     )
     priority: float = Field(default=1.0, ge=0.0, le=2.0)
     notes: str = ""
+    label: str | None = Field(default=None, description="What the client calls it, when not the type's name")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -259,9 +260,9 @@ class ClientBrief(BaseModel):
         # kitchen pinned to the ground and another to the second floor stay two.
         merged: dict[tuple, RoomRequirement] = {}
         for req in value:
-            existing = merged.get((req.type, req.level))
+            existing = merged.get((req.type, req.level, req.label))
             if existing is None:
-                merged[(req.type, req.level)] = req
+                merged[(req.type, req.level, req.label)] = req
             else:
                 existing.count += req.count
         return list(merged.values())

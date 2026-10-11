@@ -481,6 +481,13 @@ class OfflineBackend:
 # ---------------------------------------------------------------------------
 
 
+#: Models a provider has told to come back later, shared by every router in the
+#: process: a 429 with "retry-after 600s" is not worth asking again next turn.
+_COOLING: dict[str, float] = {}
+#: The longest one model may take on an interactive call before the next is asked.
+INTERACTIVE_TIMEOUT = 8.0
+
+
 class LLMRouter:
     """Capability-addressed, failover-capable, strictly-free model access."""
 
@@ -527,12 +534,17 @@ class LLMRouter:
         min_context: int = 0,
         cache_key: str | None = None,
         latency_sensitive: bool = True,
+        interactive: bool = False,
     ) -> LLMResponse:
         """Run a completion against the best available free model.
 
         `latency_sensitive` defaults to True because most calls are one of many
         in a committee fan-out. Set it False for a single, user-visible call -
         the final rationale - where the best model is worth waiting for.
+
+        `interactive` is for a person waiting on the reply (the chat): one pass
+        down the list, no back-off sleeps, and no model given more than
+        `INTERACTIVE_TIMEOUT` seconds - the next one is tried instead.
         """
         if self.settings.llm_cache_enabled:
             key = cache_key or self._cache_key(messages, capability, temperature, json_schema)
@@ -559,7 +571,7 @@ class LLMRouter:
         # A committee fans out dozens of calls at once; a free tier says "not
         # this second", not "never". Wait and go round again before falling
         # back to the offline narrative.
-        rounds = [m for _ in range(4) for m in (models + [None])]
+        rounds = list(models) if interactive else [m for _ in range(4) for m in (models + [None])]
         wait = 1.5
         for model in rounds:
             if model is None:
@@ -569,6 +581,8 @@ class LLMRouter:
             if self.dead.is_dead(model):
                 continue
             if self.breaker.is_open(model.provider):
+                continue
+            if _COOLING.get(f"{model.provider}/{model.id}", 0.0) > time.monotonic():
                 continue
             if not await self.limiter.try_acquire(model):
                 errors.append(f"{model.provider}/{model.id}: locally rate-limited")
@@ -584,9 +598,8 @@ class LLMRouter:
                     temperature=temperature,
                     max_tokens=max_tokens,
                 ) as llm_rec:
-                    response = await self._call(
-                        model, messages, temperature, max_tokens, json_schema
-                    )
+                    call = self._call(model, messages, temperature, max_tokens, json_schema)
+                    response = await (asyncio.wait_for(call, INTERACTIVE_TIMEOUT) if interactive else call)
                     llm_rec["text"] = response.text
                     llm_rec["prompt_tokens"] = response.prompt_tokens
                     llm_rec["completion_tokens"] = response.completion_tokens
@@ -602,13 +615,17 @@ class LLMRouter:
                 # breaker and take the provider out for the whole committee.
                 if "429" not in str(exc) and "rate" not in str(exc).lower():
                     self.breaker.record_failure(model.provider)
+                elif m := re.search(r"retry-after ([\d.]+)s", str(exc)):
+                    if float(m.group(1)) > 15:
+                        _COOLING[f"{model.provider}/{model.id}"] = time.monotonic() + float(m.group(1))
                 detail = f"{model.provider}/{model.id}: {type(exc).__name__}: {exc}"
                 errors.append(detail)
                 self.ledger.record(
                     UsageRecord(model.provider, model.id, capability.value, 0, 0, 0.0, ok=False)
                 )
                 log_event(logger, "llm.attempt_failed", level=30, detail=detail)
-                await asyncio.sleep(min(0.4 * attempts, 2.0) + random.random() * 0.3)
+                if not interactive:
+                    await asyncio.sleep(min(0.4 * attempts, 2.0) + random.random() * 0.3)
                 continue
 
             self.breaker.record_success(model.provider)

@@ -409,7 +409,7 @@ class SpinePlanner:
                 if a1 - a0 < 0.9 or b1 - b0 < 0.9:
                     return
                 area = round((a1 - a0) * (b1 - b0), 2)
-                _rooms.append(Room(name=name or t.label, type=t, polygon=self._poly(a0, b0, a1, b1), level=_li,
+                _rooms.append(Room(name=name or getattr(req, "label", None) or t.label, type=t, polygon=self._poly(a0, b0, a1, b1), level=_li,
                                    ceiling_height=3.0,
                                    metadata={"_c": (a0, b0, a1, b1), "notes": getattr(req, "notes", "") or "",
                                              "target_area": getattr(req, "target_area", None) or area,
