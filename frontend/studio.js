@@ -361,6 +361,15 @@ async function initHome() {
   const { mountHome } = await import("./home.js");
   mountHome({
     host, api: API, setField, openManual,
+    // A drawing dropped into the chat goes through the plan-review route.
+    uploadFile: (f) => {
+      const inp = $("inp-file");
+      const dt = new DataTransfer(); dt.items.add(f);
+      inp.files = dt.files;
+      inp.dispatchEvent(new Event("change", { bubbles: true }));
+      setMode("upload");
+      $("upload").requestSubmit();
+    },
     start: (request, brief) => {
       S.chatBrief = brief;
       if (brief?.colours) S.palette = { ...(S.palette || {}), text: brief.colours };

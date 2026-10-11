@@ -9,10 +9,14 @@
    one click away for anyone who prefers fields.
    ═══════════════════════════════════════════════════════════════════════ */
 
-const SUGGEST = [
-  ["30 × 40 ft, east facing", "We have a 30x40 ft east-facing plot. Need a G+1 house with 3 bedrooms, a pooja room and car parking."],
-  ["A home for my parents", "Single-storey home for my parents, 2 bedrooms with attached baths, no stairs, a sit-out at the front, on a 40x60 north-facing plot."],
-  ["Courtyard house", "40 x 60 site in Bengaluru, road on the west. 4 BHK duplex built around a courtyard, strict Vastu, earthy colours."],
+// Typed into the empty composer, one after another, to show what can be said.
+const EXAMPLES = [
+  "30x40 east-facing plot, G+1, 3 bedrooms and a pooja room",
+  "A single-storey home for my parents with no stairs",
+  "40 x 60 site in Bengaluru, courtyard in the middle, strict Vastu",
+  "Mujhe 30x50 ka plot hai, 2 floor, 4 bedroom chahiye",
+  "Balcony off the master bedroom upstairs, earthy colours",
+  "Modern facade with lots of wood, parking for two cars",
 ];
 const ROAD = { N: "north", NE: "north-east", E: "east", SE: "south-east", S: "south", SW: "south-west", W: "west", NW: "north-west" };
 const FLOORS = (n) => (n === 1 ? "Ground only" : `G+${n - 1}`);
@@ -24,7 +28,7 @@ const el = (tag, cls, text) => {
   return n;
 };
 
-export function mountHome({ host, api: API, setField, start, openManual }) {
+export function mountHome({ host, api: API, setField, start, openManual, uploadFile }) {
   const state = { brief: {}, busy: false, history: [], ready: false, request: null };
   host.innerHTML = "";
 
@@ -34,37 +38,69 @@ export function mountHome({ host, api: API, setField, start, openManual }) {
   const actions = el("div", "brief-strip__act");
   const sheet = el("button", "link-btn", "Fill in a form"); sheet.type = "button";
   sheet.addEventListener("click", () => openManual("brief"));
-  const upload = el("button", "link-btn", "Review my plan"); upload.type = "button";
-  upload.addEventListener("click", () => openManual("upload"));
   const go = el("button", "btn btn--cream btn--start", "Start designing"); go.type = "button"; go.disabled = true;
   go.addEventListener("click", () => state.ready && start(state.request, state.brief));
-  actions.append(upload, sheet, go);
+  actions.append(sheet, go);
   strip.append(facts, actions);
 
   const log = el("div", "chat__log"); log.setAttribute("role", "log"); log.setAttribute("aria-live", "polite");
   const empty = el("div", "chat__empty");
   empty.append(el("h2", "chat__hello", "What are we building?"),
     el("p", "chat__lede", "Tell me about the plot and the home you have in mind - in any language, as much or as little as you like. I'll ask about whatever matters and leave the rest to sensible defaults."));
-  const cards = el("div", "suggest");
-  for (const [title, text] of SUGGEST) {
-    const c = el("button", "suggest__card"); c.type = "button";
-    c.append(el("b", null, title), el("span", null, text));
-    c.addEventListener("click", () => send(text));
-    cards.append(c);
-  }
-  empty.append(cards);
+  empty.append(el("p", "chat__tip", "Already have a plan? Drop the drawing here - DXF, SVG or a photo - and the studio will review it."));
   log.append(empty);
 
   const form = el("form", "composer");
   const input = el("textarea", "composer__in"); input.rows = 1; input.maxLength = 4000;
-  input.placeholder = "Message Atri…";
+  input.placeholder = "";
   input.setAttribute("aria-label", "Message Atri");
   const sendBtn = el("button", "composer__send"); sendBtn.type = "submit"; sendBtn.disabled = true;
   sendBtn.setAttribute("aria-label", "Send");
   sendBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  form.append(input, sendBtn);
-  const hint = el("p", "composer__hint", "Enter to send · Shift + Enter for a new line");
-  host.append(strip, log, form, hint);
+  // Attach a drawing: the plan-review route, from inside the conversation.
+  const attach = el("button", "composer__attach"); attach.type = "button";
+  attach.setAttribute("aria-label", "Attach a plan to review"); attach.title = "Attach a plan (DXF, SVG, image)";
+  attach.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5l-8.6 8.6a5 5 0 01-7.1-7.1l8.6-8.6a3.3 3.3 0 014.7 4.7l-8.6 8.6a1.7 1.7 0 01-2.4-2.4l7.9-7.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const file = el("input"); file.type = "file"; file.hidden = true;
+  file.accept = ".dxf,.svg,.png,.jpg,.jpeg,.webp,.json,image/*";
+  attach.addEventListener("click", () => file.click());
+  file.addEventListener("change", () => file.files[0] && takeFile(file.files[0]));
+  const ghost = el("span", "composer__ghost");          // the typed-out examples
+  const field = el("div", "composer__field"); field.append(input, ghost);
+  form.append(attach, field, sendBtn, file);
+  host.append(strip, log, form);
+
+  function takeFile(f) {
+    bubble("you", `📎 ${f.name}`);
+    bubble("atri", "Reading your drawing - the studio will review it as drawn.");
+    setTimeout(() => uploadFile(f), 500);
+  }
+  // Drop a drawing anywhere on the conversation.
+  for (const ev of ["dragenter", "dragover"]) host.addEventListener(ev, (e) => { e.preventDefault(); host.classList.add("is-drop"); });
+  for (const ev of ["dragleave", "drop"]) host.addEventListener(ev, (e) => { e.preventDefault(); if (ev === "drop" || e.target === host) host.classList.remove("is-drop"); });
+  host.addEventListener("drop", (e) => { const f = e.dataTransfer?.files?.[0]; if (f) takeFile(f); });
+
+  // The placeholder writes an example, erases it quickly and writes the next,
+  // until the client starts typing.
+  (function typewriter() {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { ghost.textContent = EXAMPLES[0]; return; }
+    let k = 0, i = 0, dir = 1;
+    const tick = () => {
+      ghost.hidden = !!input.value || document.activeElement === input && !!input.value;
+      const ex = EXAMPLES[k % EXAMPLES.length];
+      if (dir > 0) {
+        i++;
+        ghost.textContent = ex.slice(0, i);
+        if (i >= ex.length) { dir = -1; return setTimeout(tick, 1800); }
+        return setTimeout(tick, 38 + Math.random() * 40);
+      }
+      i -= 2;
+      ghost.textContent = ex.slice(0, Math.max(0, i));
+      if (i <= 0) { dir = 1; i = 0; k++; return setTimeout(tick, 350); }
+      setTimeout(tick, 14);
+    };
+    tick();
+  })();
 
   const scroll = () => { log.scrollTop = log.scrollHeight; };
 
@@ -169,6 +205,7 @@ export function mountHome({ host, api: API, setField, start, openManual }) {
   });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   input.addEventListener("input", () => {
+    ghost.hidden = !!input.value;
     input.style.height = "auto"; input.style.height = `${Math.min(180, input.scrollHeight)}px`;
     sendBtn.disabled = state.busy || !input.value.trim();
   });

@@ -1027,3 +1027,19 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 .composer__send:disabled { opacity: .25; cursor: default; }
 .composer__hint { margin: 0; text-align: center; font-size: 11px; color: var(--cream-3); }
 @media (max-width: 900px) { .suggest { grid-template-columns: minmax(0, 1fr); } .brief-strip { flex-wrap: wrap; } }
+
+/* ═══ HOME v3: sharper, quieter ════════════════════════════════════════ */
+.btn--start, .composer, .quick__opt, .fact, .msg--you, .composer__send, .composer__attach, .link-btn { border-radius: 4px; }
+.msg--you { border-radius: 6px 6px 2px 6px; }
+.msg__av { border-radius: 4px; }
+.composer { padding: 6px; gap: 6px; align-items: center; }
+.composer__field { position: relative; flex: 1; min-width: 0; display: grid; }
+.composer__field .composer__in { grid-area: 1 / 1; padding: 10px 4px; }
+.composer__ghost { grid-area: 1 / 1; align-self: center; padding: 0 4px; pointer-events: none; font: 400 15px/1.5 var(--ui); color: var(--cream-3); white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.composer__ghost::after { content: ""; display: inline-block; width: 1px; height: 1.05em; margin-left: 1px; vertical-align: -2px; background: var(--cream-3); animation: blink .9s step-end infinite; }
+.composer__attach { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border: 0; background: none; color: var(--cream-3); cursor: pointer; transition: color .15s, background .15s; }
+.composer__attach:hover { color: var(--cream); background: rgba(var(--c-rgb), 0.06); }
+.composer__attach svg { width: 19px; height: 19px; }
+.chat__tip { margin: 6px 0 0; font-size: 12.5px; color: var(--cream-3); }
+.chat.is-drop .chat__log { outline: 1px dashed rgba(var(--c-rgb), 0.45); outline-offset: -6px; background: rgba(var(--c-rgb), 0.025); }
+.fact { border-radius: 3px; }
