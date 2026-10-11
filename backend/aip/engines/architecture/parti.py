@@ -212,7 +212,7 @@ class PartiPlanner:
         self.D = envelope.height if across_x else envelope.width
         self.stair_on = stair_on
         # A small plot takes a tighter dog-leg: two 0.9 m flights, 3.5 m long.
-        self.min_scale = 0.9 if compact_stair else 1.0
+        self.min_scale = 0.86 if compact_stair else 1.0
         self.st_w, self.st_run, self.st_rot_w, self.st_rot_d = (2.0, 3.5, 3.5, 2.0) if compact_stair else (STAIR_W, STAIR_RUN, STAIR_ROT_W, STAIR_ROT_D)
         self.cover = cover or self.W * self.D
         self.north = north_angle
@@ -612,7 +612,7 @@ class PartiPlanner:
             hall = next((c for c in core if c.slots[0][0].type in (T.CORRIDOR, T.LOBBY)
                          or c.slots[-1][0].type in (T.CORRIDOR, T.LOBBY)), None)
             if hall is None:
-                hall = Cell([[P(T.CORRIDOR if ground else T.LOBBY, 0.0, name="Passage" if ground else "Lobby")]])
+                hall = Cell([[P(T.CORRIDOR if ground else T.LOBBY, 0.0, name="Passage" if ground else "Lobby", scale=self.min_scale)]])
             keep = [x for x in hall.slots if x[0].type in (T.CORRIDOR, T.LOBBY)][:1]
             for x in hall.slots:
                 if x not in keep:
@@ -1520,7 +1520,7 @@ class PartiPlanner:
 
         def evaluate(genes: dict, scale: float) -> tuple[float, dict]:
             G = self.genes = Genes(self.rng, genes)
-            g = {"stair_end": "L" if G.r("stair_end") < 0.5 else "R", "stair_rot": G.r("stair_rot") < 0.2,
+            g = {"stair_end": "L" if G.r("stair_end") < 0.5 else "R", "stair_rot": G.r("stair_rot") < (0.5 if self.cover < 85.0 else 0.2),
                  "lobby_w": G.choice("lobby_w", [1.5, 1.8, 2.1]), "ter_end": "L" if G.r("ter_end") < 0.5 else "R",
                  "u_shift": 0.5, "bed_down": G.r("bed_down"),
                  "thin": G.r("thin") < (0.55 if self.D < 12.5 else 0.15),
