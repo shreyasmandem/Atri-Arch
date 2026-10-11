@@ -50,6 +50,8 @@
 <section class="compose" id="compose" aria-label="The brief">
 
   <div class="compose__title">
+    <div class="hero3d" id="hero3d" aria-hidden="true"></div>
+    <p class="hero3d__cap"><i></i><span>A house the studio designed, built live</span><b id="hero-cap"></b></p>
     <h1 class="headline" id="headline">
       <span class="headline__soft">A home on</span>
       <span class="headline__hard" id="hl-plot">12 × 18 m</span>
@@ -327,6 +329,33 @@
       <li class="step-card"><span class="step-card__n">03</span><b>Thirteen specialists argue</b><p>Code, structure, daylight, airflow, Vastu, cost, privacy and more review every scheme; the committee picks one and says why.</p><i class="viz viz--talk" aria-hidden="true"><em></em><em></em><em></em></i></li>
       <li class="step-card"><span class="step-card__n">04</span><b>Explore, then change it</b><p>Walk the 3D model in seven facade styles and twelve palettes, watch the breeze move through each floor, see Vastu on the plan - then revise in a sentence.</p><i class="viz viz--air" aria-hidden="true"><em></em><em></em><em></em></i></li>
     </ol>
+
+    <div class="show">
+      <div class="show__head">
+        <h2 class="explain__h">Everything a client meeting needs</h2>
+        <p class="show__lede">Real output for the house above, not mock-ups: measured drawings, a solved breeze, a model you can walk, a priced bill of quantities.</p>
+      </div>
+      <div class="show__grid">
+        <figure class="tile tile--plan"><img src="demo/plan.svg" alt="Ground floor plan of the demo house" loading="lazy"><figcaption><b>Drawings</b><span>Plans, elevations, sections, roof and site - DXF for your CAD.</span></figcaption></figure>
+        <figure class="tile tile--air"><div class="tile__live" id="show-air"></div><figcaption><b>Airflow</b><span>The breeze solved through every floor; stuffy rooms flagged.</span></figcaption></figure>
+        <figure class="tile tile--facts"><div class="facts">
+          <div><b>13</b><span>specialists review every scheme</span></div>
+          <div><b>3</b><span>schemes, ranked by consensus</span></div>
+          <div><b>84+</b><span>exterior and colour combinations per plan</span></div>
+          <div><b>₹</b><span>itemised cost, phased cash-flow</span></div>
+        </div><figcaption><b>Decided in the open</b><span>Every score explained; every conflict negotiated, not averaged.</span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="board">
+      <h2 class="explain__h">The committee</h2>
+      <ol class="board__grid" id="board-grid"></ol>
+    </div>
+
+    <div class="cta">
+      <h2 class="cta__h">Start with a sentence.</h2>
+      <button type="button" class="btn btn--cream cta__go" id="cta-go">Describe your home</button>
+    </div>
   </div>
 </section>
 

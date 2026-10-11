@@ -1043,3 +1043,70 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 .chat__tip { margin: 6px 0 0; font-size: 12.5px; color: var(--cream-3); }
 .chat.is-drop .chat__log { outline: 1px dashed rgba(var(--c-rgb), 0.45); outline-offset: -6px; background: rgba(var(--c-rgb), 0.025); }
 .fact { border-radius: 3px; }
+
+/* ═══ HOMEPAGE: hero, showcase, committee ════════════════════════════════ */
+.compose > .compose__title { position: relative; isolation: isolate; overflow: hidden; }
+.hero3d { position: absolute; inset: 0; z-index: -1; }
+.hero3d canvas { width: 100% !important; height: 100% !important; display: block; }
+.hero3d::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(11,10,9,0.92) 0%, rgba(11,10,9,0.35) 34%, rgba(11,10,9,0) 55%, rgba(11,10,9,0.55) 100%); }
+.compose__title .headline { position: relative; z-index: 1; text-shadow: 0 2px 24px rgba(0, 0, 0, 0.5); }
+.hero3d__cap { position: absolute; left: var(--gut); bottom: 22px; z-index: 2; display: flex; align-items: center; gap: 10px; margin: 0; font-size: 11px; color: var(--cream-3); letter-spacing: 0.06em; }
+.hero3d__cap i { width: 7px; height: 7px; border-radius: 50%; background: #c4553f; box-shadow: 0 0 0 0 rgba(196, 85, 63, 0.6); animation: live 2s ease-out infinite; }
+.hero3d__cap b { padding-left: 10px; border-left: 1px solid var(--rule-2); font-weight: 500; color: var(--cream-2); }
+@keyframes live { 70% { box-shadow: 0 0 0 8px rgba(196, 85, 63, 0); } 100% { box-shadow: 0 0 0 0 rgba(196, 85, 63, 0); } }
+/* The plot drawing becomes a small live card over the model. */
+.compose__title .plotfig { position: absolute; right: var(--gut); bottom: 18px; z-index: 2; width: 210px; padding: 12px; background: rgba(11, 10, 9, 0.78); border: 1px solid var(--rule-2); backdrop-filter: blur(6px); }
+.compose__title .plotfig svg { min-height: 0; height: 170px; max-height: none; }
+.compose__title .plotfig figcaption { font-size: 10px; letter-spacing: .06em; }
+
+.explain { display: grid; gap: clamp(72px, 12vh, 140px); }
+.explain__h { margin-bottom: 24px; }
+.step-card, .tile, .member { border-radius: 2px; }
+
+.show__head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; gap: 24px; margin-bottom: 28px; }
+.show__head .explain__h { margin: 0; }
+.show__lede { margin: 0; max-width: 46ch; font-size: 15px; line-height: 1.6; color: var(--cream-2); }
+.show__grid { display: grid; grid-template-columns: 1.15fr 1fr 0.85fr; gap: 2px; }
+.tile { position: relative; margin: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 420px; background: #0e0d0c; border: 1px solid var(--rule); overflow: hidden; }
+.tile img { width: 100%; height: 100%; object-fit: contain; padding: 18px; transition: transform .8s var(--ease); }
+.tile:hover img { transform: scale(1.03); }
+.tile__live { position: relative; min-height: 300px; }
+.tile figcaption { display: grid; gap: 4px; padding: 16px 18px 18px; border-top: 1px solid var(--rule); }
+.tile figcaption b { font: 600 16px var(--display); }
+.tile figcaption span { font-size: 13px; color: var(--cream-3); line-height: 1.5; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; align-content: center; gap: 28px 18px; padding: 28px 22px; }
+.facts b { display: block; font: 500 clamp(36px, 4vw, 56px)/1 var(--display); letter-spacing: -0.02em; color: var(--cream); }
+.facts span { display: block; margin-top: 6px; font-size: 12.5px; line-height: 1.45; color: var(--cream-3); }
+
+.board__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px; }
+.member { display: grid; grid-template-columns: 28px 1fr; grid-template-rows: auto auto; column-gap: 12px; row-gap: 2px; align-items: center; padding: 16px; background: rgba(var(--c-rgb), 0.025); border: 1px solid var(--rule); transition: background .25s var(--ease), border-color .25s var(--ease); }
+.member:hover { background: rgba(var(--c-rgb), 0.06); border-color: var(--rule-2); }
+.member__gl { grid-row: 1 / span 2; width: 22px; height: 22px; fill: none; stroke: var(--ochre); stroke-width: 1.2; }
+.member[data-pig="hingula"] .member__gl { stroke: #c4553f; }
+.member[data-pig="indigo"] .member__gl { stroke: #a39c92; }
+.member[data-pig="orpiment"] .member__gl { stroke: #e8dcc6; }
+.member b { font: 600 13.5px var(--ui); color: var(--cream); }
+.member span { font-size: 12px; color: var(--cream-3); }
+
+.cta { display: grid; justify-items: start; gap: 22px; padding-bottom: 40px; }
+.cta__h { margin: 0; font: 500 clamp(44px, 7vw, 110px)/0.92 var(--display); letter-spacing: -0.03em; text-transform: uppercase; }
+.cta__go { height: 48px; padding: 0 24px; border-radius: 2px; }
+
+.step-card { border: 1px solid var(--rule); }
+
+@media (max-width: 1100px) { .show__grid { grid-template-columns: 1fr 1fr; } .tile--facts { grid-column: 1 / -1; min-height: 0; } }
+@media (max-width: 900px) {
+  .compose > .compose__title { min-height: 80svh; }
+  .show__head { grid-template-columns: 1fr; }
+  .show__grid { grid-template-columns: 1fr; }
+  .compose__title .plotfig { display: none; }
+}
+.compose__title .plotfig { top: calc(var(--bar-h) + 24px); bottom: auto; width: 150px; padding: 10px; }
+.compose__title .plotfig svg { height: 120px; }
+.compose__title .plotfig figcaption { display: none; }
+.hero3d__cap { right: var(--gut); white-space: nowrap; overflow: hidden; }
+.hero3d__cap b { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1200px) { .hero3d__cap span { display: none; } .hero3d__cap b { border: 0; padding: 0; } }
+.compose__title .headline { max-width: calc(100% - 170px); }
+@media (max-width: 900px) { .brief-strip__facts { flex-basis: 100%; } .brief-strip__act { margin-left: auto; } }

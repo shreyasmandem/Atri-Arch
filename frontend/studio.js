@@ -359,6 +359,25 @@ async function initHome() {
   if (!host) return;
   $("sheet-close")?.addEventListener("click", () => { delete document.body.dataset.manual; });
   const { mountHome } = await import("./home.js");
+  // The live hero, the airflow tile and the committee: the page's own proof.
+  import("./home-hero.js").then(({ mountHero, mountAirShowcase }) => {
+    mountHero($("hero3d"), $("hero-cap"));
+    const air = $("show-air");
+    if (air) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { mountAirShowcase(air); o.disconnect(); } }).observe(air);
+  });
+  const grid = $("board-grid");
+  if (grid) {
+    const { PEOPLE, glyph } = await import("./atelier.js");
+    for (const p of Object.values(PEOPLE)) {
+      const li = el("li", "member"); li.dataset.pig = p.pig;
+      li.append(glyph(p.glyph, "member__gl"), el("b", null, p.name), el("span", null, p.role));
+      grid.append(li);
+    }
+  }
+  $("cta-go")?.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    setTimeout(() => document.querySelector(".composer__in")?.focus(), 500);
+  });
   mountHome({
     host, api: API, setField, openManual,
     // A drawing dropped into the chat goes through the plan-review route.
