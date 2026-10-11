@@ -4404,7 +4404,7 @@ class LayoutGenerator:
                     graph[b.id].add(a.id)
         return graph
 
-    def _legally_reachable(self, level: Level, adjacency: dict[str, set[str]]) -> set[str]:
+    def _legally_reachable(self, level: Level, adjacency: dict[str, set[str]], plan: FloorPlan | None = None) -> set[str]:
         """Rooms a legal door tree can reach from the entrance.
 
         The same walk the door placer performs, without cutting anything: grow
@@ -4416,7 +4416,7 @@ class LayoutGenerator:
         rooms = {r.id: r for r in level.rooms}
         if not rooms:
             return set()
-        root = self._entry_room(level).id
+        root = self._entry_room(level, plan).id
         seen = {root} | {r.id for r in level.rooms if r.type is RoomType.GARAGE}   # a porch opens to the drive
         frontier = [root]
         while frontier:
@@ -4456,7 +4456,7 @@ class LayoutGenerator:
         by_id = {r.id: r for r in rooms}
 
         def unreachable() -> list[str]:
-            reached = self._legally_reachable(level, adjacency)
+            reached = self._legally_reachable(level, adjacency, plan)
             return [r.id for r in rooms if r.id not in reached]
 
         from aip.engines.architecture.programme import is_through
@@ -4515,7 +4515,7 @@ class LayoutGenerator:
             return
         adjacency = {k: v - porch for k, v in self._door_adjacency(plan, level).items() if k not in porch}
 
-        root = self._entry_room(level).id
+        root = self._entry_room(level, plan).id
 
         # Prim-style traversal preferring links through circulation space, which
         # yields a plan where rooms open off a hall rather than through each other.
@@ -4768,22 +4768,42 @@ class LayoutGenerator:
             self._place_main_door(plan, level, rooms[root])
 
     @staticmethod
-    def _entry_room(level: Level) -> Room:
+    def _entry_room(level: Level, plan: FloorPlan | None = None) -> Room:
         """Where a person arrives on this floor: the door tree grows from here.
 
-        Ground: the foyer, else the living room. Upstairs: the staircase, else
-        the landing. Rooting the upper floor at its largest room - the master
-        bedroom - is how every other bedroom came to be entered through it.
+        Ground: the foyer, else the living room - but a room with a wall on the
+        road, when the foyer has none: the front door faces the street. Upstairs:
+        the staircase, else the landing. Rooting the upper floor at its largest
+        room - the master bedroom - is how every other bedroom came to be
+        entered through it.
         """
         order = (
             (RoomType.STAIRCASE, RoomType.LOBBY, RoomType.CORRIDOR)
             if level.index > 0 else
             (RoomType.FOYER, RoomType.LOBBY, RoomType.VERANDAH, RoomType.LIVING)
         )
-        for kind in order:
-            room = next((r for r in level.rooms if r.type is kind), None)
-            if room is not None:
-                return room
+        found = [r for kind in order for r in level.rooms if r.type is kind][:6]
+        if level.index == 0 and plan is not None and found and plan.site.road_directions:
+            road = plan.site.road_directions[0]
+
+            def faces_road(room: Room) -> float:
+                best = 360.0
+                for w in level.walls:
+                    if w.kind is WallKind.EXTERIOR and room.id in w.rooms:
+                        d = _wall_direction(plan, w)
+                        best = min(best, abs(((d.bearing - road.bearing) + 180) % 360 - 180))
+                return best
+
+            first = found[0]
+            if faces_road(first) > 50.0:
+                # Another room that receives people, if one has a wall on the road.
+                more = [r for kind in (RoomType.CORRIDOR, RoomType.FAMILY, RoomType.DRAWING, RoomType.DINING,
+                                       RoomType.STAIRCASE) for r in level.rooms if r.type is kind]
+                better = [r for r in found + more if faces_road(r) <= 50.0]
+                if better:
+                    return better[0]
+        if found:
+            return found[0]
         return max(level.rooms, key=lambda r: r.area)
 
     def _wants_attached(self, room: Room) -> bool:
