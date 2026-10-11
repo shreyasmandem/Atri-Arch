@@ -159,8 +159,16 @@ def test_extra_bathrooms_are_the_last_optional_thing_to_go():
         assert kept >= 3        # one per two bedrooms plus a common one
 
 
-def test_a_programme_nothing_can_save_is_a_typed_error_with_the_numbers():
+def test_an_over_full_brief_is_relaxed_rather_than_refused():
+    """A client is never sent away with nothing: rooms and floors give way, and the plan says so."""
     brief = _brief(plot_width=9, plot_depth=12, levels=1, bedrooms=5, bathrooms=5)
+    generator = LayoutGenerator(brief, GeneratorConfig(seed=1, **QUICK))
+    assert generator.advisories
+    assert any("left out" in a or "tight" in a or "floor was added" in a for a in generator.advisories)
+
+
+def test_a_programme_nothing_can_save_is_a_typed_error_with_the_numbers():
+    brief = _brief(plot_width=6, plot_depth=8, levels=1, bedrooms=5, bathrooms=5)
     with pytest.raises(InfeasibleBriefError) as caught:
         LayoutGenerator(brief, GeneratorConfig(seed=1, **QUICK))
     error = caught.value
@@ -174,7 +182,7 @@ def test_a_programme_nothing_can_save_is_a_typed_error_with_the_numbers():
 
 
 def test_where_no_floor_can_be_added_the_error_does_not_suggest_one():
-    brief = _brief(plot_width=9, plot_depth=12, levels=1, bedrooms=5, bathrooms=5)
+    brief = _brief(plot_width=6, plot_depth=8, levels=1, bedrooms=5, bathrooms=5)
     brief.site.max_height = 3.2           # one floor, by the height rule
     assert max_levels(brief.site.max_height) == 1
     with pytest.raises(InfeasibleBriefError) as caught:
@@ -356,7 +364,7 @@ def test_rooms_scale_up_to_their_caps_and_never_past_them():
     assert LUXURY_MAX[RoomType.BEDROOM] == 28 and LUXURY_MAX[RoomType.BATHROOM] == 12
     assert LUXURY_MAX[RoomType.STAIRCASE] == 20
     big = [r for r in generator.requirements if r.type is RoomType.LIVING]
-    assert big and big[0].target_area > 40            # and it did grow
+    assert big and big[0].target_area > big[0].asked_area   # and it did grow, to a comfortable size
 
 
 def test_when_the_caps_bind_useful_rooms_are_added_and_the_advisories_say_why():

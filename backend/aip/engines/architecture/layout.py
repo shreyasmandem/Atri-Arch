@@ -2672,6 +2672,63 @@ class LayoutGenerator:
         # (c) Draw the rooms smaller; (d) or say it cannot be done.
         shrunk = False
         if not comfy(cur):
+            if max(cur.minimum) > hard:
+                # The brief asks for more than the plot can hold at any size.
+                # A client is never sent away with nothing: add a floor if the
+                # height limit allows, then let go of the least important
+                # rooms one at a time, then of bedrooms - and say each step.
+                lmax = max_levels(site.max_height)
+                # Least important first. A room is only let go if that really
+                # lightens the floor that is too full - taking a bedroom off
+                # the upper floor does nothing for a crowded ground floor.
+                order = (RoomType.LAUNDRY, RoomType.PANTRY, RoomType.WARDROBE, RoomType.SERVANT, RoomType.LIBRARY,
+                         RoomType.GYM, RoomType.HOME_THEATRE, RoomType.STORE, RoomType.GUEST_BEDROOM,
+                         RoomType.HOME_OFFICE, RoomType.STUDY, RoomType.FAMILY, RoomType.POWDER, RoomType.FOYER,
+                         RoomType.TOILET, RoomType.GARAGE, RoomType.CHILDREN_BEDROOM, RoomType.BEDROOM)
+                before = bedrooms_in(base)
+                let_go: list[str] = []
+                guard = 0
+                while max(cur.minimum) > hard and guard < 40:
+                    guard += 1
+                    if levels < lmax:
+                        nxt = self._assess(levels + 1, base)
+                        footprint = min(cap, max(nxt.target) * 1.08)
+                        over_far = bool(site.max_built_area) and (levels + 1) * footprint > site.max_built_area
+                        if not over_far and max(nxt.minimum) < max(cur.minimum) - 0.3:
+                            levels += 1
+                            cur = nxt
+                            advisories.append(f"A floor was added ({levels} floors): the rooms asked for "
+                                              f"do not fit one level less on this plot.")
+                            continue
+                    taken = False
+                    for kind in order:
+                        if kind in (RoomType.CHILDREN_BEDROOM, RoomType.BEDROOM) and bedrooms_in(base) <= 1:
+                            continue
+                        pick = next((r for r in reversed(base) if r.type is kind), None)
+                        if pick is None:
+                            continue
+                        rest = [r for r in base if r is not pick]
+                        trial = self._assess(levels, rest)
+                        if max(trial.minimum) < max(cur.minimum) - 0.05:
+                            base[:] = rest
+                            cur = trial
+                            let_go.append(getattr(pick, "label", None) or pick.type.label.lower())
+                            if kind in (RoomType.CHILDREN_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM):
+                                baths = [r for r in base if r.type is RoomType.BATHROOM and not r.label]
+                                if len(baths) > allowed_bathrooms(bedrooms_in(base)):
+                                    rest = [r for r in base if r is not baths[-1]]
+                                    base[:] = rest
+                                    cur = self._assess(levels, base)
+                            taken = True
+                            break
+                    if not taken:
+                        break
+                if let_go:
+                    kept = bedrooms_in(base)
+                    advisories.append(
+                        "To fit this plot, left out: " + ", ".join(dict.fromkeys(let_go)) + ". "
+                        + (f"The house keeps {kept} bedrooms; a larger plot holds the rest."
+                           if kept < before else "A larger plot would hold them."))
             if max(cur.minimum) <= hard:
                 advisories.append(self._shrink(cur, max(avail, max(cur.minimum) * 1.02)))
                 shrunk = True

@@ -155,7 +155,28 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
     for (const a of b.amenities || []) setField(`amenity_${a.split(" ")[0]}`, true);
   };
 
+  let auto = null;
+  const stopAuto = () => { if (auto) { clearInterval(auto.timer); auto.node.remove(); auto = null; } };
+  function autoStart(request, brief, seconds = 5) {
+    stopAuto();
+    const node = el("div", "msg msg--atri msg--note");
+    node.append(el("span", "msg__av"));
+    const text = el("div", "msg__body");
+    const hold = el("button", "quick__opt", "Wait, one more thing"); hold.type = "button";
+    node.append(text, hold);
+    log.append(node); scroll();
+    let left = seconds;
+    const tick = () => {
+      text.textContent = `That's everything I need - the studio starts in ${left}s.`;
+      if (left-- <= 0) { stopAuto(); start(request, brief); }
+    };
+    auto = { node, timer: setInterval(tick, 1000) };
+    tick();
+    hold.addEventListener("click", () => { stopAuto(); input.focus(); bubble("atri", "Of course - tell me what to add, then press Start designing."); });
+  }
+
   async function send(text, shown = text) {
+    stopAuto();
     text = text.trim();
     if (state.busy || !text) return;
     state.busy = true; sendBtn.disabled = true;
@@ -171,6 +192,7 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       typing.remove();
+      const wasReady = state.ready;
       state.brief = d.brief; state.ready = !!d.ready; state.request = d.request;
       state.history.push({ role: "user", text }, { role: "assistant", text: d.reply });
       apply(d.brief);
@@ -191,6 +213,9 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
       }
       // "Yes, start": the client confirmed, so the studio starts on its own.
       if (d.ready && d.start && d.request) setTimeout(() => start(d.request, d.brief), 900);
+      // Everything needed is now known: the studio starts by itself after a
+      // short pause the client can use to add anything, or cancel.
+      else if (d.ready && d.request && !wasReady) autoStart(d.request, d.brief);
       scroll();
     } catch (err) {
       typing.remove();
@@ -207,6 +232,7 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
   });
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
   input.addEventListener("input", () => {
+    stopAuto();
     ghost.hidden = !!input.value;
     input.style.height = "auto"; input.style.height = `${Math.min(180, input.scrollHeight)}px`;
     sendBtn.disabled = state.busy || !input.value.trim();
