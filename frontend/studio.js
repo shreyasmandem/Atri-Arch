@@ -9,6 +9,7 @@
 
 import { atelier, person, avatar } from "./atelier.js";
 import { mountEditor } from "./editor.js";
+import { autoSetbacks } from "./setbacks.js";
 
 const API = (() => {
   const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
@@ -229,7 +230,8 @@ function renderBrief() {
   setText("stance-note", stance[2]);
   setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ₹${lakh(budget)} · Vastu ${stance[0].toLowerCase()}`);
   drawPlot({ w, d, rw, rd, unit, road, levels,
-    front: +v("setback_front") || 0, rear: +v("setback_rear") || 0, side: +v("setback_side") || 0 });
+    ...(() => { const sb = autoSetbacks(w * d, +v("setback_front") || null, +v("setback_rear") || null, +v("setback_side") || null);
+      return { front: sb[0], rear: sb[1], side: sb[2] }; })() });
 }
 
 // The plot to scale: boundary, setback envelope, the road on its side, the
@@ -565,7 +567,7 @@ function readBrief() {
   if (d.get("amenity_balcony")) amenities.push("balcony");
   if (d.get("amenity_parking")) amenities.push("parking");
 
-  const setbackSide = n("setback_side", 1.2);
+  const setbackSide = n("setback_side", 0);
   const elderlyAccess = Boolean(d.get("elderly_access"));
 
   return {
@@ -586,10 +588,10 @@ function readBrief() {
     occupant_adults: Math.max(1, n("occupant_adults", 2) || 2),
     occupant_children: Math.max(0, n("occupant_children", 1)),
     occupant_elders: Math.max(0, n("occupant_elders", 1)),
-    setback_front: Math.max(0.5, n("setback_front", 2.5)),
-    setback_rear: Math.max(0.5, n("setback_rear", 1.5)),
-    setback_left: Math.max(0.5, setbackSide),
-    setback_right: Math.max(0.5, setbackSide),
+    // Left blank, the setbacks follow the plot (the server decides, as the sheet shows).
+    ...(d.get("setback_front") ? { setback_front: Math.max(0, n("setback_front", 0)) } : {}),
+    ...(d.get("setback_rear") ? { setback_rear: Math.max(0, n("setback_rear", 0)) } : {}),
+    ...(d.get("setback_side") ? { setback_left: Math.max(0, setbackSide), setback_right: Math.max(0, setbackSide) } : {}),
     finish_tier: String(d.get("finish_tier") || "premium"),
     kitchen_type: String(d.get("kitchen_type") || "open_modular"),
     amenities: amenities,

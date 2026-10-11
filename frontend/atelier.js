@@ -8,6 +8,8 @@
    the end of the current stage and only passes it when the engine says the
    stage is done. Every line shown is a message the engine emitted.
    ═══════════════════════════════════════════════════════════════════════ */
+import { autoSetbacks } from "./setbacks.js";
+
 
 const NS = "http://www.w3.org/2000/svg";
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -245,10 +247,11 @@ class Atelier {
       this.stage3d.setPlot({
         w: +brief.plot_width, d: +brief.plot_depth, levels: +brief.levels || 1,
         road: brief.road_direction || "N",
-        setbacks: {
-          front: +brief.setback_front || 0, rear: +brief.setback_rear || 0,
-          left: +brief.setback_left || 0, right: +brief.setback_right || 0,
-        },
+        setbacks: (() => {
+          const sb = autoSetbacks(+brief.plot_width * +brief.plot_depth, brief.setback_front ?? null,
+            brief.setback_rear ?? null, brief.setback_left ?? null);
+          return { front: sb[0], rear: sb[1], left: sb[2], right: brief.setback_right ?? sb[2] };
+        })(),
       });
       this.stage3d.plan(brief);
     }

@@ -199,7 +199,8 @@ def _fit(total: float, natural: list[float], mins: list[float], maxs: list[float
 class PartiPlanner:
     def __init__(self, envelope: BoundingBox, road: Direction | None, stair_on: bool, *,
                  cover: float = 0.0, side: int = 0, north_angle: float = 0.0,
-                 prefer=None, vastu_weight: float = 0.0, elders: bool = False, seed: int = 0) -> None:
+                 prefer=None, vastu_weight: float = 0.0, elders: bool = False, seed: int = 0,
+                 compact_stair: bool = False) -> None:
         self.env = envelope
         r = (road.cardinal if road is not None else Direction.N).value
         self.road = r if r in {"N", "S", "E", "W"} else (r[side] if len(r) == 2 and r[side] in "NSEW" else "N")
@@ -207,6 +208,8 @@ class PartiPlanner:
         self.W = envelope.width if across_x else envelope.height
         self.D = envelope.height if across_x else envelope.width
         self.stair_on = stair_on
+        # A small plot takes a tighter dog-leg: two 0.9 m flights, 3.5 m long.
+        self.st_w, self.st_run, self.st_rot_w, self.st_rot_d = (2.0, 3.5, 3.5, 2.0) if compact_stair else (STAIR_W, STAIR_RUN, STAIR_ROT_W, STAIR_ROT_D)
         self.cover = cover or self.W * self.D
         self.north = north_angle
         self.prefer = prefer or (lambda t: None)
@@ -598,7 +601,7 @@ class PartiPlanner:
         if not low:
             core = [c for c in core if c is far] + [c for c in reversed(mid)] if far is not None else list(reversed(mid))
         st = Cell([[P(T.STAIRCASE, 0.0, name="Staircase")]],
-                  fixed_w=STAIR_ROT_W if g["stair_rot"] else STAIR_W) if self.stair_on else None
+                  fixed_w=self.st_rot_w if g["stair_rot"] else self.st_w) if self.stair_on else None
         if g.get("thin"):
             # One passage across the house, rooms in front of it and behind it:
             # the plan for a shallow plot. The stair stands at the back, at its end.
@@ -659,7 +662,7 @@ class PartiPlanner:
                 mins[li][r] = max(c.min_d for c in row)
             if self.stair_on:
                 sr = 2 if g.get("thin") else 1
-                mins[li][sr] = max(mins[li][sr], STAIR_ROT_D if g["stair_rot"] else STAIR_RUN)
+                mins[li][sr] = max(mins[li][sr], self.st_rot_d if g["stair_rot"] else self.st_run)
         front = max(max(need[li][0], mins[li][0]) for li in range(len(house)))
         rest = max(max(need[li][1], mins[li][1]) + max(need[li][2], mins[li][2]) for li in range(len(house)))
         out = []
@@ -681,7 +684,7 @@ class PartiPlanner:
                 if o[1] - low_c < 1.0:
                     o[2] += o[1] - low_c
                     o[1] = low_c
-            run = STAIR_ROT_D if g["stair_rot"] else STAIR_RUN
+            run = self.st_rot_d if g["stair_rot"] else self.st_run
             self._stair_d = run + 0.4 if low_c > run + 1.0 else low_c
         if g.get("thin"):
             # One passage across the house and the stair behind it: every floor
@@ -1330,11 +1333,18 @@ class PartiPlanner:
                 return [i for i, x in enumerate(types) if x is t]
             K, Dn, L = idx(T.KITCHEN), idx(T.DINING), idx(T.LIVING)
             liv_area = max(((placed[a][3] - placed[a][1]) * (placed[a][4] - placed[a][2]) for a in L), default=0.0)
+            # A long passage is dead floor and a long walk: the shorter the better.
+            for i, t in enumerate(types):
+                if t in (T.CORRIDOR, T.LOBBY):
+                    run = max(placed[i][3] - placed[i][1], placed[i][4] - placed[i][2])
+                    if run > 5.0:
+                        hit(7.0 * (run - 5.0), "long_passage")
+                        notes.append(f"L{li} passage {run:.1f} m long")
             if K and Dn and max(adj[k][d] for k in K for d in Dn) < 1.0:
                 hit(60, "kitchen_dining")
                 notes.append("kitchen off dining")
             if L and Dn and max(adj[a][d] for a in L for d in Dn) < 1.9:
-                hit(20, "living_dining")
+                hit(55, "living_dining")
                 notes.append("living off dining")
             for pj in idx(T.PUJA):
                 if any(adj[pj][w] > 0.05 for w in range(n) if types[w] in WET):
@@ -1505,7 +1515,7 @@ class PartiPlanner:
             lo = max(max(sum(c.min_w if c.fixed_w is None else c.fixed_w for c in row) for row in fl) for fl in house)
             dmin = sum(max((c.min_d for fl in house for c in fl[r]), default=0.0) for r in range(3))
             if self.stair_on:
-                dmin = max(dmin, STAIR_ROT_D if g["stair_rot"] else STAIR_RUN)
+                dmin = max(dmin, self.st_rot_d if g["stair_rot"] else self.st_run)
             hi = min(self.W, self.cover / max(dmin, 1.0))
             if hi < lo - 1e-6:
                 return inf, G.g

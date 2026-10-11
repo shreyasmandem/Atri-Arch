@@ -28,6 +28,22 @@ from aip.domain.geometry import Direction, Vec2
 from aip.domain.plan import RoomType, Site
 
 
+def auto_setbacks(area: float, given: tuple[float | None, ...] = (None, None, None, None)) -> tuple[float, float, float, float]:
+    """(front, rear, left, right) in metres: what was stated, else what a plot this size takes.
+
+    Small urban plots take byelaw relaxations (about 1.5 m front and 0.9 m sides
+    for a 30 x 40 ft plot); large plots keep the full 2.5 / 1.5 / 1.2."""
+    if area < 60:
+        base = (1.0, 0.8, 0.6, 0.6)
+    elif area < 150:
+        base = (1.5, 1.0, 0.9, 0.9)
+    elif area < 300:
+        base = (2.0, 1.2, 1.0, 1.0)
+    else:
+        base = (2.5, 1.5, 1.2, 1.2)
+    return tuple(g if g is not None else b for g, b in zip(given, base))  # type: ignore[return-value]
+
+
 class RoomRequest(BaseModel):
     type: RoomType
     count: int = Field(default=1, ge=1, le=20)
@@ -87,10 +103,10 @@ class SimpleBriefRequest(BaseModel):
 
     max_far: float = Field(default=1.5, gt=0, le=15)
     max_ground_coverage: float = Field(default=0.6, gt=0, le=1)
-    setback_front: float = Field(default=3.0, ge=0, le=30)
-    setback_rear: float = Field(default=1.5, ge=0, le=30)
-    setback_left: float = Field(default=1.2, ge=0, le=30)
-    setback_right: float = Field(default=1.2, ge=0, le=30)
+    setback_front: float | None = Field(default=None, ge=0, le=30)
+    setback_rear: float | None = Field(default=None, ge=0, le=30)
+    setback_left: float | None = Field(default=None, ge=0, le=30)
+    setback_right: float | None = Field(default=None, ge=0, le=30)
 
     @field_validator("must_haves", "materials_liked")
     @classmethod
@@ -159,6 +175,10 @@ class SimpleBriefRequest(BaseModel):
         first meeting, so the platform does it too rather than producing a
         literal but useless reading of the request.
         """
+        # Setbacks not stated follow the plot: a 20 x 30 ft plot cannot give
+        # 2.5 m to the road and 1.2 m to each side and still hold a house.
+        sb = auto_setbacks(self.plot_width * self.plot_depth,
+                           (self.setback_front, self.setback_rear, self.setback_left, self.setback_right))
         site = Site(
             boundary=[
                 Vec2(0.0, 0.0),
@@ -171,10 +191,10 @@ class SimpleBriefRequest(BaseModel):
             longitude=self.longitude,
             locality=self.locality,
             road_directions=[self.road_direction],
-            setback_front=self.setback_front,
-            setback_rear=self.setback_rear,
-            setback_left=self.setback_left,
-            setback_right=self.setback_right,
+            setback_front=sb[0],
+            setback_rear=sb[1],
+            setback_left=sb[2],
+            setback_right=sb[3],
             max_far=self.max_far,
             max_ground_coverage=self.max_ground_coverage,
         )

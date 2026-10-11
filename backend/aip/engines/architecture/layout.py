@@ -91,6 +91,12 @@ logger = get_logger("aip.layout")
 STAIR_WIDTH = 2.4
 STAIR_LENGTH = 4.5
 STAIR_AREA = STAIR_WIDTH * STAIR_LENGTH
+#: A small plot takes a tighter dog-leg: two 0.9 m flights and a landing.
+STAIR_WIDTH_COMPACT, STAIR_LENGTH_COMPACT = 2.0, 3.5
+#: A floor plate under this (m2) is a small plot.
+COMPACT_PLATE = 85.0
+_COMPACT_ROOMS = {RoomType.LIVING, RoomType.DINING, RoomType.KITCHEN, RoomType.FAMILY, RoomType.STUDY,
+                  RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM}
 
 #: Marks the terrace the generator adds to fill a light upper floor, so the
 #: feasibility arithmetic can tell it from a room the client asked for.
@@ -1650,6 +1656,7 @@ class LayoutGenerator:
         # the footprint to draw, and how much the stair and the passage scale.
         self._footprint_area: float | None = None
         self._stair_scale = 1.0
+        self._compact_stair = False
         self._passage_scale = 1.0
         self._resolve_programme()
         self._envelope = self._buildable_envelope()
@@ -1847,7 +1854,8 @@ class LayoutGenerator:
         partis = [PartiPlanner(outer or self._envelope, road, len(levels) > 1, cover=cover, side=k,
                                north_angle=site.north_angle, prefer=self._vastu_direction,
                                vastu_weight=self.brief.vastu.tradition_weight, elders=elders,
-                               seed=(self.config.seed or 0) + 31 * k) for k in sides]
+                               seed=(self.config.seed or 0) + 31 * k,
+                               compact_stair=self._compact_stair) for k in sides]
         # A narrow plot also gets the row house: no hall, a short passage between two bands.
         tries = [(p, None) for p in partis] + [(p, v) for p in planners for v in variants()] \
             + [(r, v) for r in rows if r.fits() for v in row_variants()]
@@ -2080,6 +2088,7 @@ class LayoutGenerator:
         worker._footprint_area = self._footprint_area
         worker._bedrooms = self._bedrooms
         worker._stair_scale = self._stair_scale
+        worker._compact_stair = self._compact_stair
         worker._passage_scale = self._passage_scale
         worker._stairs = []
         worker._stair = self._stair
@@ -2346,7 +2355,8 @@ class LayoutGenerator:
 
         def stair() -> RoomRequirement:
             return RoomRequirement(
-                type=RoomType.STAIRCASE, preferred_area=round(STAIR_AREA * self._stair_scale ** 2, 2),
+                type=RoomType.STAIRCASE, preferred_area=round((STAIR_WIDTH_COMPACT * STAIR_LENGTH_COMPACT if self._compact_stair else STAIR_AREA)
+                                     * self._stair_scale ** 2, 2),
                 needs_external_wall=False, needs_daylight=False, priority=1.4,
             )
 
@@ -2557,15 +2567,20 @@ class LayoutGenerator:
             target.append(tg)
         return _Assessment(levels, reqs, buckets, minimum, comfort, target)
 
-    @staticmethod
-    def _room_bounds(req: RoomRequirement) -> tuple[float, float]:
+    def _room_bounds(self, req: RoomRequirement) -> tuple[float, float]:
         """(smallest, comfortable) area for one room."""
         target = req.target_area
         if req.type is RoomType.STAIRCASE:
             return target, target
+        # On a small plot the rooms are drawn at the least a household can live
+        # with, and the passage shrinks to what a door needs.
+        compact = getattr(self, "_compact_stair", False)
         if req.type in (RoomType.CORRIDOR, RoomType.LOBBY):
-            return 0.8 * target, 0.9 * target
+            k = 0.55 if compact else 0.8
+            return k * target, (0.65 if compact else 0.9) * target
         floor = minimum_area(req, MIN_CLEAR_WIDTH.get(req.type, MIN_ROOM_DIMENSION))
+        if compact and req.type in _COMPACT_ROOMS:
+            floor *= 0.86
         return floor, comfortable_area(req, floor)
 
     def _resolve_programme(self) -> None:
@@ -2581,6 +2596,7 @@ class LayoutGenerator:
                 r.asked_area = r.target_area       # what the programme asked, kept for the audit
         requested = brief.levels
         cap = self._footprint_cap()
+        self._compact_stair = cap is not None and cap < COMPACT_PLATE
         self.feasibility = FeasibilityReport(requested_levels=requested, levels=requested)
         if not self.config.check_feasibility or cap is None:
             self.requirements, self.level_buckets = self._prepare_requirements(requested, base)
@@ -2684,7 +2700,8 @@ class LayoutGenerator:
                 order = (RoomType.LAUNDRY, RoomType.PANTRY, RoomType.WARDROBE, RoomType.SERVANT, RoomType.LIBRARY,
                          RoomType.GYM, RoomType.HOME_THEATRE, RoomType.STORE, RoomType.GUEST_BEDROOM,
                          RoomType.HOME_OFFICE, RoomType.STUDY, RoomType.FAMILY, RoomType.POWDER, RoomType.FOYER,
-                         RoomType.TOILET, RoomType.GARAGE, RoomType.CHILDREN_BEDROOM, RoomType.BEDROOM)
+                         RoomType.UTILITY, RoomType.PUJA, RoomType.DINING, RoomType.TOILET, RoomType.GARAGE,
+                         RoomType.CHILDREN_BEDROOM, RoomType.BEDROOM)
                 before = bedrooms_in(base)
                 let_go: list[str] = []
                 guard = 0
@@ -2712,7 +2729,11 @@ class LayoutGenerator:
                         if max(trial.minimum) < max(cur.minimum) - 0.05:
                             base[:] = rest
                             cur = trial
-                            let_go.append(getattr(pick, "label", None) or pick.type.label.lower())
+                            let_go.append(getattr(pick, "label", None) or {
+                                RoomType.DINING: "the separate dining room (the living room doubles as dining)",
+                                RoomType.PUJA: "the puja room (a wall niche instead)",
+                                RoomType.FOYER: "the entrance foyer",
+                            }.get(pick.type, pick.type.label.lower()))
                             if kind in (RoomType.CHILDREN_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM):
                                 baths = [r for r in base if r.type is RoomType.BATHROOM and not r.label]
                                 if len(baths) > allowed_bathrooms(bedrooms_in(base)):
@@ -3069,7 +3090,10 @@ class LayoutGenerator:
 
         options: list[StairPlan] = []
         grown = self._stair_scale
-        for thickness, length in ((STAIR_WIDTH * grown, STAIR_LENGTH * grown), (2.4, 4.2), (2.3, 4.0)):
+        sizes = ((STAIR_WIDTH * grown, STAIR_LENGTH * grown), (2.4, 4.2), (2.3, 4.0))
+        if self._compact_stair:
+            sizes = ((STAIR_WIDTH_COMPACT, STAIR_LENGTH_COMPACT),) + sizes
+        for thickness, length in sizes:
             # Side wall: long axis along the depth of the plan.
             if across - thickness >= _MIN_STRIP:
                 seam = 0.42 * depth - length / 2
