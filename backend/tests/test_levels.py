@@ -66,7 +66,9 @@ def test_duplex_has_two_floors_of_the_right_rooms(duplex_plans):
         upper = Counter(r.type for r in plan.level_at(1).rooms)
         assert ground[RoomType.LIVING] == 1 and ground[RoomType.KITCHEN] == 1
         assert ground[RoomType.FOYER] == 1 and ground[RoomType.BATHROOM] == 1
-        assert upper[RoomType.MASTER_BEDROOM] == 1 and upper[RoomType.BEDROOM] == 2
+        # The brief has an elder: one bedroom may come down so they need not climb.
+        assert upper[RoomType.MASTER_BEDROOM] == 1
+        assert upper[RoomType.BEDROOM] + ground[RoomType.BEDROOM] == 2 and ground[RoomType.BEDROOM] <= 1
         assert upper[RoomType.BATHROOM] == 2
 
 

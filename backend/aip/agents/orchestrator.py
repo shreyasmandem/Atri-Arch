@@ -127,10 +127,10 @@ class PipelineConfig:
     enable_refinement: bool = True
     enable_negotiation: bool = True
     negotiation_rounds: int = 3
-    negotiation_seconds: float = 25.0
+    negotiation_seconds: float = 14.0
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
     max_parallel_agents: int = 6
-    agent_timeout_seconds: float = 90.0
+    agent_timeout_seconds: float = 22.0
 
 
 ProgressCallback = Callable[[ProgressEvent], None] | None
@@ -444,12 +444,15 @@ class DesignPipeline:
             0.36, critics=[c.id for c in committee],
         )
 
-        candidates: list[Candidate[FloorPlan]] = []
-        for index, plan in enumerate(plans):
+        # Every scheme is reviewed at once: the committee's model calls for one
+        # scheme no longer wait on another's.
+        async def review(plan: FloorPlan):
             with span("critique", plan=plan.id):
-                results = await run_agents(
-                    committee, plan, ctx, max_parallel=self.config.max_parallel_agents
-                )
+                return await run_agents(committee, plan, ctx, max_parallel=self.config.max_parallel_agents)
+
+        reviews = await asyncio.gather(*(review(p) for p in plans))
+        candidates: list[Candidate[FloorPlan]] = []
+        for index, (plan, results) in enumerate(zip(plans, reviews, strict=True)):
             critiques = collect_critiques(results)
             candidates.append(
                 Candidate(

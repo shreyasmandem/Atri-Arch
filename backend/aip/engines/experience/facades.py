@@ -112,6 +112,8 @@ def apply(b, plan: FloorPlan, design: str, levels: list[tuple[Any, float, Any]],
     Returns overrides for the builder: whether the roof should be hip or a
     mono-pitch, so the roof the design needs replaces the default.
     """
+    from aip.engines.experience.exteriors import _free, clear, door_spans
+
     north = float(plan.site.north_angle or 0.0)
     street = lambda e: road is not None and e.out.dot(road) > 0.6  # noqa: E731
     n = len(levels)
@@ -123,27 +125,33 @@ def apply(b, plan: FloorPlan, design: str, levels: list[tuple[Any, float, Any]],
         node = f"level_{level.index}/facade"
         for e in es:
             L, yaw = e.length, _yaw(e)
+            spans = door_spans(level, e)          # nothing stands in a doorway
             if design == "fins" and upper and street(e):
                 k = max(3, int(L / 0.5))
                 for i in range(k):
-                    _box(b, node, "timber", e.at((i + 0.5) / k, 0.2), base + h / 2, (0.06, h - 0.1, 0.36), yaw)
+                    if _free((i + 0.5) / k, 0.05 / L, spans):
+                        _box(b, node, "timber", e.at((i + 0.5) / k, 0.2), base + h / 2, (0.06, h - 0.1, 0.36), yaw)
                 _box(b, node, "frame", e.at(0.5, 0.18), base + h - 0.12, (L + 0.3, 0.24, 0.42), yaw)
             elif design == "frame" and upper and street(e):
                 d = 0.75
-                for y in (base + 0.05, base + h - 0.1):
+                for y in ((base + h - 0.1,) if li == 0 else (base + 0.05, base + h - 0.1)):
                     _box(b, node, "clad", e.at(0.5, d / 2), y, (L + 0.5, 0.22, d), yaw)
                 for t in (0.0, 1.0):
                     _box(b, node, "clad", e.at(t, d / 2) + e.dir * (0.25 if t == 0 else -0.25) * -1, base + h / 2, (0.22, h, d), yaw)
             elif design == "jaali" and li >= 0 and _hot(e, north) and L > 2.0:
-                w = L * 0.55
-                s0 = e.at(0.5, 0.32)
-                cols, rows = int(w / 0.22), int((h - 0.6) / 0.22)
-                for i in range(cols + 1):
-                    p = s0 + e.dir * (-w / 2 + i * w / cols)
-                    _box(b, node, "joinery", p, base + 0.3 + (h - 0.6) / 2, (0.04, h - 0.6, 0.05), yaw)
-                for j in range(rows + 1):
-                    _box(b, node, "joinery", s0, base + 0.3 + j * (h - 0.6) / rows, (w, 0.04, 0.05), yaw)
-                _box(b, node, "frame", s0, base + h - 0.25, (w + 0.2, 0.08, 0.4), yaw)
+                rows = int((h - 0.6) / 0.22)
+                for t0, t1 in clear(0.225, 0.775, spans):
+                    w = (t1 - t0) * L
+                    if w < 0.8:
+                        continue
+                    s0 = e.at((t0 + t1) / 2, 0.32)
+                    cols = max(2, int(w / 0.22))
+                    for i in range(cols + 1):
+                        p = s0 + e.dir * (-w / 2 + i * w / cols)
+                        _box(b, node, "joinery", p, base + 0.3 + (h - 0.6) / 2, (0.04, h - 0.6, 0.05), yaw)
+                    for j in range(rows + 1):
+                        _box(b, node, "joinery", s0, base + 0.3 + j * (h - 0.6) / rows, (w, 0.04, 0.05), yaw)
+                    _box(b, node, "frame", s0, base + h - 0.25, (w + 0.2, 0.08, 0.4), yaw)
             elif False and design == "garden" and li == min(1, n - 1) and not street(e) and L == max(x.length for x in es if not street(x)):
                 w = L * 0.6
                 p = e.at(0.5, 0.1)
@@ -155,12 +163,18 @@ def apply(b, plan: FloorPlan, design: str, levels: list[tuple[Any, float, Any]],
                             b.blob(node, "leaf2", (q.x, base + h * 0.075 + 0.2 + j * 0.35, -q.y), 0.17)
             elif design == "twotone":
                 if li == 0:
-                    _box(b, node, "clad", e.at(0.5, 0.03), base + h / 2 - 0.05, (L + 0.06, h - 0.1, 0.06), yaw)
+                    # Stone cladding between the openings, never over a door or window.
+                    for t0, t1 in clear(0.0, 1.0, door_spans(level, e, 0.05, windows=True)):
+                        _box(b, node, "clad", e.at((t0 + t1) / 2, 0.03), base + h / 2 - 0.05, ((t1 - t0) * L + 0.03, h - 0.1, 0.06), yaw)
                 _box(b, node, "slab", e.at(0.5, 0.12), base + h - 0.05, (L + 0.24, 0.26, 0.26), yaw)
             elif design == "vernacular" and li == 0 and street(e) and L > 3.0:
                 k = max(2, int(L / 2.4))
                 for i in range(k + 1):
-                    p = e.at(i / k, 1.6)
+                    t = i / k
+                    if not _free(t, 0.15 / L, spans):
+                        # A post that would stand in front of a door steps aside.
+                        t = min((a for a, _b in spans if a > 0), key=lambda a: abs(a - t), default=t)
+                    p = e.at(t, 1.6)
                     b.cylinder(node, "timber", (p.x, base, -p.y), 0.1, h - 0.15, 12)
                     _box(b, node, "sill", p, base - 0.02, (0.4, 0.06, 0.4), yaw)
                 _box(b, node, "timber", e.at(0.5, 1.6), base + h - 0.2, (L + 0.2, 0.2, 0.18), yaw)

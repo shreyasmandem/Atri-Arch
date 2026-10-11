@@ -172,6 +172,52 @@ def skins(ex: Exterior, n_levels: int) -> dict[int, str]:
     return out
 
 
+def door_spans(level, e: Edge, margin: float = 0.45, windows: bool = False) -> list[tuple[float, float]]:
+    """Where along an outside edge its doors are, as fractions of the edge,
+    widened by a margin: nothing a facade adds may stand in a doorway."""
+    L = e.length
+    if L < 1e-6:
+        return []
+    out = []
+    d = e.dir
+    for w in getattr(level, "walls", []):
+        doors = [o for o in w.openings if windows or o.kind.is_door or o.kind.value in ("french_window", "sliding_door")]
+        if not doors:
+            continue
+        a, c = Vec2(w.start.x, w.start.y), Vec2(w.end.x, w.end.y)
+        # On this edge's line: both ends within a wall's thickness of it.
+        n = Vec2(-d.y, d.x)
+        if abs((a - e.a).dot(n)) > 0.3 or abs((c - e.a).dot(n)) > 0.3:
+            continue
+        for o in doors:
+            p = a + (c - a) * o.position
+            t = (p - e.a).dot(d) / L
+            half = (o.width / 2 + margin + (0.35 if o.kind.value == "main_door" else 0.0)) / L
+            out.append((t - half, t + half))
+    return out
+
+
+def clear(t0: float, t1: float, spans: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """The parts of [t0, t1] that stay clear of every span."""
+    parts = [(t0, t1)]
+    for a, b in spans:
+        nxt = []
+        for x, y in parts:
+            if b <= x or a >= y:
+                nxt.append((x, y))
+                continue
+            if a > x:
+                nxt.append((x, a))
+            if b < y:
+                nxt.append((b, y))
+        parts = nxt
+    return [(x, y) for x, y in parts if y - x > 1e-3]
+
+
+def _free(t: float, half: float, spans) -> bool:
+    return all(t + half <= a or t - half >= b for a, b in spans)
+
+
 def _box(b, node, mat, p: Vec2, y: float, size, yaw: float) -> None:
     b.box(node, mat, (p.x, y, -p.y), size, yaw)
 
@@ -195,16 +241,22 @@ def apply(b, plan: FloorPlan, ex: Exterior, levels: list[tuple[Any, float, Any]]
         skin = ex.base if li == 0 else ex.upper
         for e in edges(fp):
             L, yaw = e.length, _yaw(e)
+            spans = door_spans(level, e)
             # A slab band between floors marks each storey on the skin.
             if li > 0 and skin != "plaster":
                 _box(b, node, "slab", e.at(0.5, 0.06), base - 0.08, (L + 0.12, 0.16, 0.1), yaw)
             if ex.windows == "band" and street(e) and L > 2.5:
-                _box(b, node, "ex_glassband", e.at(0.5, 0.06), base + 1.55, (L * 0.86, 1.2, 0.04), yaw)
+                # The glazing band stops either side of a door; it never covers one.
+                for t0, t1 in clear(0.07, 0.93, spans):
+                    if (t1 - t0) * L > 0.8:
+                        _box(b, node, "ex_glassband", e.at((t0 + t1) / 2, 0.06), base + 1.55, ((t1 - t0) * L, 1.2, 0.04), yaw)
             upper = li >= 1 or n == 1
             if upper and street(e):
-                _screen(b, node, ex.screen, e, L, yaw, base, h)
+                _screen(b, node, ex.screen, e, L, yaw, base, h, spans, ground=li == 0)
             if ex.planters and li == 0 and street(e) and L > 3:
                 for t in (0.18, 0.82):
+                    if not _free(t, 0.9 / L, spans):
+                        continue               # never a planter in front of a door
                     p = e.at(t, 0.55)
                     _box(b, node, "ex_concrete", p, base + 0.25, (1.2, 0.5, 0.5), yaw)
                     b.blob(node, "leaf", (p.x, base + 0.62, -p.y), 0.34, 0.8)
@@ -217,36 +269,50 @@ def apply(b, plan: FloorPlan, ex: Exterior, levels: list[tuple[Any, float, Any]]
     return {"roof": {"flat": "flat", "slab": "slab", "mono": "pitch", "butterfly": "butterfly", "hip": "hip", "gable": "gable"}[ex.roof]}
 
 
-def _screen(b, node, kind, e: Edge, L: float, yaw: float, base: float, h: float) -> None:
+def _screen(b, node, kind, e: Edge, L: float, yaw: float, base: float, h: float,
+            spans: list[tuple[float, float]] = (), ground: bool = False) -> None:
+    """The street screen, kept out of every doorway: fins and slats are left
+    out where a door is, louvres, jaali and frame beams run either side of it."""
+    spans = list(spans)
     if kind == "fins":
         k = max(3, int(L / 0.45))
         for i in range(k):
-            _box(b, node, "ex_accent", e.at((i + 0.5) / k, 0.22), base + h / 2, (0.06, h - 0.1, 0.38), yaw)
+            t = (i + 0.5) / k
+            if _free(t, 0.05 / L, spans):
+                _box(b, node, "ex_accent", e.at(t, 0.22), base + h / 2, (0.06, h - 0.1, 0.38), yaw)
     elif kind == "louvres":
         rows = int((h - 0.4) / 0.22)
-        for j in range(rows):
-            _box(b, node, "ex_accent", e.at(0.5, 0.28), base + 0.3 + j * 0.22, (L * 0.92, 0.05, 0.22), yaw)
+        for t0, t1 in clear(0.04, 0.96, spans):
+            for j in range(rows):
+                _box(b, node, "ex_accent", e.at((t0 + t1) / 2, 0.28), base + 0.3 + j * 0.22, ((t1 - t0) * L, 0.05, 0.22), yaw)
     elif kind == "frame":
         d = 0.75
-        for y in (base + 0.05, base + h - 0.1):
+        # On the ground floor the frame has no sill beam: it would be a kerb across the door.
+        for y in ((base + h - 0.1,) if ground else (base + 0.05, base + h - 0.1)):
             _box(b, node, "ex_accent", e.at(0.5, d / 2), y, (L + 0.5, 0.22, d), yaw)
         for t, s in ((0.0, 1), (1.0, -1)):
             _box(b, node, "ex_accent", e.at(t, d / 2) + e.dir * (s * 0.14), base + h / 2, (0.22, h, d), yaw)
     elif kind == "jaali" and L > 2.0:
-        w = L * 0.6
-        s0 = e.at(0.5, 0.32)
-        cols, rows = int(w / 0.2), int((h - 0.6) / 0.2)
-        for i in range(cols + 1):
-            _box(b, node, "joinery", s0 + e.dir * (-w / 2 + i * w / cols), base + 0.3 + (h - 0.6) / 2, (0.04, h - 0.6, 0.05), yaw)
-        for j in range(rows + 1):
-            _box(b, node, "joinery", s0, base + 0.3 + j * (h - 0.6) / rows, (w, 0.04, 0.05), yaw)
+        rows = int((h - 0.6) / 0.2)
+        for t0, t1 in clear(0.2, 0.8, spans):
+            w = (t1 - t0) * L
+            if w < 0.8:
+                continue
+            s0 = e.at((t0 + t1) / 2, 0.32)
+            cols = max(2, int(w / 0.2))
+            for i in range(cols + 1):
+                _box(b, node, "joinery", s0 + e.dir * (-w / 2 + i * w / cols), base + 0.3 + (h - 0.6) / 2, (0.04, h - 0.6, 0.05), yaw)
+            for j in range(rows + 1):
+                _box(b, node, "joinery", s0, base + 0.3 + j * (h - 0.6) / rows, (w, 0.04, 0.05), yaw)
     elif kind == "perforated" and L > 2.0:
         w = L * 0.55
-        s0 = e.at(0.62, 0.3)
         k = max(6, int(w / 0.12))
         for i in range(k):
+            t = 0.62 - 0.275 + (i + 0.5) * 0.55 / k
+            if not _free(t, 0.06 / L, spans):
+                continue
             gap = 0.03 + 0.05 * abs(math.sin(i * 0.7))       # a slatted rhythm reads as perforation
-            _box(b, node, "ex_metal", s0 + e.dir * (-w / 2 + (i + 0.5) * w / k), base + h / 2, (w / k - gap, h - 0.3, 0.03), yaw)
+            _box(b, node, "ex_metal", e.at(t, 0.3), base + h / 2, (w / k - gap, h - 0.3, 0.03), yaw)
 
 
 def _rgb(hex_: str) -> tuple[float, float, float]:

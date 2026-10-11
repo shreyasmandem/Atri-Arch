@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------- behaviour ---
     # Hard ceiling on spend. The router refuses any provider that would bill.
     enforce_zero_cost: bool = True
-    llm_timeout_seconds: float = 90.0
+    llm_timeout_seconds: float = 15.0
     llm_max_retries: int = 3
     llm_cache_enabled: bool = True
 

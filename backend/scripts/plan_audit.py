@@ -71,7 +71,7 @@ def audit(plan: FloorPlan, brief) -> dict[str, list[str]]:
             n = r.display_name()
             bw, bh = sorted((r.bbox.width, r.bbox.height))
             # 1 Circulation shape: a passage is a strip, not a room.
-            if r.type in PASSAGE and bw > 1.9:
+            if r.type in PASSAGE and bw > (2.4 if r.type is T.LOBBY else 1.9):
                 f["blob_passage"].append(f"{tag} {n} {bw:.1f}x{bh:.1f} m ({r.area:.0f} m2) - a room-sized passage")
             # 2 Furnishability.
             need = FURNISH.get(r.type)

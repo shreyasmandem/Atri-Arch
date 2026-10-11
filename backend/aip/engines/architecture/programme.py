@@ -218,7 +218,8 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
                                  RoomType.LOBBY, RoomType.FOYER}),
     RoomType.GARAGE: frozenset({RoomType.FOYER, RoomType.UTILITY, RoomType.LOBBY,
                                 RoomType.CORRIDOR}),
-    RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR}),
+    RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR, RoomType.LOBBY,
+                               RoomType.STAIRCASE, RoomType.FOYER}),   # under the stair; a shoe store
     RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER}),
     RoomType.POWDER: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,
                                 RoomType.LIVING}),
@@ -302,7 +303,9 @@ def walkability(plan: FloorPlan, level_index: int = 0) -> list[Route]:
     out: list[Route] = []
     for room_id, room in rooms.items():
         if room_id not in previous:
-            out.append(Route(room.display_name(), [], False, "not reachable by any door"))
+            # A car porch is reached from the drive, not through the house.
+            porch = room.type is RoomType.GARAGE
+            out.append(Route(room.display_name(), [], porch, "" if porch else "not reachable by any door"))
             continue
         chain: list[str] = []
         node: str | None = room_id

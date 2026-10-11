@@ -16,6 +16,8 @@ what the generative critics are for.
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 from typing import Any
 
@@ -434,6 +436,10 @@ class StructuralCritic(CriticAgent):
 # ---------------------------------------------------------------------------
 
 
+#: How long a model may take to review a scheme before the offline reviewer answers.
+GENERATIVE_DEADLINE = 11.0
+
+
 class _LLMVerdict(BaseModel):
     """Schema every generative critic must return."""
 
@@ -454,25 +460,45 @@ class _GenerativeCritic(CriticAgent):
     def prompt(self, plan: FloorPlan, ctx: AgentContext) -> list[Message]:
         raise NotImplementedError
 
+    def _computed(self, plan: FloorPlan, ctx: AgentContext) -> Critique:
+        """The same question answered from the geometry, when no model can."""
+        from aip.agents.computed_review import REVIEWS
+
+        score, why, concerns = REVIEWS[self.axis](plan, ctx.brief)
+        return self.make_critique(
+            score,
+            rationale=why,
+            findings=[Finding(code=f"{self.id.upper()}.MEASURED", severity=Severity.MINOR, message=c,
+                              evidence=[Evidence(kind=EvidenceKind.COMPUTED, source="geometry",
+                                                 detail="Measured on the drawn plan.", relevance=0.7)])
+                      for c in concerns],
+            evidence=[Evidence(kind=EvidenceKind.COMPUTED, source="geometry", detail=why, relevance=0.7)],
+            confidence=0.7,
+            model_used="measured",
+        )
+
     async def run(self, payload: FloorPlan, ctx: AgentContext) -> Critique:
         if not ctx.allow_generative:
-            return self.make_critique(
-                0.6,
-                rationale="Generative review was disabled for this run.",
-                confidence=0.2,
-                degraded=True,
-            )
+            return self._computed(payload, ctx)
 
-        verdict, response = await ctx.llm().complete_model(
-            self.prompt(payload, ctx),
-            _LLMVerdict,
-            capability=self.capability,
-            temperature=self.temperature,
-            # Generous enough that a considered critique is not severed
-            # mid-sentence. Truncation was the single largest cause of failed
-            # structured parses once real models were connected.
-            max_tokens=1800,
-        )
+        messages = self.prompt(payload, ctx)
+        try:
+            verdict, response = await asyncio.wait_for(ctx.llm().complete_model(
+                messages,
+                _LLMVerdict,
+                capability=self.capability,
+                temperature=self.temperature,
+                # Generous enough that a considered critique is not severed
+                # mid-sentence. Truncation was the single largest cause of failed
+                # structured parses once real models were connected.
+                max_tokens=1800,
+            ), timeout=GENERATIVE_DEADLINE)
+        except (asyncio.TimeoutError, TimeoutError):
+            # The free models are queueing: the studio does not keep the client
+            # waiting on them. The plan is measured instead.
+            return self._computed(payload, ctx)
+        if response.degraded:
+            return self._computed(payload, ctx)
 
         findings = [
             Finding(

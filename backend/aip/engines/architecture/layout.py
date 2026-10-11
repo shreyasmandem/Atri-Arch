@@ -1541,6 +1541,7 @@ _PUBLIC_FOR_PASSAGE = frozenset({
 
 
 #: How much a point of quality severity costs a plan in the ranking.
+_PARTI_LEAD = 0.3
 _QUALITY_WEIGHT = 0.02
 
 
@@ -1713,7 +1714,10 @@ class LayoutGenerator:
                 continue
             signatures.add(signature)
             exact, breakdown = fitness_fn(plan)
-            scored.append((exact - _QUALITY_WEIGHT * min(6.0, _severity(plan.metadata["quality"])), breakdown, plan))
+            # The parti is the plan an architect draws; while one is clean it leads.
+            lead = _PARTI_LEAD if plan.metadata.get("planner") == "parti" else 0.0
+            plan.metadata["_lead"] = lead
+            scored.append((exact + lead - _QUALITY_WEIGHT * min(6.0, _severity(plan.metadata["quality"])), breakdown, plan))
             spine_clean += not plan.metadata["guardrail"]
         # Most of the time goes to searching; the rest is kept for repairing the
         # near-misses the search leaves (see `_repair`).
@@ -1792,7 +1796,7 @@ class LayoutGenerator:
 
         plans: list[FloorPlan] = []
         for index, (exact, breakdown, plan) in enumerate(selected):
-            plan.metadata["fitness"] = round(exact, 4)
+            plan.metadata["fitness"] = round(exact - plan.metadata.pop("_lead", 0.0), 4)
             plan.metadata["fitness_breakdown"] = breakdown
             plan.metadata["advisories"] = list(self.advisories)
             plan.metadata["feasibility"] = self.feasibility.to_dict()
@@ -1818,26 +1822,40 @@ class LayoutGenerator:
             roads = self.brief.site.road_directions
             road = roads[0] if roads else None
             diagonal = road is not None and len(road.cardinal.value) == 2
-            planners = [SpinePlanner(self._envelope, road, len(levels) > 1, outer=self._site_box(), side=k)
-                        for k in ((0, 1) if diagonal else (0,))]
+            sides = (0, 1) if diagonal else (0,)
+            # The planners size the house from its rooms and leave the rest as
+            # garden, so they are also given the whole plot inside the setbacks:
+            # the coverage-scaled box is a guess at the house's shape, and on a
+            # deep or wide plot the wrong one.
+            outer = self._site_box()
+            boxes = [self._envelope] + ([outer] if outer is not None and outer.area > self._envelope.area + 1.0 else [])
+            planners = [SpinePlanner(box, road, len(levels) > 1, outer=outer, side=k) for box in boxes for k in sides]
         except Exception as exc:  # noqa: BLE001 - the search is the fallback
             log_event(logger, "layout.spine_failed", error=str(exc))
             return
         from aip.engines.architecture.rowhouse import RowHousePlanner, row_variants
 
-        rows = [RowHousePlanner(self._envelope, road, len(levels) > 1, outer=self._site_box(), side=k)
-                for k in ((0, 1) if diagonal else (0,))]
+        rows = [RowHousePlanner(box, road, len(levels) > 1, outer=outer, side=k) for box in boxes for k in sides]
+        cover = self.brief.site.max_footprint if self.brief.site.plot_area else 0.0
         made = 0
+        # The parti planner first: the plan an architect would draw. Then the
+        # spine and, on a narrow plot, the row house, as the alternatives.
+        from aip.engines.architecture.parti import PartiPlanner
+
+        site = self.brief.site
+        elders = any(getattr(o, "role", "") == "elder" for o in getattr(self.brief, "occupants", []) or [])
+        partis = [PartiPlanner(outer or self._envelope, road, len(levels) > 1, cover=cover, side=k,
+                               north_angle=site.north_angle, prefer=self._vastu_direction,
+                               vastu_weight=self.brief.vastu.tradition_weight, elders=elders,
+                               seed=(self.config.seed or 0) + 31 * k) for k in sides]
         # A narrow plot also gets the row house: no hall, a short passage between two bands.
-        tries = [(p, v) for p in planners for v in variants()] + [(r, v) for r in rows if r.fits() for v in row_variants()]
-        for who, v in tries:
-            try:
-                rooms = who.plan(levels, v)
-            except Exception as exc:  # noqa: BLE001
-                log_event(logger, "layout.spine_failed", error=str(exc))
-                continue
+        tries = [(p, None) for p in partis] + [(p, v) for p in planners for v in variants()] \
+            + [(r, v) for r in rows if r.fits() for v in row_variants()]
+        def build(who, rooms) -> FloorPlan | None:
             if not rooms:
-                continue
+                return None
+            if cover and sum(r.area for r in rooms[0]) > cover * 1.02:
+                return None            # over the ground coverage the plot allows
             # Walls on the house's own outline are its outside walls; the
             # buildable envelope may be larger (the rest is garden).
             xs = [p.x for lv in rooms for r in lv for p in r.polygon]
@@ -1850,17 +1868,20 @@ class LayoutGenerator:
             finally:
                 self._envelope = envelope
                 self._open_outline = False
-            plan.metadata["planner"] = "row" if isinstance(who, RowHousePlanner) else "spine"
+            plan.metadata["planner"] = ("parti" if isinstance(who, PartiPlanner)
+                                        else "row" if isinstance(who, RowHousePlanner) else "spine")
             _doors_to_hosts(plan)
             self._judge(plan)
-            # A toilet over the kitchen, the puja or the dining table is a
-            # plumbing leak waiting to happen and a Vastu fault: mark it so the
-            # variant without it wins.
             # Everything the client asked for must be in the plan.
             have = {r.type for lv in plan.levels for r in lv.rooms}
+            if RoomType.VERANDAH in have:
+                have.add(RoomType.BALCONY)          # on a single floor the balcony is the sit-out
             for req in self.requirements:
                 if "Requested" in (req.notes or "") and req.type not in have:
                     plan.metadata["guardrail"].append(f"the {req.type.label.lower()} the client asked for is missing")
+            # A toilet over the kitchen, the puja or the dining table is a
+            # plumbing leak waiting to happen and a Vastu fault: mark it so the
+            # variant without it wins.
             from shapely.geometry import Polygon as _P
             for lo, hi in zip(plan.levels, plan.levels[1:]):
                 below = [(r, _P([(q.x, q.y) for q in r.polygon])) for r in lo.rooms
@@ -1872,8 +1893,27 @@ class LayoutGenerator:
                             if pr.intersection(pb).area > 0.3 * pr.area:
                                 plan.metadata["quality"].append(f"level {hi.index}: {r.display_name()} over the {b_room.display_name()}")
                                 break
-            made += 1
-            yield plan
+            return plan
+
+        for who, v in tries:
+            try:
+                if isinstance(who, PartiPlanner):
+                    # The parti's own score ranks its sketches; the judge has the
+                    # last word on the best of them, and the best few are offered.
+                    judged = [p for p in (build(who, rooms) for rooms in who.plans(levels, count=36)) if p is not None]
+                    order = {id(p): k for k, p in enumerate(judged)}
+                    judged.sort(key=lambda p: (_weight(p), order[id(p)]))
+                    batch = judged[:5]
+                else:
+                    batch = [build(who, who.plan(levels, v))]
+            except Exception as exc:  # noqa: BLE001
+                log_event(logger, "layout.spine_failed", error=str(exc))
+                continue
+            for plan in batch:
+                if plan is None:
+                    continue
+                made += 1
+                yield plan
         log_event(logger, "layout.spine", variants=made)
 
     def _candidates(self, seed: int | None) -> Iterator[FloorPlan]:
@@ -2122,7 +2162,8 @@ class LayoutGenerator:
                         f"{max(room.bbox.width, room.bbox.height):.1f} m, too small to furnish "
                         f"({need[0]} x {need[1]} m needed)"
                     )
-                if room.type in (RoomType.CORRIDOR, RoomType.LOBBY) and short > 1.9:
+                # A landing lobby with doors on both sides is 2.2 m; a passage is a strip.
+                if room.type in (RoomType.CORRIDOR, RoomType.LOBBY) and short > (2.4 if room.type is RoomType.LOBBY else 1.9):
                     quality.append(f"{tag}: {room.display_name()} is {short:.1f} m wide, a room and not a strip")
             built = sum(r.area for r in level.rooms) or 1.0
             share = sum(r.area for r in level.rooms
@@ -2703,6 +2744,9 @@ class LayoutGenerator:
                 scaled = original[id(r)] * f
                 if cap_area is not None and r.type is not RoomType.STAIRCASE:
                     scaled = min(scaled, CAP_HEADROOM * cap_area)
+                # Never past half again what was asked: a 40 m2 living room for a
+                # 22 m2 brief is a hall, however large the plot.
+                scaled = min(scaled, 1.45 * original[id(r)])
                 r.preferred_area = round(max(original[id(r)], scaled), 2)
             return self._assess(levels, base)
 
@@ -4034,7 +4078,9 @@ class LayoutGenerator:
             style=self.brief.style.primary.value,
         )
         plan.column_grid = self._build_column_grid(envelope)
-        self._place_openings(plan, envelope)
+        # A drawn parti is not shuffled: swapping room identities to mend a
+        # door is the search's repair, and it moves a car porch to the back.
+        self._place_openings(plan, envelope, repair=not getattr(self, "_open_outline", False))
         return plan
 
     # ------------------------------------------------------------- walls ---
@@ -4275,7 +4321,7 @@ class LayoutGenerator:
         if not rooms:
             return set()
         root = self._entry_room(level).id
-        seen = {root}
+        seen = {root} | {r.id for r in level.rooms if r.type is RoomType.GARAGE}   # a porch opens to the drive
         frontier = [root]
         while frontier:
             node = frontier.pop()
@@ -4363,10 +4409,15 @@ class LayoutGenerator:
         """Connect every room via a spanning tree rooted at the entrance."""
         from aip.domain.geometry import shared_edge
 
-        rooms = {r.id: r for r in level.rooms}
+        # A car porch is open to the drive: it is entered from outside, and is
+        # given an inside door only where it meets the utility, foyer or passage.
+        porch = {r.id for r in level.rooms if r.type is RoomType.GARAGE
+                 and not any(by.type in (RoomType.UTILITY, RoomType.FOYER, RoomType.LOBBY, RoomType.CORRIDOR)
+                             for by in level.rooms if by is not r and _shared_length(by, r) >= DOOR_WALL)}
+        rooms = {r.id: r for r in level.rooms if r.id not in porch}
         if not rooms:
             return
-        adjacency = self._door_adjacency(plan, level)
+        adjacency = {k: v - porch for k, v in self._door_adjacency(plan, level).items() if k not in porch}
 
         root = self._entry_room(level).id
 
@@ -4395,7 +4446,14 @@ class LayoutGenerator:
         # it is nearer the passage's centre - the en-suite became a common
         # bathroom with the master's door bricked up.
         reserved: dict[str, str] = {}
+        # A plan that says whose bath is whose is taken at its word.
+        for r in level.rooms:
+            owner = r.metadata.get("suite_of")
+            if r.type is RoomType.BATHROOM and owner in rooms and owner in adjacency.get(r.id, set()):
+                reserved[r.id] = owner
         for host in sorted(level.rooms, key=lambda r: r.type is not RoomType.MASTER_BEDROOM):
+            if host.id in reserved.values():
+                continue
             if not self._wants_attached(host):
                 continue
             candidates = [
