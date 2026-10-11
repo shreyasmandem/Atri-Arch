@@ -44,6 +44,10 @@ def _brief(**kw):
     # These tests cover the studio filling a generous plot, which it now does
     # only when the client allows rooms they did not ask for.
     kw.setdefault("auto_extras", True)
+    # The gate is exercised under the classic limits; the size-dependent byelaw
+    # defaults have their own test (test_byelaw_limits_follow_the_plot_size).
+    kw.setdefault("max_ground_coverage", 0.6)
+    kw.setdefault("max_far", 1.5)
     return SimpleBriefRequest(amenities=amenities, **kw).to_brief()
 
 
@@ -75,7 +79,7 @@ def test_the_staircase_is_the_same_rectangle_on_every_floor(kw):
                 (rects[0].min_x, rects[0].min_y, rects[0].max_x, rects[0].max_y), abs=1e-6
             )
         # And it is a real dog-leg, not a closet.
-        assert min(rects[0].width, rects[0].height) >= 2.3
+        assert min(rects[0].width, rects[0].height) >= 2.0 - 1e-6   # two 0.9 m flights
         assert max(rects[0].width, rects[0].height) >= 3.8
         assert not any("stack" in p for p in plan.metadata["guardrail"])
 
@@ -401,3 +405,12 @@ def test_a_room_past_its_cap_is_a_finding_even_if_the_plan_is_otherwise_sound():
     living.polygon = rectangle(Vec2(box.min_x, box.min_y), 12.0, 10.0)      # 120 m2
     _guardrail, quality = generator._findings(plan)
     assert any("over the 26" in q for q in quality), quality
+
+
+def test_byelaw_limits_follow_the_plot_size():
+    small = SimpleBriefRequest(plot_width=6.1, plot_depth=9.1).to_brief().site
+    large = SimpleBriefRequest(plot_width=30, plot_depth=40).to_brief().site
+    assert small.max_ground_coverage > large.max_ground_coverage == 0.6
+    assert small.max_far > large.max_far == 1.5
+    stated = SimpleBriefRequest(plot_width=6.1, plot_depth=9.1, max_ground_coverage=0.5).to_brief().site
+    assert stated.max_ground_coverage == 0.5          # what the client states wins

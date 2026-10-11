@@ -376,7 +376,8 @@ def test_widget_script_is_served_with_open_cors(client):
 
 # ══ Infeasible and advised briefs ═════════════════════════════════════
 
-_TOO_BIG = {"plot_width": 6, "plot_depth": 8, "bedrooms": 5, "bathrooms": 5, "levels": 1}
+_TOO_BIG = {"plot_width": 6, "plot_depth": 8, "bedrooms": 5, "bathrooms": 5, "levels": 1,
+            "max_ground_coverage": 0.6, "max_far": 1.5}
 
 
 def test_an_infeasible_brief_is_a_clear_422_not_a_500(client):
