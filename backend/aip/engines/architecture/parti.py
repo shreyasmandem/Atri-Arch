@@ -1288,7 +1288,7 @@ class PartiPlanner:
                 if host is not None and p.type in WET:
                     hi = next((j for j in range(n) if placed[j][0] is host), None)
                     if hi is None or adj[i][hi] < 1.0:
-                        hit(35, "suite")
+                        hit(120, "suite")
                         notes.append("suite bath away from its room")
                 if p.type in BEDS:
                     # A bedroom off the passage or lobby, not off the living room.

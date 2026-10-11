@@ -1872,6 +1872,13 @@ class LayoutGenerator:
                                         else "row" if isinstance(who, RowHousePlanner) else "spine")
             _doors_to_hosts(plan)
             self._judge(plan)
+            # A suite's bath opens from its own bedroom, or the suite is not one.
+            for lv in plan.levels:
+                linked = {frozenset(o.connects) for w in lv.walls for o in w.openings if o.kind.is_door and o.connects}
+                for r in lv.rooms:
+                    owner = r.metadata.get("suite_of")
+                    if owner and r.type is RoomType.BATHROOM and frozenset((r.id, owner)) not in linked:
+                        plan.metadata["guardrail"].append(f"level {lv.index}: a bedroom's own bathroom does not open from it")
             # Everything the client asked for must be in the plan.
             have = {r.type for lv in plan.levels for r in lv.rooms}
             if RoomType.VERANDAH in have:
