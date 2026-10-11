@@ -1152,10 +1152,39 @@ class PartiPlanner:
                 return False
             u = u0
             for p, w in zip(s, ws):
-                placed.append((p, u, v - sd, u + w, v))
+                # A room is never stretched past what a room of its kind is: the
+                # width it cannot use becomes the dressing room (or wardrobe)
+                # beside it, opening from the bedroom, and the room keeps its shape.
+                extra = self._spare_strip(c, s, p, w, sd)
+                if extra is not None:
+                    keep, filler = extra
+                    placed.append((p, u, v - sd, u + keep, v))
+                    placed.append((filler, u + keep, v - sd, u + w, v))
+                else:
+                    placed.append((p, u, v - sd, u + w, v))
                 u += w
             v -= sd
         return True
+
+    @staticmethod
+    def _spare_strip(c: Cell, slot: list[P], p: P, w: float, sd: float):
+        """(width the room keeps, the filler that takes the rest) or None."""
+        if len(slot) != 1 or p.filler:
+            return None
+        if p.type is T.BATHROOM and p.host is not None:
+            cap = MAX_W[T.BATHROOM]
+            if w > cap + 0.9:
+                keep = max(p.min_s, min(cap, max(2.3, 1.1 * p.area / max(sd, 1.0))))
+                if w - keep >= 1.3:
+                    return keep, P(T.STORE, 0.0, None, host=p.host, name="Dressing", filler=True)
+        elif p.type in BEDS and sd >= 3.2 and w >= 4.6:
+            suite = any(q.type is T.BATHROOM and q.host is p for s2 in c.slots for q in s2)
+            actual = w * sd
+            if actual > 1.5 * max(p.area, 1.0) and not suite:
+                strip = min(2.2, max(1.3, (actual - 1.25 * p.area) / sd))
+                if w - strip >= max(3.0, p.min_s):
+                    return w - strip, P(T.STORE, 0.0, None, host=p, name="Dressing" if p.type is T.MASTER_BEDROOM else "Wardrobe", filler=True)
+        return None
 
     # ------------------------------------------------------------ judging --
 
