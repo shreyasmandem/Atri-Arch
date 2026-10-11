@@ -420,6 +420,44 @@ export class Viewer3D {
     }
   }
 
+
+  // Stand in a room: cut the house open at its floor, put the camera in a
+  // corner at eye height and look across to the far side.
+  focusRoom(box, level = 0, instant = false) {
+    if (!this.model) return;
+    this.setMode("interior", level);
+    let base = 0;
+    const g = this.model.getObjectByName(`level_${level}`);
+    if (g) {
+      const bb = new THREE.Box3().setFromObject(g);
+      if (!bb.isEmpty()) base = bb.min.y;
+    }
+    const local = (x, y, h) => this.model.localToWorld(new THREE.Vector3(x, h, -y));
+    const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+    const w = box.x1 - box.x0, d = box.y1 - box.y0;
+    const floorY = base - this.model.position.y;
+    // From above and outside the room's corner, looking down into it: a doll's-house view.
+    // Far enough that the whole room, and a little around it, fits the frame.
+    const fov = (this.camera.fov * Math.PI) / 180;
+    const fit = (Math.max(w, d) + 2) / (2 * Math.tan(fov / 2)) / Math.min(1, this.camera.aspect || 1);
+    const eye = local(cx - 0.3 * fit, cy - 0.5 * fit, floorY + 0.8 * fit);
+    const at = local(cx, cy, floorY + 0.4);
+    this.controls.autoRotate = false;
+    if (instant) {
+      this.camera.position.copy(eye); this.controls.target.copy(at); this.controls.update();
+      return;
+    }
+    const from = this.camera.position.clone(), t0 = this.controls.target.clone();
+    const start = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - start) / 1000), e = 1 - Math.pow(1 - k, 3);
+      this.camera.position.lerpVectors(from, eye, e);
+      this.controls.target.lerpVectors(t0, at, e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
   _tick(now) {
     this.raf = requestAnimationFrame(this._tick);
     this.controls.update();

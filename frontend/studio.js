@@ -1705,68 +1705,121 @@ function renderCost() {
 /* ── interior ──────────────────────────────────────────────────────── */
 
 async function renderInterior() {
-  const s = scrollPane("interior");
+  const p = pane("interior");
+  p.innerHTML = "";
+  const id = S.activeId;
+  const plan = cur().plan;
+  const wrap = el("div", "inx");
+  const side = el("aside", "inx__side");
+  const stage = el("div", "inx__stage model-stage");
+  const info = el("div", "inx__info");
+  wrap.append(side, stage);
+  p.append(wrap);
+
+  // The interior scheme (furniture, finishes, costs), solved once per plan.
   let sc = cur().interior;
-  if (!sc) {
-    s.append(el("p", "empty-note", "Solving the furniture layout…"));
-    try {
-      const r = await fetch(`${API}/plans/${S.activeId}/interior`, { method: "POST" });
-      if (!r.ok) throw new Error(String(r.status));
-      sc = await r.json(); S.plans[S.activeId].interior = sc;
-    } catch (err) {
-      s.innerHTML = ""; s.append(el("p", "empty-note", `The interior layout could not be produced (${err.message}).`)); return;
+  const scP = sc ? Promise.resolve(sc) : fetch(`${API}/plans/${id}/interior`, { method: "POST" })
+    .then((r) => (r.ok ? r.json() : null)).then((x) => { if (x) S.plans[id].interior = x; return x; }).catch(() => null);
+
+  // Rooms, floor by floor.
+  const rooms = (plan?.levels || []).flatMap((lv) => lv.rooms
+    .filter((r) => !["corridor", "staircase", "shaft", "lobby"].includes(r.type))
+    .map((r) => ({ r, lv: lv.index })));
+  side.append(el("h3", "inx__h", "Rooms"));
+  const list = el("ol", "inx__rooms");
+  side.append(list);
+
+  const cap = el("p", "model-cap", "Loading the interiors…");
+  stage.append(cap, info);
+  const { Viewer3D } = await import("./viewer3d.js");
+  if (S.view !== "interior" || S.activeId !== id) return;
+  S.viewer?.dispose();
+  const viewer = (S.viewer = new Viewer3D(stage));
+  const pal = (S.palette ||= {});
+  const url = () => {
+    const q = new URLSearchParams();
+    if (pal.id) q.set("palette", pal.id);
+    if (pal.text) q.set("colours", pal.text);
+    if (pal.design) q.set("design", pal.design);
+    return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
+  };
+  try { await viewer.load(url()); } catch (e) { cap.textContent = `The model could not be shown (${e.message}).`; return; }
+  cap.textContent = "Pick a room to walk into it · drag to look around";
+
+  // Interior palettes, cycled in place.
+  let schemes = [];
+  fetch(`${API}/plans/${id}/palettes`).then((r) => r.json()).then((d) => { schemes = d.schemes || []; drawStyle(); }).catch(() => {});
+  const style = el("div", "inx__style");
+  side.append(style);
+  const drawStyle = () => {
+    if (!schemes.length) return;
+    const i = Math.max(0, schemes.findIndex((s) => s.id === pal.id));
+    const s = schemes[i];
+    style.innerHTML = "";
+    style.append(el("span", "inx__k", "Interior style"));
+    const row = el("div", "inx__style-row");
+    const name = el("b", null, s.name);
+    const sw = el("span", "inx__sw");
+    for (const hex of Object.values(s.interior || {})) { const c = el("i"); c.style.background = hex; sw.append(c); }
+    const nav = el("div", "inx__nav");
+    for (const [t, step] of [["‹", -1], ["›", 1]]) {
+      const b = el("button", "ghost-btn", t); b.type = "button";
+      b.setAttribute("aria-label", step < 0 ? "Previous style" : "Next style");
+      b.addEventListener("click", async () => {
+        pal.id = schemes[(i + step + schemes.length) % schemes.length].id;
+        drawStyle();
+        await viewer.load(url(), { keepView: true });
+        if (current) viewer.focusRoom(current.box, current.lv, true);
+      });
+      nav.append(b);
     }
-    if (S.view !== "interior") return;
-  }
-  s.innerHTML = "";
+    row.append(name, nav);
+    style.append(row, sw, el("p", "inx__story", s.story || ""));
+  };
 
-  const stats = el("div", "stat-row");
-  for (const [pig, k, val, sub] of [
-    ["ochre", "Furniture", inr(sc.total_furniture_cost), "supply and fit"],
-    ["indigo", "Finishes", inr(sc.total_finishes_cost), "floors, walls, ceilings"],
-    ["chalk", "Total", inr(sc.total_cost), sc.currency],
-    ["orpiment", "Rooms", `${sc.rooms.length}`, cap(sc.style)],
-  ]) {
-    const d = el("dl", "stat"); d.dataset.pig = pig;
-    d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); stats.append(d);
-  }
-  s.append(stats);
-  s.append(el("p", "lede", sc.summary || ""));
-
-  s.append(el("h3", "sec", "Palette"));
-  const chips = el("div", "chips");
-  for (const sw of sc.palette?.swatches || []) {
-    const c = el("div", "chip-sw", sw.role); c.style.background = sw.hex; c.title = `${sw.role} — ${sw.hex}`;
-    chips.append(c);
-  }
-  s.append(chips);
-  if (sc.palette?.character) s.append(el("p", "note-card", sc.palette.character));
-
-  for (const room of sc.rooms) {
-    s.append(el("h3", "sec", `${room.room_name} · ${room.area_m2.toFixed(1)} m² · ${room.direction} · layout ${room.layout_score.toFixed(2)}`));
-    if (room.furniture.length) {
-      const t = el("table", "led");
-      t.innerHTML = "<thead><tr><th>Item</th><th>Size</th><th>Against</th><th class='n'>Cost</th></tr></thead>";
-      const tb = el("tbody");
-      for (const f of room.furniture) {
-        const r = el("tr"); r.title = f.notes || "";
-        r.append(el("td", null, f.name), el("td", null, `${f.width.toFixed(2)} × ${f.depth.toFixed(2)} m`),
-          el("td", null, f.against_wall || "—"), el("td", "n", Math.round(f.cost).toLocaleString("en-IN")));
-        tb.append(r);
+  // Walk into a room: the floors above lift away, the camera stands in a
+  // corner at eye height, and the furniture and its cost come up beside it.
+  let current = null;
+  const open = async (item, li) => {
+    list.querySelectorAll("li").forEach((x) => x.classList.toggle("is-on", x === li));
+    const xs = item.r.polygon.map((q) => q.x ?? q[0]), ys = item.r.polygon.map((q) => q.y ?? q[1]);
+    const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    current = { box, lv: item.lv };
+    viewer.focusRoom(box, item.lv);
+    const s = await scP;
+    const rs = s?.rooms?.find((x) => x.room_id === item.r.id);
+    info.innerHTML = "";
+    info.append(el("b", "inx__room", item.r.name || item.r.type));
+    info.append(el("span", "inx__meta", `${(item.r.area ?? 0).toFixed?.(1) ?? ""} m² · ${floorName(item.lv)}${rs?.direction ? ` · ${rs.direction}` : ""}`));
+    if (rs?.furniture?.length) {
+      const ul = el("ul", "inx__items");
+      let total = 0;
+      for (const f of rs.furniture) {
+        total += f.cost || 0;
+        const li2 = el("li");
+        li2.append(el("span", null, f.name), el("span", "n", inr(f.cost || 0)));
+        ul.append(li2);
       }
-      t.append(tb); s.append(t);
+      info.append(ul, el("p", "inx__total", `Furniture ${inr(total)}`));
+    } else {
+      info.append(el("p", "inx__meta", "No loose furniture - finishes only."));
     }
-    for (const u of room.unplaced || []) {
-      const d = el("div", "find"); d.dataset.sev = "major";
-      d.append(el("i", "find__s"), el("span", "find__t", `${u.name} could not be placed`),
-        el("span", "find__c", u.reason));
-      s.append(d);
-    }
-    if (room.lighting) {
-      const l = room.lighting;
-      s.append(el("p", "find__m", `Lighting — ${l.target_lux} lux target · ${l.downlight_count} downlights · ${l.colour_temperature_k}K · ~${l.estimated_load_w}W`));
-    }
+    if (rs?.lighting) info.append(el("p", "inx__meta", `${rs.lighting.target_lux} lux · ${rs.lighting.colour_temperature_k} K · ${rs.lighting.downlight_count} downlights`));
+    info.hidden = false;
+  };
+  const lis = new Map();
+  for (const item of rooms) {
+    const li = el("li");
+    lis.set(item, li);
+    const b = el("button", "inx__room-btn"); b.type = "button";
+    b.append(el("span", null, item.r.name || item.r.type), el("small", null, `${floorName(item.lv)} · ${(+item.r.area || 0).toFixed(1)} m²`));
+    b.addEventListener("click", () => open(item, li));
+    li.append(b);
+    list.append(li);
   }
+  info.hidden = true;
+  const first = rooms.find((x) => x.r.type === "living") || rooms[0];
+  if (first) open(first, lis.get(first));
 }
 
 /* ── 3D ────────────────────────────────────────────────────────────── */
