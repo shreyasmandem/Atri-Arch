@@ -1,0 +1,6 @@
+{
+  "cleanUrls": true,
+  "headers": [
+    { "source": "/(.*)\.(glb|js|css|svg|png|jpg|webp|woff2)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }
+  ]
+}
