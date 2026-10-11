@@ -979,6 +979,15 @@ class PartiPlanner:
         open_kind = T.TERRACE if li > 0 else (T.VERANDAH if r == 0 else None)
         if row and all(c.slots[0][0].type in (T.CORRIDOR, T.LOBBY) for c in row):
             open_kind = None                 # a passage across the house is all hall
+        if li > 0 and r == 1 and spare > 0.3:
+            # Upstairs the core's spare width widens the landing into a sitting
+            # lobby before it becomes a terrace no door can reach.
+            lob = next((c for c in row if c.slots[0][0].type is T.LOBBY), None)
+            if lob is not None:
+                add = min(spare, max(0.0, 3.0 - fixed[id(lob)]))
+                fixed[id(lob)] += add
+                spare -= add
+                avail -= add
         if open_kind is not None and spare >= 1.6 and (li > 0 or spare > avail - sum(caps) - 1e-6 or not flex):
             name = "Terrace" if li > 0 else "Sit-out"
             if li == 0:

@@ -1541,7 +1541,7 @@ _PUBLIC_FOR_PASSAGE = frozenset({
 
 
 #: How much a point of quality severity costs a plan in the ranking.
-_PARTI_LEAD = 0.3
+_PARTI_LEAD = 1.0
 _QUALITY_WEIGHT = 0.02
 
 
@@ -4261,6 +4261,10 @@ class LayoutGenerator:
                 kind = OpeningKind.VENTILATOR if room.type.is_wet else OpeningKind.WINDOW
                 openable_fraction = OPENABLE_FRACTION.get(kind, 0.7)
                 required = max(room.area * 0.11, (room.area / 6) / openable_fraction)
+                if room.type.is_habitable:
+                    # The code is a floor, not a design: rooms are glazed to about
+                    # a sixth of their floor, as a practice would draw them.
+                    required = max(required, room.area * 0.17)
                 if room.type.is_wet:
                     required = min(required, 1.4)
 
@@ -4278,9 +4282,12 @@ class LayoutGenerator:
                     continue
 
                 share = required / len(chosen)
+                # Every outside window is built with a 0.55 m chajja over it
+                # (see the 3D builder): about half the opening is shaded.
+                room.metadata["shading_factor"] = max(float(room.metadata.get("shading_factor", 0.0)), 0.5)
                 for wall in chosen:
                     usable_length = max(0.6, wall.length - 0.6)
-                    height = 0.75 if room.type.is_wet else 1.35
+                    height = 0.75 if room.type.is_wet else 1.5
                     width = min(usable_length, max(0.6, share / height))
                     wall.openings.append(
                         Opening(
