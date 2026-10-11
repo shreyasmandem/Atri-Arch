@@ -4465,7 +4465,7 @@ class LayoutGenerator:
                 continue
             candidates = [
                 n for n in adjacency.get(host.id, set())
-                if rooms[n].type is RoomType.BATHROOM and n not in reserved
+                if rooms[n].type is RoomType.BATHROOM and n not in reserved and not rooms[n].metadata.get("common")
             ]
             if candidates:
                 best = max(candidates, key=lambda n: _shared_length(rooms[host.id], rooms[n]))
@@ -4489,6 +4489,8 @@ class LayoutGenerator:
 
                 if a.type.is_circulation or b.type.is_circulation:
                     cost *= 0.35
+                if b.metadata.get("enter_from") == a.id:
+                    cost *= 0.02          # the door the plan was drawn for
 
                 # Everything else comes from the declared programme rather than
                 # from heuristics maintained separately here, so the doors the

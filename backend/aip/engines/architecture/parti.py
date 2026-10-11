@@ -73,8 +73,11 @@ ASPECT = {T.LIVING: 1.8, T.DRAWING: 1.8, T.FAMILY: 1.9, T.DINING: 1.8, T.MASTER_
 #: The longest a room should run along its band before it is a corridor with furniture in it.
 MAX_W = {T.LIVING: 6.8, T.DRAWING: 6.0, T.FAMILY: 6.0, T.DINING: 5.0, T.KITCHEN: 4.4, T.MASTER_BEDROOM: 5.4,
          T.BEDROOM: 4.8, T.GUEST_BEDROOM: 4.8, T.CHILDREN_BEDROOM: 4.8, T.STUDY: 4.2, T.HOME_OFFICE: 4.2,
-         T.BATHROOM: 3.6, T.TOILET: 2.4, T.POWDER: 2.2, T.PUJA: 2.6, T.STORE: 3.0, T.UTILITY: 3.6,
+         T.BATHROOM: 3.0, T.TOILET: 2.4, T.POWDER: 2.2, T.PUJA: 2.6, T.STORE: 3.0, T.UTILITY: 3.6,
          T.PANTRY: 2.6, T.LAUNDRY: 3.0, T.GARAGE: 3.8}
+#: The deepest a room should be drawn in its bay; past it a small room leaves the depth to its neighbour.
+MAX_D = {T.BATHROOM: 2.6, T.TOILET: 2.2, T.POWDER: 2.0, T.PUJA: 2.4, T.UTILITY: 2.6, T.PANTRY: 2.4,
+         T.MASTER_BEDROOM: 4.8, T.BEDROOM: 4.4, T.GUEST_BEDROOM: 4.4, T.CHILDREN_BEDROOM: 4.4, T.STUDY: 4.0}
 #: How much a room's size matters to the client, per square metre of error.
 WEIGHT = {T.LIVING: 1.2, T.MASTER_BEDROOM: 1.2, T.BEDROOM: 1.0, T.KITCHEN: 1.0, T.DINING: 0.9}
 #: The least a room can be when the plot leaves no choice.
@@ -243,6 +246,8 @@ class PartiPlanner:
                 continue
             if r.type is T.TERRACE and "fills the footprint" in (r.notes or ""):
                 continue
+            if r.type is T.FOYER and self.W < 9.0 and "Requested" not in (r.notes or ""):
+                continue          # on a narrow plot the living room receives; the hall is not drawn
             out.append(P(r.type, float(r.target_area), r))
         return out
 
@@ -613,7 +618,7 @@ class PartiPlanner:
                     and rng.r(key("thinf", ix.get(id(c.pieces()[0]), "x"))) < 0.6
                 put(F if to_front else B, c)
             core = [hall]
-            if ground and rng.r(key("thinfront")) < 0.5:
+            if ground and rng.r(key("thinfront")) < 0.8:
                 # Dining beside the living room, the kitchen beside it: the day
                 # rooms along the street, the bedrooms behind the passage.
                 for c in [c for c in B if any(p.type in (T.DINING, T.KITCHEN) for p in c.pieces())]:
@@ -676,12 +681,12 @@ class PartiPlanner:
                     o[2] += o[1] - low_c
                     o[1] = low_c
             run = STAIR_ROT_D if g["stair_rot"] else STAIR_RUN
-            self._stair_d = run + 0.4 if low_c > run + 1.4 else low_c
-        if self.stair_on and g.get("thin"):
-            back = max(o[2] for o in out)
-            for o in out:
-                o[1] -= back - o[2]
-                o[2] = back
+            self._stair_d = run + 0.4 if low_c > run + 1.0 else low_c
+        if g.get("thin"):
+            # One passage across the house and the stair behind it: every floor
+            # keeps the same lines.
+            same = [max(o[r] for o in out) for r in range(3)]
+            out = [list(same) for _ in out]
         return out
 
     @staticmethod
@@ -942,7 +947,7 @@ class PartiPlanner:
                 d = depths[r]
                 for c, x0, x1 in rows[r]:
                     k = len(placed)
-                    if not self._cell(c, u0 + x0, v - d, u0 + x1, v, placed):
+                    if not self._cell(c, u0 + x0, v - d, u0 + x1, v, placed, li=li, band=r):
                         self.why[512] = self.why.get(512, 0) + 1
                         return None
                     if c.span:
@@ -984,7 +989,7 @@ class PartiPlanner:
             # lobby before it becomes a terrace no door can reach.
             lob = next((c for c in row if c.slots[0][0].type is T.LOBBY), None)
             if lob is not None:
-                add = min(spare, max(0.0, 3.0 - fixed[id(lob)]))
+                add = min(spare, max(0.0, 2.4 - fixed[id(lob)]))
                 fixed[id(lob)] += add
                 spare -= add
                 avail -= add
@@ -1003,12 +1008,14 @@ class PartiPlanner:
             elif at_low != at_high:
                 # A stretch beside a passage: open at the house's side wall.
                 row.insert(0 if at_low else len(row), t)
-            elif r == 1 and self.stair_on:
-                row.insert(len(row) if g["stair_end"] == "L" else 0, t)
+            elif any(c.slots[0][0].type is T.STAIRCASE for c in row):
+                # Never between the stair and its wall: the stair stays where it is on every floor.
+                st_i = next(i for i, c in enumerate(row) if c.slots[0][0].type is T.STAIRCASE)
+                row.insert(len(row) if st_i == 0 else 0, t)
             else:
                 row.insert(0 if g["ter_end"] == "L" else len(row), t)
             avail -= spare
-        elif li == 0 and r in (1, 2) and flex and avail - sum(caps) >= 1.4:
+        elif li == 0 and r == 2 and flex and avail - sum(caps) >= 1.4:
             # Downstairs the rooms cannot stretch to fill the band: behind the
             # kitchen goes its wash yard, in the core a family lounge at the side
             # wall or a store by the stair, and the rest is shared out.
@@ -1112,7 +1119,7 @@ class PartiPlanner:
             return laid
         return [(c, a, b) for (c, _a, _b), a, b in zip(laid, edges, edges[1:])]
 
-    def _cell(self, c: Cell, u0, v0, u1, v1, placed) -> bool:
+    def _cell(self, c: Cell, u0, v0, u1, v1, placed, li: int = 0, band: int = 1) -> bool:
         d = v1 - v0
         if len(c.slots) == 1 and c.slots[0][0].type is T.STAIRCASE:
             sd = getattr(self, "_stair_d", None) or d
@@ -1128,7 +1135,9 @@ class PartiPlanner:
         idx = [i for i, f in enumerate(fixed) if not f]
         nat = [sum(p.area for p in c.slots[i]) or 1.0 for i in idx]
         mins = [max(p.min_s for p in c.slots[i]) for i in idx]
-        ds = _fit(free, nat, mins) if idx else []
+        # Small rooms keep to their depth; the room they share the bay with takes the rest.
+        maxs = [min(MAX_D.get(p.type, math.inf) for p in c.slots[i]) for i in idx]
+        ds = _fit(free, nat, mins, maxs) if idx else []
         if ds is None:
             return False
         dd = dict(zip(idx, ds))
@@ -1201,31 +1210,7 @@ class PartiPlanner:
             else:
                 start = {i for i, t in enumerate(types) if t is T.STAIRCASE} or \
                         {i for i, t in enumerate(types) if t is T.LOBBY}
-            reached = set(start)
-            changed = True
-            while changed:
-                changed = False
-                for i in range(n):
-                    if i in reached:
-                        continue
-                    ti = types[i]
-                    for j in reached:
-                        if adj[i][j] < 1.0 - 1e-6:
-                            continue
-                        tj = types[j]
-                        host = placed[i][0].host
-                        ok = (may_enter(ti, tj) and (is_through(tj) or tj in PRIVATE_HOST.get(ti, ())
-                                                     or (ti in WET and tj in BEDS)))
-                        if host is not None and placed[j][0] is host:
-                            ok = True
-                        if ti is T.STAIRCASE and is_through(tj):
-                            ok = True
-                        if ti is T.GARAGE:
-                            ok = True
-                        if ok:
-                            reached.add(i)
-                            changed = True
-                            break
+            reached, _parent = self._reach(placed, types, adj, start)
             for i in range(n):
                 if i not in reached and types[i] not in (T.GARAGE,) and not placed[i][0].filler:
                     hit(100, "unreachable")
@@ -1376,6 +1361,45 @@ class PartiPlanner:
                 below = [(UNDER[p.type], (u0, v0, u1, v1)) for p, u0, v0, u1, v1 in placed if p.type in UNDER]
             wet_below = [(u0, v0, u1, v1) for p, u0, v0, u1, v1 in placed if p.type in WET]
         return pen, notes
+
+    #: Which neighbour a room is best entered from, most preferred first.
+    _PREFER = {T.CORRIDOR: 0, T.LOBBY: 0, T.FOYER: 1, T.DINING: 2, T.FAMILY: 2, T.LIVING: 3, T.DRAWING: 3}
+
+    def _reach(self, placed, types, adj, start):
+        """Which rooms a legal door can reach from where you arrive, and from which
+        neighbour each is best entered - the passage before the living room, a
+        bath's own bedroom before anything."""
+        n = len(placed)
+        reached = set(start)
+        parent: dict[int, int] = {}
+        changed = True
+        while changed:
+            changed = False
+            for i in range(n):
+                if i in reached:
+                    continue
+                ti = types[i]
+                host = placed[i][0].host
+                best = None
+                for j in reached:
+                    if adj[i][j] < 1.0 - 1e-6:
+                        continue
+                    tj = types[j]
+                    if host is not None and placed[j][0] is host:
+                        rank = -1
+                    elif ti is T.GARAGE or (ti is T.STAIRCASE and is_through(tj)):
+                        rank = self._PREFER.get(tj, 5)
+                    elif may_enter(ti, tj) and (is_through(tj) or tj in PRIVATE_HOST.get(ti, ()) or (ti in WET and tj in BEDS)):
+                        rank = self._PREFER.get(tj, 4 if is_through(tj) else 6)
+                    else:
+                        continue
+                    if best is None or rank < best[0]:
+                        best = (rank, j)
+                if best is not None:
+                    reached.add(i)
+                    parent[i] = best[1]
+                    changed = True
+        return reached, parent
 
     def _miss(self, rect, want: Direction, cu: float, cv: float) -> float:
         """0 when the room sits toward `want` from the middle of the house, 1 when opposite."""
@@ -1546,8 +1570,33 @@ class PartiPlanner:
                 made[id(p)] = rooms[-1]
             # A suite's bath, and a balcony off its room, name the room they belong to,
             # so the doors go where the plan meant them.
+            # The door each room is meant to have: the door placer follows it where it is legal.
+            types = [x[0].type for x in placed]
+            n = len(placed)
+            eps = 0.02
+
+            def touch(a, b):
+                _, a0, b0, a1, b1 = a
+                _, c0, d0, c1, d1 = b
+                if abs(a1 - c0) < eps or abs(c1 - a0) < eps:
+                    return max(0.0, min(b1, d1) - max(b0, d0))
+                if abs(b1 - d0) < eps or abs(d1 - b0) < eps:
+                    return max(0.0, min(a1, c1) - max(a0, c0))
+                return 0.0
+            adj = [[touch(placed[i], placed[j]) if i != j else 0.0 for j in range(n)] for i in range(n)]
+            top = max(x[4] for x in placed)
+            start = ({i for i, t in enumerate(types) if t in (T.VERANDAH, T.FOYER) and abs(placed[i][4] - top) < eps}
+                     or {i for i, t in enumerate(types) if t in (T.LIVING, T.DRAWING)}) if li == 0 else \
+                ({i for i, t in enumerate(types) if t is T.STAIRCASE} or {i for i, t in enumerate(types) if t is T.LOBBY})
+            _reached, parent = self._reach(placed, types, adj, start)
+            for i, j in parent.items():
+                a, b = placed[i][0], placed[j][0]
+                if id(a) in made and id(b) in made:
+                    made[id(a)].metadata["enter_from"] = made[id(b)].id
             for p, *_r in placed:
                 if p.host is not None and id(p) in made and id(p.host) in made:
                     made[id(p)].metadata["suite_of"] = made[id(p.host)].id
+                elif p.type in WET and id(p) in made:
+                    made[id(p)].metadata["common"] = True      # opens off the passage, for everyone
             out.append(rooms)
         return out
