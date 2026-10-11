@@ -260,18 +260,33 @@ def parse(text: str) -> dict[str, Any]:
     if m:
         a, b = _num(m.group(1)), _num(m.group(3))
         unit = (m.group(2) or m.group(4) or "").strip()
-        if unit in {"ft", "feet", "foot", "'"} or (not unit and min(a, b) >= 25):
+        if unit in {"ft", "feet", "foot", "'"} or (not unit and (min(a, b) >= 25 or (min(a, b) >= 15 and max(a, b) >= 25))):
             out["plot_unit"] = "ft"
             a, b = a * FT, b * FT
         else:
             out["plot_unit"] = "m"
         out["plot_width"], out["plot_depth"] = round(a, 2), round(b, 2)
-    if m := re.search(r"(\d+)\s*(?:bhk|bed\s?rooms?|bedrooms?|br\b)", t):
+    if "plot_width" not in out and (m := re.search(
+            r"(\d[\d,]*(?:\.\d+)?)\s*(sq\.?\s*ft|sqft|square\s*feet|sq\.?\s*m\b|sqm|square\s*met(?:er|re)s?|sq\.?\s*yards?|gaj)", t)):
+        area = _num(m.group(1))
+        unit = m.group(2).replace(" ", "")
+        feet = unit.startswith(("sqft", "sq.ft", "squarefeet"))
+        if feet:
+            area *= FT * FT
+        elif unit.startswith(("sqy", "sq.y", "gaj")):
+            area *= 0.8361
+        if 15 <= area <= 20000:
+            w = (area * 0.75) ** 0.5            # an Indian plot is usually 3:4, the short side on the road
+            out["plot_width"], out["plot_depth"] = round(w, 2), round(area / w, 2)
+            out["plot_unit"] = "ft" if feet else "m"
+    if m := re.search(r"(\d+)\s*(?:bhk|bed\s?rooms?|bedrooms?|beds?\b|br\b)", t):
         out["bedrooms"] = int(m.group(1))
     if m := re.search(r"(\d+)\s*(?:bath\s?rooms?|baths|toilets)", t):
         out["bathrooms"] = int(m.group(1))
     if m := re.search(r"\bg\s*\+\s*(\d)", t):
         out["levels"] = int(m.group(1)) + 1
+    elif m := re.search(r"\bground\s*(?:floor\s*)?(?:\+|plus)\s*(\d|one|two|three|four)\b", t):
+        out["levels"] = (int(m.group(1)) if m.group(1).isdigit() else WORDNUM[m.group(1)]) + 1
     elif m := re.search(r"(\d)\s*(?:floors?|storeys?|stories|levels?)\b", t):
         out["levels"] = int(m.group(1))
     elif re.search(r"\b(single[- ]storey|single floor|ground floor only|one floor|bungalow)\b", t):
@@ -346,7 +361,7 @@ def parse(text: str) -> dict[str, Any]:
         if m := re.search(r"(\d+)\s*(?:balconies|balcony)", clause):
             req["count"] = int(m.group(1))
         for word, d in DIRS.items():
-            if re.search(rf"\b(?:in|on|at|towards?) the {word}\b", clause):
+            if re.search(rf"\b(?:in|on|at|towards?)(?: the)? {word}\b", clause):
                 req["direction"] = d
                 break
         if found in ("master_bedroom", "bedroom", "guest_bedroom") and re.search(r"attached|en-?suite", clause):
@@ -369,6 +384,21 @@ def parse(text: str) -> dict[str, Any]:
         if (level is not None or "direction" in req or "attach_to" in req or found not in AMENITY
                 or found in {"balcony", "courtyard", "garage"}):
             rooms.append(req)
+    # "pooja in northeast" inside a long clause: a room named with the side it is wanted on.
+    for word in sorted(ROOMS, key=len, reverse=True):
+        kind = ROOMS[word]
+        if kind in ("bedroom", "bathroom", "toilet"):
+            continue
+        for dname, d in DIRS.items():
+            if re.search(rf"\b{re.escape(word)}s?\s+(?:in|on|at|to|towards)(?:\s+the)?\s+{re.escape(dname)}\b", t):
+                have = next((r for r in rooms if r.get("type") == kind), None)
+                if have is None:
+                    rooms.append({"type": kind, "direction": d})
+                elif not have.get("direction"):
+                    have["direction"] = d
+                if kind in AMENITY:
+                    amen.add(AMENITY[kind])
+                break
     if rooms:
         out["rooms"] = rooms
     if amen:
