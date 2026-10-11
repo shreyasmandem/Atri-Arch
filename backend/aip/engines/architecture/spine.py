@@ -47,8 +47,8 @@ MIN_DIM = {T.MASTER_BEDROOM: 3.4, T.BEDROOM: 3.0, T.GUEST_BEDROOM: 3.0, T.CHILDR
            T.STORE: 1.4, T.BALCONY: 1.5, T.VERANDAH: 1.8, T.COURTYARD: 3.0, T.FOYER: 1.8, T.HOME_THEATRE: 3.6, T.GYM: 3.0, T.LIBRARY: 2.6, T.HOME_OFFICE: 2.6, T.SERVANT: 2.6}
 #: How far a room may grow past its programme area; beyond it the plot is garden.
 GROW = 1.1
-SPINE = 1.4
-FOYER = 2.2
+SPINE = 1.3
+FOYER = 1.9
 STAIR_W, STAIR_L = 2.5, 4.6
 BATH_DEPTH = 1.7
 
@@ -80,6 +80,7 @@ class Variant:
     wide: float          # 0 snug .. 1 generous stacks
     transverse: bool = False   # spine parallel to the road (wide, shallow plots)
     single: bool = False       # narrow plots: one row of rooms beside a side hall
+    ell: bool = False          # the living wing reaches past the bedrooms: an L-shaped house
 
 
 def variants() -> list[Variant]:
@@ -110,7 +111,8 @@ RANK = {T.PUJA: 0, T.STUDY: 1, T.HOME_OFFICE: 1, T.LIBRARY: 1, T.GUEST_BEDROOM: 
 
 
 class SpinePlanner:
-    def __init__(self, envelope: BoundingBox, road: Direction | None, stair_on: bool) -> None:
+    def __init__(self, envelope: BoundingBox, road: Direction | None, stair_on: bool,
+                 outer: BoundingBox | None = None) -> None:
         self.env = envelope
         r = (road.cardinal if road is not None else Direction.N).value
         self.road = r if r in {"N", "S", "E", "W"} else "N"
@@ -118,6 +120,13 @@ class SpinePlanner:
         self.W = envelope.width if across_x else envelope.height
         self.D = envelope.height if across_x else envelope.width
         self.stair_on = stair_on
+        # How far the buildable plot reaches past the envelope on each side of
+        # the frontage (canonical low and high u): room for an L's wing.
+        o = outer or envelope
+        e = envelope
+        gap = {"N": (e.min_x - o.min_x, o.max_x - e.max_x), "S": (o.max_x - e.max_x, e.min_x - o.min_x),
+               "E": (o.max_y - e.max_y, e.min_y - o.min_y), "W": (e.min_y - o.min_y, o.max_y - e.max_y)}[self.road]
+        self.slack = (max(0.0, gap[0]), max(0.0, gap[1]))
 
     def _poly(self, u0: float, v0: float, u1: float, v1: float):
         if getattr(self, "tr", False):
@@ -193,8 +202,13 @@ class SpinePlanner:
                 if any(wet(n) for n in near):
                     rows.pop(k)
                     spot = next((j for j in range(len(rows) + 1)
-                                 if not any(wet(rows[x]) for x in (j - 1, j) if 0 <= x < len(rows))), 0)
-                    rows.insert(spot, r)
+                                 if not any(wet(rows[x]) for x in (j - 1, j) if 0 <= x < len(rows))), None)
+                    if spot is None:
+                        # Nowhere clear of the wet rooms: a store between them.
+                        rows.insert(0, r)
+                        rows.insert(1, Row([Item(T.STORE, width * 1.3)], depth=1.3, cap=1.3, grow=False))
+                    else:
+                        rows.insert(spot, r)
                 break
         return rows
 
@@ -205,6 +219,7 @@ class SpinePlanner:
         self.outer = {}
         levels = [list(l) for l in levels]
         self.verandah = None
+        self.garden = {}
         # Courtyards, verandahs and car porches are ground-floor rooms.
         for l in levels[1:]:
             for r in [r for r in l if r.type in {T.COURTYARD, T.VERANDAH, T.GARAGE}]:
@@ -306,6 +321,16 @@ class SpinePlanner:
         self.spine = None
         Wh = pw + SP + qw
         u_off = (W - Wh) / 2 if not v.transverse else W - Wh   # transverse: the house against the road
+        # An L: the public rooms at the front reach out past the bedroom wing,
+        # leaving a garden court in the angle.
+        self.ext = 0.0
+        if v.ell and not v.transverse and not v.single:
+            room = (W - Wh) + (self.slack[0] if v.public_left else self.slack[1])
+            self.ext = min(4.5, room)
+            if self.ext < 2.4:
+                self.why = 9
+                return None
+            u_off = W - Wh if v.public_left else 0.0
         self.house = (u_off, u_off + Wh)
         if v.public_left:
             pl, spine, ql = (u_off, u_off + pw), (u_off + pw, u_off + pw + SP), (u_off + pw + SP, u_off + Wh)
@@ -392,12 +417,36 @@ class SpinePlanner:
             self.level = li
             self.v0 = v0
             self.rooms_ref = rooms
+            self.reach = self.ext if li == 0 else 0.0   # upstairs stays a simple block
+            self.reach_low = v.public_left
             if not self._fill(add, pl, prow, v0, Dl, None, []):
                 self.why = 5
                 return None
+            self.reach = 0.0
             if not self._fill(add, ql, qrow, v0, Dl - foyer_cut, stair, fronts):
                 self.why = 6
                 return None
+            # The hall stops at the last door it serves; behind it is garden.
+            # Decided on the ground floor and kept above, so floors stack.
+            hall = next((r for r in rooms if r.type is T.CORRIDOR), None)
+            if hall is not None:
+                if li == 0:
+                    sides = []
+                    for lo_u, hi_u in (pl, ql):
+                        bottoms = [r.metadata["_c"][1] for r in rooms
+                                   if r is not hall and r.metadata.get("_c") and r.metadata["_c"][0] >= lo_u - 0.01
+                                   and r.metadata["_c"][2] <= hi_u + 0.01]
+                        tops = [r.metadata["_c"][3] for r in rooms
+                                if r is not hall and r.metadata.get("_c") and abs(r.metadata["_c"][1] - min(bottoms)) < 0.01
+                                and r.metadata["_c"][0] >= lo_u - 0.01 and r.metadata["_c"][2] <= hi_u + 0.01] if bottoms else []
+                        if tops:
+                            sides.append(min(bottoms) + min(1.2, (min(tops) - min(bottoms)) * 0.5))
+                    self.hall_from = max(v0, min(sides)) if sides else v0
+                hc = hall.metadata["_c"]
+                start = max(hc[1], getattr(self, "hall_from", v0))
+                if start > hc[1] + 0.05 and hc[3] - start > 1.0:
+                    nc = (hc[0], start, hc[2], hc[3])
+                    hall.polygon = self._poly(*nc); hall.metadata["_c"] = nc
             out_levels.append(rooms)
         return out_levels
 
@@ -495,6 +544,9 @@ class SpinePlanner:
     def _fill(self, add, side, rows: list[Row], v0: float, D: float, stair, fronts: list[Item]) -> bool:
         u0, u1 = side
         width = u1 - u0
+        g = self.garden.get((round(u0, 2), round(u1, 2))) if self.level > 0 else None
+        if g:
+            v0 = g
         spans = [(v0, D)]
         if stair and stair[0] < u1 - 0.01 and stair[2] > u0 + 0.01:
             sv0, sv1 = stair[1], stair[3]
@@ -511,6 +563,12 @@ class SpinePlanner:
             add(it.type, u0, top - d, u1, top, it.req)
             top -= d
         bins = [[lo, min(hi, top)] for lo, hi in spans if min(hi, top) - lo > 0.05]
+        reach = getattr(self, "reach", 0.0)
+        if reach and rows and len(rows[0].parts) == 1 and rows[0].parts[0].type in (T.LIVING, T.DRAWING, T.VERANDAH):
+            it = rows[0].parts[0]
+            asked = getattr(it.req, "asked_area", None) or it.area
+            rows[0].depth = max(MIN_DIM.get(it.type, 3.6), it.area / (width + reach))
+            rows[0].cap = max(rows[0].depth, asked * 1.4 / (width + reach))
         groups, k = [], 0
         while k < len(rows):
             g = [rows[k]]
@@ -555,9 +613,11 @@ class SpinePlanner:
                     max(growable, key=lambda r: r.depth).depth += spare
                     spare = 0.0
             cursor = hi
+            lead = abs(hi - D) < 0.01          # rows from the front, for an L's reach
             for r in rs:
                 b0 = cursor - r.depth
                 if r.widths:
+                    lead = False
                     hall_low = abs(u0 - self.spine[1]) < 0.01
                     a = u0 if hall_low else u1
                     for part, w in zip(r.parts, r.widths, strict=True):
@@ -566,7 +626,11 @@ class SpinePlanner:
                         else:
                             add(part.type, a - w, b0, a, cursor, part.req); a -= w
                 elif len(r.parts) == 1:
-                    add(r.parts[0].type, u0, b0, u1, cursor, r.parts[0].req)
+                    wide = getattr(self, "reach", 0.0) if (lead and r.parts[0].type in (T.LIVING, T.DRAWING, T.VERANDAH)) else 0.0
+                    if not wide:
+                        lead = False
+                    ua, ub = (u0 - wide, u1) if getattr(self, "reach_low", True) else (u0, u1 + wide)
+                    add(r.parts[0].type, ua, b0, ub, cursor, r.parts[0].req)
                 else:
                     tot = sum(max(p.area, 1.0) for p in r.parts)
                     a = u0
@@ -579,10 +643,12 @@ class SpinePlanner:
                 cursor = b0
             if cursor - lo > 0.05:
                 gap = cursor - lo
-                if self.level > 0 and gap >= 1.5 and abs(lo - self.v0) < 0.01:
+                if self.level > 0 and gap >= 1.5 and (abs(lo - self.v0) < 0.01 or g):
                     add(T.TERRACE, u0, lo, u1, cursor, name="Terrace")
-                elif self.level == 0 and gap >= 3.0:
-                    add(T.FAMILY, u0, lo, u1, cursor, name="Family")
+                elif self.level == 0 and gap >= 2.5 and abs(lo - self.v0) < 0.01:
+                    # Garden: the shorter wing stops short, and the house is an L.
+                    # The floors above stop there too - nothing overhangs the garden.
+                    self.garden[(round(u0, 2), round(u1, 2))] = cursor
                 elif gap >= 1.4 and not (rs and rs[-1].grow):
                     add(T.STORE, u0, lo, u1, cursor, name="Store")
                 elif rs:

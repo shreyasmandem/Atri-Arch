@@ -1816,7 +1816,8 @@ class LayoutGenerator:
         try:
             levels = [[self.requirements[i] for i in bucket] for bucket in self.level_buckets]
             roads = self.brief.site.road_directions
-            planner = SpinePlanner(self._envelope, roads[0] if roads else None, len(levels) > 1)
+            planner = SpinePlanner(self._envelope, roads[0] if roads else None, len(levels) > 1,
+                                   outer=self._site_box())
         except Exception as exc:  # noqa: BLE001 - the search is the fallback
             log_event(logger, "layout.spine_failed", error=str(exc))
             return
@@ -1835,10 +1836,12 @@ class LayoutGenerator:
             ys = [p.y for lv in rooms for r in lv for p in r.polygon]
             envelope = self._envelope
             self._envelope = BoundingBox(min(xs), min(ys), max(xs), max(ys))
+            self._open_outline = True
             try:
                 plan = self._assemble(rooms)
             finally:
                 self._envelope = envelope
+                self._open_outline = False
             plan.metadata["planner"] = "spine"
             _doors_to_hosts(plan)
             self._judge(plan)
@@ -4054,6 +4057,11 @@ class LayoutGenerator:
                     kind, thickness = WallKind.EXTERIOR, WALL_THICKNESS_EXTERIOR
                 elif len(ids) > 1:
                     kind, thickness = WallKind.INTERIOR, WALL_THICKNESS_INTERIOR
+                elif getattr(self, "_open_outline", False):
+                    # A house that is not a rectangle (an L, a court): a wall with a
+                    # room on one side only is an outside wall, garden beyond.
+                    kind, thickness = WallKind.EXTERIOR, WALL_THICKNESS_EXTERIOR
+                    on_envelope = True
                 else:
                     # A wall bounding exactly one room and not on the envelope is a
                     # stub - the neighbouring cell was degenerate. A partition.
