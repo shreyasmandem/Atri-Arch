@@ -23,6 +23,7 @@ from aip.domain.plan import FloorPlan
 from aip.engines.experience.exteriors import (
     ACCENTS,
     BASES,
+    FEATURES,
     ROOFS,
     SCREENS,
     UPPERS,
@@ -45,10 +46,11 @@ You compose each design from this grammar - use only these values:
 - windows: {", ".join(WINDOWS)}  (band = continuous dark glazing band per floor)
 - planters: true/false
 - accent (colour of frame, fins or screen): {", ".join(ACCENTS)}
+- feature (the signature element): {", ".join(FEATURES)}  (jharokha = projecting bay windows on brackets; colonnade = posts and a verandah roof along the front; chhatri = roof pavilions, flat roofs only; cornice = deep floor cornices; breeze = breeze-block screen; greenwall = planted wall)
 
-Design for the client's words first, then the house style, the climate (hot Indian cities want shade on the west and south: fins, louvres, jaali, deep frames, overhangs) and good taste: one strong idea per design, materials that belong together, no two designs alike.
+Design for the client's words first, then the house style - stay in the style's own vocabulary (a haveli has jharokhas, jaali and sandstone; Kerala has tiled hip roofs on a colonnade; Scandinavian is a timber gable with nothing applied), the climate (hot Indian cities want shade on the west and south: fins, louvres, jaali, deep frames, overhangs) and good taste: one strong idea per design, materials that belong together, no two designs alike.
 
-Return only JSON: {{"designs": [{{"name": "a short evocative name (2-4 words)", "idea": "one sentence on the concept", "roof": ..., "base": ..., "upper": ..., "screen": ..., "windows": ..., "planters": ..., "accent": ...}}]}} with 8 designs, best first."""
+Return only JSON: {{"designs": [{{"name": "a short evocative name (2-4 words)", "idea": "one sentence on the concept", "roof": ..., "base": ..., "upper": ..., "screen": ..., "windows": ..., "planters": ..., "accent": ..., "feature": ...}}]}} with 8 designs, best first."""
 
 
 async def design_exteriors(plan: FloorPlan, preferences: str = "", *, use_llm: bool = True) -> list[dict[str, Any]]:
@@ -87,6 +89,7 @@ async def design_exteriors(plan: FloorPlan, preferences: str = "", *, use_llm: b
                             windows=d["windows"] if d.get("windows") in WINDOWS else "punched",
                             planters=bool(d.get("planters")),
                             accent=d["accent"] if d.get("accent") in ACCENTS else "bronze",
+                            feature=d["feature"] if d.get("feature") in FEATURES else "none",
                         )
                     except (KeyError, TypeError):
                         continue

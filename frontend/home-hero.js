@@ -9,9 +9,12 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 const HOUSES = [
-  ["demo/house0.glb", "Timber fins · stone base · slab roof"],
-  ["demo/house1.glb", "Perforated metal · board concrete · skillion"],
-  ["demo/house2.glb", "Jaali · brick base · tiled hip roof"],
+  ["demo/house0.glb", "Haveli · jharokhas · jaali · sandstone"],
+  ["demo/house1.glb", "Kerala · colonnade · tiled hip roof"],
+  ["demo/house2.glb", "Tropical · louvres · green wall"],
+  ["demo/house3.glb", "Contemporary · deep frame · cornices"],
+  ["demo/house4.glb", "Nordic · timber gable"],
+  ["demo/house5.glb", "Mid-century · breeze block · butterfly roof"],
 ];
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ease = (t) => 1 - Math.pow(1 - t, 3);
@@ -61,7 +64,7 @@ export async function mountHero(host, caption) {
   const show = async (first) => {
     const [url, label] = HOUSES[k % HOUSES.length];
     try {
-      await viewer.load(url, { keepView: !first, front: [0, 1] });
+      await viewer.load(url, { keepView: !first, front: [0, 1], zoom: 0.95, lift: 0.5 });
     } catch { return false; }
     if (caption) caption.textContent = label;
     if (!reduced()) await build(viewer);

@@ -365,6 +365,7 @@ async function initHome() {
     const air = $("show-air");
     if (air) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { mountAirShowcase(air); o.disconnect(); } }).observe(air);
   });
+  import("./steps.js").then(({ mountSteps }) => mountSteps()).catch(() => {});
   const grid = $("board-grid");
   if (grid) {
     const { PEOPLE, glyph } = await import("./atelier.js");
@@ -2443,7 +2444,29 @@ function reviseBox(after) {
   input.setAttribute("aria-label", "Describe a change to this design");
   const go = el("button", "ghost-btn", "Revise"); go.type = "submit";
   const said = el("p", "revise__said"); said.setAttribute("aria-live", "polite");
-  box.append(input, go, said);
+  // Changes this design could take, one tap each: what it lacks, what is
+  // usually asked of a house like it. Each is a sentence the studio reads.
+  const have = new Set((cur()?.plan?.levels || []).flatMap((l) => l.rooms.map((r) => r.type)));
+  const floors = (cur()?.plan?.levels || []).length;
+  const ideas = [
+    ["Bigger kitchen", "make the kitchen bigger"],
+    ["Bigger living room", "make the living room bigger"],
+    !have.has("study") && ["Add a study", "add a study"],
+    !have.has("puja") && ["Add a puja room", "add a pooja room"],
+    !have.has("balcony") && floors > 1 && ["Balcony off the master", "add a balcony off the master bedroom"],
+    !have.has("garage") && ["Car parking", "add car parking"],
+    ["Kitchen in the south-east", "put the kitchen in the south-east"],
+    floors > 1 && ["Bedroom downstairs", "add a bedroom on the ground floor"],
+    ["One more bathroom", "add one more bathroom"],
+    ["Traditional look", "make it look traditional with a tiled roof"],
+  ].filter(Boolean).slice(0, 8);
+  const chips = el("div", "revise__ideas");
+  for (const [label, text] of ideas) {
+    const c = el("button", "revise__idea", label); c.type = "button";
+    c.addEventListener("click", () => { input.value = text; box.requestSubmit(); });
+    chips.append(c);
+  }
+  box.append(input, go, chips, said);
   after.before(box);
   box.addEventListener("submit", async (e) => {
     e.preventDefault();
