@@ -101,6 +101,39 @@ def _sanitize_attrs(attrs: dict[str, Any]) -> dict[str, Any]:
 
 
 @contextmanager
+def _trace(name: str, **kwargs: Any) -> Iterator[Any]:
+    """A Neatlogs span that never breaks the code it wraps.
+
+    Only opening and closing the span are guarded. An exception raised by the
+    traced code itself is recorded on the span and re-raised - catching it and
+    yielding again is what made `contextmanager` fail with "generator didn't
+    stop after throw()", hiding the real error.
+    """
+    try:
+        import neatlogs
+
+        cm = neatlogs.trace(name, **kwargs)
+        sp = cm.__enter__()
+    except Exception:  # noqa: BLE001 - tracing is optional
+        yield None
+        return
+    try:
+        yield sp
+    except BaseException as exc:
+        try:
+            suppressed = cm.__exit__(type(exc), exc, exc.__traceback__)
+        except Exception:  # noqa: BLE001
+            suppressed = False
+        if not suppressed:
+            raise
+    else:
+        try:
+            cm.__exit__(None, None, None)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+@contextmanager
 def workflow_span(
     name: str,
     *,
@@ -114,28 +147,18 @@ def workflow_span(
         yield None
         return
 
-    try:
-        import neatlogs
+    cfg = get_settings()
+    merged: dict[str, Any] = {
+        "neatlogs.workflow.project_id": cfg.neatlogs_project_id,
+        "neatlogs.workflow.surface": "architect-studio",
+    }
+    if input_value:
+        merged["input.value"] = input_value[:4000]
+    if attributes:
+        merged.update(_sanitize_attrs(attributes))
 
-        cfg = get_settings()
-        merged: dict[str, Any] = {
-            "neatlogs.workflow.project_id": cfg.neatlogs_project_id,
-            "neatlogs.workflow.surface": "architect-studio",
-        }
-        if input_value:
-            merged["input.value"] = input_value[:4000]
-        if attributes:
-            merged.update(_sanitize_attrs(attributes))
-
-        with neatlogs.trace(
-            name,
-            kind="WORKFLOW",
-            session_id=session_id or None,
-            attributes=merged,
-        ) as sp:
-            yield sp
-    except Exception:  # noqa: BLE001
-        yield None
+    with _trace(name, kind="WORKFLOW", session_id=session_id or None, attributes=merged) as sp:
+        yield sp
 
 
 @contextmanager
@@ -145,17 +168,8 @@ def chain_span(name: str, **attributes: Any) -> Iterator[Any]:
         yield None
         return
 
-    try:
-        import neatlogs
-
-        with neatlogs.trace(
-            name,
-            kind="CHAIN",
-            attributes=_sanitize_attrs(attributes),
-        ) as sp:
-            yield sp
-    except Exception:  # noqa: BLE001
-        yield None
+    with _trace(name, kind="CHAIN", attributes=_sanitize_attrs(attributes)) as sp:
+        yield sp
 
 
 @contextmanager
@@ -173,22 +187,17 @@ def agent_span(
         yield None
         return
 
-    try:
-        import neatlogs
-
-        attrs = _sanitize_attrs(
-            {
-                "neatlogs.agent.name": name,
-                "neatlogs.agent.role": role,
-                "neatlogs.agent.goal": goal,
-                "neatlogs.agent.analytical": analytical,
-                "aip.trace_id": trace_id,
-            }
-        )
-        with neatlogs.trace(agent_id, kind="AGENT", attributes=attrs) as sp:
-            yield sp
-    except Exception:  # noqa: BLE001
-        yield None
+    attrs = _sanitize_attrs(
+        {
+            "neatlogs.agent.name": name,
+            "neatlogs.agent.role": role,
+            "neatlogs.agent.goal": goal,
+            "neatlogs.agent.analytical": analytical,
+            "aip.trace_id": trace_id,
+        }
+    )
+    with _trace(agent_id, kind="AGENT", attributes=attrs) as sp:
+        yield sp
 
 
 @contextmanager
@@ -198,17 +207,8 @@ def retriever_span(name: str, **attributes: Any) -> Iterator[Any]:
         yield None
         return
 
-    try:
-        import neatlogs
-
-        with neatlogs.trace(
-            name,
-            kind="RETRIEVER",
-            attributes=_sanitize_attrs(attributes),
-        ) as sp:
-            yield sp
-    except Exception:  # noqa: BLE001
-        yield None
+    with _trace(name, kind="RETRIEVER", attributes=_sanitize_attrs(attributes)) as sp:
+        yield sp
 
 
 @contextmanager

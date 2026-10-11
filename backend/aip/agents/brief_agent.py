@@ -651,17 +651,47 @@ def _clean(updates: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+_BARE = re.compile(rf"^\s*(\d|{'|'.join(WORDNUM)})\s*(?:please|pls|plz)?\s*[.!]?\s*$")
+_BARE_DIR = {**DIRS, **{v.lower(): v for v in DIRS.values()}}
+_BARE_GROUND = re.compile(r"^\s*(?:just |only )?(?:ground|g)(?: floor)?(?: only)?\s*[.!]?\s*$")
+
+
+def _bare_answer(message: str, brief: dict[str, Any]) -> dict[str, Any]:
+    """A bare reply to a question still open - "South", "Ground only", "4" or a
+    tapped chip - read as the answer to that question, since the parser only
+    reads these inside a phrase ("south facing", "4 bedrooms")."""
+    t = _hindi(message.lower()).strip()
+    need = missing(brief)
+    word = re.sub(r"\s*(?:side|road|facing)?\s*[.!]?$", "", re.sub(r"^(?:the |road |facing )", "", t)).strip()
+    if "road_direction" in need and word in _BARE_DIR:
+        return {"road_direction": _BARE_DIR[word]}
+    if "levels" in need and _BARE_GROUND.match(t):
+        return {"levels": 1}
+    m = _BARE.match(t)
+    if not m:
+        return {}
+    n = int(m.group(1)) if m.group(1).isdigit() else WORDNUM[m.group(1)]
+    asked = need[:2] if any(k in need[:2] for k in ("bedrooms", "levels")) else need
+    if "bedrooms" in asked and 1 <= n <= 8:
+        return {"bedrooms": n}
+    if "levels" in asked and 1 <= n <= 6:
+        return {"levels": n}
+    return {}
+
+
 async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm: bool = True,
                    history: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """One turn: the updated brief, what is still missing, what to ask, and the reply."""
     brief = dict(brief or {})
     rules = parse(message)
+    bare = {k: v for k, v in _bare_answer(message, brief).items() if k not in rules}
+    rules.update(bare)
     turn = await llm_turn(message, brief, history or []) if use_llm else None
     if turn is not None:
         model = _clean(turn.get("updates") or {})
         # The rules win where they read a number unambiguously (a model can
         # slip a unit); the model carries everything else, in any language.
-        for k in ("plot_width", "plot_depth", "plot_unit", "bedrooms", "levels"):
+        for k in ("plot_width", "plot_depth", "plot_unit", "bedrooms", "levels", *bare):
             if k in rules:
                 model[k] = rules[k]
         # Rooms the rules read (counted, placed on floors, next to another
@@ -678,7 +708,8 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
         if (turn.get("go_ahead") or GO_AHEAD.search(message.lower())) and need:
             merged = apply_defaults(merged)
             need = []
-        questions = [q for q in (turn.get("questions") or []) if isinstance(q, dict) and q.get("text")][:2]
+        questions = [q for q in (turn.get("questions") or []) if isinstance(q, dict) and q.get("text")
+                     and not (q.get("key") in ESSENTIAL and q.get("key") not in need)][:2]
         if need and not questions:
             questions = [{"key": k, "text": QUESTIONS[k][0], "options": QUESTIONS[k][1]} for k in need[:2]]
         if not need:
