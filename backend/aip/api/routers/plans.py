@@ -184,6 +184,19 @@ async def get_vastu_placements(
     return placements(_load(plan_id, principal), tradition)
 
 
+@router.get("/{plan_id}/exteriors")
+async def get_exteriors(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    prefs: str = Query(default="", max_length=1200, description="What the client said about the look they want"),
+) -> dict[str, Any]:
+    """Distinct exterior designs for this plan from the exterior designer, best first."""
+    from aip.agents.exterior_agent import design_exteriors
+
+    plan = _load(plan_id, principal)
+    return {"designs": await design_exteriors(plan, prefs)}
+
+
 @router.get("/{plan_id}/palettes")
 async def get_palettes(
     plan_id: str,

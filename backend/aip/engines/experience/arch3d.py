@@ -168,6 +168,13 @@ class Palette:
             "screen": Material("screen", (0.05, 0.05, 0.06), 0.2),
             "brass": Material("brass", (0.78, 0.60, 0.28), 0.3, 0.9),
             "light": Material("light", (1.0, 0.95, 0.84), 0.5, 0.0, 1.0, (1.0, 0.86, 0.62)),
+            # Exterior skins.
+            "ex_brick": Material("brick", (0.56, 0.30, 0.22), 0.9),
+            "ex_concrete": Material("board_concrete", (0.62, 0.61, 0.58), 0.95),
+            "ex_timber": Material("timber_boards", (0.55, 0.37, 0.22), 0.7),
+            "ex_metal": Material("dark_metal", (0.16, 0.16, 0.17), 0.45, 0.6),
+            "ex_glassband": Material("glazing_band", (0.10, 0.12, 0.14), 0.08, 0.4),
+            "ex_accent": Material("exterior_accent", (0.54, 0.42, 0.30), 0.5, 0.3),
         }
         self.scheme = scheme
         if scheme is not None:
@@ -485,6 +492,8 @@ def _walls(b: Builder, plan: FloorPlan, level: Level, base: float, node: str, ro
         out = wall.outward_normal(centre) if exterior else Vec2(0, 0)
         cladded = (exterior and level.index == 0 and road is not None and out.dot(road) > 0.7)
         mat = "clad" if cladded else ("plaster" if exterior else "wall_in")
+        if exterior and getattr(b.p, "skins", None) and level.index in b.p.skins:
+            mat = b.p.skins[level.index]
         t = wall.thickness
         # Which room lies on which face: + is the side the left normal points to.
         n = Vec2(-unit.y, unit.x)
@@ -711,6 +720,15 @@ def _hip_roof(b: Builder, env: BoundingBox, y: float) -> None:
         length = math.hypot(xb - xa, zb - za)
         yaw = math.atan2(zb - za, xb - xa)
         b.box("roof", "timber", (mid[0], y - 0.06, -mid[1]), (length, 0.14, 0.05), yaw)
+
+
+def _flat_roof_extras(b: Builder, top: Level, y: float) -> None:
+    """The stair head-room and water tank, on a roof without a parapet."""
+    stair = next((r for r in top.rooms if r.type is RoomType.STAIRCASE), None)
+    if stair is not None:
+        bb = stair.bbox
+        b.box("roof", "plaster", (bb.centre.x, y + 0.18 + 1.3, -bb.centre.y), (bb.width, 2.6, bb.height))
+        b.box("roof", "slab", (bb.centre.x, y + 0.18 + 2.66, -bb.centre.y), (bb.width + 0.3, 0.12, bb.height + 0.3))
 
 
 def _flat_roof(b: Builder, plan: FloorPlan, top: Level, y: float, footprint, palette: Palette) -> None:
@@ -983,6 +1001,14 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
     if include_ground:
         _site(b, plan, ground_fp, road)
 
+    from aip.engines.experience import exteriors, facades
+
+    ex = exteriors.Exterior.parse(design_id)
+    if ex is None and design_id not in facades.DESIGNS:
+        ex = exteriors.generate(plan, 1)[0]
+    # The outside face of each floor's walls takes the design's skin.
+    palette.skins = exteriors.skins(ex, len(plan.levels)) if ex is not None else {}
+
     bases: list[float] = []
     dressed: list[tuple[Level, float, Any]] = []
     y = PLINTH
@@ -1013,20 +1039,26 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
                 _stair(b, room, y, level.floor_to_floor, f"{node}/structure")
         y += level.floor_to_floor
 
-    # The facade language: one of several, chosen for the style and the plan.
-    from aip.engines.experience import facades
+    # The facade: the exterior grammar's design, or a named legacy language.
 
-    design = facades.choose(plan, design_id)
     try:
-        over = facades.apply(b, plan, design, dressed, road, y)
+        if ex is not None:
+            over = exteriors.apply(b, plan, ex, dressed, road, y)
+        else:
+            over = facades.apply(b, plan, facades.choose(plan, design_id), dressed, road, y)
     except Exception as exc:  # noqa: BLE001 - a plain facade beats no model
-        log_event(logger, "arch3d.facade_failed", plan=plan.id, design=design, error=str(exc))
+        log_event(logger, "arch3d.facade_failed", plan=plan.id, design=design_id, error=str(exc))
         over = {}
     roof_kind = over.get("roof", palette.roof_kind)
     if plan.levels:
         top = plan.levels[-1]
         fp = _footprint(top)
-        if roof_kind == "pitch":
+        if roof_kind in ("slab", "butterfly", "gable"):
+            b.slab("roof", "slab", _poly_pts(fp), y - SLAB, y)
+            exteriors.roof(b, roof_kind, fp, y, road)
+            if roof_kind == "slab":
+                _flat_roof_extras(b, top, y)
+        elif roof_kind == "pitch":
             b.slab("roof", "slab", _poly_pts(fp), y - SLAB, y)
             facades.pitch_roof(b, fp, y, road)
         elif roof_kind == "hip":

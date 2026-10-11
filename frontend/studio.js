@@ -1850,7 +1850,25 @@ async function paletteCard(card, id, modelUrl) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     list = d.schemes;
-    designs = d.designs || [];
+    // Facades come from the exterior designer, composed for what the client said.
+    if (!designs.length) {
+      const cb = S.chatBrief || {};
+      const prefs = [cb.notes, (cb.styles || []).join(" "), cb.colours, pal.text].filter(Boolean).join(". ");
+      fetch(`${API}/plans/${id}/exteriors${prefs ? `?prefs=${encodeURIComponent(prefs.slice(0, 1100))}` : ""}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((x) => {
+          if (!x?.designs?.length) return;
+          designs = x.designs;
+          // The designer's first choice becomes what the model shows.
+          if (!pal.design && S.viewer) {
+            pal.design = designs[0].id;
+            S.viewer.load(modelUrl(), { keepView: true }).catch(() => {});
+          }
+          draw();
+        })
+        .catch(() => {});
+      designs = d.designs || [];
+    }
     pal.prefs = d.preferences;
   };
   const apply = async (scheme) => {
@@ -1893,7 +1911,7 @@ async function paletteCard(card, id, modelUrl) {
       const di = Math.max(0, designs.findIndex((x) => x.id === pal.design));
       const row = el("div", "pal__head pal__design");
       const lab = el("span", "pal__toggle");
-      lab.append(el("span", "pal__k", "Facade"), el("b", "pal__name", designs[di].name));
+      lab.append(el("span", "pal__k", `Facade ${di + 1} / ${designs.length}`), el("b", "pal__name", designs[di].name));
       lab.title = designs[di].story;
       const dn = el("div", "pal__nav");
       for (const [t, step] of [["‹", -1], ["›", 1]]) {
