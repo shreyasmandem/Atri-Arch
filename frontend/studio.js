@@ -226,9 +226,9 @@ function renderBrief() {
   setText("hl-road", ROAD_WORD[road]);
   const storeys = levels === 1 ? "one storey" : `${NUMWORD[levels] || levels} storeys`;
   setText("hl-prog", `${NUMWORD[beds] || beds} bedroom${beds > 1 ? "s" : ""}, ${storeys}`);
-  setText("budget-words", budget ? lakh(budget) : "");
+  setText("budget-words", budget ? lakh(budget) : "no budget set");
   setText("stance-note", stance[2]);
-  setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ₹${lakh(budget)} · Vastu ${stance[0].toLowerCase()}`);
+  setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ${budget ? `₹${lakh(budget)}` : "no set budget"} · Vastu ${stance[0].toLowerCase()}`);
   drawPlot({ w, d, rw, rd, unit, road, levels,
     ...(() => { const sb = autoSetbacks(w * d, +v("setback_front") || null, +v("setback_rear") || null, +v("setback_side") || null);
       return { front: sb[0], rear: sb[1], side: sb[2] }; })() });
@@ -581,7 +581,8 @@ function readBrief() {
     bedrooms: Math.max(1, n("bedrooms", 3) || 3),
     bathrooms: Math.max(1, n("bathrooms", 3) || 3),
     styles: [String(d.get("styles") || "tropical_modern")],
-    budget: Math.max(500000, n("budget", 6500000) || 6500000),
+    // Left blank, there is no budget to be over: the cost axis then judges efficiency, not a number nobody gave.
+    budget: n("budget", 0) > 0 ? Math.max(500000, n("budget", 0)) : 0,
     currency: "INR",
     vastu: vastu,
     accessibility: elderlyAccess ? "universal" : "basic",
@@ -1085,7 +1086,7 @@ function renderRail() {
     ["Locality", b.locality], ["Road", b.road_direction],
     ["Bedrooms", b.bedrooms], ["Bathrooms", b.bathrooms],
     ["Floors", b.levels], ["Style", cap(b.styles?.[0] || "")],
-    ["Budget", inr(b.budget)], ["Vastu", cap(b.vastu || "")],
+    ["Budget", b.budget ? inr(b.budget) : "not set"], ["Vastu", cap(b.vastu || "")],
   ];
   for (const [k, v] of rows) {
     const d = el("div"); d.append(el("dt", null, k), el("dd", null, String(v ?? "—"))); recap.append(d);

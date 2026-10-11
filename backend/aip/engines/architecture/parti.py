@@ -102,10 +102,11 @@ class P:
     fixed_d: float | None = None   # a strip of fixed depth (balcony, sit-out)
     name: str | None = None
     filler: bool = False
+    scale: float = 1.0             # a small plot draws rooms a little under the usual least side
 
     @property
     def min_s(self) -> float:
-        return MIN_S.get(self.type, 1.4)
+        return MIN_S.get(self.type, 1.4) * self.scale
 
 
 @dataclass(eq=False)
@@ -209,6 +210,7 @@ class PartiPlanner:
         self.D = envelope.height if across_x else envelope.width
         self.stair_on = stair_on
         # A small plot takes a tighter dog-leg: two 0.9 m flights, 3.5 m long.
+        self.min_scale = 0.9 if compact_stair else 1.0
         self.st_w, self.st_run, self.st_rot_w, self.st_rot_d = (2.0, 3.5, 3.5, 2.0) if compact_stair else (STAIR_W, STAIR_RUN, STAIR_ROT_W, STAIR_ROT_D)
         self.cover = cover or self.W * self.D
         self.north = north_angle
@@ -251,7 +253,7 @@ class PartiPlanner:
                 continue
             if r.type is T.FOYER and self.W < 9.0 and "Requested" not in (r.notes or ""):
                 continue          # on a narrow plot the living room receives; the hall is not drawn
-            out.append(P(r.type, float(r.target_area), r, name=getattr(r, "label", None)))
+            out.append(P(r.type, float(r.target_area), r, name=getattr(r, "label", None), scale=self.min_scale))
         return out
 
     @staticmethod
@@ -1509,6 +1511,7 @@ class PartiPlanner:
                  "stair_top": G.r("stair_top") < 0.5}
             house = self._house(levels, g, scale)
             if house is None:
+                self.why["compose"] = self.why.get("compose", 0) + 1
                 return inf, G.g
             # The width the house takes: from snug to as wide as the plot and
             # its coverage allow once the bands are as shallow as they can be.
@@ -1518,6 +1521,7 @@ class PartiPlanner:
                 dmin = max(dmin, self.st_rot_d if g["stair_rot"] else self.st_run)
             hi = min(self.W, self.cover / max(dmin, 1.0))
             if hi < lo - 1e-6:
+                self.why["too_wide" if lo > self.W + 1e-6 else "too_deep"] = self.why.get("too_wide" if lo > self.W + 1e-6 else "too_deep", 0) + 1
                 return inf, G.g
             # A house in proportion to its plot: the width an architect would
             # start from, give or take, never a sliver on a wide site.
@@ -1527,14 +1531,19 @@ class PartiPlanner:
             if self.W <= 14:
                 want = max(want, 0.85 * self.W)
             a, b = max(lo, min(hi, 0.85 * want)), min(hi, max(lo, 1.2 * want))
+            # On a shallow plot a narrow house would have to be deeper than the
+            # plot: the house is at least as wide as its area needs the depth for.
+            a = max(a, min(b, area_need * scale / max(self.D, 1.0)))
             self.want_w = want
             Wh = a + (b - a) * G.r("width")
             depths = self._depths(house, Wh, g)
             if depths is None:
+                self.why["depths"] = self.why.get("depths", 0) + 1
                 return inf, G.g
             self._arrange(house, Wh, depths, g)
             sized = self._size(house, Wh, g)
             if sized is None:
+                self.why["size"] = self.why.get("size", 0) + 1
                 return inf, G.g
             pen, notes = self._score(sized, None)
             sig = tuple(tuple(tuple(tuple(p.type.value for p in s) for s in c.slots) for c in row)
@@ -1583,6 +1592,8 @@ class PartiPlanner:
             crowded = up is not None and sum(1 for p in up if p.type in BEDS) >= 4
             if g["bed_down"] >= (0.3 if self.elders else 0.65 if crowded else 1.1):
                 up = None
+            if self.cover < 85.0 and not self.elders and not crowded:
+                up = None            # a small plate keeps its ground floor for the day rooms
             if up is not None:
                 bed = min((p for p in up if p.type in BEDS and p.type is not T.MASTER_BEDROOM),
                           key=lambda p: p.area, default=None)
@@ -1616,11 +1627,42 @@ class PartiPlanner:
             fl = self._compose(li, ps, g)
             if not any(fl):
                 return None
+            self._balance(fl)
             drawn = {id(p) for row in fl for c in row for p in c.pieces()}
             if any(id(p) not in drawn for p in ps):
                 return None                  # never a plan that drops a room it was given
             house.append(fl)
         return house
+
+    @staticmethod
+    def _row_w(row: list[Cell]) -> float:
+        return sum(c.fixed_w if c.fixed_w is not None else c.min_w for c in row)
+
+    def _balance(self, fl: list[list[Cell]]) -> None:
+        """A band that cannot fit across the plot gives a room to another band:
+        a narrow plot has the same rooms, arranged to its width."""
+        keep = {T.STAIRCASE, T.CORRIDOR, T.LOBBY, T.FOYER, T.LIVING, T.DRAWING}
+        for _ in range(10):
+            w = [self._row_w(r) for r in fl]
+            r = max(range(3), key=lambda i: w[i])
+            if w[r] <= self.W + 1e-6:
+                return
+            best = None
+            for c in fl[r]:
+                if c.fixed_w is not None or c.span or any(p.type in keep for p in c.pieces()):
+                    continue
+                for o in range(3):
+                    if o == r or w[o] + c.min_w > self.W + 1e-6:
+                        continue
+                    # Prefer the emptiest band, and the cell that eases the wide one most.
+                    key = (w[o] + c.min_w, -c.min_w)
+                    if best is None or key < best[0]:
+                        best = (key, c, o)
+            if best is None:
+                return
+            _, c, o = best
+            fl[r].remove(c)
+            fl[o].append(c)
 
     def _rooms(self, sized) -> list[list[Room]]:
         floors, _depths, _box = sized

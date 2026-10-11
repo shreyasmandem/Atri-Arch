@@ -309,7 +309,7 @@ def parse(text: str) -> dict[str, Any]:
         rooms.append(r)
         if r["type"] in AMENITY:
             amen.add(AMENITY[r["type"]])
-    for clause in re.split(r"[.;,\n]| and | with | plus ", t):
+    for clause in re.split(r"[.;,\n&+]| and | aur | evam | tatha | with | plus | also | along with | saath mein | ke saath ", t):
         found = None
         host = None
         named = named_room(clause)

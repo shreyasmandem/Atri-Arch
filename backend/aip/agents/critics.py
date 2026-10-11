@@ -265,11 +265,12 @@ class CostCritic(CriticAgent):
                 f"80% confidence interval {estimate.p10:,.0f} to {estimate.p90:,.0f}."
             )
         else:
-            # No budget stated: score efficiency of spend per square metre instead.
-            score = 0.7
+            # No budget stated: nothing to be over. Judged on what the scheme
+            # spends per square metre of floor it gives, within its finish tier.
+            score = 0.82
             rationale = (
-                f"No budget was specified. Estimated {estimate.total:,.0f} "
-                f"{estimate.currency} at {estimate.rate_per_m2:,.0f}/m2."
+                f"No budget was specified, so the scheme cannot be over one. Estimated "
+                f"{estimate.total:,.0f} {estimate.currency} at {estimate.rate_per_m2:,.0f}/m2."
             )
 
         return self.make_critique(
