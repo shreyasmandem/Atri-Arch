@@ -151,6 +151,8 @@ export function mountHome({ host, api: API, setField, start, openManual }) {
       if (d.ready) {
         go.classList.remove("is-pulse"); void go.offsetWidth; go.classList.add("is-pulse");
       }
+      // "Yes, start": the client confirmed, so the studio starts on its own.
+      if (d.ready && d.start && d.request) setTimeout(() => start(d.request, d.brief), 900);
       scroll();
     } catch (err) {
       typing.remove();

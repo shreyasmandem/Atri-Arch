@@ -66,6 +66,7 @@ STYLES = {"modern": "modern_minimal", "minimal": "modern_minimal", "contemporary
 FLOOR_WORDS = {"ground": 0, "first": 1, "second": 2, "third": 3, "top": -1, "upstairs": 1, "upper": 1, "downstairs": 0}
 GO_AHEAD = re.compile(r"\b(go ahead|you decide|your call|anything|doesn'?t matter|no preference|just design|surprise me|proceed|start)\b")
 
+START = re.compile(r"^\s*(yes|yeah|yep|ok|okay|sure|start|begin|go|go ahead|let.?s go|let.?s do it|do it|proceed|haan|ha|chalo|shuru)(?![a-z])")
 ESSENTIAL = ("plot", "road_direction", "levels", "bedrooms")
 QUESTIONS = {
     "plot": ("What size is the plot?", ["30 x 40 ft", "40 x 60 ft", "12 x 18 m", "60 x 80 ft"]),
@@ -319,8 +320,10 @@ Return only JSON:
    "colours": "the client's colour wishes in their words",
    "notes": "anything else they want that fits nowhere above"},
  "questions": [{"key": "plot"|"road_direction"|"levels"|"bedrooms"|"other", "text": "the question, in their language", "options": ["2-5 short one-tap answers, in their language"]}],
- "go_ahead": true if they told you to proceed or decide yourself
-}"""
+ "go_ahead": true if they told you to proceed or decide yourself,
+ "start": true if they are confirming that the design should begin now ("yes", "start", "go ahead", "haan, shuru karo", "let's do it")
+}
+When the essentials are known and the client confirms, set "start": true and say in a few words that the studio is starting."""
 
 
 async def llm_turn(message: str, brief: dict[str, Any], history: list[dict[str, str]]) -> dict[str, Any] | None:
@@ -407,7 +410,8 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
             questions = [{"key": k, "text": QUESTIONS[k][0], "options": QUESTIONS[k][1]} for k in need[:2]]
         if not need:
             questions = [q for q in questions if q.get("key") == "other"][:1]
-        return {"brief": merged, "missing": need, "questions": questions, "ready": not need,
+        start = bool(turn.get("start") or START.search(message.lower())) and not need
+        return {"brief": merged, "missing": need, "questions": questions, "ready": not need, "start": start,
                 "reply": str(turn["reply"]).strip(), "by": "model"}
     # No model reachable: the rules, with a plain reply.
     merged = merge(brief, rules)
@@ -421,7 +425,8 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
         reply = (f"Noted - {heard}. " if heard else "") + " ".join(q["text"] for q in questions)
     else:
         reply = "That's everything I need. Press Start designing when you're ready, or tell me anything else you'd like."
-    return {"brief": merged, "missing": need, "questions": questions, "ready": not need, "reply": reply, "by": "rules"}
+    return {"brief": merged, "missing": need, "questions": questions, "ready": not need,
+            "start": bool(START.search(message.lower())) and not need and bool(brief), "reply": reply, "by": "rules"}
 
 
 async def revise(instruction: str, brief: dict[str, Any], *, use_llm: bool = True) -> dict[str, Any]:
