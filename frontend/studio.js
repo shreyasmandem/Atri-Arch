@@ -1764,8 +1764,8 @@ function renderCost() {
   const stats = el("div", "stat-row");
   for (const [pig, k, val, sub] of [
     ["ochre", "Estimate", inr(c.total), `${inr(c.rate_per_m2)} per m²`],
-    ["indigo", "80% range", `${inr(c.p10)}`, `to ${inr(c.p90)} · ±${c.uncertainty_band_percent ?? "—"}%`],
-    ["chalk", "Programme", `${c.duration_months} mo`, `${Math.round(c.delay_probability * 100)}% chance of delay`],
+    ["indigo", "80% range", `${inr(c.p10)}`, `to ${inr(c.p90)}${c.total ? ` · ±${Math.round((c.p90 - c.p10) / 2 / c.total * 100)}%` : ""}`],
+    ["chalk", "Programme", `${c.duration_months} mo`, c.expected_delay_weeks > 0.5 ? `plan for about ${Math.round(c.expected_delay_weeks)} weeks of slip` : "no material slip expected"],
     ["hingula", "Line items", `${c.line_items.length}`, `${c.finish_tier} spec · ${c.region}`],
   ]) {
     const d = el("dl", "stat"); d.dataset.pig = pig;
