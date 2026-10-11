@@ -1151,6 +1151,19 @@ class PartiPlanner:
             if ws is None:
                 return False
             u = u0
+            deep = self._spare_depth(s, sd)
+            if deep is not None:
+                # A bath in a deep bay keeps its depth; what is left is its dressing room.
+                keep_d, filler = deep
+                p = s[0]
+                if band == 2:
+                    placed.append((filler, u0, v - (sd - keep_d), u1, v))
+                    placed.append((p, u0, v - sd, u1, v - (sd - keep_d)))
+                else:
+                    placed.append((p, u0, v - keep_d, u1, v))
+                    placed.append((filler, u0, v - sd, u1, v - keep_d))
+                v -= sd
+                continue
             for p, w in zip(s, ws):
                 # A room is never stretched past what a room of its kind is: the
                 # width it cannot use becomes the dressing room (or wardrobe)
@@ -1165,6 +1178,20 @@ class PartiPlanner:
                 u += w
             v -= sd
         return True
+
+    @staticmethod
+    def _spare_depth(slot: list[P], sd: float):
+        """(depth the bath keeps, the dressing room that takes the rest) or None."""
+        if len(slot) != 1:
+            return None
+        p = slot[0]
+        if p.filler or p.type is not T.BATHROOM or p.host is None:
+            return None
+        cap = MAX_D[T.BATHROOM]
+        if sd > cap + 0.9 and sd - cap >= 1.3:
+            return cap, P(T.STORE, 0.0, None, host=p.host,
+                          name="Dressing" if p.host.type is T.MASTER_BEDROOM else "Wardrobe", filler=True)
+        return None
 
     @staticmethod
     def _spare_strip(c: Cell, slot: list[P], p: P, w: float, sd: float):
