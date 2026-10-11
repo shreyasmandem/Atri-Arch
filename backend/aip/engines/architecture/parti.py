@@ -995,7 +995,7 @@ class PartiPlanner:
             # lobby before it becomes a terrace no door can reach.
             lob = next((c for c in row if c.slots[0][0].type is T.LOBBY), None)
             if lob is not None:
-                add = min(spare, max(0.0, 2.4 - fixed[id(lob)]))
+                add = min(spare, max(0.0, (2.4 if d <= 4.5 and not lob.span else 1.6) - fixed[id(lob)]))   # a long landing stays narrow
                 fixed[id(lob)] += add
                 spare -= add
                 avail -= add
@@ -1050,7 +1050,17 @@ class PartiPlanner:
             grow = next((c for c in row if c.slots[0][0].type in (T.LOBBY, T.CORRIDOR)), None)
             if grow is None:
                 return None          # a stair alone in its band is not stretched across the house
-            fixed[id(grow)] += avail
+            if li > 0 and r == 1 and grow.slots[0][0].type is T.LOBBY and (d > 4.5 or grow.span)                     and fixed[id(grow)] + avail >= 1.6 + 1.8:
+                # A long landing stays a landing; the width it cannot use is a sitting
+                # lounge beside it, so the floor has no hall as big as a room.
+                lounge_w = fixed[id(grow)] + avail - 1.6
+                fixed[id(grow)] = 1.6
+                t = Cell([[P(T.FAMILY, 0.0, name="Upper lounge", filler=True)]], fixed_w=lounge_w)
+                fixed[id(t)] = lounge_w
+                st_i = next((i for i, c in enumerate(row) if c.slots[0][0].type is T.STAIRCASE), None)
+                row.insert(len(row) if st_i == 0 or st_i is None else 0, t)
+            else:
+                fixed[id(grow)] += avail
             avail = 0.0
         widths = _fit(avail, nat, [c.min_w for c in flex], caps) if flex else []
         if widths is None:
@@ -1405,7 +1415,7 @@ class PartiPlanner:
             tot = sum((x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].type not in OUTDOOR) or 1.0
             circ = sum((x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].type in (T.CORRIDOR, T.LOBBY))
             if circ / tot > 0.1:
-                hit(60 * (circ / tot - 0.1), "circulation")
+                hit(100 * (circ / tot - 0.1) + 400 * max(0.0, circ / tot - 0.14), "circulation")
             ter = sum((x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].filler)
             # A house shows the street a proper front: on a wide plot it is not a 7 m sliver.
             if li == 0:
