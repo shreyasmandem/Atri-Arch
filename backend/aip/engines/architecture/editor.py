@@ -320,6 +320,14 @@ def apply_edits(plan: FloorPlan, ops: list[dict[str, Any]]) -> tuple[FloorPlan, 
                     if lvl is None:
                         raise EditError("That floor does not exist.")
                     targets = [r for r in lvl.rooms if not r.type.is_outdoor]
+                top = max(lv.index for lv in new.levels)
+                for r in targets:
+                    lvl_of = next(lv for lv in new.levels if r in lv.rooms)
+                    room_cap = CEILING_RANGE[1] if lvl_of.index == top else lvl_of.floor_to_floor - 0.15
+                    if h > room_cap + 1e-6:
+                        raise EditError(
+                            f"The {_label(r)} has another floor over it, so its ceiling can be at most "
+                            f"{room_cap:.2f} m (the floor-to-floor less the slab).")
                 for r in targets:
                     r.ceiling_height = round(h, 2)
                 msg = (f"{_label(targets[0])}" if len(targets) == 1 else f"{len(targets)} rooms") + f" ceiling {h:.2f} m"
