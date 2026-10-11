@@ -10,7 +10,7 @@
 import { atelier, person, avatar } from "./atelier.js";
 
 const API = (() => {
-  const o = new URLSearchParams(location.search).get("api");
+  const o = new URLSearchParams(location.search).get("api") || window.AIP_API;
   if (o) return o.replace(/\/$/, "");
   if (location.port === "8080" || location.port === "3000" || location.port === "5500") {
     return `http://${location.hostname || "127.0.0.1"}:8000/api/v1`;
@@ -819,6 +819,7 @@ async function onUpload(e) {
 async function stream(url, simple) {
   cancelRun();
   S.abort = new AbortController();
+  S.streamError = null;
   const res = await fetch(url, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: simple ? JSON.stringify({ simple, candidates: 3, include_generative_critics: true }) : undefined,
@@ -860,8 +861,10 @@ async function stream(url, simple) {
   }
 
   if (!sawResult && (S.isGenerating || S.phase === "running")) {
-    atelier.fail("The run ended without a scheme",
-      "The engine closed the connection before returning a design. Check the server log, then try again.",
+    const why = S.streamError;
+    S.streamError = null;
+    atelier.fail(why ? "This brief needs a change" : "The studio lost its connection",
+      why || "The connection dropped before the design came back. Nothing was lost - press Start designing again.",
       { onBack: backToBrief });
   }
 }
@@ -888,7 +891,8 @@ function handle(frame) {
     window.dispatchEvent(new Event("aip:result"));
     atelier.result(d, { onOpen: () => applyResult(d) });
   } else if (name === "error") {
-    toast(d.message || "The engine reported an error.");
+    S.streamError = d.message || "The engine reported an error.";
+    toast(S.streamError);
   }
 }
 
@@ -919,7 +923,10 @@ async function applyResult(d) {
   S.candidateId = d.selected_candidate_id || d.consensus?.winner_id || d.winner_plan_id;
   S.negotiation = d.negotiation || null;
   S.negotiationOutcome = d.negotiation_outcome || "";
-  S.exportUrls = d.export_urls || {};
+  // Links the server returns are relative to it; with the UI hosted apart they need its origin.
+  const apiOrigin = /^https?:/.test(API) ? new URL(API).origin : "";
+  S.exportUrls = Object.fromEntries(Object.entries(d.export_urls || {})
+    .map(([k, u]) => [k, typeof u === "string" && u.startsWith("/") ? apiOrigin + u : u]));
   S.explanation = d.explanation || "";
   S.recommendations = d.recommendations || [];
   S.projectId = d.project_id; S.sessionId = d.trace_id;

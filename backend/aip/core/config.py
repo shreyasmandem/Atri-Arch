@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_prefix: str = "/api/v1"
     cors_origins: str = "*"
+    #: Origins matched by pattern, for a UI hosted apart (Vercel previews and production).
+    cors_origin_regex: str = r"https://[a-z0-9-]+\.vercel\.app"
 
     # Secret used to sign session tokens. Auto-generated in dev; MUST be set in
     # production or startup fails loudly (see `validate_production`).
@@ -139,7 +141,7 @@ class Settings(BaseSettings):
             problems.append("DEBUG must be false in production")
         if self.cors_origin_list == ["*"]:
             problems.append("CORS_ORIGINS must be an explicit allow-list in production")
-        if not self.configured_providers():
+        if not self.configured_providers() and not self.public_demo:
             problems.append(
                 "no model provider configured - set at least one free API key "
                 "(GROQ_API_KEY, GOOGLE_API_KEY, ...) or run Ollama locally"
