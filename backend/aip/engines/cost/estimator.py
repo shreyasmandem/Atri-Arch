@@ -469,7 +469,7 @@ def estimate_cost(
         professional_fees=round(fees, 2),
         tax=round(tax, 2),
         total=round(total, 2),
-        rate_per_m2=round(total / built, 2),
+        rate_per_m2=round(round(total, 2) / round(built, 2), 2),   # from the figures shown
         p10=round(p10, 2),
         p50=round(p50, 2),
         p90=round(p90, 2),

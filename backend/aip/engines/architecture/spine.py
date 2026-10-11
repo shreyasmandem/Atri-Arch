@@ -312,7 +312,9 @@ class SpinePlanner:
         if self.stair_on:
             qw = max(qw, STAIR_W)
         if not v.single and pw + SPINE + qw > W:
-            free = W - SPINE
+            # A tight plot: the hall narrows to a passage (1.1 m) before the rooms do.
+            hall_w = 1.1
+            free = W - hall_w
             if free < 2 * 2.8:
                 self.why = 2
                 return None
@@ -499,9 +501,12 @@ class SpinePlanner:
             return sum(max(1.5, min(1.8 if i.type is T.BALCONY else 3.0, i.area / wq)) for i in fronts)
         def shrink(i, a, scale):
             # Draw a room smaller than the generous size the programme grew it
-            # to, but never below 85 % of what the client asked for.
+            # to, but never below 85 % of what the client asked for - or, on a
+            # plot that cannot hold a hall otherwise, 72 %, and never so small
+            # it cannot be furnished.
             asked = getattr(i.req, "asked_area", None) or a
-            return max(a * scale, min(a, asked * 0.85))
+            floor = asked * 0.85 if scale >= 0.8 else max(asked * 0.72, MIN_DIM.get(i.type, 1.4) ** 2 * 1.05)
+            return max(a * scale, min(a, floor))
         for scale in (1.0, 0.9, 0.8, 0.7, 0.6):
             for _ in range(12):
                 dp, dq = depth(pub, wp, 0.0, scale), depth(priv, wq, stair_len + fdep() + (1.0 if stair_len and 0.0 < v.stair_at < 1.0 else 0.0), scale)
@@ -516,7 +521,9 @@ class SpinePlanner:
                 src, dst, ws, wd = (priv, pub, wq, wp) if dq > dp else (pub, priv, wp, wq)
                 if wp <= 0:
                     src, dst, ws, wd = priv, [], wq, 0.0
-                movable = [i for i in src if i.type in BEDS or i.type in {T.STUDY, T.FAMILY, T.STORE, T.PUJA}]
+                # A bedroom, a study, a puja.
+                movable = [i for i in src if i.type in BEDS
+                           or i.type in {T.STUDY, T.FAMILY, T.STORE, T.PUJA}]
                 moved = False
                 for it in (sorted(movable, key=lambda i: -(i.area + (i.bath.area if i.bath else 0))) if wd > 0 else []):
                     trial_src = [i for i in src if i is not it]
