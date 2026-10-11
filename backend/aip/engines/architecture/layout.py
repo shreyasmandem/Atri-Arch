@@ -1816,17 +1816,20 @@ class LayoutGenerator:
         try:
             levels = [[self.requirements[i] for i in bucket] for bucket in self.level_buckets]
             roads = self.brief.site.road_directions
-            planner = SpinePlanner(self._envelope, roads[0] if roads else None, len(levels) > 1,
-                                   outer=self._site_box())
+            road = roads[0] if roads else None
+            diagonal = road is not None and len(road.cardinal.value) == 2
+            planners = [SpinePlanner(self._envelope, road, len(levels) > 1, outer=self._site_box(), side=k)
+                        for k in ((0, 1) if diagonal else (0,))]
         except Exception as exc:  # noqa: BLE001 - the search is the fallback
             log_event(logger, "layout.spine_failed", error=str(exc))
             return
         from aip.engines.architecture.rowhouse import RowHousePlanner, row_variants
 
-        row = RowHousePlanner(self._envelope, roads[0] if roads else None, len(levels) > 1, outer=self._site_box())
+        rows = [RowHousePlanner(self._envelope, road, len(levels) > 1, outer=self._site_box(), side=k)
+                for k in ((0, 1) if diagonal else (0,))]
         made = 0
         # A narrow plot also gets the row house: no hall, a short passage between two bands.
-        tries = [(planner, v) for v in variants()] + ([(row, v) for v in row_variants()] if row.fits() else [])
+        tries = [(p, v) for p in planners for v in variants()] + [(r, v) for r in rows if r.fits() for v in row_variants()]
         for who, v in tries:
             try:
                 rooms = who.plan(levels, v)
@@ -1847,7 +1850,7 @@ class LayoutGenerator:
             finally:
                 self._envelope = envelope
                 self._open_outline = False
-            plan.metadata["planner"] = "spine" if who is planner else "row"
+            plan.metadata["planner"] = "row" if isinstance(who, RowHousePlanner) else "spine"
             _doors_to_hosts(plan)
             self._judge(plan)
             # A toilet over the kitchen, the puja or the dining table is a
@@ -2326,6 +2329,29 @@ class LayoutGenerator:
             else:
                 buckets[upper].append(idx)
                 upper = 1 + (upper % max(1, levels - 1))
+
+        # A ground floor asked to hold more than its footprint (a garage, a
+        # courtyard and the whole public programme on a small plot) sends up
+        # what lives as well upstairs - laundry first, then a store, a study, a
+        # spare bathroom - to the lightest floor, rather than squeezing every
+        # room below what it needs while the floors above are half terrace.
+        fp = self._footprint_area or self._footprint_cap()
+        if levels > 1 and fp:
+            movable = [RoomType.LAUNDRY, RoomType.STORE, RoomType.STUDY, RoomType.HOME_OFFICE,
+                       RoomType.LIBRARY, RoomType.GYM, RoomType.SERVANT]
+
+            def load(b: list[int]) -> float:
+                return sum(reqs[i].target_area for i in b) + 11.0 + 0.06 * fp
+
+            cap = 0.84 * fp
+            for kind in movable:
+                for idx in [i for i in buckets[0] if reqs[i].type is kind and reqs[i].level is None]:
+                    if load(buckets[0]) <= cap:
+                        break
+                    dest = min(range(1, levels), key=lambda k: load(buckets[k]))
+                    if load(buckets[dest]) + reqs[idx].target_area <= cap:
+                        buckets[0].remove(idx)
+                        buckets[dest].append(idx)
 
         # Every level needs at least one room.
         for bucket in buckets:

@@ -99,28 +99,52 @@ class SimpleBriefRequest(BaseModel):
     def _apply_extras(self, reqs: list[RoomRequirement]) -> list[RoomRequirement]:
         """Fold the chat's room requests into the programme."""
         reqs = [r for r in reqs if r.type not in set(self.remove_rooms)]
+        mark = "Requested by the client."
+        claimed: set[int] = set()
         for x in self.extra_rooms:
-            same = [r for r in reqs if r.type is x.type]
-            if same and (x.scale or x.level is not None or x.direction) and x.count == 1 and x.area is None:
-                for r in same[:1]:
-                    if x.scale:
-                        r.preferred_area = round(r.target_area * x.scale, 2)
-                    if x.level is not None:
-                        r.level = x.level
-                    if x.direction:
-                        r.preferred_direction = x.direction
-                    if x.attached_bathroom:
-                        r.attached_bathroom = True
+            notes = mark + (f" Opens off the {x.attach_to.value.replace('_', ' ')}." if x.attach_to else "")
+            # A room the programme already has, not yet claimed by an earlier
+            # request, takes this request's floor, size and side. A second
+            # request of the same kind ("a kitchen on the second floor too")
+            # adds a room rather than moving the first.
+            free = [r for r in reqs if r.type is x.type and id(r) not in claimed]
+            if free:
+                r = free[0]
+                if r.count > 1:
+                    r.count -= 1
+                    r = RoomRequirement(type=r.type, priority=r.priority, attached_bathroom=r.attached_bathroom,
+                                        needs_external_wall=r.needs_external_wall)
+                    reqs.append(r)
+                if x.area:
+                    r.preferred_area = x.area
+                elif x.scale:
+                    r.preferred_area = round(r.target_area * x.scale, 2)
+                if x.level is not None:
+                    r.level = x.level
+                if x.direction:
+                    r.preferred_direction = x.direction
+                if x.attached_bathroom:
+                    r.attached_bathroom = True
+                claimed.add(id(r))
+                if mark not in (r.notes or ""):
+                    r.notes = (notes + " " + (r.notes or "")).strip()
+                elif x.attach_to and "Opens off" not in r.notes:
+                    r.notes += notes[len(mark):]
+                if x.count > 1:
+                    reqs.append(extra := RoomRequirement(type=x.type, count=x.count - 1, level=x.level, notes=notes,
+                                                preferred_direction=x.direction, attached_bathroom=x.attached_bathroom,
+                                                needs_external_wall=x.type.is_outdoor))
+                    claimed.add(id(extra))
                 continue
-            if same and x.type not in {RoomType.BALCONY, RoomType.TERRACE, RoomType.STUDY, RoomType.GYM,
-                                       RoomType.HOME_THEATRE, RoomType.FAMILY, RoomType.STORE}:
-                continue
-            notes = "Requested by the client." + (f" Opens off the {x.attach_to.value.replace('_', ' ')}." if x.attach_to else "")
-            reqs.append(RoomRequirement(
+            if x.scale and not free and any(r.type is x.type for r in reqs):
+                continue        # "make the kitchen bigger" twice: once is enough
+            new = RoomRequirement(
                 type=x.type, count=x.count, preferred_area=x.area, preferred_direction=x.direction,
                 attached_bathroom=x.attached_bathroom, level=x.level, notes=notes,
                 needs_external_wall=x.type.is_outdoor or x.type in {RoomType.STUDY, RoomType.GYM},
-            ))
+            )
+            claimed.add(id(new))
+            reqs.append(new)
         return reqs
 
     def to_brief(self) -> ClientBrief:
@@ -255,6 +279,10 @@ class SimpleBriefRequest(BaseModel):
             if r.type in {RoomType.STUDY, RoomType.BALCONY, RoomType.GARAGE, RoomType.PUJA} and not r.notes:
                 r.notes = "Requested by the client."
         requirements = self._apply_extras(requirements)
+        # A car porch, a verandah and a courtyard open to the sky belong on the ground.
+        for r in requirements:
+            if r.type in {RoomType.GARAGE, RoomType.VERANDAH, RoomType.COURTYARD} and r.level is None and self.levels > 1:
+                r.level = 0
         must_haves = list(self.must_haves)
         if self.kitchen_type and f"kitchen:{self.kitchen_type}" not in must_haves:
             must_haves.append(f"kitchen:{self.kitchen_type}")

@@ -46,6 +46,10 @@ MIN_DIM = {T.MASTER_BEDROOM: 3.4, T.BEDROOM: 3.0, T.GUEST_BEDROOM: 3.0, T.CHILDR
            T.LIVING: 4.2, T.DINING: 3.0, T.KITCHEN: 2.4, T.BATHROOM: 1.6, T.TOILET: 1.4, T.POWDER: 1.3,
            T.UTILITY: 1.4, T.PUJA: 1.4, T.STUDY: 2.6, T.FAMILY: 3.2, T.DRAWING: 3.4, T.GARAGE: 5.0,
            T.STORE: 1.4, T.BALCONY: 1.5, T.VERANDAH: 1.8, T.COURTYARD: 3.0, T.FOYER: 1.8, T.HOME_THEATRE: 3.6, T.GYM: 3.0, T.LIBRARY: 2.6, T.HOME_OFFICE: 2.6, T.SERVANT: 2.6}
+#: The least a room can be and still be furnished, for floors with no room to spare.
+MIN_AREA = {T.LIVING: 15.0, T.DINING: 8.5, T.KITCHEN: 6.5, T.MASTER_BEDROOM: 12.0, T.BEDROOM: 9.5,
+            T.GUEST_BEDROOM: 9.5, T.CHILDREN_BEDROOM: 9.5, T.GARAGE: 14.0, T.COURTYARD: 9.0, T.BATHROOM: 3.2,
+            T.TOILET: 2.2, T.UTILITY: 2.5, T.LAUNDRY: 3.0, T.PUJA: 2.0, T.STUDY: 7.0, T.FAMILY: 10.0}
 #: How far a room may grow past its programme area; beyond it the plot is garden.
 GROW = 1.1
 SPINE = 1.3
@@ -113,10 +117,12 @@ RANK = {T.PUJA: 0, T.STUDY: 1, T.HOME_OFFICE: 1, T.LIBRARY: 1, T.GUEST_BEDROOM: 
 
 class SpinePlanner:
     def __init__(self, envelope: BoundingBox, road: Direction | None, stair_on: bool,
-                 outer: BoundingBox | None = None) -> None:
+                 outer: BoundingBox | None = None, side: int = 0) -> None:
         self.env = envelope
         r = (road.cardinal if road is not None else Direction.N).value
-        self.road = r if r in {"N", "S", "E", "W"} else "N"
+        # A road on a diagonal (south-west) fronts one of its two sides; the
+        # caller tries each (`side` 0 or 1).
+        self.road = r if r in {"N", "S", "E", "W"} else (r[side] if len(r) == 2 and r[side] in "NSEW" else "N")
         across_x = self.road in {"N", "S"}
         self.W = envelope.width if across_x else envelope.height
         self.D = envelope.height if across_x else envelope.width
@@ -268,7 +274,17 @@ class SpinePlanner:
                     else:
                         self.verandah = Item(T.VERANDAH, it.area, it.req)   # a band across the front
                 elif li == 0 and it.type is T.GARAGE:
-                    priv.insert(0, Item(T.GARAGE, it.area, it.req))
+                    # A car porch is on the road: the head of the private stack,
+                    # or with the spine along the road, an end of the front stack.
+                    if v.transverse:
+                        # The road front then holds the porch and the living room; the
+                        # dining room and kitchen, kept together, take the back stack.
+                        pub.insert(1 if pub and pub[0].type is T.FOYER else 0, Item(T.GARAGE, it.area, it.req))
+                        back = [x for x in pub if x.type in {T.DINING, T.KITCHEN, T.PANTRY, T.UTILITY, T.LAUNDRY}]
+                        pub[:] = [x for x in pub if x not in back]
+                        priv[:0] = back
+                    else:
+                        priv.insert(0, Item(T.GARAGE, it.area, it.req))
                 elif li == 0 and it.type is T.COURTYARD:
                     priv.insert(min(2, len(priv)), Item(T.COURTYARD, min(it.area, 16.0), it.req))
                 elif li > 0 and it.type in {T.BALCONY, T.TERRACE}:
@@ -488,7 +504,7 @@ class SpinePlanner:
         little smaller - never below what they need to be furnished."""
         pub, priv, fronts = list(pub), list(priv), list(fronts)
         optional = [T.COURTYARD, T.VERANDAH, T.HOME_THEATRE, T.GYM, T.LIBRARY, T.FAMILY, T.STUDY, T.TERRACE,
-                    T.GARAGE, T.BALCONY, T.STORE]
+                    T.GARAGE, T.BALCONY, T.STORE, T.FOYER]   # an entrance hall last: the living room can receive
         def depth(items, w, extra=0.0, scale=1.0):
             saved = [(i, i.area) for i in items] + [(i.bath, i.bath.area) for i in items if i.bath]
             for i, a in saved:
@@ -505,9 +521,15 @@ class SpinePlanner:
             # plot that cannot hold a hall otherwise, 72 %, and never so small
             # it cannot be furnished.
             asked = getattr(i.req, "asked_area", None) or a
-            floor = asked * 0.85 if scale >= 0.8 else max(asked * 0.72, MIN_DIM.get(i.type, 1.4) ** 2 * 1.05)
+            if scale >= 0.8:
+                floor = asked * 0.85
+            elif scale >= 0.7:
+                floor = max(asked * 0.72, MIN_DIM.get(i.type, 1.4) ** 2 * 1.05)
+            else:
+                # Last resort on an over-full floor: the least each room can be furnished in.
+                floor = MIN_AREA.get(i.type, MIN_DIM.get(i.type, 1.4) ** 2 * 1.05)
             return max(a * scale, min(a, floor))
-        for scale in (1.0, 0.9, 0.8, 0.7, 0.6):
+        for scale in (1.0, 0.9, 0.8, 0.7, 0.6, 0.5):
             for _ in range(12):
                 dp, dq = depth(pub, wp, 0.0, scale), depth(priv, wq, stair_len + fdep() + (1.0 if stair_len and 0.0 < v.stair_at < 1.0 else 0.0), scale)
                 if dp <= D + 1e-6 and dq <= D + 1e-6:
@@ -523,7 +545,7 @@ class SpinePlanner:
                     src, dst, ws, wd = priv, [], wq, 0.0
                 # A bedroom, a study, a puja.
                 movable = [i for i in src if i.type in BEDS
-                           or i.type in {T.STUDY, T.FAMILY, T.STORE, T.PUJA}]
+                           or i.type in {T.STUDY, T.FAMILY, T.STORE, T.PUJA, T.COURTYARD}]
                 moved = False
                 for it in (sorted(movable, key=lambda i: -(i.area + (i.bath.area if i.bath else 0))) if wd > 0 else []):
                     trial_src = [i for i in src if i is not it]

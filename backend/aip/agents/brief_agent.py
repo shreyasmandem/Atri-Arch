@@ -50,7 +50,9 @@ ROOMS = {
     "veranda": "verandah", "sit-out": "verandah", "sitout": "verandah", "porch": "verandah",
     "courtyard": "courtyard", "garage": "garage", "car parking": "garage", "parking": "garage",
     "servant room": "servant", "maid room": "servant", "bathroom": "bathroom", "toilet": "toilet",
-    "powder room": "powder",
+    "powder room": "powder", "garden": "courtyard", "lawn": "courtyard", "open space": "courtyard",
+    "open to sky": "courtyard", "open-to-sky": "courtyard", "wash area": "utility", "washing area": "utility",
+    "dress": "store", "kitchens": "kitchen",
 }
 AMENITY = {"puja": "pooja", "garage": "parking", "study": "study", "utility": "utility", "balcony": "balcony",
            "dining": "dining", "courtyard": "courtyard", "verandah": "verandah", "gym": "gym",
@@ -82,6 +84,68 @@ def _num(s: str) -> float:
 
 WORDNUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8}
 ALWAYS = {"living", "dining", "kitchen"}   # every house has these; only placements matter
+FLOOR_RE = r"(ground|first|second|third|fourth|top|terrace|\d)"
+NEXT_TO = r"\b(?:next to|beside|adjacent to|adjoining|near|attached to|connected to|opening (?:in)?to|off|by) (?:the |a |my )?"
+VOCAB = sorted({w for k in ROOMS for w in k.split()} | set(FLOOR_WORDS) | {w.replace("-", " ") for k in DIRS for w in k.split()}
+               | {"floor", "facing", "road", "plot", "bedrooms", "bathrooms", "garden", "vastu", "storey"})
+
+
+def _spell(t: str) -> str:
+    """Mend typing slips on the words that matter ("tuility", "gardern", "groun",
+    "secnd", "bathrom") - only ever to a room, floor or direction word."""
+    import difflib
+
+    def fix(m: re.Match) -> str:
+        w = m.group(0)
+        if len(w) < 5 or w in VOCAB or w.rstrip("s") in VOCAB or w[:-2] in VOCAB or w[:-3] + "y" in VOCAB:
+            return w
+        hit = difflib.get_close_matches(w, VOCAB, n=1, cutoff=0.84)
+        return hit[0] if hit else w
+    return re.sub(r"[a-z]+", fix, t)
+
+
+def _counted(t: str) -> tuple[list[dict[str, Any]], str]:
+    """Rooms asked for by number - "2 kitchens, one on the ground and one on the
+    second", "three balconies" - each placed where the client said. Returns the
+    rooms and the text with those phrases blanked, so they are not read twice."""
+    out: list[dict[str, Any]] = []
+    names = {w: w for w in ROOMS if ROOMS[w] not in {"bedroom", "bathroom", "toilet", "master_bedroom"}}
+    names |= {w[:-1] + "ies": w for w in list(names) if w.endswith("y")}       # balconies, studies
+    words = "|".join(re.escape(w) for w in sorted(names, key=len, reverse=True))
+    pat = re.compile(rf"\b(\d+|{'|'.join(WORDNUM)})\s+(?:separate |more |extra |different )?({words})(?:e?s)?\b")
+    for m in list(pat.finditer(t)):
+        n = int(m.group(1)) if m.group(1).isdigit() else WORDNUM[m.group(1)]
+        if not 1 <= n <= 8:
+            continue
+        kind = ROOMS[names[m.group(2)]]
+        tail = t[m.end(): m.end() + 140]
+        stop = re.search(r"[.;\n]|\b\d+\s*(?:bed|bath)", tail)
+        tail = tail[: stop.start()] if stop else tail
+        found_at = list(re.finditer(rf"\b(one|two|three|four|\d|another|the other|other|second one|the second one)\s+(?:is |are )?(?:on|in|at|for)?\s*(?:the\s+)?{FLOOR_RE}", tail))
+        levels = []
+        for x in found_at:
+            q = int(x.group(1)) if x.group(1).isdigit() else WORDNUM.get(x.group(1), 1)
+            lv = int(x.group(2)) if x.group(2).isdigit() else FLOOR_WORDS.get(x.group(2))
+            levels += [lv] * q
+        levels = [(-1 if x == "terrace" else x) for x in levels if x is not None]
+        if found_at:
+            span = found_at[-1].end()       # blank only the placing phrases, not what follows
+            t = t[: m.end()] + " " * span + t[m.end() + span:]
+        for k in range(n):
+            r: dict[str, Any] = {"type": kind}
+            if k < len(levels) and levels[k] is not None and levels[k] >= 0:
+                r["level"] = levels[k]
+            out.append(r)
+        t = t[: m.start()] + " " * (m.end() - m.start()) + t[m.end():]
+    # "one more kitchen", collapsed: same type and floor become one entry with a count.
+    merged: list[dict[str, Any]] = []
+    for r in out:
+        same = next((x for x in merged if x["type"] == r["type"] and x.get("level") == r.get("level")), None)
+        if same:
+            same["count"] = same.get("count", 1) + 1
+        else:
+            merged.append(r)
+    return merged, t
 
 
 def parse(text: str) -> dict[str, Any]:
@@ -89,6 +153,7 @@ def parse(text: str) -> dict[str, Any]:
     t = " " + text.lower().replace("×", "x") + " "
     t = re.sub(r"\b(" + "|".join(WORDNUM) + r")\b(?=[\s-]*(?:bhk|bed|bath|floor|storey|stor|level|kids|children|elder|balcon))",
                lambda m: str(WORDNUM[m.group(1)]), t)
+    t = _spell(t)
     out: dict[str, Any] = {}
     m = re.search(r"(\d{1,3}(?:\.\d+)?)\s*(ft|feet|foot|'|m|mtr|metres?|meters?)?\s*(?:x|by|\*)\s*(\d{1,3}(?:\.\d+)?)\s*(ft|feet|foot|'|m|mtr|metres?|meters?)?", t)
     if m:
@@ -137,6 +202,11 @@ def parse(text: str) -> dict[str, Any]:
 
     # Rooms, and where they go. "a balcony off the master bedroom on the first floor".
     rooms, amen = [], set()
+    counted, t = _counted(t)
+    for r in counted:
+        rooms.append(r)
+        if r["type"] in AMENITY:
+            amen.add(AMENITY[r["type"]])
     for clause in re.split(r"[.;,\n]| and | with | plus ", t):
         found = None
         host = None
@@ -148,10 +218,12 @@ def parse(text: str) -> dict[str, Any]:
                 host = next((ROOMS[w] for w in sorted(ROOMS, key=len, reverse=True)
                              if re.search(rf"\b{re.escape(w)}s?\b", rest) and ROOMS[w] not in {"balcony", "terrace"}), None)
                 break
-        for word in (sorted(ROOMS, key=len, reverse=True) if found is None else []):
-            if re.search(rf"\b{re.escape(word)}s?\b", clause):
-                found = ROOMS[word]
-                break
+        if found is None:
+            # The room the clause is about is the first one it names
+            # ("a utility next to the kitchen" is about the utility).
+            hits = [(m.start(), -len(w), w) for w in ROOMS for m in [re.search(rf"\b{re.escape(w)}s?\b", clause)] if m]
+            if hits:
+                found = ROOMS[min(hits)[2]]
         if not found or re.search(r"\b(no|without|don'?t want|skip)\b", clause):
             continue
         if found in ("bedroom", "bathroom", "toilet") and not re.search(r"\b(ground|first|second|third|upstairs|downstairs|floor)\b", clause):
@@ -174,11 +246,17 @@ def parse(text: str) -> dict[str, Any]:
             req["attached_bathroom"] = True
         if host:
             req["attach_to"] = host
+        elif m := re.search(NEXT_TO + r"(" + "|".join(re.escape(w) for w in sorted(ROOMS, key=len, reverse=True)) + r")s?\b", clause):
+            if ROOMS[m.group(1)] != found:
+                req["attach_to"] = ROOMS[m.group(1)]
         if found in AMENITY:
             amen.add(AMENITY[found])
-        if found in ALWAYS and level is None and "direction" not in req:
+        if found in ALWAYS and level is None and "direction" not in req and "attach_to" not in req:
             continue
-        if level is not None or "direction" in req or found not in AMENITY or found in {"balcony", "courtyard", "garage"}:
+        if req in rooms or (found == "courtyard" and len(req) == 1 and any(r.get("type") == "courtyard" for r in rooms)):
+            continue            # said twice ("a garden, an open space") is asked once
+        if (level is not None or "direction" in req or "attach_to" in req or found not in AMENITY
+                or found in {"balcony", "courtyard", "garage"}):
             rooms.append(req)
     if rooms:
         out["rooms"] = rooms
@@ -188,9 +266,10 @@ def parse(text: str) -> dict[str, Any]:
     colour = [c for c in re.split(r"[.;,\n]| and ", text) if re.search(r"colou?rs?|paint|walls?|tones?|palette|shades?|white|beige|grey|gray|wood|earthy|pastel", c, re.I)]
     if colour:
         out["colours"] = "; ".join(c.strip() for c in colour)[:600]
-    if m := re.search(r"\b(?:in|at|located in)\s+([a-z][a-z .]{2,30}?)(?:[,.;]|$| city| area)", t):
+    if m := re.search(r"\b(?:in|at|located in)\s+([a-z][a-z .]{2,30}?)(?:[,.;]|$| city| area| with| and| for| having)", t):
         city = m.group(1).strip()
-        if city not in {"the", "a", "my", "front", "back"} and not any(w in city for w in ("floor", "bedroom", "north", "south", "east", "west")):
+        if city not in {"the", "a", "my", "front", "back", "home", "house", "my home", "the house", "total", "all"} \
+                and city.split()[0] not in VOCAB and not any(w in city for w in ("floor", "bedroom", "north", "south", "east", "west")):
             out["locality"] = city.title()
     return out
 
@@ -296,7 +375,7 @@ CHAT_SYSTEM = """You are Atri, the lead architect of a residential design studio
 
 Each turn you do two things:
 1. Understand what the client said, in whatever language or mix of languages they use (English, Hindi, Hinglish, Tamil, Telugu, Kannada, Malayalam, Marathi, Bengali, Gujarati, anything) and however they phrase it, and record every concrete requirement in the brief.
-2. Reply in the language and script of the client's latest message (romanised Kannada or Hindi gets romanised Kannada or Hindi back), in one to three short sentences: acknowledge the specific things they asked for (not a recap of everything), offer one useful architectural observation when you have a real one (for example how a courtyard helps a deep plot, or why a north road suits the living room), and ask about at most two things that are still missing and would change the design.
+2. Reply in the language named at the end of these instructions, in one to three short sentences: acknowledge the specific things they asked for (not a recap of everything), offer one useful architectural observation when you have a real one (for example how a courtyard helps a deep plot, or why a north road suits the living room), and ask about at most two things that are still missing and would change the design.
 
 Essentials that must be known before designing: plot size, which side the road is on, number of floors, number of bedrooms. Ask for those first, one or two at a time, never all at once. Everything else (bathrooms, Vastu, style, budget, colours) has sensible defaults - do not interrogate. If the client says to go ahead or that you can decide, assume only the defaults (bathrooms equal to bedrooms, balanced Vastu, contemporary style) and say so in a few words. Never add a room or amenity the client did not ask for - parking, a lounge, a gym are theirs to request.
 
@@ -326,6 +405,47 @@ Return only JSON:
 When the essentials are known and the client confirms, set "start": true and say in a few words that the studio is starting."""
 
 
+SCRIPTS = [((0x0900, 0x097F), "Hindi (or Marathi, if the message is Marathi), in Devanagari"),
+           ((0x0980, 0x09FF), "Bengali, in Bengali script"), ((0x0A00, 0x0A7F), "Punjabi, in Gurmukhi"),
+           ((0x0A80, 0x0AFF), "Gujarati, in Gujarati script"), ((0x0B80, 0x0BFF), "Tamil, in Tamil script"),
+           ((0x0C00, 0x0C7F), "Telugu, in Telugu script"), ((0x0C80, 0x0CFF), "Kannada, in Kannada script"),
+           ((0x0D00, 0x0D7F), "Malayalam, in Malayalam script"), ((0x0600, 0x06FF), "Urdu, in Urdu script")]
+# Words that only appear when someone is writing an Indian language in Latin letters.
+ROMAN = {
+    "Hinglish (Hindi in Latin letters, mixed with English as the client does)": {
+        "hai", "hain", "mujhe", "mujhko", "chahiye", "chahte", "chahta", "chahti", "karo", "karna", "kar", "kya",
+        "nahi", "nahin", "mera", "meri", "mere", "hamara", "hamare", "ghar", "kamra", "kamre", "wala", "wali",
+        "bhi", "aur", "ek", "do", "teen", "banao", "banana", "saath", "sath", "accha", "acha", "theek", "thik",
+        "haan", "ji", "hoga", "hogi", "chalo", "shuru", "lekin", "par", "mein", "ke", "ki", "ka", "ko", "se",
+        "yeh", "ye", "woh", "wo", "kitne", "kitna", "matlab", "bas", "zyada", "jyada", "thoda"},
+    "romanised Kannada, in Latin letters": {"beku", "beda", "illa", "maadi", "madi", "mane", "nanage", "ide", "swalpa"},
+    "romanised Tamil, in Latin letters": {"venum", "vendum", "illai", "veedu", "enaku", "romba", "konjam", "seri"},
+    "romanised Telugu, in Latin letters": {"kavali", "kaavali", "ledu", "illu", "naaku", "chala", "konchem", "cheyyandi"},
+}
+
+
+def reply_language(text: str) -> str:
+    """The language to answer in, read from the message itself - not from a place
+    name in it ("Bengaluru" is English), not from earlier turns."""
+    counts: dict[str, int] = {}
+    for ch in text:
+        o = ord(ch)
+        for (lo, hi), name in SCRIPTS:
+            if lo <= o <= hi:
+                counts[name] = counts.get(name, 0) + 1
+    if counts:
+        return max(counts, key=counts.get)
+    words = re.findall(r"[a-z]+", text.lower())
+    for name, vocab in ROMAN.items():
+        hits = {w for w in words if w in vocab}
+        # Short words ("do", "par", "se", "ke") are English too: it takes two
+        # distinct ones, or one that is never English, to call it.
+        strong = {w for w in hits if len(w) >= 4 and w not in {"wali", "mere", "bhi"}}
+        if len(hits) >= 3 or (len(hits) >= 2 and strong) or (strong and len(words) <= 4):
+            return name
+    return "English"
+
+
 async def llm_turn(message: str, brief: dict[str, Any], history: list[dict[str, str]]) -> dict[str, Any] | None:
     """The conversation turn, by a language model; None if none is reachable."""
     try:
@@ -336,6 +456,10 @@ async def llm_turn(message: str, brief: dict[str, Any], history: list[dict[str, 
         for h in history[-12:]:
             text = str(h.get("text", ""))[:2000]
             msgs.append(user(text) if h.get("role") == "user" else assistant(text))
+        lang = reply_language(message)
+        msgs[0] = system(msgs[0].content + f"\n\nWrite the reply, questions and options in {lang}. "
+                         "Decide this from the client's latest message only: a place name (Bengaluru, Chennai) "
+                         "or an Indian word for a room (puja, verandah) in an English message is still English.")
         msgs.append(user(message))
         router = LLMRouter()
         try:
@@ -398,7 +522,12 @@ async def converse(message: str, brief: dict[str, Any] | None = None, *, use_llm
         for k in ("plot_width", "plot_depth", "plot_unit", "bedrooms", "levels"):
             if k in rules:
                 model[k] = rules[k]
-        merged = merge(brief, model)
+        # Rooms the rules read (counted, placed on floors, next to another
+        # room) are kept as read; the model adds the rooms the rules missed.
+        if rules.get("rooms"):
+            ruled = {r["type"] for r in rules["rooms"]}
+            model["rooms"] = [r for r in model.get("rooms", []) if r.get("type") not in ruled]
+        merged = merge(brief, {"rooms": rules.get("rooms", []), "amenities": rules.get("amenities", [])}, model)
         if model.get("remove"):
             merged["remove"] = sorted(set(brief.get("remove", [])) | set(model["remove"]))
         need = missing(merged)

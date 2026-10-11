@@ -255,11 +255,13 @@ class ClientBrief(BaseModel):
     @field_validator("requirements")
     @classmethod
     def _dedupe(cls, value: list[RoomRequirement]) -> list[RoomRequirement]:
-        merged: dict[RoomType, RoomRequirement] = {}
+        # Same kind on the same floor is one requirement with a count; a
+        # kitchen pinned to the ground and another to the second floor stay two.
+        merged: dict[tuple, RoomRequirement] = {}
         for req in value:
-            existing = merged.get(req.type)
+            existing = merged.get((req.type, req.level))
             if existing is None:
-                merged[req.type] = req
+                merged[(req.type, req.level)] = req
             else:
                 existing.count += req.count
         return list(merged.values())
