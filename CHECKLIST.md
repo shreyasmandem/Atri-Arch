@@ -27,8 +27,15 @@ Done
 - [x] Uploads: unreadable pictures/SVGs still give a starting plan on the plot, said plainly; garbage files are a clear 422
 - [x] cfo.ai used for the business forecast: docs/cfo-ai/
 
+Also done in the second pass
+- [x] Byelaw coverage/FAR by plot size (small plots 75-80% / FAR 2.0), row-house plots share side walls, compact stair and minimums on plates under 85 m2 (bedrooms keep 9.5 m2)
+- [x] A statutory-area shortfall is a guardrail failure (no more all-three-schemes-disqualified on 40x40 G+2); car porch with an outside wall is never 'unreachable'
+- [x] Designs queue one at a time on the public demo, a run stops when its client leaves; keep-alive workflow pings Render every 10 min
+- [x] Editor tests (tests/test_editor.py); parser reads '3 beds', 'ground plus one', plots given in sq ft, 'pooja in northeast', Hinglish conjunctions
+- [x] One-tap starting briefs on the home page; scheme letters agree between tab, rail and drawing title
+
 Open
-- [~] Plan quality: 30x40 ft with parking falls back to the GA planner (flawed adjacency); parti struggles on plates under ~70 m2
-- [ ] tests/test_import.py: 4 round-trip tests fail (thin 1.1 m rooms lost on re-read) - pre-existing, fixture-related
-- [ ] Vastu default score ~55-65 at the balanced stance (planner weights barely move it)
-- [ ] Add GROQ_API_KEY / GOOGLE_API_KEY in Render > Environment (user), then Manual Deploy
+- [~] Plan quality: plates under ~70 m2 with a car still fall back to the GA planner (clean on the common briefs, flawed adjacency on some); 'Offered with reservations' text can show
+- [ ] tests/test_import.py: 4 round-trip tests fail (1.1 m rooms lost on re-read) - pre-existing, fixture-related
+- [ ] Vastu default score ~55-75 at the balanced stance (planner weights barely move it)
+- [ ] User: add GROQ_API_KEY / GOOGLE_API_KEY in Render > Environment, then Manual Deploy (the demo works without them)
