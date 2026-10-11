@@ -1150,6 +1150,59 @@ async def _read_image(
         ) from exc
 
 
+async def _starter_plan(
+    data: bytes, plot_width: float | None, plot_depth: float | None, road: Direction,
+    north_angle: float, name: str, why: str, *, picture: bool = True,
+) -> ImportResult | None:
+    """A picture that is not a readable plan still gets a plan: one drawn on the
+    plot from sensible defaults, said plainly, ready to be edited. None when the
+    file is not an image at all."""
+    import asyncio
+    import io
+
+    try:
+        if picture:
+            from PIL import Image
+
+            with Image.open(io.BytesIO(data)) as im:
+                im.verify()
+        elif not data.strip():
+            return None
+    except Exception:  # noqa: BLE001 - not a picture: the original error stands
+        return None
+
+    def build() -> FloorPlan:
+        from aip.api.schemas import SimpleBriefRequest
+
+        w, d = plot_width or 12.0, plot_depth or 18.0
+        req = SimpleBriefRequest(plot_width=w, plot_depth=d, levels=2, bedrooms=3, bathrooms=3,
+                                 road_direction=road)
+        brief = req.to_brief()
+        from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
+
+        plan = LayoutGenerator(brief, GeneratorConfig(seed=7)).generate(1)[0]
+        plan.name = name
+        plan.site.north_angle = north_angle
+        plan.metadata["imported"] = True
+        plan.metadata["import_source"] = "image"
+        plan.metadata["starter_plan"] = True
+        return plan
+
+    try:
+        plan = await asyncio.to_thread(build)
+    except Exception:  # noqa: BLE001
+        return None
+    rooms = plan.all_rooms
+    note = (
+        f"No floor plan could be read from this {'picture' if picture else 'file'}, so the studio drew a starting plan on "
+        f"{'your' if plot_width and plot_depth else 'a 12 x 18 m'} plot from its defaults "
+        "(3 bedrooms, two floors). Change it with Edit design, or describe your house in the chat."
+    )
+    return ImportResult(plan=plan, source="image", rooms_read=0, rooms_kept=len(rooms),
+                        warnings=[note, f"Why: {why[:220]}"], scale_note="Starter plan; no scale was read.",
+                        openings_added=True)
+
+
 async def import_floorplan(
     data: bytes,
     filename: str,
@@ -1189,12 +1242,26 @@ async def import_floorplan(
             if not 3.0 <= max(box.width, box.height) * unit_scale[0] <= 300.0:
                 unit_scale = None
     elif lower.endswith(".svg"):
-        rooms, warnings = parse_svg(data.decode("utf-8", errors="replace"))
+        try:
+            rooms, warnings = parse_svg(data.decode("utf-8", errors="replace"))
+        except ImportError_ as exc:
+            fb = None
+            if b"<svg" in data[:4000].lower():       # a real SVG with no rooms in it, not garbage
+                fb = await _starter_plan(data, plot_width, plot_depth, road, north_angle, name, str(exc), picture=False)
+            if fb is None:
+                raise
+            return fb
         source = "svg"
     elif lower.endswith((".png", ".jpg", ".jpeg", ".webp")) or mime.startswith("image/"):
         mime = mime or {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(
             lower.rsplit(".", 1)[-1], "image/png")
-        rooms, warnings, meta = await _read_image(data, mime)
+        try:
+            rooms, warnings, meta = await _read_image(data, mime)
+        except ImportError_ as exc:
+            fallback = await _starter_plan(data, plot_width, plot_depth, road, north_angle, name, str(exc))
+            if fallback is None:
+                raise
+            return fallback
         source = "image"
         extent_m = meta.get("extent_m")
         if extent_m:
