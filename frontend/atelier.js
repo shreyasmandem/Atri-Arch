@@ -249,7 +249,7 @@ class Atelier {
         road: brief.road_direction || "N",
         setbacks: (() => {
           const sb = autoSetbacks(+brief.plot_width * +brief.plot_depth, brief.setback_front ?? null,
-            brief.setback_rear ?? null, brief.setback_left ?? null);
+            brief.setback_rear ?? null, brief.setback_left ?? null, Math.min(+brief.plot_width, +brief.plot_depth));
           return { front: sb[0], rear: sb[1], left: sb[2], right: brief.setback_right ?? sb[2] };
         })(),
       });

@@ -230,7 +230,7 @@ function renderBrief() {
   setText("stance-note", stance[2]);
   setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ${budget ? `₹${lakh(budget)}` : "no set budget"} · Vastu ${stance[0].toLowerCase()}`);
   drawPlot({ w, d, rw, rd, unit, road, levels,
-    ...(() => { const sb = autoSetbacks(w * d, +v("setback_front") || null, +v("setback_rear") || null, +v("setback_side") || null);
+    ...(() => { const sb = autoSetbacks(w * d, +v("setback_front") || null, +v("setback_rear") || null, +v("setback_side") || null, Math.min(w, d));
       return { front: sb[0], rear: sb[1], side: sb[2] }; })() });
 }
 

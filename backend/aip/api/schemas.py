@@ -28,12 +28,29 @@ from aip.domain.geometry import Direction, Vec2
 from aip.domain.plan import RoomType, Site
 
 
-def auto_setbacks(area: float, given: tuple[float | None, ...] = (None, None, None, None)) -> tuple[float, float, float, float]:
+def byelaw_limits(area: float) -> tuple[float, float]:
+    """(ground coverage, FAR) a plot this size is usually allowed: the small plots of a
+    town may cover and build more than a large one."""
+    if area < 60:
+        return 0.80, 2.0
+    if area < 150:
+        return 0.75, 2.0
+    if area < 300:
+        return 0.65, 1.75
+    return 0.60, 1.5
+
+
+def auto_setbacks(
+    area: float, given: tuple[float | None, ...] = (None, None, None, None), short_side: float | None = None,
+) -> tuple[float, float, float, float]:
     """(front, rear, left, right) in metres: what was stated, else what a plot this size takes.
 
     Small urban plots take byelaw relaxations (about 1.5 m front and 0.9 m sides
     for a 30 x 40 ft plot); large plots keep the full 2.5 / 1.5 / 1.2."""
-    if area < 60:
+    if short_side is not None and short_side <= 7.0:
+        # A row-house plot (23 ft or less across): the side walls are shared with the neighbours.
+        base = (1.2, 0.8, 0.0, 0.0) if area < 60 else (1.5, 1.0, 0.0, 0.0)
+    elif area < 60:
         base = (1.0, 0.8, 0.6, 0.6)
     elif area < 150:
         base = (1.5, 1.0, 0.9, 0.9)
@@ -101,8 +118,9 @@ class SimpleBriefRequest(BaseModel):
     must_haves: list[str] = Field(default_factory=list, max_length=20)
     notes: str = Field(default="", max_length=4000)
 
-    max_far: float = Field(default=1.5, gt=0, le=15)
-    max_ground_coverage: float = Field(default=0.6, gt=0, le=1)
+    # Left out, the byelaw for a plot this size applies (small urban plots may cover and build more).
+    max_far: float | None = Field(default=None, gt=0, le=15)
+    max_ground_coverage: float | None = Field(default=None, gt=0, le=1)
     setback_front: float | None = Field(default=None, ge=0, le=30)
     setback_rear: float | None = Field(default=None, ge=0, le=30)
     setback_left: float | None = Field(default=None, ge=0, le=30)
@@ -178,7 +196,8 @@ class SimpleBriefRequest(BaseModel):
         # Setbacks not stated follow the plot: a 20 x 30 ft plot cannot give
         # 2.5 m to the road and 1.2 m to each side and still hold a house.
         sb = auto_setbacks(self.plot_width * self.plot_depth,
-                           (self.setback_front, self.setback_rear, self.setback_left, self.setback_right))
+                           (self.setback_front, self.setback_rear, self.setback_left, self.setback_right),
+                           min(self.plot_width, self.plot_depth))
         site = Site(
             boundary=[
                 Vec2(0.0, 0.0),
@@ -195,8 +214,9 @@ class SimpleBriefRequest(BaseModel):
             setback_rear=sb[1],
             setback_left=sb[2],
             setback_right=sb[3],
-            max_far=self.max_far,
-            max_ground_coverage=self.max_ground_coverage,
+            max_far=self.max_far if self.max_far is not None else byelaw_limits(self.plot_width * self.plot_depth)[1],
+            max_ground_coverage=(self.max_ground_coverage if self.max_ground_coverage is not None
+                                 else byelaw_limits(self.plot_width * self.plot_depth)[0]),
         )
 
         requirements: list[RoomRequirement] = []

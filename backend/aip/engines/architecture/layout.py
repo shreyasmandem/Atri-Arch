@@ -2526,6 +2526,20 @@ class LayoutGenerator:
         site = self.brief.site
         if not site.boundary:
             return None
+        # A rectangular plot: each side takes its own setback - the road side its
+        # front, the opposite its rear, the others the side setbacks.
+        xs0 = sorted({round(p.x, 4) for p in site.boundary})
+        ys0 = sorted({round(p.y, 4) for p in site.boundary})
+        if len(site.boundary) == 4 and len(xs0) == 2 and len(ys0) == 2 and min(site.setback_left, site.setback_right) <= 0.0:
+            road = site.road_directions[0].cardinal.value if site.road_directions else "N"
+            f, r, lft, rgt = site.setback_front, site.setback_rear, site.setback_left, site.setback_right
+            west, east, south, north = {
+                "N": (lft, rgt, r, f), "S": (lft, rgt, f, r),
+                "E": (r, f, rgt, lft), "W": (f, r, rgt, lft),
+            }.get(road, (lft, rgt, r, f))
+            x0, x1, y0, y1 = xs0[0] + west, xs0[1] - east, ys0[0] + south, ys0[1] - north
+            if x1 - x0 > 0.5 and y1 - y0 > 0.5:
+                return BoundingBox(x0, y0, x1, y1)
         inner = shrink_polygon(
             site.boundary,
             min(site.setback_front, site.setback_rear, site.setback_left, site.setback_right),
@@ -2751,7 +2765,9 @@ class LayoutGenerator:
                         "To fit this plot, left out: " + ", ".join(dict.fromkeys(let_go)) + ". "
                         + (f"The house keeps {kept} bedrooms; a larger plot holds the rest."
                            if kept < before else "A larger plot would hold them."))
-            if max(cur.minimum) <= hard:
+            # A programme within 4% of what the plot can hold is drawn at its minimum
+            # (walls take less than the packing allowance on a small plot) rather than refused.
+            if max(cur.minimum) <= hard * 1.04:
                 advisories.append(self._shrink(cur, max(avail, max(cur.minimum) * 1.02)))
                 shrunk = True
             else:
