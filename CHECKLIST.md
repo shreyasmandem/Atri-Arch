@@ -15,12 +15,20 @@
 - [x] Prepare for free public deployment (Dockerfile, render.yaml, DEPLOY.md, PUBLIC_DEMO mode; production config smoke-tested)
 
 ## Overnight 2026-10-12 (hackathon)
-- [x] Chat: bare answers read, studio auto-starts (5 s cancellable) once plot/road/floors/bedrooms known
-- [x] Over-full briefs are relaxed (floor added, least-important rooms left out, said in advisories) instead of 'engine closed the connection'
-- [x] Real server errors shown in the UI; no more 'closed the connection' slop
-- [x] Deployed: UI https://atri-arch.vercel.app, API https://atri-arch.onrender.com (Render free Docker, keyless until GROQ_API_KEY/GOOGLE_API_KEY are added by the user in Render > Environment)
-- [x] Edit the drawing: widen/deepen, swap, rename, use-as, ceiling, undo (drawer, 'Edit design' button)
-- [~] Plan quality sweep (scratchpad sweep.py): area_balance 18, underuses_plot 10, living_far_from_dining 10, bedroom_no_bath 9, unfurnishable 8
-- [ ] Importer round-trip tests (4 fail in tests/test_import.py: small rooms lost) and odd image uploads
-- [ ] cfo.ai: run a session and screenshot into docs/
-- [ ] Remove remaining copy slop; default scores higher; edge cases (shapes, ceilings)
+
+Done
+- [x] Chat: bare answers read, studio auto-starts (5 s, cancellable) once plot/road/floors/bedrooms are known; Hinglish/Hindi read and answered
+- [x] Over-full briefs are relaxed (floor added, least-important rooms left out, said in advisories) instead of an error
+- [x] Real server errors shown in the UI (no 'closed the connection' slop); caption slop removed
+- [x] Deployed: UI https://atri-arch.vercel.app (Vercel), API https://atri-arch.onrender.com (Render free Docker). Redeploy API: Render > Manual Deploy
+- [x] Edit the drawing: widen/deepen, swap, rename, use-as, ceiling, undo (drawer, 'Edit design' button), re-scored in the background
+- [x] Small plots: setbacks follow plot size, compact stair, tighter minimums; garage is a car's width; passages kept short
+- [x] Front door faces the road on every planner; budget optional (no invented budget, cost axis no longer 0.20)
+- [x] Uploads: unreadable pictures/SVGs still give a starting plan on the plot, said plainly; garbage files are a clear 422
+- [x] cfo.ai used for the business forecast: docs/cfo-ai/
+
+Open
+- [~] Plan quality: 30x40 ft with parking falls back to the GA planner (flawed adjacency); parti struggles on plates under ~70 m2
+- [ ] tests/test_import.py: 4 round-trip tests fail (thin 1.1 m rooms lost on re-read) - pre-existing, fixture-related
+- [ ] Vastu default score ~55-65 at the balanced stance (planner weights barely move it)
+- [ ] Add GROQ_API_KEY / GOOGLE_API_KEY in Render > Environment (user), then Manual Deploy
