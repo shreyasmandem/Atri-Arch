@@ -1,3 +1,9 @@
+# HANDOFF - read this first (updated overnight 2026-10-12)
+
+Live: UI https://atri-arch.vercel.app (Vercel, auto-deploys from origin/main) -> API https://atri-arch.onrender.com (Render free, Manual Deploy to update; see DEPLOY.md).
+Push only to `origin` (neathack-AtriArch). Never commit backend/.env. User adds GROQ_API_KEY / GOOGLE_API_KEY in Render > Environment.
+Open items are in CHECKLIST.md (section 'Overnight 2026-10-12'). Edit-the-drawing lives in backend/aip/engines/architecture/editor.py + frontend/editor.js.
+
 # Handoff — Atri Arch (Architect Intelligence Platform)
 
 FastAPI backend in `backend/`, static frontend in `frontend/`. Run: preview config "aip" in `.claude/launch.json` (uvicorn on :8000, no auto-reload — restart after backend edits). API at `/api/v1`. Keys live only in gitignored `backend/.env` (GROQ_API_KEY comma-separated for rotation, GOOGLE_API_KEY) — never commit or echo them.
