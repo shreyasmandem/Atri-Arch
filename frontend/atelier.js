@@ -274,7 +274,7 @@ class Atelier {
   _briefLine(b) {
     if (!b) return "";
     const floors = +b.levels > 1 ? `${b.levels} floors` : "1 floor";
-    return `${b.plot_width} × ${b.plot_depth} m  ·  road ${ROAD[b.road_direction] || b.road_direction}  ·  ${b.bedrooms} bed  ·  ${floors}`;
+    return `${b.plot_unit === "ft" ? `${Math.round(b.plot_width / 0.3048)} × ${Math.round(b.plot_depth / 0.3048)} ft` : `${(+b.plot_width).toFixed(1)} × ${(+b.plot_depth).toFixed(1)} m`}  ·  road ${ROAD[b.road_direction] || b.road_direction}  ·  ${b.bedrooms} bed  ·  ${floors}`;
   }
 
   /* ── the bar never stands still ──────────────────────────────────── */

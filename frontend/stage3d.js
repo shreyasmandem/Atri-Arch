@@ -1914,9 +1914,12 @@ export class Stage3D {
     m.moved = 0;
     const v = step > 0 ? moved / step : 0;
     u.speed += (v - u.speed) * damp(step, 10);
-    const loco = clamp(u.speed / 0.45, 0, 1);
-    const runW = clamp((u.speed - 2.1) / 0.9, 0, 1);
-    u.phase += (moved / lerp(0.95, 1.6, runW)) * TAU;
+    // Gait in the figure's own size: a big figure on a big plot takes long
+    // strides, so its legs keep time with the ground it covers.
+    const fs = this.figS || 1;
+    const loco = clamp(u.speed / (0.45 * fs), 0, 1);
+    const runW = clamp((u.speed / fs - 2.1) / 0.9, 0, 1);
+    u.phase += (moved / (lerp(0.95, 1.6, runW) * fs)) * TAU;
     u.clock += dt;
     const c = u.clock;
 

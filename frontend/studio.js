@@ -199,6 +199,9 @@ function lightPadas(svg, plan) {
 const ROAD_WORD = { N: "north", NE: "north-east", E: "east", SE: "south-east", S: "south", SW: "south-west", W: "west", NW: "north-west" };
 const NUMWORD = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight"];
 const fmtM = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+// Plots are quoted in feet as often as metres; the sheet keeps what was typed and the studio works in metres.
+const FT = 0.3048;
+const plotUnit = (f) => (f?.querySelector('input[name="plot_unit"]:checked')?.value === "m" ? "m" : "ft");
 const lakh = (n) => n >= 1e7 ? `${(n / 1e7).toFixed(2).replace(/\.?0+$/, "")} crore` : `${Math.round(n / 1e5)} lakh`;
 
 // The headline and the plot drawing are the brief itself, set large, so the
@@ -207,28 +210,30 @@ function renderBrief() {
   const f = $("brief");
   if (!f) return;
   const v = (n) => f.elements[n]?.value;
-  const w = Math.max(3, +v("plot_width") || 12), d = Math.max(3, +v("plot_depth") || 18);
+  const unit = plotUnit(f), k = unit === "ft" ? FT : 1;
+  const rw = Math.max(3, +v("plot_width") || 40), rd = Math.max(3, +v("plot_depth") || 60);
+  const w = rw * k, d = rd * k;
   const road = f.querySelector('input[name="road_direction"]:checked')?.value || "N";
   const levels = +v("levels") || 2;
   const beds = Math.max(1, +v("bedrooms") || 1);
   const budget = +v("budget") || 0;
   const stance = STANCES[+(f.querySelector('input[name="vastu_slider"]:checked')?.value ?? 2)] || STANCES[2];
 
-  setText("hl-plot", `${fmtM(w)} × ${fmtM(d)} m`);
+  setText("hl-plot", `${fmtM(rw)} × ${fmtM(rd)} ${unit}`);
   setText("hl-road", ROAD_WORD[road]);
   const storeys = levels === 1 ? "one storey" : `${NUMWORD[levels] || levels} storeys`;
   setText("hl-prog", `${NUMWORD[beds] || beds} bedroom${beds > 1 ? "s" : ""}, ${storeys}`);
   setText("budget-words", budget ? lakh(budget) : "");
   setText("stance-note", stance[2]);
-  setText("sum-line", `${Math.round(w * d)} m² plot · ${beds} bed · ₹${lakh(budget)} · Vastu ${stance[0].toLowerCase()}`);
-  drawPlot({ w, d, road, levels,
+  setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ₹${lakh(budget)} · Vastu ${stance[0].toLowerCase()}`);
+  drawPlot({ w, d, rw, rd, unit, road, levels,
     front: +v("setback_front") || 0, rear: +v("setback_rear") || 0, side: +v("setback_side") || 0 });
 }
 
 // The plot to scale: boundary, setback envelope, the road on its side, the
 // floors stacked behind, dimensions and a north point. Geometry is set with
 // CSS-transitionable attributes so a change of input redraws smoothly.
-function drawPlot({ w, d, road, levels, front, rear, side }) {
+function drawPlot({ w, d, rw = w, rd = d, unit = "m", road, levels, front, rear, side }) {
   const svg = $("plot-svg");
   if (!svg) return;
   const VW = 420, VH = 340, M = 56;
@@ -301,10 +306,10 @@ function drawPlot({ w, d, road, levels, front, rear, side }) {
   set(svg.querySelector('.pf-dim[data-d="d"]'), { x1: dimX, x2: dimX, y1: y0, y2: y0 + pd });
   const tw = svg.querySelector('.pf-t[data-d="w"]');
   set(tw, { x: x0 + pw / 2, y: dimY - 6 });
-  tw.textContent = `${fmtM(w)} m`;
+  tw.textContent = `${fmtM(rw)} ${unit}`;
   const td = svg.querySelector('.pf-t[data-d="d"]');
   set(td, { x: dimX + 6, y: y0 + pd / 2, transform: `rotate(-90 ${(dimX + 6).toFixed(1)} ${(y0 + pd / 2).toFixed(1)})` });
-  td.textContent = `${fmtM(d)} m`;
+  td.textContent = `${fmtM(rd)} ${unit}`;
 }
 
 function initBrief() {
@@ -312,6 +317,19 @@ function initBrief() {
   if (!f) return;
   f.addEventListener("input", renderBrief);
   f.addEventListener("change", renderBrief);
+  // Switching the unit converts what is typed, so the plot stays the same size.
+  let unit = plotUnit(f);
+  f.querySelectorAll('input[name="plot_unit"]').forEach((r) => r.addEventListener("change", () => {
+    const next = plotUnit(f);
+    if (next === unit) return;
+    const k = next === "m" ? FT : 1 / FT;
+    for (const n of ["plot_width", "plot_depth"]) {
+      const x = +f.elements[n].value;
+      if (x) f.elements[n].value = next === "m" ? (Math.round(x * k * 10) / 10) : Math.round(x * k);
+    }
+    unit = next;
+    renderBrief();
+  }));
   // Steppers: the − and + beside a number.
   f.querySelectorAll(".step").forEach((b) => b.addEventListener("click", () => {
     const input = b.parentElement.querySelector("input");
@@ -549,8 +567,9 @@ function readBrief() {
 
   return {
     project_name: "Studio scheme",
-    plot_width: Math.max(3, n("plot_width", 12) || 12),
-    plot_depth: Math.max(3, n("plot_depth", 18) || 18),
+    plot_width: +(Math.max(3, n("plot_width", 40) || 40) * (plotUnit($("brief")) === "ft" ? FT : 1)).toFixed(2),
+    plot_depth: +(Math.max(3, n("plot_depth", 60) || 60) * (plotUnit($("brief")) === "ft" ? FT : 1)).toFixed(2),
+    plot_unit: plotUnit($("brief")),
     locality: String(d.get("locality") || "Bengaluru, Karnataka"),
     road_direction: String(d.get("road_direction") || "N"),
     levels: Math.max(1, Math.min(6, n("levels", 2) || 2)),

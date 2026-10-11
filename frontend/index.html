@@ -85,9 +85,10 @@
         <div class="row">
           <span class="row__k">Plot</span>
           <div class="row__v row__v--pair">
-            <label class="num"><input type="number" id="inp-plot-width" name="plot_width" value="12" min="3" max="200" step="0.5" aria-label="Plot width, east to west, in metres"><i>m wide</i></label>
+            <label class="num"><input type="number" id="inp-plot-width" name="plot_width" value="40" min="3" max="660" step="0.5" aria-label="Plot width, east to west"><i>wide</i></label>
             <span class="times" aria-hidden="true">×</span>
-            <label class="num"><input type="number" id="inp-plot-depth" name="plot_depth" value="18" min="3" max="200" step="0.5" aria-label="Plot depth, north to south, in metres"><i>m deep</i></label>
+            <label class="num"><input type="number" id="inp-plot-depth" name="plot_depth" value="60" min="3" max="660" step="0.5" aria-label="Plot depth, north to south"><i>deep</i></label>
+            <span class="unit" role="radiogroup" aria-label="Plot measured in"><label><input type="radio" name="plot_unit" value="ft" checked><span>ft</span></label><label><input type="radio" name="plot_unit" value="m"><span>m</span></label></span>
           </div>
         </div>
 

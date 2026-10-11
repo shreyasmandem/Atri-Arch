@@ -141,8 +141,10 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
   // What the agent understood also goes into the sheet, so the drawing
   // beside the chat follows the conversation.
   const apply = (b) => {
-    if (b.plot_width) setField("plot_width", (+b.plot_width).toFixed(1));
-    if (b.plot_depth) setField("plot_depth", (+b.plot_depth).toFixed(1));
+    const ft = document.querySelector('#brief input[name="plot_unit"]:checked')?.value !== "m";
+    const sz = (m) => (ft ? String(Math.round(m / 0.3048)) : (+m).toFixed(1));
+    if (b.plot_width) setField("plot_width", sz(+b.plot_width));
+    if (b.plot_depth) setField("plot_depth", sz(+b.plot_depth));
     if (b.road_direction) setField("road_direction", b.road_direction);
     if (b.levels) setField("levels", String(Math.min(4, b.levels)));
     if (b.bedrooms) setField("bedrooms", String(b.bedrooms));

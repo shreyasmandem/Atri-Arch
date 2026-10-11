@@ -1161,3 +1161,12 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 .revise__ideas { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .revise__idea { padding: 5px 10px; border: 1px solid var(--rule-2); border-radius: 999px; background: none; color: var(--cream-2); font: 500 11.5px var(--ui); cursor: pointer; transition: border-color .15s, color .15s, background .15s; }
 .revise__idea:hover { border-color: var(--cream-3); color: var(--cream); background: rgba(var(--c-rgb), 0.05); }
+
+/* Plot unit: feet or metres, a two-way switch beside the plot size. */
+.unit { display: inline-flex; border: 1px solid rgba(var(--c-rgb), 0.28); border-radius: 999px; padding: 2px; align-self: center; }
+.unit label { cursor: pointer; }
+.unit input { position: absolute; opacity: 0; pointer-events: none; }
+.unit span { display: block; padding: 3px 11px; border-radius: 999px; font-size: 12.5px; color: var(--cream-3); transition: background .2s, color .2s; }
+.unit input:checked + span { background: var(--cream); color: var(--ink, #141210); }
+.unit input:focus-visible + span { outline: 1px solid var(--cream); outline-offset: 2px; }
+.row__v--pair:has(.unit) { gap: 10px 14px; flex-wrap: nowrap; }
