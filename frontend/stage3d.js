@@ -588,21 +588,7 @@ export class Stage3D {
     const { w, d } = this.plot;
     const z0 = this.origin.z - d, z1 = this.origin.z;
     const lv = this.settling ? null : this.focusLevel;
-    const all = this.current?.rooms || [];
-    if (lv == null) {
-      // The whole house, every floor: on a big plot that is the house and its
-      // garden, not a field with a model in the middle of it.
-      if (all.length) {
-        let bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
-        for (const r of all) for (const p of r.pts) {
-          bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x); bz0 = Math.min(bz0, p.z); bz1 = Math.max(bz1, p.z);
-        }
-        const m = 3;
-        return { x0: Math.max(this.origin.x, bx0 - m), x1: Math.min(this.origin.x + this.extent.total, bx1 + m),
-          z0: Math.max(z0, bz0 - m), z1: Math.min(z1, bz1 + m), pad: 0.6 };
-      }
-      return { x0: this.origin.x, x1: this.origin.x + this.extent.total, z0, z1, pad: 0.8 };
-    }
+    if (lv == null) return { x0: this.origin.x, x1: this.origin.x + this.extent.total, z0, z1, pad: 0.8 };
     const x0 = this.origin.x + lv * (w + GAP);
     const plate = { x0, x1: x0 + w, z0, z1 };
     const rs = this.focusRooms || [];
@@ -611,9 +597,7 @@ export class Stage3D {
     for (const r of rs) for (const p of r.pts) {
       ax0 = Math.min(ax0, p.x); ax1 = Math.max(ax1, p.x); az0 = Math.min(az0, p.z); az1 = Math.max(az1, p.z);
     }
-    // Close in on the rooms in proportion to how much of the plate is garden.
-    const fill = ((ax1 - ax0) * (az1 - az0)) / Math.max(1, (plate.x1 - plate.x0) * (plate.z1 - plate.z0));
-    const k = clamp(0.95 - fill, 0.32, 0.85);
+    const k = 0.32;
     return {
       x0: lerp(plate.x0, ax0 - 1.5, k), x1: lerp(plate.x1, ax1 + 1.5, k),
       z0: lerp(plate.z0, az0 - 1.5, k), z1: lerp(plate.z1, az1 + 1.5, k), pad: 0.3,
@@ -932,7 +916,7 @@ export class Stage3D {
         for (let k = 0; k < 4; k++) {
           const [x, y] = c[(s0 + k) % 4], [nx, ny] = c[(s0 + k + 1) % 4];
           const p = at(x, y);
-          this._do(m, { type: "run", to: p, slow: true }, { type: "note", t: 0.6 }, { type: "call", fn: () => this._stake(p) });
+          this._do(m, { type: "run", to: p }, { type: "note", t: 0.6 }, { type: "call", fn: () => this._stake(p) });
           quick(m, p, at(nx, ny), COL.chalk, 0.4, this.planning);
           this._do(m, { type: "call", fn: () => this._dim(at((x + nx) / 2, (y + ny) / 2), Math.hypot(nx - x, ny - y)) });
         }
@@ -961,7 +945,7 @@ export class Stage3D {
         say(m, pick(["Taking levels.", "Reading the staff.", "Which way does it drain?"]));
         for (let i = 0; i < 3; i++) {
           const p = at(rnd(1, w - 1), rnd(1, d - 1));
-          this._do(m, { type: "run", to: p, slow: true }, { type: "note", t: rnd(1.0, 1.6) },
+          this._do(m, { type: "run", to: p }, { type: "note", t: rnd(1.0, 1.6) },
             { type: "call", fn: () => { this._stake(p); this._dim(p, null, `+${(Math.random() * 0.3).toFixed(2)}`); } });
         }
       },
@@ -1786,16 +1770,14 @@ export class Stage3D {
         // No invented lines and no aimless pacing: the team confers.
         const h = this._huddle(m);
         const roll = Math.random();
-        if (roll < 0.3) {
-          // Back to the setting-out: check a peg, read a level, re-tape a run.
+        if (roll < 0.22) {
+          // Wander off to check something on the plot.
           const { w, d } = this.plot;
-          const p = this.P(0, Math.round(Math.random() * w), Math.round(Math.random() * d));
-          m.tasks.push({ type: "run", to: p, slow: true }, { type: "note", t: 1.4 + Math.random() * 1.6 },
-            { type: "call", fn: () => this._stake(p) });
-        } else if (roll < 0.38) {
+          m.tasks.push({ type: "run", to: this.P(0, Math.random() * w, Math.random() * d), slow: true }, { type: pick(["note", "point", "wait"]), t: 1 + Math.random() * 1.5 });
+        } else if (roll < 0.32) {
           m.tasks.push({ type: "say", text: pick(IDLE), t: 1.8, team: true });
         } else if (fig.position.distanceTo(h.at) > 0.35 * (this.figS || 1)) {
-          m.tasks.push({ type: "run", to: h.at, slow: true }, { type: "face", to: h.centre });
+          m.tasks.push({ type: "run", to: h.at }, { type: "face", to: h.centre });
         } else if (m.kind === "arch1") {
           m.tasks.push(pick([{ type: "talk", t: 2.4 }, { type: "point", t: 1.4 }, { type: "talk", t: 1.8 }]));
         } else {

@@ -618,10 +618,11 @@ class PartiPlanner:
                     and rng.r(key("thinf", ix.get(id(c.pieces()[0]), "x"))) < 0.6
                 put(F if to_front else B, c)
             core = [hall]
-            if ground and rng.r(key("thinfront")) < 0.8:
+            day = [c for c in B if any(p.type in (T.DINING, T.KITCHEN) for p in c.pieces())]
+            if ground and len(B) > len(day) and rng.r(key("thinfront")) < 0.8:
                 # Dining beside the living room, the kitchen beside it: the day
                 # rooms along the street, the bedrooms behind the passage.
-                for c in [c for c in B if any(p.type in (T.DINING, T.KITCHEN) for p in c.pieces())]:
+                for c in day:
                     B.remove(c)
                     put(F, c)
             if st is not None:
@@ -1041,7 +1042,9 @@ class PartiPlanner:
         elif not flex and avail > 0.05:
             if not row:
                 return None          # a ground-floor band with nothing in it
-            grow = next((c for c in row if c.slots[0][0].type in (T.LOBBY, T.CORRIDOR)), row[-1])
+            grow = next((c for c in row if c.slots[0][0].type in (T.LOBBY, T.CORRIDOR)), None)
+            if grow is None:
+                return None          # a stair alone in its band is not stretched across the house
             fixed[id(grow)] += avail
             avail = 0.0
         widths = _fit(avail, nat, [c.min_w for c in flex], caps) if flex else []
@@ -1453,6 +1456,10 @@ class PartiPlanner:
             # A house in proportion to its plot: the width an architect would
             # start from, give or take, never a sliver on a wide site.
             want = min(self.W, math.sqrt(area_need * scale * 1.2 * self.W / max(self.D, 1.0)))
+            # The house takes most of a narrow frontage; on a large plot it keeps
+            # the plot's own proportions.
+            if self.W <= 14:
+                want = max(want, 0.85 * self.W)
             a, b = max(lo, min(hi, 0.85 * want)), min(hi, max(lo, 1.2 * want))
             self.want_w = want
             Wh = a + (b - a) * G.r("width")

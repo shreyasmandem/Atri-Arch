@@ -2751,9 +2751,6 @@ class LayoutGenerator:
                 scaled = original[id(r)] * f
                 if cap_area is not None and r.type is not RoomType.STAIRCASE:
                     scaled = min(scaled, CAP_HEADROOM * cap_area)
-                # Never past half again what was asked: a 40 m2 living room for a
-                # 22 m2 brief is a hall, however large the plot.
-                scaled = min(scaled, 1.45 * original[id(r)])
                 r.preferred_area = round(max(original[id(r)], scaled), 2)
             return self._assess(levels, base)
 

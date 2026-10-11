@@ -203,11 +203,10 @@ def floor_plan_svg(
 
 
 def _padded_extent(plan: FloorPlan, level: Level) -> BoundingBox:
+    # A floor plan frames the building; the site plan shows the plot.
     points = [p for r in level.rooms for p in r.polygon]
-    if plan.site.boundary:
-        points.extend(plan.site.boundary)
     box = bounding_box(points)
-    pad = 1.2
+    pad = 1.6
     return BoundingBox(box.min_x - pad, box.min_y - pad, box.max_x + pad, box.max_y + pad)
 
 
