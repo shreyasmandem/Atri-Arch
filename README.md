@@ -8,6 +8,12 @@ elevations, sections, a furnished interior, an explainable Vastu report, a
 costed bill of quantities and a 3D walkthrough — reviewed by a committee of
 thirteen independent critics, with every verdict traceable to its evidence.
 
+**Live demo:** https://atri-arch.vercel.app  (API: https://atri-arch.onrender.com - the free instance wakes in about a minute).
+
+After a design is drawn you can **edit the drawing itself** - widen or deepen a room, swap two rooms, rename or
+re-use a room, set a ceiling height, undo - and the plan is rebuilt and re-scored. The business model was worked
+through with cfo.ai (see `docs/cfo-ai/`). Deployment: `DEPLOY.md`.
+
 It runs on a laptop. It needs no GPU, no Docker and no cloud account. Model
 spend is **$0.00**, and the test suite asserts that as an invariant.
 
