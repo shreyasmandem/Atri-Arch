@@ -1,0 +1,20 @@
+# Render blueprint: New > Blueprint, point it at this repo. Free plan sleeps
+# when idle; set the API keys in the dashboard (never commit them).
+services:
+  - type: web
+    name: atri-arch
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/capabilities
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://atri-arch.onrender.com
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false

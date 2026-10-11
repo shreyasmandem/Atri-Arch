@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- app ---
     app_name: str = "Architect Intelligence Platform"
     environment: str = Field(default="development")
+    #: A public studio: callers without a key act as the demo firm even in production.
+    public_demo: bool = Field(default=False)
     debug: bool = Field(default=True)
     log_level: str = Field(default="INFO")
     log_json: bool = Field(default=False)
