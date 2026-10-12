@@ -515,7 +515,8 @@ body[data-phase="running"] .at-stage { view-transition-name: sheet; }
 }
 body[data-phase="review"] .plate { view-transition-name: sheet; }
 .plate svg { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; filter: drop-shadow(0 24px 48px rgba(0, 0, 0, 0.55)); }
-.plate { overflow: hidden; touch-action: none; cursor: grab; }
+.plate { overflow: hidden; touch-action: pan-y; cursor: grab; }
+.plate.is-zoomed { touch-action: none; }
 .plate.is-panning { cursor: grabbing; }
 .plate svg, .plate img { transform-origin: 50% 50%; will-change: transform; user-select: none; -webkit-user-drag: none; }
 .zoom-step { width: 30px; padding: 0; font-size: 16px; letter-spacing: 0; }
@@ -1205,3 +1206,59 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 .editdrawer .revise { margin-top: 18px; }
 .editdrawer .edit { margin-bottom: 0; }
 .pane[data-view="drawings"] { position: relative; }
+
+/* ═══ PHONES ═══════════════════════════════════════════════════════════
+   One column, thumb-sized targets, no horizontal scroll, and the page can
+   still be scrolled with a finger resting on a drawing. */
+@media (max-width: 700px) {
+  html { -webkit-text-size-adjust: 100%; }
+  body { overflow-x: hidden; }
+
+  /* the brief */
+  .compose > .compose__title { height: 64svh; min-height: 0; padding-bottom: 20px; }
+  .headline__hard { font-size: clamp(34px, 11vw, 48px); }
+  .headline__soft { font-size: clamp(20px, 6vw, 26px); }
+  .headline__hard--sm { font-size: clamp(16px, 5vw, 20px); }
+  .compose__title .headline { max-width: 100%; }
+  .chat { height: auto; min-height: 0; padding-top: 20px; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .brief-strip { flex-wrap: wrap; gap: 8px; }
+  .brief-strip__facts { flex-basis: 100%; }
+  .brief-strip__act { flex: 1 1 100%; margin-left: 0; gap: 8px; }
+  .brief-strip__act .link-btn { min-height: 44px; }
+  .btn--start { flex: 1; margin-left: 0; height: 48px; }
+  .composer__send, .composer__attach { width: 44px; height: 44px; }
+  .msg--you { max-width: 86%; }
+  .msg--atri { max-width: 100%; }
+  .explain { padding-left: 16px; padding-right: 16px; }
+
+  /* forms: 16px fields so iOS does not zoom on focus */
+  input:not([type="radio"]):not([type="checkbox"]):not([type="range"]):not([type="file"]),
+  select, textarea { font-size: max(16px, 1em); }
+
+  /* the studio bar: wordmark and New brief, then schemes, then views */
+  .bar { grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; }
+  .wordmark { order: 1; }
+  .bar__end { order: 2; }
+  .bar__mid { order: 3; grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  .bar__mid::-webkit-scrollbar { display: none; }
+  .schemes { flex-wrap: nowrap; }
+  .scheme-tab { flex: none; min-height: 40px; }
+  .views { order: 4; scrollbar-width: none; }
+  .views::-webkit-scrollbar { display: none; }
+  .view-tab { flex: none; min-height: 40px; }
+  .engine { display: none; }
+  .bar__end .btn { min-height: 40px; padding: 0 14px; }
+
+  /* the form sheet: the mode tabs stop short of the close button */
+  .sheet__close { width: 40px; height: 40px; }
+  .modes { margin-right: 52px; }
+  /* ledgers: tighter, and they scroll sideways rather than being cut off */
+  table.led { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; font-size: 12px; }
+  table.led th { letter-spacing: 0.06em; padding-right: 10px; }
+  table.led td { padding-right: 10px; }
+  /* the stage leaves room to scroll past it */
+  .stage { height: 60svh; }
+  .at-stage { height: 52svh; }
+  .plate { min-height: 52svh; }
+  .review { padding-bottom: env(safe-area-inset-bottom); }
+}

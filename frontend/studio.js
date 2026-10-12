@@ -1417,6 +1417,9 @@ function applyPlate(animate = false) {
     art.style.transform = `translate(${plateView.x}px, ${plateView.y}px) scale(${plateView.z})`;
   }
   setText("zoom-val", `${Math.round(plateView.z * 100)}%`);
+  // On a phone the drawing only takes the finger once it is zoomed in; at fit,
+  // a vertical swipe over it scrolls the page.
+  $("plate")?.classList.toggle("is-zoomed", plateView.z > 1.02);
 }
 
 function zoomPlate(z, cx = 0, cy = 0, animate = false) {
@@ -1457,19 +1460,43 @@ function initPlate() {
     e.preventDefault();
     zoomPlate(plateView.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), ...centre(e));
   }, { passive: false });
+  // Two fingers pinch; one finger pans.
+  const fingers = new Map();
+  let pinch = null;
+  const spread = () => {
+    const [a, b] = [...fingers.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
   plate.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || own(e)) return;
-    plateView.drag = { x: e.clientX - plateView.x, y: e.clientY - plateView.y };
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     plate.setPointerCapture(e.pointerId);
+    if (fingers.size === 2) {
+      plateView.drag = null;
+      pinch = { ...spread(), z: plateView.z };
+      return;
+    }
+    plateView.drag = { x: e.clientX - plateView.x, y: e.clientY - plateView.y };
     plate.classList.add("is-panning");
   });
   plate.addEventListener("pointermove", (e) => {
+    if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && fingers.size === 2) {
+      const now = spread();
+      const r = plate.getBoundingClientRect();
+      zoomPlate(pinch.z * (now.d / pinch.d), now.x - r.left - r.width / 2, now.y - r.top - r.height / 2);
+      return;
+    }
     if (!plateView.drag) return;
     plateView.x = e.clientX - plateView.drag.x;
     plateView.y = e.clientY - plateView.drag.y;
     applyPlate();
   });
-  const end = () => { plateView.drag = null; plate.classList.remove("is-panning"); };
+  const end = (e) => {
+    if (e?.pointerId != null) fingers.delete(e.pointerId);
+    if (fingers.size < 2) pinch = null;
+    plateView.drag = null; plate.classList.remove("is-panning");
+  };
   plate.addEventListener("pointerup", end);
   plate.addEventListener("pointercancel", end);
   plate.addEventListener("dblclick", (e) => {
