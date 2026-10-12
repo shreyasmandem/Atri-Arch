@@ -1848,6 +1848,7 @@ class LayoutGenerator:
         made = 0
         # The parti planner first: the plan an architect would draw. Then the
         # spine and, on a narrow plot, the row house, as the alternatives.
+        from aip.engines.architecture.corridor import CorridorPlanner, corridor_variants
         from aip.engines.architecture.parti import PartiPlanner
 
         site = self.brief.site
@@ -1878,7 +1879,8 @@ class LayoutGenerator:
                 self._envelope = envelope
                 self._open_outline = False
             plan.metadata["planner"] = ("parti" if isinstance(who, PartiPlanner)
-                                        else "row" if isinstance(who, RowHousePlanner) else "spine")
+                                        else "row" if isinstance(who, RowHousePlanner)
+                                        else "corridor" if isinstance(who, CorridorPlanner) else "spine")
             _doors_to_hosts(plan)
             self._judge(plan)
             # A suite's bath opens from its own bedroom, or the suite is not one.
@@ -1914,6 +1916,7 @@ class LayoutGenerator:
                                 break
             return plan
 
+        clean_yielded = 0
         for who, v in tries:
             try:
                 if isinstance(who, PartiPlanner):
@@ -1932,7 +1935,31 @@ class LayoutGenerator:
                 if plan is None:
                     continue
                 made += 1
+                clean_yielded += not plan.metadata.get("guardrail")
                 yield plan
+        # None of the searching planners found a plan that holds: the corridor
+        # planner builds one that does, whatever the plot.
+        if clean_yielded < 2:
+            corridors = []
+            for k in sides:
+                cp = CorridorPlanner(outer or self._envelope, road, len(levels) > 1, outer=outer, side=k)
+                cp.cover = cover
+                corridors.append(cp)
+            clean_corr = 0
+            for cp in corridors:
+                for v in corridor_variants():
+                    if clean_corr >= 3:
+                        break
+                    try:
+                        plan = build(cp, cp.plan(levels, v))
+                    except Exception as exc:  # noqa: BLE001
+                        log_event(logger, "layout.corridor_failed", error=str(exc))
+                        continue
+                    if plan is None:
+                        continue
+                    made += 1
+                    clean_corr += not plan.metadata.get("guardrail")
+                    yield plan
         log_event(logger, "layout.spine", variants=made)
 
     def _candidates(self, seed: int | None) -> Iterator[FloorPlan]:

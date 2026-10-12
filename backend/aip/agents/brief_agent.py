@@ -399,6 +399,26 @@ def parse(text: str) -> dict[str, Any]:
                 if kind in AMENITY:
                     amen.add(AMENITY[kind])
                 break
+    # A room named inside a run-on clause ("3 bedroom parking", "4 bhk pooja study"): the
+    # clause reader takes the first room it finds, so these are picked up here, once each.
+    for word, kind in (("car parking", "garage"), ("parking", "garage"), ("garage", "garage"), ("car porch", "garage"),
+                       ("pooja", "puja"), ("puja", "puja"), ("mandir", "puja"), ("prayer room", "puja"),
+                       ("study", "study"), ("gym", "gym"), ("home theatre", "home_theatre"),
+                       ("home theater", "home_theatre"), ("servant room", "servant"), ("courtyard", "courtyard")):
+        if not re.search(rf"\b{re.escape(word)}\b", t):
+            continue
+        if re.search(rf"\b(?:no|without|don'?t want|skip)\s+(?:an?\s+|the\s+)?{re.escape(word)}\b", t):
+            continue
+        if any(r.get("type") == kind for r in rooms):
+            continue
+        if kind in AMENITY and AMENITY[kind] in amen and kind != "garage":
+            continue
+        if kind == "garage":
+            rooms.append({"type": "garage"})
+        elif kind not in {"study", "puja", "gym", "home_theatre"} or AMENITY.get(kind) not in amen:
+            rooms.append({"type": kind})
+        if kind in AMENITY:
+            amen.add(AMENITY[kind])
     if rooms:
         out["rooms"] = rooms
     if amen:

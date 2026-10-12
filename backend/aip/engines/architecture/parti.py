@@ -1643,7 +1643,6 @@ class PartiPlanner:
             fl = self._compose(li, ps, g)
             if not any(fl):
                 return None
-            self._balance(fl)
             drawn = {id(p) for row in fl for c in row for p in c.pieces()}
             if any(id(p) not in drawn for p in ps):
                 return None                  # never a plan that drops a room it was given
