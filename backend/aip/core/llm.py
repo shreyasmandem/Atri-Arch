@@ -237,8 +237,12 @@ class DeadModels:
     instead, so the router simply skips it and moves to the next one.
     """
 
+    #: Shared by every router in the process. Seen in neatlogs: with one set per
+    #: router, each critic in a parallel fan-out rediscovered the same 404.
+    _shared: set[str] = set()
+
     def __init__(self) -> None:
-        self._dead: set[str] = set()
+        self._dead = DeadModels._shared
 
     def mark(self, model: ModelSpec, reason: str) -> None:
         key = f"{model.provider}/{model.id}"

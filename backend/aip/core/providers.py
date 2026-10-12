@@ -157,9 +157,7 @@ GROQ = ProviderSpec(
     # stale entry degrades one model instead of the whole account.
     models=(
         ModelSpec("openai/gpt-oss-120b", "groq", _TEXT_LONG, 131072, 0.90, 30, 1000, supports_tools=True, typical_latency_ms=640),
-        ModelSpec("qwen/qwen3.6-27b", "groq", _TEXT_LONG, 131072, 0.83, 30, 1000, typical_latency_ms=280),
-        ModelSpec("groq/compound", "groq", _TEXT_LONG, 131072, 0.84, 30, 1000,
-                  notes="Agentic system with built-in tool use.", typical_latency_ms=1500),
+        ModelSpec("qwen/qwen3.8-27b", "groq", _TEXT_LONG, 131072, 0.83, 30, 1000, typical_latency_ms=280),
     ),
 )
 
