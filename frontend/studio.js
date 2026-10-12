@@ -80,6 +80,35 @@ const inr = (n) => n >= 1e7 ? `₹${(n / 1e7).toFixed(2)} Cr`
 
 const cap = (s) => String(s).replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 
+/* ── plans survive a server restart ───────────────────────────────── */
+
+// The server keeps schemes in memory. When it has restarted (a deploy, a free
+// instance waking up) a plan the page still shows answers 404; the plan's own
+// JSON is sent back and the request tried once more.
+const planJson = new Map();
+const rememberPlan = (plan) => { if (plan?.id && plan.levels) planJson.set(plan.id, plan); };
+(() => {
+  const real = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const res = await real(input, init);
+    if (res.status !== 404) return res;
+    try {
+      const url = typeof input === "string" ? input : input?.url || "";
+      if (!url.startsWith(API)) return res;
+      let id = url.slice(API.length).match(/^\/plans\/(plan_[A-Za-z0-9]+)/)?.[1];
+      if (!id && typeof init?.body === "string") {
+        try { id = JSON.parse(init.body).plan_id; } catch { /* not json */ }
+      }
+      const plan = id && planJson.get(id);
+      if (!plan) return res;
+      const back = await real(`${API}/plans/restore`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plan }),
+      });
+      return back.ok ? real(input, init) : res;
+    } catch { return res; }
+  };
+})();
+
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(t._t); t._t = setTimeout(() => { t.hidden = true; }, 8000);
@@ -939,6 +968,11 @@ async function applyResult(d) {
   S.voices = d.voices || [];
 
   S.plans[d.winner_plan_id] = { plan: d.plan, vastu: d.vastu, cost: d.cost };
+  rememberPlan(d.plan);
+  // Every candidate's drawing is held too, so any tab survives a restart.
+  for (const id of d.plan_ids || []) {
+    if (!planJson.has(id)) fetch(`${API}/plans/${id}`).then((r) => (r.ok ? r.json() : null)).then(rememberPlan).catch(() => {});
+  }
   setText("ledger-cost", (d.model_cost_usd || 0).toFixed(2));
   if (d.degraded) toast(d.degraded_reason || "Some critics ran in degraded mode.");
 
@@ -1011,6 +1045,7 @@ async function selectScheme(id) {
           body: JSON.stringify({ plan_id: id, budget: S.briefSent?.budget || 0 }) }).then((r) => r.json()),
       ]);
       S.plans[id] = { plan, vastu, cost };
+      rememberPlan(plan);
     } catch (err) { toast(`Could not load that scheme: ${err.message}`); }
   }
   renderAll();
@@ -1111,6 +1146,7 @@ async function adoptEdited(newId) {
     jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0 }),
   ]);
   S.plans[newId] = { plan, vastu, cost };
+  rememberPlan(plan);
   // The winner on screen may be a refined copy of a candidate; its tab is the candidate's.
   const slotId = S.planIds.includes(oldId) ? oldId : snap.candidateId;
   const swap = (id) => (id === oldId || id === slotId ? newId : id);

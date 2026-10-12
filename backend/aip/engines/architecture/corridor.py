@@ -132,7 +132,7 @@ class CorridorPlanner(SpinePlanner):
 
     # ----------------------------------------------------------------- plan --
 
-    def plan(self, levels: list[list], v: CVariant) -> list[list[Room]] | None:
+    def plan(self, levels: list[list], v: CVariant, _single: bool = False) -> list[list[Room]] | None:
         self.tr = v.transverse
         W, D = (self.D, self.W) if v.transverse else (self.W, self.D)
         levels = [list(l) for l in levels]
@@ -156,7 +156,7 @@ class CorridorPlanner(SpinePlanner):
         Wh = min(W, 12.0) * v.narrow
         col_total = Wh - cw
         # Under 4.8 m for two columns: one column, the rooms in a single row on the passage.
-        single = col_total < 2 * 2.4
+        single = _single or col_total < 2 * 2.4
         if col_total < 2.4:
             self.why = 1
             return None
@@ -164,7 +164,13 @@ class CorridorPlanner(SpinePlanner):
         # Which rows stand in which column, floor by floor.
         plan_cols: list[tuple[list[_Row], list[_Row], list[_Row]]] = []
         def merged(cols):
-            return (cols[0] + cols[1], [], cols[2]) if single else cols
+            if not single:
+                return cols
+            shift = len(cols[0])
+            for r in cols[1]:
+                if r.host is not None:
+                    r.host += shift          # the second column's rows now follow the first's
+            return (cols[0] + cols[1], [], cols[2])
 
         w_est = col_total if single else col_total / 2.0
         plan_cols.append(merged(self._columns(floors[0], 0, v, w_est, multi)))
@@ -181,6 +187,8 @@ class CorridorPlanner(SpinePlanner):
             need_l = max(need_l, 2.0) if stair_col == 0 else need_l
             need_r = max(need_r, 2.0) if stair_col == 1 else need_r
         if need_l + need_r > col_total + 1e-6:
+            if not single:
+                return self.plan(levels, v, _single=True)
             self.why = 2
             return None
         area_l = max((sum(r.area for r in cols[0]) for cols in plan_cols), default=1.0) or 1.0
@@ -314,10 +322,9 @@ class CorridorPlanner(SpinePlanner):
                                 extra = (u0, u1 - wb)
                     room = add(row.type, bu0, vcur - d, bu1, vcur, row.req, row.name, key=(side, k))
                     if extra is not None:
-                        dr = add(T.STORE, extra[0], vcur - d, extra[1], vcur, name="Dressing")
-                        host_room = ids.get((side, row.host))
-                        if dr is not None and host_room is not None:
-                            dr.metadata["suite_of"] = host_room.id
+                        # Beside the passage, so it has its own door there; the bedroom's
+                        # one reserved door is the bath's.
+                        add(T.STORE, extra[0], vcur - d, extra[1], vcur, name="Dressing")
                     if room is not None and row.host is not None:
                         host = ids.get((side, row.host))
                         if host is not None:

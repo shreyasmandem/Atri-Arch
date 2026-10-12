@@ -70,6 +70,29 @@ def _plan_from_payload(payload: dict[str, Any] | None, plan_id: str | None, prin
     raise HTTPException(status_code=422, detail="Provide either 'plan_id' or 'plan'.")
 
 
+class RestoreRequest(BaseModel):
+    plan: dict[str, Any]
+
+
+@router.post("/restore")
+async def restore_plan(payload: RestoreRequest, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Put a plan the client still holds back in the server's memory.
+
+    Schemes live in memory on the instance that drew them; a restart (a deploy,
+    a free instance waking from sleep) forgets them while a browser still shows
+    them. The client keeps each plan's JSON and sends it back on a 404, so the
+    drawing, the model and the analyses carry on instead of failing.
+    """
+    try:
+        plan = FloorPlan.model_validate(payload.plan)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail=f"Invalid plan: {exc}") from exc
+    if not plan.id or not plan.levels:
+        raise HTTPException(status_code=422, detail="That is not a plan.")
+    get_plan_store().put(principal.firm.id, plan)
+    return {"plan_id": plan.id}
+
+
 class EditRequest(BaseModel):
     """Edits to a finished plan, applied in order. See `editor` for the kinds."""
 

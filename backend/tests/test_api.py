@@ -428,3 +428,24 @@ def test_advisories_reach_the_design_response(client):
     assert body["advisories"], "the plan departed from the brief and the response did not say so"
     assert any("floor" in a for a in body["advisories"])
     assert body["plan"]["metadata"]["advisories"] == body["advisories"]
+
+
+# ══ A restart must not strand an open page ═════════════════════════════
+
+
+def test_a_plan_the_client_holds_can_be_put_back_after_a_restart(client, designed):
+    from aip.api.store import get_plan_store
+
+    plan_id = designed["winner_plan_id"]
+    plan = client.get(f"/api/v1/plans/{plan_id}").json()
+    assert client.get(f"/api/v1/plans/{plan_id}/model.glb").status_code == 200
+
+    get_plan_store()._items.clear()              # the server restarted: memory is gone
+    assert client.get(f"/api/v1/plans/{plan_id}/model.glb").status_code == 404
+
+    assert client.post("/api/v1/plans/restore", json={"plan": plan}).status_code == 200
+    assert client.get(f"/api/v1/plans/{plan_id}/model.glb").status_code == 200
+
+
+def test_restoring_something_that_is_not_a_plan_is_a_422(client):
+    assert client.post("/api/v1/plans/restore", json={"plan": {"hello": 1}}).status_code == 422
