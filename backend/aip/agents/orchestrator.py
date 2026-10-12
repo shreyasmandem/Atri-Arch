@@ -225,6 +225,9 @@ class DesignPipeline:
             else:
                 emit("debate", "skipped", "Committee agreement was high; no debate needed.", 0.62)
 
+            consensus = self._prefer_valid(candidates, consensus)
+            result.consensus = consensus
+
             winner = next((c for c in candidates if c.id == consensus.winner_id), candidates[0])
             result.winner = winner.artifact
 
@@ -482,6 +485,29 @@ class DesignPipeline:
         total = sum(len(c.critiques) for c in candidates)
         emit("critique", "done", f"{total} independent verdicts collected.", 0.56)
         return candidates
+
+    @staticmethod
+    def _prefer_valid(candidates, consensus):
+        """A drawing that fails the validity guardrail is not the committee's pick
+        while a clean scheme is on the table; the critics score the numbers, and a
+        0.5 m passage scores well."""
+        def flawed(c) -> bool:
+            return bool((getattr(c.artifact, "metadata", None) or {}).get("guardrail"))
+
+        by_id = {c.id: c for c in candidates}
+        current = by_id.get(consensus.winner_id)
+        if current is None or not flawed(current):
+            return consensus
+        clean = [c for c in candidates if not flawed(c)]
+        if not clean:
+            return consensus
+        order = [r["candidate_id"] for r in consensus.ranking]
+        clean.sort(key=lambda c: order.index(c.id) if c.id in order else len(order))
+        pick = clean[0]
+        ranking = sorted(consensus.ranking, key=lambda r: r["candidate_id"] != pick.id)
+        score = next((r["score"] for r in consensus.ranking if r["candidate_id"] == pick.id),
+                     consensus.winner_score)
+        return consensus.model_copy(update={"winner_id": pick.id, "winner_score": score, "ranking": ranking})
 
     async def _stage_consensus(
         self, candidates: list[Candidate[FloorPlan]], brief: ClientBrief, emit
