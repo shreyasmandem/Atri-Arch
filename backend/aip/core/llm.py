@@ -62,6 +62,11 @@ class ModelUnavailable(LLMError):
     """This model id is gone. The provider itself may be perfectly healthy."""
 
 
+class CredentialRejected(LLMError):
+    """The provider refused the key (401/403). It will not start working again
+    until someone replaces the key, so the provider is parked for the process."""
+
+
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
@@ -175,6 +180,14 @@ class CircuitBreaker:
         if until:
             self._open_until.pop(provider, None)
         return False
+
+    def park(self, provider: str) -> None:
+        """Take a provider out until restart - its key was refused."""
+        self._open_until[provider] = float("inf")
+        log_event(logger, "circuit.parked", level=40, provider=provider, reason="credential rejected")
+
+    def parked(self) -> list[str]:
+        return sorted(p for p, until in self._open_until.items() if until == float("inf"))
 
     def record_success(self, provider: str) -> None:
         self._failures.pop(provider, None)
@@ -604,6 +617,16 @@ class LLMRouter:
                     llm_rec["prompt_tokens"] = response.prompt_tokens
                     llm_rec["completion_tokens"] = response.completion_tokens
                     llm_rec["latency_ms"] = response.latency_ms
+            except CredentialRejected as exc:
+                # A refused key fails every model on the provider, on every call.
+                # Found in neatlogs: each chat turn spent seconds on a revoked
+                # Groq key before failing over. Park the provider instead.
+                self.breaker.park(model.provider)
+                errors.append(f"{model.provider}/{model.id}: {exc}")
+                self.ledger.record(
+                    UsageRecord(model.provider, model.id, capability.value, 0, 0, 0.0, ok=False)
+                )
+                continue
             except ModelUnavailable as exc:
                 # The id is gone, not the provider. Retire the model and keep
                 # every other model on this provider in play.
@@ -864,6 +887,8 @@ class LLMRouter:
                 # extract_json() is robust enough to cope.
                 body.pop("response_format", None)
                 continue
+            if res.status_code in (401, 403):
+                raise CredentialRejected(f"key rejected by {provider.name} (http {res.status_code})")
             if res.status_code >= 400:
                 body = res.text[:300]
                 lowered = body.lower()

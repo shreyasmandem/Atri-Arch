@@ -21,8 +21,9 @@ async def health() -> HealthResponse:
     from aip.rag.corpus import corpus_summary
 
     settings = get_settings()
-    configured = settings.configured_providers()
     llm = get_llm_router()
+    # A provider whose key was refused is configured but not usable.
+    configured = [p for p in settings.configured_providers() if p not in llm.breaker.parked()]
     return HealthResponse(
         status="ok",
         version=__version__,
