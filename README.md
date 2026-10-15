@@ -10,7 +10,7 @@ you a full drawing set in about a minute.**
 Borda vote → repair agents → plans, elevations, sections, DXF, a 3D model,
 airflow, a Vastu reading, a Monte Carlo cost estimate and furnished interiors.
 
-| | |
+| Link | |
 |---|---|
 | **Live** | https://atri-arch.vercel.app (the API is pinged every 5 minutes, so it is awake when you open it) |
 | **Demo video (2:17)** | https://x.com/mandemshreyas/status/2109655589924266239 |
@@ -43,10 +43,17 @@ atriarch.design_pipeline            WORKFLOW
 | **Incident 01** | Failed LLM spans on almost every run. Opening them: `http 404 model_not_found` for `qwen/qwen3.6-27b` and `groq/compound`. Groq had withdrawn both ids, and every critic in the parallel fan-out rediscovered the same 404, on every run. | Withdrawn ids replaced with the live `qwen/qwen3.8-27b`, and a retired model is now retired once for the whole process instead of once per critic. [commit `bfae4c0`](https://entire.io/gh/shreyasmandem/neathack-AtriArch/commit/bfae4c0edf19a5abf5393d2b60ed76c0345393ba) |
 | **Incident 02** | `rate limited (retry-after 1.0s / 2.0s)` spans on `openai/gpt-oss-120b` and `gemini-2.5-pro` when 13 critics fan out at once. | A 429 now means "later, not broken": the router fails over to the next model immediately instead of sleeping, and never opens the circuit breaker for a rate limit. |
 
-**Result, from neatlogs' own weekly digest:** the share of requests with recorded
-errors fell from **85.3% to 40.0%**. Most of what remains are free-tier 429s that the
-router recovers from by failing over; when every free model is busy, an LLM critic is
-marked `degraded` in the API and UI rather than failing the run.
+**Result, from neatlogs' own weekly digest:** traces containing an error span fell
+from **85.3% to 40.0%** after commit `bfae4c0`.
+
+Read that number as span errors, not failed designs. neatlogs records every
+provider-level HTTP 429 on an inner `LLM` span as an error, even when the router
+recovers from it on the next span. A rate-limited call does not fail the run: the
+capability-addressed router fails over to the next provider at once, and if every free
+provider is saturated at the same moment, the LLM critic falls back to the
+deterministic critics, is labelled `degraded` in the API and UI, and the
+`atriarch.design_pipeline` workflow still returns a complete scheme. That fallback is
+asserted by `test_router_degrades_instead_of_raising`.
 
 ### Entire: memory for the coding agent
 
@@ -79,31 +86,38 @@ Forecast and notes: [`docs/cfo-ai/`](docs/cfo-ai/).
 
 ## Where the agents and the LLMs are
 
-Atri Arch is a team of agents, not one prompt. Language models do the parts that
-need judgement; physics and code checks are tools the agents use, so no model can
-talk a bad plan past the committee.
+Atri Arch is a neuro-symbolic multi-agent system: **8 specialised LLM agents** and a
+**manager-worker negotiation orchestrator**, working against **10 deterministic
+physics and code tools**. The LLM agents do what needs judgement: conversation,
+critique, revision, design and explanation. The deterministic engines are their
+ground truth. Every plan an agent proposes is measured before it can win, so a
+hallucinated room size, a corridor too narrow to walk or a code breach is caught by
+arithmetic, not by another model's opinion. The engines do not replace the agents;
+they keep them honest.
 
-| Agent | Uses an LLM for |
+| Agent | Role |
 |---|---|
 | **Brief agent** | The conversation. Reads a brief in English, Hindi or Hinglish, asks only what is missing, and starts when the client says go. |
-| **3 LLM critics** | Design coherence, brief fidelity and livability: the judgements that resist a formula. |
+| **3 generative critics** | Design coherence, brief fidelity and livability: the judgements that resist a formula. |
 | **Revision agent** | "Make the kitchen bigger, add a balcony off the master": reads a change in any language and applies it. |
 | **Exterior designer** | Composes facades in a facade grammar for what the client said. |
-| **Plan reader** | Reads a photo or scan of an existing plan with a vision model. |
-| **Design rationale** | Writes the client-facing explanation of what was chosen and what it traded away. |
-| **10 analytical critics** | No LLM. Code, daylight, ventilation, privacy, circulation, accessibility, space, structure, Vastu and cost are measured, because a daylight factor should be arithmetic, not an opinion. |
+| **Vision plan reader** | Reads a photo or scan of an existing plan with a vision model. |
+| **Design rationale writer** | Writes the client-facing explanation of what was chosen and what it traded away. |
+| **Negotiation orchestrator** | Manager-worker protocol: hands each open constraint to the worker that owns it (floorplan, Vastu, cost, interior), and accepts a repair only when re-measuring the whole design shows a net gain. |
+| **10 deterministic critics** | The ground-truth tools. Code, daylight, ventilation, privacy, circulation, accessibility, space, structure, Vastu and cost are measured, because a daylight factor should be arithmetic, not an opinion. |
 
 The models are free-tier (Groq, Gemini, OpenRouter and others) behind a
 capability-addressed router with failover, rate-limit handling and a circuit breaker.
 That is why the incidents above mattered: the router is the agent's nervous system.
 
-## What was built during neatHack
+## What was built during neatHack (Oct 10-12, 2026)
 
-The analytical core (geometry, the measured critics, the Vastu corpus and the cost
-engine) started before the hackathon as a research project; the Phase 1 report is in
-[`docs/`](docs/). neatHack is where it became an agent you can talk to and a product
-people can use. Everything below was built Oct 10-12, and every commit is
-checkpointed in Entire:
+The entire platform was built during the 48-hour neatHack sprint and is tracked
+across 75+ Entire checkpoints: the 10 deterministic physics and code critics, the
+Vastu knowledge graph, the manager-worker negotiation protocol, the hand-written
+AutoCAD R12 DXF and glTF generators, the multi-agent LLM studio, the four layout
+planners, the live atelier UI and the telemetry-instrumented model router. Highlights
+from the commit history:
 
 - The conversational **brief agent** (any language) and the **revision agent**
 - The **exterior designer agent** with seven facade languages and palettes, day and night
@@ -288,7 +302,7 @@ Home Office  -> NE  Home Office -[hosts]-> Study -[demands]-> Light -[affords]->
 No rule in the corpus mentions a gym, a home theatre or a home office. The graph
 reaches all three by reasoning through what happens inside the room.
 
-| | |
+| Metric | Value |
 |---|---|
 | Placements a cited text addresses | 112 |
 | Placements the graph can derive | 578 |
@@ -342,7 +356,7 @@ against arithmetic.
 For the LLM work, `aip/core/providers.py` is a registry of free-tier
 and local models. The router is capability-addressed (`Capability.REASONING`,
 not a vendor name), rate-limit aware, circuit-broken, failover-capable, and
-routes on **measured latency as well as quality** - a model 4% better and 40x
+routes on **measured latency as well as quality** — a model 4% better and 40x
 slower is the wrong choice when thirteen critics are fanning out.
 
 Provider catalogues rot, so the registry is verified rather than trusted:
@@ -444,8 +458,8 @@ independent CAD library to confirm every wall's length and thickness survived.
 - [docs/API_SETUP.md](docs/API_SETUP.md) — the free accounts to create, in priority order
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the pieces fit together
 - [docs/RESEARCH.md](docs/RESEARCH.md) — novelty claims, method, evaluation, limitations
-- [docs/AIP_Project_Report_Phase1.docx](docs/AIP_Project_Report_Phase1.docx) — the
-  Phase 1 report. Regenerate it with `python scripts/build_report.py` from
+- [docs/AIP_Project_Report_Phase1.docx](docs/AIP_Project_Report_Phase1.docx) — an
+  auto-generated technical benchmark report. Regenerate it with `python scripts/build_report.py` from
   `backend/`: every figure in it is measured from the running system at build
   time, so the document cannot drift from the code.
 - `http://127.0.0.1:8000/docs` — interactive OpenAPI reference
