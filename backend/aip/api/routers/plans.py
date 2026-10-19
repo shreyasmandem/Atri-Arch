@@ -236,6 +236,49 @@ async def get_airflow_field(
     return result
 
 
+@router.get("/{plan_id}/thermal")
+async def get_thermal(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    season: str = Query(default="summer", pattern="^(summer|monsoon|winter)$"),
+    month: int | None = Query(default=None, ge=1, le=12, description="A month in particular, in place of the season"),
+    windows: str = Query(default="open", pattern="^(open|night|shut)$"),
+    fans: bool = Query(default=True),
+    cool_roof: bool = Query(default=False),
+    chajja: float = Query(default=0.6, ge=0.0, le=1.5, description="Sunshade depth over windows, metres"),
+) -> dict[str, Any]:
+    """Each room's temperature hour by hour through a design day of the
+    nearest city's climate, how comfortable it feels, what heats it, the AC
+    it needs, and what each fix would change."""
+    import asyncio
+
+    from aip.engines.architecture.thermal import Options, thermal
+
+    plan = _load(plan_id, principal)
+    opt = Options(season=season, month=month, windows=windows, fans=fans, cool_roof=cool_roof, chajja=chajja)
+    return await asyncio.to_thread(thermal, plan, opt)
+
+
+@router.get("/{plan_id}/thermal/year")
+async def get_thermal_year(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    windows: str = Query(default="open", pattern="^(open|night|shut)$"),
+    fans: bool = Query(default=True),
+    cool_roof: bool = Query(default=False),
+    chajja: float = Query(default=0.6, ge=0.0, le=1.5),
+) -> dict[str, Any]:
+    """The house through its city's year: each month's average outdoor
+    maximum and minimum beside the hottest room and the comfortable hours."""
+    import asyncio
+
+    from aip.engines.architecture.thermal import Options, thermal_year
+
+    plan = _load(plan_id, principal)
+    opt = Options(windows=windows, fans=fans, cool_roof=cool_roof, chajja=chajja)
+    return await asyncio.to_thread(thermal_year, plan, opt)
+
+
 @router.get("/{plan_id}/vastu3d")
 async def get_vastu_placements(
     plan_id: str,

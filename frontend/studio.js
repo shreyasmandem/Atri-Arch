@@ -3059,10 +3059,18 @@ async function renderAir() {
   const p = pane("air"); p.innerHTML = "";
   const id = S.activeId;
   const levels = cur().plan?.levels || [];
-  const st = (S.airState ||= { level: 0, wind: null, doors: true });
+  const st = (S.airState ||= { level: 0, wind: null, doors: true, mode: "breeze" });
   if (!levels.some((lv) => lv.index === st.level)) st.level = levels[0]?.index ?? 0;
 
-  const bar = el("div", "pane__bar");
+  // Two readings of the same air: where the breeze goes, and how warm each
+  // room gets through the day.
+  const modes = el("div", "air-modes"); modes.setAttribute("role", "tablist"); modes.setAttribute("aria-label", "Air");
+  for (const [m, name] of [["breeze", "Breeze"], ["heat", "Temperature"]]) {
+    const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(st.mode === m));
+    b.addEventListener("click", () => { if (st.mode !== m) { st.mode = m; renderAir(); } });
+    modes.append(b);
+  }
   const floors = el("div", "sheet-groups"); floors.setAttribute("role", "tablist");
   for (const lv of levels) {
     const b = el("button", null, floorName(lv.index)); b.type = "button"; b.setAttribute("role", "tab");
@@ -3070,6 +3078,20 @@ async function renderAir() {
     b.addEventListener("click", () => { st.level = lv.index; renderAir(); });
     floors.append(b);
   }
+
+  if (st.mode === "heat") {
+    const bar = el("div", "pane__bar");
+    bar.append(modes, floors);
+    const body = el("div", "air-heat");
+    p.append(bar, body);
+    const { ThermalView } = await import("./thermal.js?v=t3");
+    if (S.view !== "air" || S.activeId !== id) return;
+    const th = (S.airHeat ||= { season: "summer", windows: "open", fans: true, cool_roof: false, chajja: 0.6 });
+    S.air = new ThermalView(body, { api: API, planId: id, level: st.level, state: th });
+    return;
+  }
+
+  const bar = el("div", "pane__bar");
   const rose = el("div", "air-rose"); rose.setAttribute("role", "radiogroup"); rose.setAttribute("aria-label", "Wind from");
   rose.append(el("span", "air-rose__label", "Wind from"));
   const tools = el("div", "pane__tools");
@@ -3080,7 +3102,7 @@ async function renderAir() {
   best.title = "Solve the floor for all eight winds and rank them";
   const play = el("button", "ghost-btn", "Pause"); play.type = "button";
   tools.append(doors, best, play);
-  bar.append(floors, rose, tools);
+  bar.append(modes, floors, rose, tools);
   const stage = el("div", "model-stage air-stage");
   const cap = el("p", "model-cap", "Solving the breeze…");
   const rank = el("div", "air-rank"); rank.hidden = true;

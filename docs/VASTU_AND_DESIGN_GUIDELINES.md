@@ -265,6 +265,32 @@ Sources: [South Indian house design, BricknBolt](https://www.bricknbolt.com/blog
 [Geoffrey Bawa, Ampersand Travel](https://ampersandtravel.com/blog/2024/geoffrey-bawa-the-pioneer-of-tropical-modernism),
 [Award-winning Kerala brick house, Onmanorama](https://onmanorama.com/lifestyle/decor/2020/09/25/award-winning-house-kerala-garner-global-attention.html).
 
+## Part 5: Temperature and thermal comfort
+
+The Air tab's Temperature view (`engines/architecture/thermal.py`) runs every
+indoor room hour by hour through a design day of the client's city:
+
+- **Climate:** monthly averages for 19 Indian cities (mean daily maximum and
+  minimum, mean humidity), after IMD climatological normals, rounded. The
+  city is the one named in the brief, or the nearest to the plot. "Hottest",
+  "wettest" and "coolest" pick that city's own months; any month can be chosen.
+- **Model:** two nodes per room (air, and the brick and RCC mass), driven by
+  the sun on each wall and the roof (NOAA sun position, clear-sky beam and
+  diffuse, cut by monsoon cloud), glass with chajja shading, air changes from
+  the breeze solve, and people and cooking.
+- **Construction defaults:** 230 mm brick U 2.1 W/m2K, 150 mm RCC roof U 3.0
+  (1.2 with a cool roof), single glass U 5.7, SHGC 0.6.
+- **Comfort:** IMAC (India Model for Adaptive Comfort, 2016), neutral
+  temperature 0.54 x outdoor mean + 12.83 C, +/-2.4 C for 90% acceptability;
+  moving air from the breeze or a ceiling fan feels cooler (ASHRAE 55).
+- **AC:** sensible load to hold 26 C (BEE default) with windows shut, +25%
+  for latent load and pull-down.
+- **Thermal camera:** inside surface temperatures of each outside wall,
+  window glass with the sun through it, the ceiling under an exposed slab and
+  the open ground, drawn in an infrared palette.
+
+It ranks rooms and sizes fixes at concept stage; it is not a full simulation.
+
 ---
 
 ## Where sources disagree

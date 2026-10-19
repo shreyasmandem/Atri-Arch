@@ -465,6 +465,11 @@ def test_exterior_batches_and_customised_fit(client, designed):
                      params={"design": "ex:hip.stone.timber.none.punched.n.teak.chhatri~w:efe9dc"}).json()
     assert fit["design"]["roof"] == "flat" and fit["notes"] and fit["design"]["colours"]["wall"] == "#efe9dc"
     assert client.get(f"/api/v1/plans/{pid}/exteriors/fit", params={"design": "nope"}).status_code == 422
+    th = client.get(f"/api/v1/plans/{pid}/thermal", params={"season": "summer", "cool_roof": "true"}).json()
+    assert th["rooms"] and len(th["outdoor"]) == 24 and th["city"]
+    assert client.get(f"/api/v1/plans/{pid}/thermal", params={"season": "spring"}).status_code == 422
+    assert client.get(f"/api/v1/plans/{pid}/thermal", params={"month": 1}).json()["month"] == 1
+    assert len(client.get(f"/api/v1/plans/{pid}/thermal/year").json()["months"]) == 12
     sig = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "s", "n": 40, "style": "signature"}).json()
     assert len(sig["designs"]) == 40 and all(d.get("look") for d in sig["designs"])
     g = client.get(f"/api/v1/plans/{pid}/exteriors/grammar").json()
