@@ -62,6 +62,7 @@ export class Viewer3D {
   // without it, the dark studio table the drawings and hero use.
   constructor(host, { daylight = false } = {}) {
     this.host = host;
+    this.THREE = THREE;          // for callers that measure the model (part labels)
     this.daylight = daylight;
     const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }));
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -193,6 +194,54 @@ export class Viewer3D {
   // Exterior: the whole house. Interior: the roof and every floor above the
   // one in view lifted away, ceiling lights hidden so the rooms read from
   // above. Night: dusk light, the lamps on and glowing through the glass.
+  // ── parts: what a click lands on, and lighting a part up ────────────
+  // Each mesh is named node__material__key (arch3d); the key names the part.
+  partAt(clientX, clientY) {
+    if (!this.model) return null;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    const ray = (this._ray ||= new THREE.Raycaster());
+    ray.setFromCamera(ndc, this.camera);
+    const meshes = [];
+    this.model.traverse((o) => { if (o.isMesh && o.visible) meshes.push(o); });
+    for (const hit of ray.intersectObjects(meshes, false)) {
+      let o = hit.object, ok = true;
+      for (let q = o; q; q = q.parent) if (!q.visible) { ok = false; break; }
+      if (!ok) continue;
+      const key = o.name.split("__").pop();
+      return { key, mesh: o, point: hit.point };
+    }
+    return null;
+  }
+
+  // Every part key in the model, with the colour it wears now.
+  parts() {
+    const out = new Map();
+    this.model?.traverse((o) => {
+      if (!o.isMesh) return;
+      const key = o.name.split("__").pop();
+      const m = [].concat(o.material)[0];
+      if (!out.has(key) && m?.color) out.set(key, `#${m.color.getHexString()}`);
+    });
+    return out;
+  }
+
+  // Light a part up (null: none), so the client sees what they are about to change.
+  highlight(key) {
+    if (this._lit === key) return;
+    this._lit = key;
+    this.model?.traverse((o) => {
+      if (!o.isMesh) return;
+      const on = key && o.name.split("__").pop() === key;
+      for (const m of [].concat(o.material)) {
+        if (!m?.emissive || this.lamps?.includes(m)) continue;
+        m.userData.glow ??= { c: m.emissive.getHex(), i: m.emissiveIntensity };
+        if (on) { m.emissive.setHex(0x6a8cff); m.emissiveIntensity = 0.45; }
+        else { m.emissive.setHex(m.userData.glow.c); m.emissiveIntensity = m.userData.glow.i; }
+      }
+    });
+  }
+
   setMode(mode, level = 0) {
     if (!this.model) return;
     const levels = [];

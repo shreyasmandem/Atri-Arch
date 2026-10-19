@@ -352,6 +352,28 @@ async def get_exteriors(
     return {"designs": designs, "grammar": grammar(), "style": plan.style, "heard": heard(prefs)}
 
 
+class DesignChatRequest(BaseModel):
+    design: str = Field(..., max_length=600, description="The exterior design id being edited")
+    message: str = Field(..., min_length=1, max_length=800, description="What the client wants changed")
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=12)
+    parts: list[str] = Field(default_factory=list, max_length=80, description="Part keys the 3D model shows")
+
+
+@router.post("/{plan_id}/exteriors/chat")
+async def exterior_chat(plan_id: str, req: DesignChatRequest,
+                        principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Change the outside of the house by saying so: "paint the boundary wall
+    charcoal", "a tiled hip roof", "make the gate teak". Returns the edited
+    design, a reply, and a line per change."""
+    from aip.agents.design_chat import edit_exterior
+
+    plan = _load(plan_id, principal)
+    try:
+        return await edit_exterior(plan, req.design, req.message, req.history, parts=req.parts)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/{plan_id}/exteriors/grammar")
 async def exterior_grammar(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
     """The customising vocabulary and colour schemes, with the plan's style and

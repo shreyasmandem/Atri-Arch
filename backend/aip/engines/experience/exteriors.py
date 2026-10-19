@@ -56,6 +56,44 @@ ACCENTS = {"bronze": "#8a6a4c", "charcoal": "#2b2a29", "teak": "#7a4b2a", "white
            "graphite": "#3d3f42", "verdigris": "#5f8a7e"}
 #: The four tints a design may fix exactly: id key -> Exterior field.
 COLOUR_KEYS = {"w": "wall", "c": "clad", "r": "roof_tint", "m": "metal", "f": "frame", "d": "door"}
+
+#: Every part of the outside a client can pick in 3D and paint, by the 3D
+#: model's material key: (label, group, words a client might use for it).
+#: Its colour rides in the design id's "z" entry ("z:compound-8a8a8a.gate-7a4b2a"),
+#: so the elevations, thumbnails and the registry all see the same house.
+PARTS: dict[str, tuple[str, str, tuple[str, ...]]] = {
+    "plaster": ("Wall paint", "Walls", ("wall", "walls", "plaster", "facade", "house colour", "outer walls")),
+    "clad": ("Stone cladding", "Walls", ("stone", "stone cladding", "cladding")),
+    "ex_brick": ("Brick", "Walls", ("brick", "bricks", "brickwork")),
+    "ex_concrete": ("Concrete", "Walls", ("concrete", "exposed concrete")),
+    "ex_timber": ("Timber cladding and slats", "Walls", ("timber", "wood", "wooden", "slats", "battens", "wood cladding")),
+    "ex_terracotta": ("Terracotta", "Walls", ("terracotta", "jaali", "clay")),
+    "ex_acp": ("ACP panels", "Walls", ("acp", "aluminium panels", "metal panels")),
+    "ex_slate": ("Slate", "Walls", ("slate",)),
+    "ex_panel": ("Feature panel", "Walls", ("feature panel", "feature wall", "panel")),
+    "ex_accent": ("Accent bands and trims", "Trims", ("accent", "bands", "band", "trim", "trims", "frame band")),
+    "slab": ("Slab edges and chajjas", "Trims", ("slab", "slabs", "chajja", "chajjas", "sunshade", "sunshades", "ledge")),
+    "sill": ("Window sills and copings", "Trims", ("sill", "sills", "coping")),
+    "plinth": ("Plinth", "Trims", ("plinth", "base band", "skirting")),
+    "ex_metal": ("Metal fins and screens", "Trims", ("fins", "metal", "louvres", "screen", "metal screen")),
+    "ex_roof": ("Roof slab", "Roof", ("roof", "roof slab", "roof plate")),
+    "roof_tile": ("Roof tiles", "Roof", ("roof tiles", "tiles", "tiled roof")),
+    "roof_flat": ("Terrace floor", "Roof", ("terrace", "terrace floor", "roof terrace")),
+    "water": ("Water tank", "Roof", ("water tank", "tank", "sintex")),
+    "timber": ("Pergola", "Roof", ("pergola",)),
+    "frame": ("Window frames", "Windows and doors", ("window frames", "frames", "window frame", "windows")),
+    "glass": ("Window glass", "Windows and doors", ("glass", "glazing")),
+    "main_door": ("Main door", "Windows and doors", ("main door", "front door", "entrance door")),
+    "door": ("Other doors", "Windows and doors", ("doors", "door")),
+    "rail_metal": ("Railings", "Windows and doors", ("railing", "railings", "grill", "grille", "balcony railing")),
+    "compound": ("Boundary wall", "Outside", ("boundary", "boundary wall", "compound wall", "compound", "fence")),
+    "gate": ("Gate", "Outside", ("gate", "main gate", "timber gate")),
+    "gate_steel": ("Gate steelwork", "Outside", ("sliding gate", "steel gate", "gate bars")),
+    "paving": ("Paving and drive", "Outside", ("paving", "drive", "driveway", "path", "pavers")),
+    "lawn": ("Lawn", "Outside", ("lawn", "grass")),
+    "pool_tile": ("Pool tiles", "Outside", ("pool tiles", "pool")),
+    "bamboo": ("Bamboo", "Outside", ("bamboo",)),
+}
 #: The site around the house: what the boundary wall is, and what guards balconies and terraces.
 BOUNDARIES = ("plaster", "stone", "brick", "hedge", "grille")
 RAILINGS = ("glass", "metal", "solid")
@@ -422,6 +460,8 @@ class Exterior:
     deck: str = ""
     lights: str = ""
     yard: str = ""
+    #: Colours a client painted on single parts, "key-hex.key-hex" (see PARTS).
+    paints: str = ""
 
     @property
     def id(self) -> str:
@@ -429,6 +469,8 @@ class Exterior:
                                  "p" if self.planters else "n", self.accent, self.feature])
         tail = [f"{k}:{getattr(self, f)}" for k, f in COLOUR_KEYS.items() if getattr(self, f)]
         tail += [f"{k}:{getattr(self, f)}" for k, (f, _) in OPTION_KEYS.items() if getattr(self, f)]
+        if self.paints:
+            tail.append(f"z:{self.paints}")
         return f"{core}~{','.join(tail)}" if tail else core
 
     @property
@@ -448,6 +490,8 @@ class Exterior:
                 tints[COLOUR_KEYS[k]] = _hex6(v)
             elif k in OPTION_KEYS and v in OPTION_KEYS[k][1]:
                 tints[OPTION_KEYS[k][0]] = v
+            elif k == "z":
+                tints["paints"] = encode_paints(decode_paints(v))
         parts = core.split(".")
         if len(parts) == 7:
             parts.append("none")              # ids from before the signature element
@@ -553,6 +597,7 @@ class Exterior:
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["colours"] = {f: (f"#{d.pop(f)}" if d[f] else "") for f in COLOUR_KEYS.values()}
+        d["paints"] = {k: f"#{v}" for k, v in decode_paints(self.paints).items()}
         return {"id": self.id, "name": self.name(), "story": self.story(), **d}
 
 
@@ -578,9 +623,40 @@ def combinations() -> int:
     return n
 
 
+def decode_paints(v: str) -> dict[str, str]:
+    """"compound-8a8a8a.gate-7a4b2a" -> {"compound": "8a8a8a", ...}, known parts only."""
+    out: dict[str, str] = {}
+    for item in filter(None, (v or "").split(".")):
+        key, _, hx = item.rpartition("-")
+        if key in PARTS and _hex6(hx):
+            out[key] = _hex6(hx)
+    return out
+
+
+def encode_paints(paints: dict[str, str]) -> str:
+    """The canonical form: parts in PARTS order, so equal paints give equal ids."""
+    return ".".join(f"{k}-{_hex6(paints[k])}" for k in PARTS if k in paints and _hex6(paints[k]))
+
+
+def with_paints(ex: Exterior, changes: dict[str, str | None]) -> Exterior:
+    """The design with some parts repainted (a hex) or returned to the design's own (None)."""
+    from dataclasses import replace
+
+    cur = decode_paints(ex.paints)
+    for k, v in changes.items():
+        if k not in PARTS:
+            continue
+        if v is None:
+            cur.pop(k, None)
+        elif _hex6(v):
+            cur[k] = _hex6(v)
+    return replace(ex, paints=encode_paints(cur))
+
+
 def grammar() -> dict[str, Any]:
     """The vocabulary a client can customise with, labelled."""
-    return {"combinations": combinations(), "roof": list(ROOFS), "base": list(BASES), "upper": list(UPPERS), "screen": list(SCREENS),
+    parts = [{"key": k, "label": lab, "group": grp} for k, (lab, grp, _w) in PARTS.items()]
+    return {"parts": parts, "combinations": combinations(), "roof": list(ROOFS), "base": list(BASES), "upper": list(UPPERS), "screen": list(SCREENS),
             "windows": list(WINDOWS), "feature": list(FEATURES), "accents": ACCENTS,
             "tones": {k: v[0] for k, v in WALL_TONES.items()}, "labels": NAMES, "schemes": list(EXTERIOR_SCHEMES),
             "boundary": list(BOUNDARIES), "railing": list(RAILINGS), "shade": list(SHADES), "canopy": list(CANOPIES),
@@ -872,6 +948,9 @@ def recolour(palette, ex: Exterior) -> None:
     if ex.panel in PANEL_FINISH:
         src, name = PANEL_FINISH[ex.panel]
         m["ex_panel"] = m[src].__class__(name, m[src].rgb, m[src].roughness, m[src].metallic)
+    # Last, whatever the client painted part by part.
+    for key, hex_ in decode_paints(ex.paints).items():
+        tint(key, hex_)
     # The drive's surface, named for the texture it wears.
     pave = {"concrete": ("paving_concrete", "#a9a7a1"), "gravel": ("gravel", "#b7aa94"), "grass": ("grass_pavers", "#6f8a4f")}
     if ex.paving in pave:

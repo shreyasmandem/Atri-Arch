@@ -157,6 +157,9 @@ class Palette:
             "roof_tile": Material("roof_tile", ext.get("tile", (0.58, 0.27, 0.17)), 0.75),
             "roof_flat": Material("roof_screed", (0.72, 0.71, 0.69), 0.95),
             "timber": Material("pergola_timber", (0.46, 0.31, 0.19), 0.7),
+            # The gate has finishes of its own, so it can be painted apart from the pergola and railings.
+            "gate": Material("gate_timber", (0.46, 0.31, 0.19), 0.7),
+            "gate_steel": Material("gate_steel", (0.22, 0.22, 0.23), 0.35, 0.8),
             "lawn": Material("lawn", (0.33, 0.47, 0.24), 1.0),
             "paving": Material("paving", (0.70, 0.67, 0.62), 0.9),
             "compound": Material("compound_wall", (0.86, 0.84, 0.80), 0.95),
@@ -368,7 +371,8 @@ class Builder:
                 scene.graph.update(frame_to=group, frame_from=scene.graph.base_frame)
                 parents.add(group)
             # glTF loaders strip "/" from names, so the path uses "__".
-            label = f"{node}/{mat.name}".replace("/", "__")
+            # The material key last, so a click in the viewer knows which part it hit.
+            label = f"{node}/{mat.name}/{key}".replace("/", "__")
             scene.add_geometry(mesh, node_name=label, geom_name=label,
                                parent_node_name=group)
         return scene
@@ -1010,15 +1014,15 @@ def _gate(b: Builder, kind: str, seg, at: Vec2) -> None:
     yaw = math.atan2(d.y, d.x)
     w = 3.6
     if kind == "timber":
-        b.box("site", "timber", (c.x, 0.85, -c.y), (w, 1.5, 0.06), yaw)
+        b.box("site", "gate", (c.x, 0.85, -c.y), (w, 1.5, 0.06), yaw)
         for k in range(1, 6):
-            b.box("site", "rail_metal", (c.x, 0.1 + k * 0.28, -c.y), (w, 0.02, 0.08), yaw)
+            b.box("site", "gate_steel", (c.x, 0.1 + k * 0.28, -c.y), (w, 0.02, 0.08), yaw)
     else:
-        b.box("site", "rail_metal", (c.x, 1.55, -c.y), (w, 0.06, 0.06), yaw)
-        b.box("site", "rail_metal", (c.x, 0.15, -c.y), (w, 0.06, 0.06), yaw)
+        b.box("site", "gate_steel", (c.x, 1.55, -c.y), (w, 0.06, 0.06), yaw)
+        b.box("site", "gate_steel", (c.x, 0.15, -c.y), (w, 0.06, 0.06), yaw)
         for k in range(int(w / 0.12) + 1):
             q = c + d * (-w / 2 + k * 0.12)
-            b.box("site", "rail_metal", (q.x, 0.85, -q.y), (0.025, 1.4, 0.025), yaw)
+            b.box("site", "gate_steel", (q.x, 0.85, -q.y), (0.025, 1.4, 0.025), yaw)
     for s in (-1, 1):
         q = c + d * (s * (w / 2 + 0.12))
         b.box("site", "compound", (q.x, 0.85, -q.y), (0.3, 1.7, 0.3), yaw)

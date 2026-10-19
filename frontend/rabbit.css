@@ -836,6 +836,53 @@ input[type="range"].stance::-moz-range-thumb { width: 16px; height: 16px; border
 .air-rank__n { text-align: right; color: var(--cream-3); }
 @media (max-width: 720px) { .air-rose__label { display: none; } .air-rose button { min-width: 30px; padding: 0 5px; } }
 
+/* ── exterior: parts you can point at and paint ───────────────────── */
+.exw-tip { position: absolute; z-index: 4; padding: 5px 10px; background: rgba(11, 10, 9, 0.9); border: 1px solid var(--rule-2); color: var(--cream); font: 600 12px/1.3 var(--ui); pointer-events: none; white-space: nowrap; }
+.exw-bar { position: absolute; z-index: 3; top: 12px; right: 12px; display: flex; gap: 6px; }
+.exw-btn { height: 30px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(11, 10, 9, 0.72); color: var(--cream); font: 600 11px/1 var(--ui); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(4px); }
+.exw-btn:hover, .exw-btn[aria-pressed="true"], .exw-btn[aria-expanded="true"] { background: var(--cream); color: var(--ink); }
+.exw-hint { position: absolute; z-index: 2; left: 12px; bottom: 10px; margin: 0; padding: 4px 9px; background: rgba(11, 10, 9, 0.66); color: var(--cream-2); font-size: 11px; pointer-events: none; }
+.exw-tags { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.exw-tag { position: absolute; left: 0; top: 0; padding: 3px 8px; border: 1px solid rgba(255, 255, 255, 0.55); background: rgba(11, 10, 9, 0.78); color: #fff; font: 600 10.5px/1.2 var(--ui); white-space: nowrap; pointer-events: auto; cursor: pointer; }
+.exw-tag:hover { background: #fff; color: var(--ink); }
+.exw-list { position: absolute; z-index: 3; top: 48px; right: 12px; display: grid; gap: 1px; width: min(240px, calc(100% - 24px)); max-height: calc(100% - 64px); overflow-y: auto; padding: 8px; background: rgba(11, 10, 9, 0.92); border: 1px solid var(--rule-2); }
+.exw-list__g { padding: 8px 6px 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-3); }
+.exw-list__row { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 6px; border: 0; background: none; color: var(--cream-2); font: 12px/1.3 var(--ui); text-align: left; cursor: pointer; }
+.exw-list__row:hover { background: rgba(var(--c-rgb), 0.08); color: var(--cream); }
+.exw-list__row i { width: 14px; height: 14px; border: 1px solid rgba(255, 255, 255, 0.3); }
+.exw-list__row small { color: var(--cream-3); font-size: 10px; }
+.exw-edit { position: absolute; z-index: 4; left: 12px; top: 12px; display: grid; gap: 10px; width: min(300px, calc(100% - 24px)); padding: 14px; background: rgba(11, 10, 9, 0.94); border: 1px solid var(--rule-2); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); }
+.exw-edit__head { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.exw-edit__head b { display: block; font: 500 17px/1.2 var(--display); color: var(--cream); }
+.exw-edit__head span { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-3); }
+.exw-edit__x { width: 28px; height: 28px; border: 1px solid var(--rule-2); background: none; color: var(--cream); font-size: 16px; cursor: pointer; }
+.exw-edit__now { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--cream-2); }
+.exw-edit__now i { width: 22px; height: 22px; border: 1px solid rgba(255, 255, 255, 0.35); }
+.exw-edit__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr)); gap: 5px; max-height: 150px; overflow-y: auto; }
+.exw-sw { aspect-ratio: 1; border: 1px solid rgba(255, 255, 255, 0.22); cursor: pointer; transition: transform .15s var(--ease); }
+.exw-sw:hover { transform: scale(1.12); }
+.exw-sw[aria-selected="true"] { outline: 2px solid #fff; outline-offset: 1px; }
+.exw-edit__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.exw-edit__any { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--cream-2); cursor: pointer; }
+.exw-edit__any input { width: 34px; height: 26px; padding: 0; border: 1px solid var(--rule-2); background: none; cursor: pointer; }
+/* the design chat */
+.exc-log { display: grid; gap: 8px; max-height: 340px; overflow-y: auto; padding: 2px; }
+.exc-empty { margin: 0; font-size: 12px; color: var(--cream-3); }
+.exc-msg { max-width: 92%; padding: 9px 12px; font-size: 13px; line-height: 1.45; }
+.exc-msg p { margin: 0; }
+.exc-msg--user { justify-self: end; background: var(--cream); color: var(--ink); }
+.exc-msg--assistant { justify-self: start; border: 1px solid var(--rule-2); color: var(--cream-2); }
+.exc-msg.is-busy { color: var(--cream-3); font-style: italic; }
+.exc-msg small { display: block; margin-top: 4px; font-size: 10px; color: var(--cream-3); }
+.exc-changes { margin: 6px 0 0; padding-left: 16px; font-size: 12px; color: var(--cream); }
+.exc-ideas { display: flex; flex-wrap: wrap; gap: 6px; }
+.exc-ideas .chip { padding: 7px 11px; border: 1px solid var(--rule-2); border-radius: 999px; background: transparent; color: var(--cream-2); font: 500 12px/1.3 var(--ui); cursor: pointer; }
+.exc-ideas .chip:hover { background: var(--cream); color: var(--ink); }
+.exc-form { display: flex; gap: 6px; }
+.exc-form input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--rule-2); background: var(--ink); color: var(--cream); font: 13px var(--ui); }
+.exc-form input:focus { outline: none; border-color: var(--cream-2); }
+@media (max-width: 720px) { .exw-hint { display: none; } .exw-edit { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; gap: 8px; padding: 10px; } .exw-edit__grid { max-height: 64px; grid-template-columns: repeat(auto-fill, minmax(22px, 1fr)); } .exw-edit__head b { font-size: 15px; } }
+
 /* ── air: temperature ─────────────────────────────────────────────── */
 .air-modes { display: flex; gap: 2px; padding-bottom: 6px; }
 .air-modes button { height: 30px; padding: 0 14px; border: 1px solid var(--rule); background: transparent; color: var(--cream-3); font: 600 11px/1 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; transition: color .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease); }

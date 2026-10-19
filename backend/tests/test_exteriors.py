@@ -228,3 +228,60 @@ def test_signature_homes_are_whole_valid_houses_in_colourways(plan):
     assert len({e.form for e in goa}) == 1 and len({e.wall for e in goa}) == 3
     for d in designs[::3]:
         build_scene(plan, include_furniture=False, design_id=d["id"])
+
+
+def test_parts_painted_one_by_one_ride_in_the_id_and_the_model(plan):
+    from aip.engines.experience.exteriors import PARTS, decode_paints, with_paints
+
+    ex = generate(plan, 1)[0]
+    painted = with_paints(ex, {"compound": "#3a3a3c", "gate": "7a4b2a", "nonsense": "ffffff"})
+    assert decode_paints(painted.paints) == {"compound": "3a3a3c", "gate": "7a4b2a"}
+    back = Exterior.parse(painted.id)
+    assert back == painted and back.form == ex.form
+    assert painted.to_dict()["paints"] == {"compound": "#3a3a3c", "gate": "#7a4b2a"}
+    assert Exterior.parse(with_paints(painted, {"gate": None}).id).paints == "compound-3a3a3c"
+    # The model wears it, and every mesh says which part it is.
+    scene = build_scene(plan, include_furniture=False, design_id=painted.id)
+    keys = {name.rsplit("__", 1)[-1] for name in scene.geometry}
+    assert "compound" in keys and keys & {"plaster", "clad", "ex_brick", "ex_concrete", "ex_timber"}
+    wall = next(g for n, g in scene.geometry.items() if n.endswith("__compound"))
+    r, g, b, _a = wall.visual.material.baseColorFactor
+    assert abs(int(r) - int(g)) < 4 and r < 30       # charcoal, in linear light (0-255)
+    assert all(k in PARTS for k in ("compound", "gate", "plaster", "frame"))
+
+
+def test_the_design_chat_reads_parts_colours_and_the_grammar(plan):
+    import asyncio
+
+    from aip.agents.design_chat import edit_exterior
+
+    ex = Exterior("flat", "plaster", "plaster", "none", "punched", False, "white", "none")
+    r = asyncio.run(edit_exterior(plan, ex.id, "paint the boundary wall charcoal and the gate teak", use_llm=False))
+    assert r["design"]["paints"] == {"compound": "#3a3a3c", "gate": "#7a4b2a"}
+    assert len(r["changed"]) == 2 and r["by"] == "rules"
+    r2 = asyncio.run(edit_exterior(plan, r["design"]["id"], "put the gate back to the original colour", use_llm=False))
+    assert r2["design"]["paints"] == {"compound": "#3a3a3c"}
+    r3 = asyncio.run(edit_exterior(plan, ex.id, "something nice please", use_llm=False))
+    assert r3["changed"] == [] and "labelled" in r3["reply"]
+
+
+def test_the_chat_paints_the_gate_the_house_has(plan):
+    import asyncio
+
+    from aip.agents.design_chat import edit_exterior
+
+    ex = Exterior("flat", "plaster", "plaster", "none", "punched", False, "white", "none", gate="sliding")
+    r = asyncio.run(edit_exterior(plan, ex.id, "make the gate teak", use_llm=False, parts=["gate_steel", "compound"]))
+    assert r["design"]["paints"] == {"gate_steel": "#7a4b2a"}
+    r2 = asyncio.run(edit_exterior(plan, ex.id, "paint the pool tiles blue", use_llm=False, parts=["gate_steel", "compound"]))
+    assert r2["design"]["paints"] == {} and "no pool tiles" in r2["reply"]
+
+
+def test_a_new_tiled_roof_takes_the_tile_colour(plan):
+    import asyncio
+
+    from aip.agents.design_chat import edit_exterior
+
+    ex = Exterior("flat", "plaster", "plaster", "none", "punched", False, "white", "none")
+    r = asyncio.run(edit_exterior(plan, ex.id, "a hip roof with mangalore red tiles", use_llm=False, parts=["ex_roof", "plaster"]))
+    assert r["design"]["roof"] == "hip" and r["design"]["paints"] == {"roof_tile": "#a8553a"}
