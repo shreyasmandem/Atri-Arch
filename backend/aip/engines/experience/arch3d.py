@@ -163,6 +163,9 @@ class Palette:
             "leaf": Material("foliage", (0.24, 0.42, 0.20), 0.9),
             "leaf2": Material("foliage_light", (0.36, 0.52, 0.26), 0.9),
             "water": Material("water_tank", (0.20, 0.20, 0.21), 0.6),
+            "pool_water": Material("pool_water", (0.22, 0.62, 0.70), 0.06, 0.1, 0.9),
+            "pool_tile": Material("pool_tile", (0.55, 0.78, 0.82), 0.3),
+            "bamboo": Material("bamboo_pole", (0.71, 0.60, 0.38), 0.6),
             "f_wood": Material("floor_timber", (0.58, 0.42, 0.28), 0.6),
             "f_stone": Material("floor_stone", floor, 0.35),
             "f_tile": Material("floor_tile_matt", (0.78, 0.79, 0.78), 0.7),
@@ -885,6 +888,27 @@ def _roof_garden(b: Builder, top: Level, footprint, y: float) -> None:
             b.blob("roof", "leaf" if i % 2 else "leaf2", (q.x, y + 0.7, -q.y), 0.38, 0.85)
 
 
+def _pool(b: Builder, rect) -> None:
+    """A sunk pool: tiled tank, water just below the coping, a stone coping
+    and a deck round it with two loungers."""
+    pts = [Vec2(x, y) for x, y in list(rect.exterior.coords)[:-1]]
+    deck = rect.buffer(0.9, join_style=2)
+    b.slab("site", "paving", [Vec2(x, y) for x, y in list(deck.exterior.coords)[:-1]], 0.0, 0.04)
+    rim = rect.buffer(0.3, join_style=2)
+    b.slab("site", "sill", [Vec2(x, y) for x, y in list(rim.exterior.coords)[:-1]], 0.04, 0.09)
+    b.slab("site", "pool_tile", pts, 0.09, 0.095)
+    b.slab("site", "pool_water", pts, 0.095, 0.1)
+    x0, y0, x1, y1 = rect.bounds
+    along_x = (x1 - x0) >= (y1 - y0)
+    for k in (0.3, 0.6):
+        if along_x:
+            p = Vec2(x0 + (x1 - x0) * k, y1 + 0.55)
+            b.box("site", "linen", (p.x, 0.22, -p.y), (0.65, 0.08, 1.7))
+        else:
+            p = Vec2(x1 + 0.55, y0 + (y1 - y0) * k)
+            b.box("site", "linen", (p.x, 0.22, -p.y), (1.7, 0.08, 0.65))
+
+
 def _boundary(b: Builder, kind: str, a: Vec2, c: Vec2, mid: Vec2, length: float, yaw: float) -> None:
     """One run of the boundary: a full wall (plaster, stone, brick), a low
     wall under a clipped hedge, or a low wall under a metal grille."""
@@ -1010,6 +1034,13 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
             if g.geom_type == "Polygon" and g.area > 0.5:
                 b.slab("site", "paving", [Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], 0.0, 0.03)
 
+    # The pool the client asked for, in the open garden away from the road.
+    from aip.engines.experience.landscape import pool_rect
+
+    pool = pool_rect(plan)
+    if pool is not None:
+        _pool(b, pool[0])
+
     # A lush garden plants the inside of the boundary too, which a tight
     # city plot has room for even when its setbacks take no tree.
     if getattr(b.p, "garden", "") == "lush":
@@ -1018,6 +1049,8 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
             drive.buffer(0.4) if drive is not None else Polygon())
         if gate_c is not None:
             keep_off = keep_off.union(Point(gate_c.x, gate_c.y).buffer(2.3))
+        if pool is not None:
+            keep_off = keep_off.union(pool[0].buffer(1.3))
         if not edge.is_empty and edge.geom_type == "Polygon":
             ring_ = edge.exterior
             k = int(ring_.length / 1.1)
@@ -1033,13 +1066,15 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
         free = free.difference(footprint.buffer(2.4))
     if drive is not None:
         free = free.difference(drive.buffer(1.0))
+    if pool is not None:
+        free = free.difference(pool[0].buffer(2.6))       # no canopy over the water
     if free.is_empty:
         return
     rng = random.Random(int(hashlib.md5(plan.id.encode()).hexdigest()[:8], 16))
     fx0, fy0, fx1, fy1 = free.bounds
     placed: list[Vec2] = []
     for _ in range(400):
-        if len(placed) >= {"lush": 26, "minimal": 5, "none": 0}.get(getattr(b.p, "garden", ""), 14):
+        if len(placed) >= {"lush": 26, "minimal": 5, "none": 0}.get(getattr(b.p, "garden", ""), 14 + int(plan.site.garden_share * 30)):
             break
         p = Vec2(rng.uniform(fx0, fx1), rng.uniform(fy0, fy1))
         if not free.contains(Point(p.x, p.y)) or any(p.distance_to(q) < 3.2 for q in placed):
@@ -1280,7 +1315,7 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
     if plan.levels:
         top = plan.levels[-1]
         fp = _footprint(top)
-        if roof_kind in ("slab", "butterfly", "gable"):
+        if roof_kind in ("slab", "butterfly", "gable", "vault", "sawtooth"):
             b.slab("roof", "slab", _poly_pts(fp), y - SLAB, y)
             exteriors.roof(b, roof_kind, fp, y, road, slab_mat="ex_roof" if ex is not None else "slab")
             if roof_kind == "slab":

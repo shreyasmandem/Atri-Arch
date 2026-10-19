@@ -9,6 +9,8 @@ sensible professional defaults.
 
 from __future__ import annotations
 
+import math
+
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -125,6 +127,11 @@ class SimpleBriefRequest(BaseModel):
     setback_rear: float | None = Field(default=None, ge=0, le=30)
     setback_left: float | None = Field(default=None, ge=0, le=30)
     setback_right: float | None = Field(default=None, ge=0, le=30)
+    #: Outdoors: a share of the plot kept as lawn (or the lawn's size in m2),
+    #: and a pool. Both hold the house's footprint down so the space is left.
+    lawn_share: float | None = Field(default=None, ge=0, le=0.7, description="Share of the plot kept as lawn")
+    lawn_area: float | None = Field(default=None, ge=0, le=20000, description="Lawn wanted, m2 (instead of a share)")
+    pool: str = Field(default="", pattern=r"^(|none|plunge|family|lap)$", description="A pool: plunge, family or lap")
 
     @field_validator("must_haves", "materials_liked")
     @classmethod
@@ -136,7 +143,11 @@ class SimpleBriefRequest(BaseModel):
         reqs = [r for r in reqs if r.type not in set(self.remove_rooms)]
         mark = "Requested by the client."
         claimed: set[int] = set()
+        # A pool chosen for the garden is not also a room inside the house.
+        garden_pool = self.pool not in ("", "none")
         for x in self.extra_rooms:
+            if garden_pool and x.label and "pool" in x.label.lower():
+                continue
             notes = mark + (f" Opens off the {x.attach_to.value.replace('_', ' ')}." if x.attach_to else "")
             # A room the programme already has, not yet claimed by an earlier
             # request, takes this request's floor, size and side. A second
@@ -184,6 +195,26 @@ class SimpleBriefRequest(BaseModel):
             reqs.append(new)
         return reqs
 
+    def _garden_share(self) -> float:
+        area = self.plot_width * self.plot_depth
+        if self.lawn_area and area:
+            return round(min(0.7, self.lawn_area / area), 3)
+        return round(self.lawn_share or 0.0, 3)
+
+    def _coverage(self) -> float:
+        """The ground the house may cover: the byelaw's limit, less the lawn
+        and the pool the client asked for and room for the paths round them."""
+        from aip.engines.experience.landscape import pool_area
+
+        area = self.plot_width * self.plot_depth
+        cap = self.max_ground_coverage if self.max_ground_coverage is not None else byelaw_limits(area)[0]
+        pool = pool_area("" if self.pool == "none" else self.pool)
+        garden = self._garden_share()
+        if (garden or pool) and area:
+            # Never below a quarter of the plot: a house still has to stand.
+            cap = min(cap, max(0.25, 1.0 - garden - pool / area - 0.08))
+        return math.floor(cap * 1000) / 1000          # rounded down: the lawn is never shaved
+
     def to_brief(self) -> ClientBrief:
         """Expand into a full professional brief.
 
@@ -215,8 +246,9 @@ class SimpleBriefRequest(BaseModel):
             setback_left=sb[2],
             setback_right=sb[3],
             max_far=self.max_far if self.max_far is not None else byelaw_limits(self.plot_width * self.plot_depth)[1],
-            max_ground_coverage=(self.max_ground_coverage if self.max_ground_coverage is not None
-                                 else byelaw_limits(self.plot_width * self.plot_depth)[0]),
+            max_ground_coverage=self._coverage(),
+            garden_share=self._garden_share(),
+            pool="" if self.pool == "none" else self.pool,
         )
 
         requirements: list[RoomRequirement] = []

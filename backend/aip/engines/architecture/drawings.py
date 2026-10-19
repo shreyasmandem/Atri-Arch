@@ -793,6 +793,17 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
                 opacity=0.9 if not room.type.is_outdoor else 0.6,
             )
 
+    # The pool the client asked for, and how much of the plot stays open.
+    from aip.engines.experience.landscape import POOL_NAMES, pool_rect
+
+    pool = pool_rect(plan)
+    if pool is not None:
+        rect, kind = pool
+        pts = [Vec2(x, y) for x, y in list(rect.exterior.coords)[:-1]]
+        canvas.polygon(pts, fill="#8fc9d6", stroke="#3f8796", width=1.4)
+        c = rect.centroid
+        canvas.text(Vec2(c.x, c.y), POOL_NAMES[kind].upper(), size=8.5, weight="700", fill="#1f4f59")
+
     # Road on the approach side.
     road = site.road_directions[0] if site.road_directions else Direction.N
     _draw_road(canvas, box, road, style)
@@ -804,7 +815,11 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
     canvas.text(
         Vec2(extent.min_x + 0.4, extent.max_y - 0.8),
         f"Plot {site.plot_area:.0f} m²   |   Footprint {plan.footprint_area:.0f} m²   "
-        f"|   Coverage {plan.footprint_area / site.plot_area:.0%}   |   FAR {plan.achieved_far:.2f}",
+        f"|   Coverage {plan.footprint_area / site.plot_area:.0%}   |   FAR {plan.achieved_far:.2f}"
+        f"   |   Open ground {site.plot_area - plan.footprint_area:.0f} m²"
+        + (f" (asked: {site.garden_share:.0%} lawn)" if site.garden_share else "")
+        + ("" if not site.pool else f"   |   {POOL_NAMES[pool[1]].capitalize()}" if pool is not None
+           else "   |   The pool asked for does not fit this plot"),
         size=9, fill=style.text_muted, anchor="start",
     )
     _draw_north_point(canvas, plan, style)

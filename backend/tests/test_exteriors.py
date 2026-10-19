@@ -159,3 +159,28 @@ def test_a_roof_garden_asks_for_a_flat_roof_and_is_heard_once(plan):
     assert heard("contemporary with ACP, lighting and a roof garden") == ["roof garden", "contemporary", "acp", "lighting"]
     batch = generate(plan, 12, seed="g", prefer=asked)
     assert sum(e.deck == "garden" for e in batch) >= 8
+
+
+def test_new_roofs_features_and_screens_build(plan):
+    from aip.engines.experience.exteriors import FEATURES, ROOFS, SCREENS
+
+    assert {"vault", "sawtooth"} <= set(ROOFS) and {"arcade", "portico", "bay"} <= set(FEATURES)
+    assert {"slats", "bamboo"} <= set(SCREENS)
+    for roof, feature, screen in (("vault", "arcade", "slats"), ("sawtooth", "portico", "bamboo"), ("flat", "bay", "slats")):
+        ex = Exterior(roof=roof, feature=feature, screen=screen)
+        ex, _ = ex.fitted(one_floor=len(plan.levels) <= 1)
+        scene = build_scene(plan, include_furniture=False, design_id=ex.id)
+        assert len(scene.geometry) > 10
+    names = {g.visual.material.name for g in build_scene(
+        plan, include_furniture=False, design_id=Exterior(roof="flat", screen="bamboo").id).geometry.values()}
+    assert "bamboo_pole" in names
+
+
+def test_batches_reach_the_new_vocabulary(plan):
+    # The new elements arrive through the styles they belong to.
+    seen_roofs, seen_features = set(), set()
+    for style in ("industrial", "traditional_indian", "indo_saracenic", "biophilic"):
+        for e in generate(plan, 24, seed="wide", style=style):
+            seen_roofs.add(e.roof)
+            seen_features.add(e.feature)
+    assert {"vault", "sawtooth"} <= seen_roofs and {"arcade", "portico"} & seen_features

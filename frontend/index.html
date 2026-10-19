@@ -9,7 +9,7 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r15">
+<link rel="stylesheet" href="rabbit.css?v=r18">
 <link rel="icon" href="logo_emblem.png" type="image/png">
 </head>
 <body data-phase="compose" data-mode="brief">
@@ -41,6 +41,8 @@
 
   <div class="bar__end">
     <p class="engine" aria-live="polite"><i id="engine-dot" data-tone="running"></i><span id="engine-note">Connecting</span></p>
+    <button type="button" class="btn btn--line bar__back" id="back" hidden>Back</button>
+    <button type="button" class="btn btn--line" id="resume" hidden>Back to your designs</button>
     <button type="button" class="btn btn--line" id="restart" hidden>New brief</button>
   </div>
 </header>
@@ -186,6 +188,28 @@
           <span class="row__k">Access</span>
           <div class="row__v">
             <label class="amenity-chip is-checked"><input type="checkbox" name="elderly_access" value="1" checked><span>Step-free for elders</span></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="spec__group" aria-labelledby="g-out">
+        <h2 class="spec__h" id="g-out">Outdoors</h2>
+        <div class="row">
+          <label class="row__k" for="inp-lawn">Lawn</label>
+          <div class="row__v row__v--stack">
+            <input type="range" class="stance" name="lawn_share" id="inp-lawn" min="0" max="50" step="5" value="0" aria-describedby="lawn-words">
+            <span class="row__note" id="lawn-words" aria-live="polite">No lawn asked for: the plot's own setbacks stay open</span>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row__k" for="inp-pool">Pool</label>
+          <div class="row__v">
+            <select name="pool" id="inp-pool">
+              <option value="" selected>No pool</option>
+              <option value="plunge">Plunge pool, about 3 × 6 m</option>
+              <option value="family">Family pool, about 4 × 8 m</option>
+              <option value="lap">Lap pool, about 2.5 × 14 m</option>
+            </select>
           </div>
         </div>
       </section>
@@ -461,6 +485,6 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="config.js"></script>
-<script src="studio.js?v=r16" type="module"></script>
+<script src="studio.js?v=r18" type="module"></script>
 </body>
 </html>

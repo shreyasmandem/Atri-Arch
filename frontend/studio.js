@@ -121,6 +121,11 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 // atelier board travels into the review's drawing plate as one object.
 function phase(p) {
   S.phase = p;
+  // Every studio page can be left: Back in the studio; from the brief, a way
+  // back to the designs already made.
+  const back = $("back"), resume = $("resume");
+  if (back) back.hidden = p !== "review";
+  if (resume) resume.hidden = !(p === "compose" && S.activeId && S.plans?.[S.activeId]);
   if (document.body.dataset.phase === p) return;
   const apply = () => { document.body.dataset.phase = p; };
   if (document.startViewTransition && !reducedMotion() && !document.hidden) {
@@ -256,6 +261,11 @@ function renderBrief() {
   const storeys = levels === 1 ? "one storey" : `${NUMWORD[levels] || levels} storeys`;
   setText("hl-prog", `${NUMWORD[beds] || beds} bedroom${beds > 1 ? "s" : ""}, ${storeys}`);
   setText("budget-words", budget ? lakh(budget) : "no budget set");
+  // The lawn asked for, in the plot's own unit.
+  const lawn = (+v("lawn_share") || 0) / 100;
+  setText("lawn-words", lawn
+    ? `${Math.round(lawn * 100)}% of the plot kept as lawn, about ${Math.round(rw * rd * lawn).toLocaleString()} ${unit === "ft" ? "sq ft" : "m²"}`
+    : "No lawn asked for: the plot's own setbacks stay open");
   setText("stance-note", stance[2]);
   setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ${budget ? `₹${lakh(budget)}` : "no set budget"} · Vastu ${stance[0].toLowerCase()}`);
   drawPlot({ w, d, rw, rd, unit, road, levels,
@@ -446,6 +456,9 @@ async function initHome() {
       S.chatWords = words;
       if (brief?.colours) S.palette = { ...(S.palette || {}), text: brief.colours };
       const form = readBrief();
+      // Said in the chat: "a pool", "a big lawn". The form's own choice wins.
+      if (!form.pool && /\b(swimming )?pool\b/i.test(words)) form.pool = /\blap\b/i.test(words) ? "lap" : /\bplunge|small pool/i.test(words) ? "plunge" : "family";
+      if (!form.lawn_share && /\b(lawn|garden|green space|open space)\b/i.test(words)) form.lawn_share = /\b(big|large|huge|lots of|spacious)\b/i.test(words) ? 0.35 : 0.2;
       const amenities = [...new Set([...(form.amenities || []), ...(request?.amenities || [])])];
       onSubmit(null, { ...form, ...request, amenities, must_haves: amenities });
     },
@@ -466,6 +479,15 @@ async function initHome() {
   initDropzone();
   initHome();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
+  $("back")?.addEventListener("click", goBack);
+  $("resume")?.addEventListener("click", resumeStudio);
+  // Esc steps back too, once no dialog or drawer is open to take it first.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || S.phase !== "review") return;
+    if (e.target.closest?.("input, select, textarea")) return;
+    const open = !$("why").hidden || document.body.dataset.manual || ($("editdrawer") && !$("editdrawer").hidden);
+    if (!open) goBack();
+  }, { capture: true });
   $("see-why")?.addEventListener("click", openWhy);
   $("restart")?.addEventListener("click", () => {
     cancelRun();
@@ -627,6 +649,9 @@ function readBrief() {
     kitchen_type: String(d.get("kitchen_type") || "open_modular"),
     amenities: amenities,
     must_haves: amenities,
+    // Outdoors: the plan leaves this much lawn, and room for the pool.
+    ...(n("lawn_share", 0) > 0 ? { lawn_share: Math.min(0.5, n("lawn_share", 0) / 100) } : {}),
+    ...(d.get("pool") ? { pool: String(d.get("pool")) } : {}),
   };
 }
 
@@ -997,6 +1022,32 @@ async function applyResult(d) {
   showView("drawings");
 }
 
+// Leaving a studio page: Back (the button, the browser's, the phone's, or
+// Esc) steps to the view before; from the first view it returns to the
+// brief, where "Back to your designs" brings the studio back as it was.
+function goBack() {
+  if (S.exitRoom) return S.exitRoom();
+  if (history.state?.studio) return history.back();
+  phase("compose");
+}
+function resumeStudio() {
+  if (!S.activeId || !S.plans?.[S.activeId]) return;
+  phase("review");
+  $("restart").hidden = false;
+  const v = S.view && S.view !== "compose" ? S.view : "drawings";
+  history.pushState({ studio: true, view: v }, "", `#${v}`);
+  showView(v, { fromHistory: true });
+}
+window.addEventListener("popstate", (e) => {
+  const st = e.state;
+  if (st?.studio && S.activeId && S.plans?.[S.activeId]) {
+    if (S.phase !== "review") { phase("review"); $("restart").hidden = false; }
+    showView(st.view, { fromHistory: true });
+  } else if (S.phase === "review") {
+    phase("compose");
+  }
+});
+
 function buildSchemeTabs() {
   const wrap = $("schemes"); wrap.innerHTML = "";
   const ranked = S.consensus?.ranking || [];
@@ -1324,8 +1375,11 @@ const VIEW_GROUPS = {
 };
 const groupOf = (v) => Object.keys(VIEW_GROUPS).find((g) => VIEW_GROUPS[g].some(([k]) => k === v)) || v;
 
-function showView(v) {
+function showView(v, { fromHistory = false } = {}) {
   if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
+  // Each view is a step the browser's (and the phone's) back button can undo.
+  if (!fromHistory && S.phase === "review" && history.state?.view !== v) history.pushState({ studio: true, view: v }, "", `#${v}`);
+  S.exitRoom = null;
   if (v !== "model" && S.viewer) { S.viewer.dispose(); S.viewer = null; window.speechSynthesis?.cancel(); }
   if (v !== "exterior" && S.exViewer) { S.exViewer.dispose(); S.exViewer = null; }
   if (v !== "air" && S.air) { S.air.dispose(); S.air = null; }
@@ -2003,9 +2057,22 @@ async function renderInterior() {
     const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
     current = { box, lv: item.lv };
     viewer.focusRoom(box, item.lv);
+    // Back (or Esc) leaves the room first, then the view.
+    S.exitRoom = () => {
+      S.exitRoom = null;
+      current = null;
+      list.querySelectorAll("li").forEach((x) => x.classList.remove("is-on"));
+      info.hidden = true;
+      cap.textContent = "Pick a room to walk into it · drag to look around";
+      viewer.load(url()).then(() => viewer.setMode("exterior")).catch(() => {});
+    };
     const s = await scP;
     const rs = s?.rooms?.find((x) => x.room_id === item.r.id);
     info.innerHTML = "";
+    const out = el("button", "ghost-btn inx__out", "Whole house"); out.type = "button";
+    out.setAttribute("aria-label", "Leave the room and see the whole house");
+    out.addEventListener("click", () => S.exitRoom?.());
+    info.append(out);
     info.append(el("b", "inx__room", item.r.name || item.r.type));
     info.append(el("span", "inx__meta", `${(item.r.area ?? 0).toFixed?.(1) ?? ""} m² · ${floorName(item.lv)}${rs?.direction ? ` · ${rs.direction}` : ""}`));
     if (rs?.furniture?.length) {
@@ -2211,7 +2278,8 @@ const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pit
   fins: "Fins", louvres: "Louvres", frame: "Box frame", jaali: "Jaali", perforated: "Perforated", punched: "Punched", band: "Glazing band",
   jharokha: "Jharokha", colonnade: "Colonnade", chhatri: "Chhatri", cornice: "Cornice", breeze: "Breeze-block", greenwall: "Green wall", balcony: "Balcony",
   hedge: "Hedge", grille: "Grille", glass: "Glass", solid: "Solid wall", terracotta: "Terracotta tile", acp: "ACP panel",
-  slate: "Stacked slate" };
+  slate: "Stacked slate", vault: "Barrel vault", sawtooth: "Sawtooth", slats: "Timber slats", bamboo: "Bamboo",
+  arcade: "Arcade", portico: "Portico", bay: "Bay window" };
 // A count too large to read as digits, in words: "120 quintillion".
 function bigWords(n) {
   const names = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion", "septillion", "octillion"];
@@ -2372,7 +2440,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     };
     // The grammar's batch is instant; the designer (a model call) can take a
     // while, so its picks join at the front of the gallery when they arrive.
-    await loadMore(12);
+    await loadMore(24);
     if (designs.length) settle();
     const x = await agent;
     if (x?.designs?.length) {
@@ -2501,7 +2569,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       ...(grammar?.styles || []).filter((x) => x.id !== planStyle).map((x) => [x.id, x.name])];
     const filt = chips("Style", styles, pal.style || "", async (v) => {
       pal.style = v; draw();
-      if (v && !designs.some((d) => d.fam === v)) { await loadMore(12, v); draw(); }
+      if (v && !designs.some((d) => d.fam === v)) { await loadMore(24, v); draw(); }
     }, { cls: "ex-chips--scroll" });
     panel.append(filt);
     // Say what the designs are drawn from: the style, and the brief's own words.
@@ -2534,13 +2602,13 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     };
     add(shown);
     panel.append(grid);
-    const more = el("button", "ghost-btn ex-more", "Generate 12 more designs"); more.type = "button";
+    const more = el("button", "ghost-btn ex-more", "Generate 24 more designs"); more.type = "button";
     const go = async () => {
       if (loading) return;
       more.disabled = true; more.textContent = "Designing…"; more.setAttribute("aria-busy", "true");
-      const fresh = await loadMore(12);
+      const fresh = await loadMore(24);
       add(fresh);
-      more.disabled = false; more.textContent = "Generate 12 more designs"; more.removeAttribute("aria-busy");
+      more.disabled = false; more.textContent = "Generate 24 more designs"; more.removeAttribute("aria-busy");
       const tab = card.querySelector("#ex-tab-designs"); if (tab) tab.textContent = `Designs ${designs.length}`;
       const k = card.querySelector(".ex__title .pal__k"); if (k) k.textContent = `Exterior ${idx() + 1} of ${designs.length}`;
     };
@@ -2549,7 +2617,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     // Up to a point on a desktop, where the button keeps going after that; a
     // phone has no room for the button, so its strip just keeps coming.
     const phone = matchMedia("(max-width: 720px)");
-    new IntersectionObserver(([e]) => { if (e.isIntersecting && (designs.length < 120 || phone.matches)) go(); }).observe(sentinel);
+    new IntersectionObserver(([e]) => { if (e.isIntersecting && (designs.length < 240 || phone.matches)) go(); }).observe(sentinel);
   };
 
   // Colours, one surface at a time: named paints, and any colour at all.
@@ -2710,7 +2778,8 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
   };
   // Roof silhouettes, drawn small, so the choice reads before the label.
   const ROOF_ICON = { flat: "M5 20V10h14v10M4 10V8h16v2", slab: "M5 20v-9h14v9M2 10.5h20", mono: "M5 20v-8l14-4v12M3 12.6l18-5.2",
-    butterfly: "M5 20V9l7 3 7-3v11M3 8.4l9 3.8 9-3.8", hip: "M5 20v-8h14v8M3 12l5-5h8l5 5z", gable: "M5 20v-9h14v9M3 11.5L12 4l9 7.5" };
+    butterfly: "M5 20V9l7 3 7-3v11M3 8.4l9 3.8 9-3.8", hip: "M5 20v-8h14v8M3 12l5-5h8l5 5z", gable: "M5 20v-9h14v9M3 11.5L12 4l9 7.5",
+    vault: "M5 20v-8h14v8M3 12c0-6.5 18-6.5 18 0", sawtooth: "M5 20v-8h14v8M3 12l6-4v4l6-4v4l6-4v4" };
   const FINISH = { plaster: ["plaster", "#e9e2d4"], stone: ["stone", "#9a8a76"], brick: ["brick", "#9a5238"], concrete: ["concrete", "#a9a7a1"],
     timber: ["timber", "#8a5a34"], metal: ["seam", "#3a3b3d"], terracotta: ["tiles", "#b0613f"], acp: ["acpanel", "#8f9296"],
     slate: ["slate", "#56585b"] };
@@ -2773,7 +2842,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       base: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw" },
       upper: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw", disabled: (v) => one && v !== "plaster" },
       paving: { paint: tex(DRIVE), cls: "ex-chips--sw ex-chips--4" },
-      feature: { disabled: (v) => one && (v === "jharokha" || v === "balcony") },
+      feature: { disabled: (v) => one && ["jharokha", "balcony", "bay"].includes(v) },
       solar: { disabled: (v) => v === "on" && !flatRoof },
       panel: { paint: tex(PANEL), cls: "ex-chips--sw ex-chips--4" },
       parapet: { disabled: (v) => v !== "plain" && now.roof !== "flat" },

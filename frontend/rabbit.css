@@ -139,6 +139,15 @@ body[data-phase="review"] .bar, body[data-phase="running"] .bar { background: va
 .wordmark img { width: 28px; height: 28px; object-fit: contain; }
 .bar__mid { min-width: 0; display: flex; justify-content: center; }
 .bar__end { display: flex; align-items: center; gap: 18px; }
+.bar__end .btn + .btn { margin-left: -8px; }
+.bar__back::before { content: ""; width: 7px; height: 7px; margin-right: 8px; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
+.bar__back { display: inline-flex; align-items: center; }
+.bar__back[hidden] { display: none; }
+@media (max-width: 720px) {
+  /* A phone's bar is tight: Back is an arrow (still named Back for screen readers). */
+  .bar__back { width: 44px; padding: 0; justify-content: center; font-size: 0; }
+  .bar__back::before { margin: 0 0 0 3px; }
+}
 .engine { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-3); white-space: nowrap; }
 .engine i { width: 6px; height: 6px; border-radius: 50%; background: var(--cream-3); }
 .engine i[data-tone="ok"] { background: var(--cream); }
@@ -637,6 +646,7 @@ table.led tfoot td { padding-top: 14px; font-weight: 600; color: var(--cream); b
 .mandala-side { min-width: 0; }
 
 .fld { display: grid; gap: 10px; margin: 0 0 20px; max-width: 520px; font-size: 13px; color: var(--cream-2); }
+.row__v--stack { display: grid; gap: 6px; }
 input[type="range"].stance { -webkit-appearance: none; appearance: none; width: 100%; height: 24px; background: transparent; cursor: pointer; }
 input[type="range"].stance::-webkit-slider-runnable-track { height: 1px; background: var(--cream-3); }
 input[type="range"].stance::-moz-range-track { height: 1px; background: var(--cream-3); }
@@ -1316,6 +1326,8 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 .inx__sw { display: flex; } .inx__sw i { flex: 1; height: 18px; }
 .inx__story { margin: 0; font-size: 12px; line-height: 1.5; color: var(--cream-3); }
 .inx__stage { position: relative; min-height: 0; }
+.inx__out { justify-self: start; height: 30px; padding: 0 12px 0 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 7px; }
+.inx__out::before { content: ""; width: 6px; height: 6px; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
 .inx__info { position: absolute; right: 16px; top: 16px; z-index: 3; width: min(300px, 40%); max-height: calc(100% - 80px); overflow-y: auto; display: grid; gap: 6px; padding: 14px 16px; background: rgba(11, 10, 9, .88); border: 1px solid var(--rule-2); border-radius: 3px; backdrop-filter: blur(6px); }
 .inx__room { font: 600 17px var(--display); }
 .inx__meta { margin: 0; font-size: 12px; color: var(--cream-3); }

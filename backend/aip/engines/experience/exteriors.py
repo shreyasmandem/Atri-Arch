@@ -37,15 +37,16 @@ from aip.domain.geometry import Vec2
 from aip.domain.plan import FloorPlan
 from aip.engines.experience.facades import Edge, edges, pitch_roof
 
-ROOFS = ("flat", "slab", "mono", "butterfly", "hip", "gable")
+ROOFS = ("flat", "slab", "mono", "butterfly", "hip", "gable", "vault", "sawtooth")
 #: Wall skins. Terracotta tile, ACP (aluminium composite panel) and stacked
 #: slate are what Indian elevations layer today beside plaster and stone.
 BASES = ("plaster", "stone", "brick", "concrete", "timber", "metal", "terracotta", "acp", "slate")
 UPPERS = ("plaster", "timber", "metal", "brick", "stone", "concrete", "terracotta", "acp", "slate")
-SCREENS = ("none", "fins", "louvres", "frame", "jaali", "perforated")
+SCREENS = ("none", "fins", "louvres", "frame", "jaali", "perforated", "slats", "bamboo")
 WINDOWS = ("punched", "band")
 #: The design's signature element: what a passer-by remembers the house by.
-FEATURES = ("none", "jharokha", "colonnade", "chhatri", "cornice", "breeze", "greenwall", "balcony")
+FEATURES = ("none", "jharokha", "colonnade", "chhatri", "cornice", "breeze", "greenwall", "balcony",
+            "arcade", "portico", "bay")
 ACCENTS = {"bronze": "#8a6a4c", "charcoal": "#2b2a29", "teak": "#7a4b2a", "white": "#efece6",
            "terracotta": "#a8553a", "sage": "#7d8b6a", "navy": "#2b3a52", "brass": "#b08a3e",
            "ochre": "#c08a2e", "indigo": "#34406e", "forest": "#2f4a36", "rose": "#b46a6a",
@@ -109,37 +110,39 @@ WALL_TONES = {"lime": ("#efe9dc", ("#a8553a", "#3d3f42", "#8c8a84")), "sand": ("
 
 #: What each style tends towards; a design outside it is still allowed, only less likely.
 STYLE_BIAS: dict[str, dict[str, tuple[str, ...]]] = {
-    "contemporary": {"roof": ("flat", "slab", "mono"), "screen": ("fins", "frame", "louvres", "perforated"),
-                     "feature": ("none", "cornice", "breeze", "greenwall"), "accent": ("bronze", "charcoal", "slate", "teak")},
+    "contemporary": {"roof": ("flat", "slab", "mono", "sawtooth"), "screen": ("fins", "frame", "louvres", "perforated", "slats"),
+                     "feature": ("none", "cornice", "breeze", "greenwall", "bay", "portico"), "accent": ("bronze", "charcoal", "slate", "teak")},
     "modern_minimal": {"roof": ("slab", "flat"), "screen": ("none", "frame"), "upper": ("plaster", "metal"),
-                       "feature": ("none",), "accent": ("white", "charcoal", "slate")},
-    "tropical_modern": {"roof": ("slab", "mono", "butterfly"), "upper": ("timber",), "screen": ("louvres", "fins"),
+                       "feature": ("none", "bay"), "accent": ("white", "charcoal", "slate")},
+    "tropical_modern": {"roof": ("slab", "mono", "butterfly", "vault"), "upper": ("timber",), "screen": ("louvres", "fins", "slats", "bamboo"),
                         "feature": ("greenwall", "breeze", "none"), "accent": ("teak", "forest", "sage")},
     "kerala_vernacular": {"roof": ("hip", "gable"), "base": ("stone", "plaster"), "upper": ("timber", "plaster"),
                           "feature": ("colonnade",), "accent": ("teak", "terracotta", "forest")},
     "traditional_indian": {"roof": ("hip", "flat"), "screen": ("jaali",), "base": ("stone",),
-                           "feature": ("jharokha", "colonnade", "cornice"), "accent": ("ochre", "terracotta", "teak", "indigo")},
+                           "feature": ("jharokha", "colonnade", "cornice", "arcade", "portico"), "accent": ("ochre", "terracotta", "teak", "indigo")},
     "chettinad": {"roof": ("hip", "flat"), "screen": ("jaali",), "base": ("stone", "brick"),
-                  "feature": ("colonnade", "cornice"), "accent": ("ochre", "indigo", "rose", "teak")},
+                  "feature": ("colonnade", "cornice", "arcade"), "accent": ("ochre", "indigo", "rose", "teak")},
     "rajasthani_haveli": {"roof": ("flat",), "screen": ("jaali",), "base": ("stone",),
                           "feature": ("jharokha", "chhatri"), "accent": ("sand", "rose", "ochre", "terracotta")},
-    "indo_saracenic": {"roof": ("flat",), "screen": ("jaali", "frame"), "base": ("stone", "brick"),
-                       "feature": ("chhatri", "colonnade", "cornice"), "accent": ("sand", "terracotta", "white")},
+    "indo_saracenic": {"roof": ("flat", "vault"), "screen": ("jaali", "frame"), "base": ("stone", "brick"),
+                       "feature": ("chhatri", "colonnade", "cornice", "arcade"), "accent": ("sand", "terracotta", "white")},
     "scandinavian": {"roof": ("gable", "mono"), "upper": ("timber",), "screen": ("none",),
                      "feature": ("none",), "accent": ("charcoal", "white", "slate")},
-    "japandi": {"roof": ("slab", "gable"), "upper": ("timber",), "screen": ("louvres", "none"),
+    "japandi": {"roof": ("slab", "gable"), "upper": ("timber",), "screen": ("louvres", "none", "slats"),
                 "feature": ("none", "greenwall"), "accent": ("teak", "charcoal", "sand")},
     "industrial": {"base": ("concrete", "brick"), "upper": ("metal", "brick"), "screen": ("perforated", "frame"),
-                   "feature": ("none", "breeze"), "accent": ("charcoal", "slate", "terracotta")},
-    "biophilic": {"roof": ("slab", "butterfly"), "upper": ("timber",), "screen": ("louvres", "fins"),
+                   "feature": ("none", "breeze"), "accent": ("charcoal", "slate", "terracotta"), "roof": ("sawtooth",)},
+    "biophilic": {"roof": ("slab", "butterfly", "vault"), "upper": ("timber",), "screen": ("louvres", "fins", "bamboo"),
                   "feature": ("greenwall",), "accent": ("forest", "sage", "teak")},
-    "mid_century_modern": {"roof": ("butterfly", "mono", "slab"), "base": ("brick", "stone"), "screen": ("frame", "fins"),
-                           "feature": ("breeze", "none"), "accent": ("ochre", "teak", "sage", "navy")},
+    "mid_century_modern": {"roof": ("butterfly", "mono", "slab", "vault"), "base": ("brick", "stone"), "screen": ("frame", "fins"),
+                           "feature": ("breeze", "none", "bay"), "accent": ("ochre", "teak", "sage", "navy")},
 }
 
 NAMES = {
     "fins": "Fin", "louvres": "Louvre", "frame": "Frame", "jaali": "Jaali", "perforated": "Screen", "none": "Plain",
     "flat": "Parapet", "slab": "Slab", "mono": "Skillion", "butterfly": "Butterfly", "hip": "Tiled", "gable": "Gable",
+    "vault": "Vault", "sawtooth": "Sawtooth", "slats": "Slat", "bamboo": "Bamboo",
+    "arcade": "Arcade", "portico": "Portico", "bay": "Bay-window",
     "timber": "Timber", "metal": "Metal", "brick": "Brick", "stone": "Stone", "concrete": "Concrete", "plaster": "Lime",
     "terracotta": "Terracotta", "acp": "Panel", "slate": "Slate",
     "jharokha": "Jharokha", "colonnade": "Colonnade", "chhatri": "Chhatri", "cornice": "Cornice", "breeze": "Breeze-block",
@@ -440,7 +443,7 @@ class Exterior:
         if one_floor and e.upper != "plaster":
             e = replace(e, upper="plaster")
             notes.append("A single-storey house has no upper floor to clad.")
-        if e.feature in ("jharokha", "balcony") and one_floor:
+        if e.feature in ("jharokha", "balcony", "bay") and one_floor:
             notes.append(f"A {NAMES[e.feature].lower()} needs an upper floor; it is left off.")
             e = replace(e, feature="none")
         if e.deck and e.roof != "flat":
@@ -469,7 +472,8 @@ class Exterior:
 
     def story(self) -> str:
         roof = {"flat": "a parapet roof terrace", "slab": "a thin cantilevered roof slab", "mono": "a single-pitch roof over a clerestory",
-                "butterfly": "a butterfly roof", "hip": "a hipped tile roof on deep eaves", "gable": "a pitched gable roof"}[self.roof]
+                "butterfly": "a butterfly roof", "hip": "a hipped tile roof on deep eaves", "gable": "a pitched gable roof",
+                "vault": "a barrel-vaulted roof", "sawtooth": "a sawtooth roof of north lights"}[self.roof]
         base = {"plaster": "a lime-plaster ground floor", "stone": "a stone-clad ground floor", "brick": "an exposed-brick ground floor",
                 "concrete": "a board-marked concrete ground floor", "timber": "a timber-boarded ground floor",
                 "metal": "a dark metal-clad ground floor", "terracotta": "a terracotta-tiled ground floor",
@@ -480,13 +484,16 @@ class Exterior:
                  "acp": "aluminium-panelled floors above", "slate": "stacked-slate floors above"}[self.upper]
         screen = {"none": "", "fins": ", vertical fins shading the street face", "louvres": ", horizontal louvres across the street face",
                   "frame": ", a deep frame around the upper floor", "jaali": ", a jaali screen against the hard sun",
-                  "perforated": ", a perforated metal screen"}[self.screen]
+                  "perforated": ", a perforated metal screen", "slats": ", close timber slats veiling the street face",
+                  "bamboo": ", a screen of bamboo poles"}[self.screen]
         win = ", glazing in continuous bands" if self.windows == "band" else ""
         plant = ", planters along the edges" if self.planters else ""
         feat = {"none": "", "jharokha": ", jharokha bays projecting over the street",
                 "colonnade": ", a colonnaded verandah along the front", "chhatri": ", chhatri pavilions on the roof",
                 "cornice": ", deep cornices marking every floor", "breeze": ", a breeze-block screen wall",
-                "greenwall": ", a planted green wall", "balcony": ", cantilevered balconies over the street"}[self.feature]
+                "greenwall": ", a planted green wall", "balcony": ", cantilevered balconies over the street",
+                "arcade": ", an arcade of arches along the front", "portico": ", a double-height portico at the door",
+                "bay": ", projecting bay windows"}[self.feature]
         return f"{base[0].upper()}{base[1:]}, {upper}{screen}{feat}{win}{plant}, under {roof}."
 
     def to_dict(self) -> dict[str, Any]:
@@ -676,7 +683,9 @@ def _harmonious(e: Exterior, one_floor: bool) -> bool:
         return False
     if e.feature == "chhatri" and e.roof != "flat":
         return False                         # chhatris stand on a flat roof
-    if e.feature in ("jharokha", "balcony") and one_floor:
+    if e.feature in ("jharokha", "balcony", "bay") and one_floor:
+        return False
+    if e.roof in ("vault", "sawtooth") and e.feature == "chhatri":
         return False
     if e.base == "metal" and e.upper in ("stone", "brick"):
         return False                         # the heavy skin goes below the light one
@@ -851,7 +860,8 @@ def apply(b, plan: FloorPlan, ex: Exterior, levels: list[tuple[Any, float, Any]]
     _feature(b, ex, levels, street, roof_y)
     _panel(b, ex, levels, street)
     _lights(b, ex, levels, street, roof_y)
-    return {"roof": {"flat": "flat", "slab": "slab", "mono": "pitch", "butterfly": "butterfly", "hip": "hip", "gable": "gable"}[ex.roof]}
+    return {"roof": {"flat": "flat", "slab": "slab", "mono": "pitch", "butterfly": "butterfly", "hip": "hip", "gable": "gable",
+                     "vault": "vault", "sawtooth": "sawtooth"}[ex.roof]}
 
 
 def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
@@ -908,6 +918,52 @@ def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
                     q = c + e.dir * (s_ * (w / 2 - 0.02))
                     _box(b, node, "rail_glass", q, base + 0.55, (0.03, 0.95, dep - 0.06), yaw)
                     _box(b, node, "ex_accent", q, base + 1.04, (0.05, 0.05, dep), yaw)
+            elif f == "arcade" and li == 0 and street(e) and L > 3.0:
+                # Piers and round arches along the front, a verandah behind them.
+                k = max(2, int(L / 2.6))
+                posts = [i / k for i in range(k + 1) if _free(i / k, 0.25 / L, doors) or i in (0, k)]
+                for t in posts:
+                    p = e.at(t, 1.6)
+                    _box(b, node, "plaster", p, base + (h - 0.3) / 2, (0.38, h - 0.3, 0.38), yaw)
+                for ta, tb in zip(posts, posts[1:]):
+                    r = (tb - ta) * L / 2
+                    if r < 0.5:
+                        continue
+                    spring = base + h - 0.45 - r
+                    for j in range(13):
+                        a = math.pi * j / 12
+                        q = e.at((ta + tb) / 2, 1.6) + e.dir * (-math.cos(a) * r)
+                        _box(b, node, "plaster", q, spring + math.sin(a) * r, (0.16, 0.16, 0.34), yaw)
+                _box(b, node, "ex_accent", e.at(0.5, 1.6), base + h - 0.3, (L + 0.4, 0.3, 0.42), yaw)
+                b.slab(node, "slab", [e.at(0, 0), e.at(1, 0), e.at(1, 1.85), e.at(0, 1.85)], base + h - 0.15, base + h - 0.03)
+            elif f == "portico" and li == 0 and street(e) and L > 3.0:
+                # Double-height columns either side of the main door, under a slab.
+                ds = door_spans(level, e, 0.0)
+                if ds:
+                    ta, tb = max(ds, key=lambda s_: s_[1] - s_[0])
+                    tall = sum(lv.floor_to_floor for lv, _b, _f in levels[:2]) - 0.2
+                    mid = e.at((ta + tb) / 2, 0.0)
+                    half = max(1.3, (tb - ta) * L / 2 + 0.7)
+                    for s_ in (-1, 1):
+                        q = mid + e.dir * (s_ * half) + e.out * 2.0
+                        b.cylinder(node, "plaster", (q.x, base, -q.y), 0.2, tall, 16)
+                        _box(b, node, "slab", q, base + 0.05, (0.6, 0.1, 0.6), yaw)
+                    corners = [mid + e.dir * (-half - 0.4), mid + e.dir * (half + 0.4),
+                               mid + e.dir * (half + 0.4) + e.out * 2.5, mid + e.dir * (-half - 0.4) + e.out * 2.5]
+                    b.slab(node, "slab", corners, base + tall, base + tall + 0.2)
+                    _box(b, node, "ex_accent", mid + e.out * 2.5, base + tall + 0.1, (2 * half + 0.8, 0.22, 0.08), yaw)
+            elif f == "bay" and li >= 1 and street(e) and L > 3.0:
+                # A projecting box window round the widest window on the face.
+                wins = [sp for sp in door_spans(level, e, 0.0, windows=True)]
+                if wins:
+                    ta, tb = max(wins, key=lambda s_: s_[1] - s_[0])
+                    w = min(3.0, (tb - ta) * L + 0.5)
+                    c = e.at((ta + tb) / 2, 0.35)
+                    _box(b, node, "ex_accent", c, base + 0.45, (w, 0.12, 0.7), yaw)
+                    _box(b, node, "ex_accent", c, base + 2.25, (w, 0.12, 0.7), yaw)
+                    for s_ in (-1, 1):
+                        _box(b, node, "ex_accent", c + e.dir * (s_ * (w / 2 - 0.05)), base + 1.35, (0.1, 1.8, 0.7), yaw)
+                    _box(b, node, "ex_glassband", c + e.out * 0.32, base + 1.35, (w - 0.2, 1.68, 0.03), yaw)
             elif f == "cornice":
                 _box(b, node, "slab", e.at(0.5, 0.2), base + h - 0.12, (L + 0.5, 0.2, 0.42), yaw)
                 _box(b, node, "ex_accent", e.at(0.5, 0.26), base + h - 0.3, (L + 0.42, 0.1, 0.3), yaw)
@@ -1029,6 +1085,24 @@ def _screen(b, node, kind, e: Edge, L: float, yaw: float, base: float, h: float,
                 _box(b, node, "joinery", s0 + e.dir * (-w / 2 + i * w / cols), base + 0.3 + (h - 0.6) / 2, (0.04, h - 0.6, 0.05), yaw)
             for j in range(rows + 1):
                 _box(b, node, "joinery", s0, base + 0.3 + j * (h - 0.6) / rows, (w, 0.04, 0.05), yaw)
+    elif kind == "slats":
+        # Close vertical timber slats across the whole face, left out at doors.
+        k = max(6, int(L / 0.11))
+        for i in range(k):
+            t = (i + 0.5) / k
+            if _free(t, 0.03 / L, spans):
+                _box(b, node, "ex_timber", e.at(t, 0.12), base + h / 2, (0.035, h - 0.15, 0.09), yaw)
+        _box(b, node, "ex_accent", e.at(0.5, 0.12), base + h - 0.06, (L, 0.08, 0.14), yaw)
+    elif kind == "bamboo":
+        # A veil of bamboo poles on a top and bottom rail.
+        k = max(6, int(L / 0.13))
+        for i in range(k):
+            t = (i + 0.5) / k
+            if _free(t, 0.04 / L, spans):
+                p = e.at(t, 0.2)
+                b.cylinder(node, "bamboo", (p.x, base + 0.08, -p.y), 0.032, h - 0.16, 7)
+        for yy in (base + 0.1, base + h - 0.12):
+            _box(b, node, "ex_accent", e.at(0.5, 0.2), yy, (L, 0.05, 0.08), yaw)
     elif kind == "perforated" and L > 2.0:
         w = L * 0.55
         k = max(6, int(w / 0.12))
@@ -1038,6 +1112,46 @@ def _screen(b, node, kind, e: Edge, L: float, yaw: float, base: float, h: float,
                 continue
             gap = 0.03 + 0.05 * abs(math.sin(i * 0.7))       # a slatted rhythm reads as perforation
             _box(b, node, "ex_metal", e.at(t, 0.3), base + h / 2, (w / k - gap, h - 0.3, 0.03), yaw)
+
+
+def _curved_roofs(b, kind: str, footprint, y: float) -> bool:
+    """A barrel vault over the long axis, or a sawtooth of north lights
+    along it: roofs that change the house's whole silhouette."""
+    fx0, fy0, fx1, fy1 = footprint.bounds
+    eave = 0.45
+    x0, y0, x1, y1 = fx0 - eave, fy0 - eave, fx1 + eave, fy1 + eave
+    along_x = (x1 - x0) >= (y1 - y0)
+    long0, long1 = (x0, x1) if along_x else (y0, y1)
+    short0, short1 = (y0, y1) if along_x else (x0, x1)
+    lo = y + 0.2
+
+    def P(u: float, v: float, h: float) -> tuple[float, float, float]:
+        # u along the long axis, v across it, h up.
+        return (u, h, -v) if along_x else (v, h, -u)
+
+    # The walls carried up a little to meet the roof.
+    b.slab("roof", "plaster", [Vec2(fx0, fy0), Vec2(fx1, fy0), Vec2(fx1, fy1), Vec2(fx0, fy1)], y, lo)
+    if kind == "vault":
+        span = short1 - short0
+        rise = span * 0.24
+        n = 16
+        arc = [(short0 + span * i / n, lo + math.sin(math.pi * i / n) * rise) for i in range(n + 1)]
+        for (va, ha), (vb, hb) in zip(arc, arc[1:]):
+            b.quad_strip("roof", "ex_roof", P(long0, va, ha), P(long1, va, ha), P(long1, vb, hb), P(long0, vb, hb))
+            for u in (long0 + eave, long1 - eave):
+                # The vault's end walls, glazed: light along the whole house.
+                b.quad_strip("roof", "glass", P(u, va, lo), P(u, vb, lo), P(u, vb, hb), P(u, va, ha))
+        return True
+    length = long1 - long0
+    teeth = max(2, round(length / 4.0))
+    seg, rise = length / teeth, 1.2
+    for i in range(teeth):
+        ua, ub = long0 + i * seg, long0 + (i + 1) * seg
+        b.quad_strip("roof", "ex_roof", P(ua, short0, lo), P(ub, short0, lo + rise), P(ub, short1, lo + rise), P(ua, short1, lo))
+        b.quad_strip("roof", "glass", P(ub, short0, lo), P(ub, short1, lo), P(ub, short1, lo + rise), P(ub, short0, lo + rise))
+        for v in (short0, short1):
+            b.tri("roof", "plaster", P(ua, v, lo), P(ub, v, lo), P(ub, v, lo + rise))
+    return True
 
 
 def _rgb(hex_: str) -> tuple[float, float, float]:
@@ -1050,6 +1164,8 @@ def roof(b, kind: str, footprint, y: float, road: Vec2 | None, slab_mat: str = "
     if footprint is None or footprint.is_empty:
         return False
     x0, y0, x1, y1 = footprint.bounds
+    if kind in ("vault", "sawtooth"):
+        return _curved_roofs(b, kind, footprint, y)
     if kind == "slab":
         # A thin roof plate cantilevered well past the walls, with a fascia.
         o = 0.6
