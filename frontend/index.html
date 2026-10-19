@@ -9,7 +9,7 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r12">
+<link rel="stylesheet" href="rabbit.css?v=r15">
 <link rel="icon" href="logo_emblem.png" type="image/png">
 </head>
 <body data-phase="compose" data-mode="brief">
@@ -30,6 +30,7 @@
 
   <nav class="views" id="views" aria-label="Views">
     <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
+    <button type="button" class="view-tab" data-view="exterior">Exterior</button>
     <button type="button" class="view-tab" data-view="model">3D</button>
     <button type="button" class="view-tab" data-view="air">Air</button>
     <button type="button" class="view-tab" data-view="vastu">Vastu</button>
@@ -414,6 +415,7 @@
     <div class="pane" data-view="cost" hidden></div>
     <div class="pane" data-view="interior" hidden></div>
     <div class="pane" data-view="model" hidden></div>
+    <div class="pane" data-view="exterior" hidden></div>
     <div class="pane" data-view="findings" hidden></div>
     <div class="pane" data-view="negotiation" hidden></div>
     <div class="pane" data-view="audit" hidden></div>
@@ -459,6 +461,6 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="config.js"></script>
-<script src="studio.js?v=r15" type="module"></script>
+<script src="studio.js?v=r16" type="module"></script>
 </body>
 </html>

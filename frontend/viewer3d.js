@@ -174,7 +174,10 @@ export class Viewer3D {
       if (this.vastuData) this.setVastu(this.vastuData, this.vastuLevel);
       return { triangles: Math.round(tris), width: size.x, depth: size.z, height: size.y };
     }
-    const dist = span / (2 * Math.tan((this.camera.fov * Math.PI) / 360)) * 1.35 * zoom;
+    // A tall, narrow view (a side column, a phone) stands further back, or
+    // the house's width would be cut off at the sides.
+    const narrow = Math.max(1, 1 / (this.camera.aspect || 1)) ** 0.85;
+    const dist = span / (2 * Math.tan((this.camera.fov * Math.PI) / 360)) * 1.35 * zoom * narrow;
     // Open on the street side, three-quarters on: the face the house shows.
     if (front) {
       const a = Math.atan2(-front[1], front[0]) + 0.6;

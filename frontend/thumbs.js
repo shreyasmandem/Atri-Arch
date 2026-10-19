@@ -77,14 +77,71 @@ async function render(url, front) {
   return blob ? URL.createObjectURL(blob) : null;
 }
 
+// The four elevations of a house: orthographic, square on to each side,
+// the building alone (no plot), under the same sky.
+const EW = 420, EH = 300;
+async function renderElevations(url) {
+  if (!R) setup();
+  const gltf = await new GLTFLoader().loadAsync(url);
+  const m = gltf.scene;
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    o.castShadow = o.receiveShadow = true;
+    for (const x of [].concat(o.material || [])) { dress(x); if (x.transparent) { o.castShadow = false; x.depthWrite = false; } }
+  });
+  const site = m.getObjectByName("site");
+  if (site) site.visible = false;
+  const box = new THREE.Box3().setFromObject(m);
+  const size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+  m.position.set(-mid.x, -box.min.y, -mid.z);
+  scene.add(m);
+  const span = Math.max(size.x, size.y, size.z);
+  const sc = sun.shadow.camera;
+  Object.assign(sc, { left: -span, right: span, top: span, bottom: -span, far: span * 10 });
+  sc.updateProjectionMatrix();
+  R.setSize(EW, EH, false);
+  const out = [];
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
+  for (const side of ["N", "E", "S", "W"]) {
+    const wide = side === "N" || side === "S" ? size.x : size.z;
+    let hw = wide / 2 * 1.15, hh = size.y / 2 * 1.15;
+    if (hw / hh > EW / EH) hh = hw * EH / EW; else hw = hh * EW / EH;
+    Object.assign(ortho, { left: -hw, right: hw, top: hh, bottom: -hh });
+    const far = Math.max(size.x, size.z) * 3;
+    const dir = { N: [0, 0, -1], S: [0, 0, 1], E: [1, 0, 0], W: [-1, 0, 0] }[side];
+    ortho.position.set(dir[0] * far, size.y / 2, dir[2] * far);
+    ortho.far = far * 3;
+    ortho.lookAt(0, size.y / 2, 0);
+    ortho.updateProjectionMatrix();
+    sun.position.set(dir[0] * far + far * 0.4, far * 1.2, dir[2] * far + far * 0.4);
+    R.render(scene, ortho);
+    const blob = await new Promise((ok) => R.domElement.toBlob(ok, "image/webp", 0.88));
+    out.push(blob ? URL.createObjectURL(blob) : null);
+  }
+  R.setSize(W, H, false);
+  scene.remove(m);
+  m.traverse((o) => { o.geometry?.dispose(); for (const x of [].concat(o.material || [])) x.dispose?.(); });
+  return out;
+}
+
 async function pump() {
   if (running) return;
   running = true;
   while (queue.length) {
     const job = queue.pop();               // latest first
-    try { job.resolve(await render(job.url, job.front)); } catch { job.resolve(null); }
+    try { job.resolve(await (job.run ? job.run() : render(job.url, job.front))); } catch { job.resolve(job.run ? [] : null); }
   }
   running = false;
+}
+
+const elevCache = new Map();
+/** Image URLs of the house's North, East, South and West elevations. */
+export function elevations(url) {
+  if (!elevCache.has(url)) {
+    elevCache.set(url, new Promise((resolve) => { queue.push({ url: `elev:${url}`, run: () => renderElevations(url), resolve }); }));
+    pump();
+  }
+  return elevCache.get(url);
 }
 
 /** A rendered image URL for this model, or null if it could not be drawn. */

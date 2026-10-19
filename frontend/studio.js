@@ -1327,6 +1327,7 @@ const groupOf = (v) => Object.keys(VIEW_GROUPS).find((g) => VIEW_GROUPS[g].some(
 function showView(v) {
   if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
   if (v !== "model" && S.viewer) { S.viewer.dispose(); S.viewer = null; window.speechSynthesis?.cancel(); }
+  if (v !== "exterior" && S.exViewer) { S.exViewer.dispose(); S.exViewer = null; }
   if (v !== "air" && S.air) { S.air.dispose(); S.air = null; }
   if (v !== "drawings" && S.sheetViewer) { S.sheetViewer.dispose(); S.sheetViewer = null; S.sheetViewerPlan = null; }
   S.view = v;
@@ -1351,6 +1352,7 @@ function showView(v) {
   if (v === "cost") renderCost();
   if (v === "interior") renderInterior();
   if (v === "model") renderModel();
+  if (v === "exterior") renderExterior();
   if (v === "air") renderAir();
   if (v === "findings") renderFindings();
   if (v === "negotiation") renderNegotiation();
@@ -1520,46 +1522,6 @@ function sheetModelUrl(id) {
   return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
 }
 
-// Colours on an elevation sheet: the design's own, its style's schemes, then
-// every other, each a click that recolours the house (the 3D panel follows).
-async function sheetColours(box, id, key, show) {
-  if (!box) return;
-  box.hidden = !show;
-  if (!show) return;
-  const g = (S.exGrammar ||= {});
-  if (!g[id]) {
-    try { g[id] = await fetch(`${API}/plans/${id}/exteriors/grammar`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status)))); }
-    catch { box.hidden = true; return; }
-  }
-  if (S.sheet !== key) return;
-  const { grammar, style, default: fallback } = g[id];
-  const pal = (S.palette ||= {});
-  const mine = grammar.styles?.find((x) => x.id === style)?.schemes || [];
-  const ordered = [null, ...grammar.schemes.filter((x) => mine.includes(x.id)), ...grammar.schemes.filter((x) => !mine.includes(x.id))];
-  box.innerHTML = "";
-  box.append(el("span", "plate3d__k", "Colours"));
-  const row = el("div", "plate3d__dots");
-  row.setAttribute("role", "group"); row.setAttribute("aria-label", "Elevation colours");
-  for (const sc of ordered) {
-    const b = el("button", "plate3d__dot"); b.type = "button";
-    const name = sc ? sc.name : "Design's own colours";
-    b.title = mine.includes(sc?.id) ? `${name} · suits this style` : name;
-    b.setAttribute("aria-label", b.title);
-    b.setAttribute("aria-pressed", String((pal.tint?.id ?? null) === (sc?.id ?? null)));
-    b.style.background = sc ? `conic-gradient(${sc.wall} 0 50%, ${sc.clad} 0 70%, ${sc.roof} 0 88%, ${sc.metal} 0)` : "";
-    if (!sc) b.classList.add("is-own");
-    if (sc && mine.includes(sc.id)) b.classList.add("is-suggested");
-    b.addEventListener("click", async () => {
-      pal.base ||= exParse(pal.design) ? pal.design : fallback;
-      pal.tint = schemeTint(sc);
-      pal.design = exTint(pal.base, pal.tint);
-      await loadOrthoSheet(key);
-    });
-    row.append(b);
-  }
-  box.append(row, el("span", "plate3d__now", pal.tint?.name || "Design's own colours"));
-}
-
 async function loadOrthoSheet(key) {
   const plate = $("plate");
   const kind = ORTHO[key];
@@ -1587,8 +1549,6 @@ async function loadOrthoSheet(key) {
     S.sheetViewerPlan = id;
     host.append(el("p", "model-cap", "Building the model…"));
     S.sheetViewerUrl = null;
-    const colours = el("div", "plate3d__colours"); colours.hidden = true;
-    plate.append(colours);
     sunIn.addEventListener("input", () => {
       const h = +sunIn.value; sunOut.textContent = `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
       S.sheetViewer?.setSun(h);
@@ -1605,7 +1565,6 @@ async function loadOrthoSheet(key) {
     plate.querySelector(".model-cap")?.remove();
     if (S.sheet !== key || !S.sheetViewer) return;
   }
-  sheetColours(plate.querySelector(".plate3d__colours"), id, key, /^[NESW]$/.test(kind));
   plate.querySelector(".plate3d__ctl--cut").hidden = !kind.startsWith("section");
   S.sheetViewer.setOrtho(kind, { cut: +(plate.querySelector(".plate3d__ctl--cut input")?.value || 0.5) });
   const [set, items] = sheetSets().find(([, it]) => it.some(([k]) => k === key)) || ["", []];
@@ -2093,7 +2052,10 @@ async function renderModel() {
   bar.append(modes);
   const tools = el("div", "pane__tools");
   const play = el("button", "ghost-btn", "Play walkthrough"); play.type = "button";
-  tools.append(play);
+  // Exterior design has a tab of its own; the 3D view shows what was chosen there.
+  const exterior = el("button", "ghost-btn", "Exterior design"); exterior.type = "button";
+  exterior.addEventListener("click", () => showView("exterior"));
+  tools.append(exterior, play);
   for (const [label, href] of [[".glb", `${API}/plans/${S.activeId}/model.glb`], [".obj", `${API}/plans/${S.activeId}/model.obj`]]) {
     const a = el("a", "ghost-btn", label); a.href = href; a.download = ""; a.title = `Download the model as ${label}`;
     tools.append(a);
@@ -2102,8 +2064,7 @@ async function renderModel() {
   const stage = el("div", "model-stage");
   const cap = el("p", "model-cap", "Loading the model…");
   const say = el("p", "model-say"); say.setAttribute("aria-live", "polite");
-  const card = el("div", "pal"); card.hidden = true;
-  stage.append(cap, say, card);
+  stage.append(cap, say);
   p.append(bar, stage);
 
   const id = S.activeId;
@@ -2148,7 +2109,6 @@ async function renderModel() {
     }
     modes.firstChild?.setAttribute("aria-selected", "true");
     cap.textContent = `${st.width.toFixed(1)} × ${st.depth.toFixed(1)} m  ·  ${st.height.toFixed(1)} m high  ·  ${st.triangles.toLocaleString()} triangles`;
-    paletteCard(card, id, modelUrl);
   } catch (err) {
     cap.textContent = `The model could not be shown here (${err.message}). It can still be downloaded.`;
   }
@@ -2166,6 +2126,76 @@ async function renderModel() {
       }
     });
   }).catch(() => { play.disabled = true; });
+}
+
+/* ── Exterior: a tab of its own ───────────────────────────────────── */
+
+// The gallery takes the page, so many designs show at once; beside it the
+// chosen design in 3D and all four of its elevations, redrawn as it changes.
+async function renderExterior() {
+  S.exViewer?.dispose(); S.exViewer = null;
+  const p = pane("exterior"); p.innerHTML = "";
+  const id = S.activeId;
+  if (!id) return;
+  const wrap = el("div", "exw");
+  const card = el("div", "pal ex ex--page");
+  const side = el("aside", "exw__side");
+  side.setAttribute("aria-label", "The chosen exterior");
+  const stage = el("div", "exw__stage");
+  const cap = el("p", "model-cap", "Loading the house…");
+  stage.append(cap);
+  const elevHead = el("div", "exw__elevhead");
+  elevHead.append(el("h3", "ex__h", "Elevations"));
+  const open3d = el("button", "ghost-btn", "Open in 3D"); open3d.type = "button";
+  open3d.addEventListener("click", () => showView("model"));
+  elevHead.append(open3d);
+  const elev = el("div", "exw__elev");
+  side.append(stage, elevHead, elev);
+  wrap.append(card, side);
+  p.append(wrap);
+
+  const pal = (S.palette ||= {});
+  const modelUrl = () => {
+    const q = new URLSearchParams();
+    if (pal.id) q.set("palette", pal.id);
+    if (pal.text) q.set("colours", pal.text);
+    if (pal.design) q.set("design", pal.design);
+    return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
+  };
+  // The four elevations of what the model shows, drawn without the site.
+  const { elevations } = await import("./thumbs.js");
+  let drawn = "";
+  const drawElevations = async () => {
+    const url = modelUrl();
+    if (url === drawn) return;
+    drawn = url;
+    elev.innerHTML = "";
+    const figs = ["North", "East", "South", "West"].map((name) => {
+      const f = el("figure", "exw__fig is-loading");
+      f.append(el("figcaption", null, name));
+      elev.append(f);
+      return f;
+    });
+    const srcs = await elevations(url).catch(() => []);
+    if (drawn !== url) return;
+    figs.forEach((f, i) => {
+      if (!srcs[i]) { f.classList.replace("is-loading", "is-failed"); return; }
+      const img = el("img"); img.src = srcs[i]; img.alt = `${f.textContent} elevation`;
+      f.prepend(img); f.classList.remove("is-loading");
+    });
+  };
+  try {
+    const { Viewer3D } = await import("./viewer3d.js");
+    if (S.view !== "exterior" || S.activeId !== id) return;
+    S.exViewer = new Viewer3D(stage, { daylight: true });
+    const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
+    await S.exViewer.load(modelUrl(), { front: road });
+    cap.remove();
+  } catch (err) {
+    cap.textContent = `The house could not be shown here (${err.message}).`;
+  }
+  drawElevations();
+  paletteCard(card, id, modelUrl, { viewer: () => S.exViewer, page: true, onModel: drawElevations });
 }
 
 /* ── 3D: colour schemes, recommended and browsable ─────────────────── */
@@ -2223,7 +2253,10 @@ function exId(d) {
 
 // The palette card: the recommended scheme first, the others a click away,
 // and a line where the client can say what colours they like in words.
-async function paletteCard(card, id, modelUrl) {
+// `viewer` is whichever 3D view shows the house; `page` lays the panel out as
+// the Exterior tab itself rather than a card over a model; `onModel` hears
+// each rebuild (the Exterior tab redraws its elevations).
+async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
   const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js"), import("./materials.js")]);
   const swatch = (hex, label) => {
@@ -2279,13 +2312,13 @@ async function paletteCard(card, id, modelUrl) {
     } catch { /* uniqueness is a courtesy; the design stands either way */ }
   };
   const rebuild = async () => {
-    if (!S.viewer || !designs.length) return;
+    if (!viewer() || !designs.length) return;
     pal.design = tinted(designs[idx()].id, cardTint(designs[idx()]));
     const asked = pal.design;
     live++; card.classList.add("is-live");
-    try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not rebuild the exterior (${e.message}).`); }
+    try { await viewer().load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not rebuild the exterior (${e.message}).`); }
     if (--live === 0) card.classList.remove("is-live");
-    if (asked === pal.design) claim(asked);
+    if (asked === pal.design) { claim(asked); onModel?.(); }
   };
   const choose = (did) => { pal.base = did; pal.notes = []; draw(); rebuild(); };
   const merge = (xs) => {
@@ -2358,12 +2391,13 @@ async function paletteCard(card, id, modelUrl) {
   };
   // The whole-house scheme: interiors, frames and doors as well as the outside.
   const apply = async (scheme) => {
-    if (!S.viewer) return;
+    if (!viewer()) return;
     pal.id = scheme.id;
     draw();
     live++; card.classList.add("is-live");
-    try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not recolour the model (${e.message}).`); }
+    try { await viewer().load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not recolour the model (${e.message}).`); }
     if (--live === 0) card.classList.remove("is-live");
+    onModel?.();
   };
 
   // Thumbnails render when their tile scrolls into view, latest first.
@@ -2798,7 +2832,8 @@ async function paletteCard(card, id, modelUrl) {
     if (!s) return;
     const keep = card.querySelector(".ex-panel")?.scrollTop || 0;
     card.hidden = false; card.innerHTML = "";
-    card.className = `pal ex${pal.min ? " is-min" : ""}${live ? " is-live" : ""}`;
+    const min = !page && pal.min;
+    card.className = `pal ex${page ? " ex--page" : ""}${min ? " is-min" : ""}${live ? " is-live" : ""}`;
     pal.tab ||= "designs";
     const di = idx(), d = designs[di];
     const head = el("div", "ex__head");
@@ -2814,14 +2849,16 @@ async function paletteCard(card, id, modelUrl) {
       bt.addEventListener("click", () => choose(designs[(di + step + designs.length) % designs.length].id));
       nav.append(bt);
     }
-    const min = el("button", "ghost-btn", pal.min ? "+" : "–"); min.type = "button";
-    min.setAttribute("aria-label", pal.min ? "Show exterior designs" : "Minimise exterior designs");
-    min.setAttribute("aria-expanded", String(!pal.min));
-    min.addEventListener("click", () => { pal.min = !pal.min; draw(); });
-    nav.append(min);
+    if (!page) {
+      const mb = el("button", "ghost-btn", pal.min ? "+" : "–"); mb.type = "button";
+      mb.setAttribute("aria-label", pal.min ? "Show exterior designs" : "Minimise exterior designs");
+      mb.setAttribute("aria-expanded", String(!pal.min));
+      mb.addEventListener("click", () => { pal.min = !pal.min; draw(); });
+      nav.append(mb);
+    }
     head.append(title, nav);
     card.append(head);
-    if (pal.min) return;
+    if (min) return;
     if (d?.story) card.append(el("p", "pal__story ex__story", d.story));
     const tabs = el("div", "ex__tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Exterior");
     TABS.forEach(([k, label], n) => {
