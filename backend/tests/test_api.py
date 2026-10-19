@@ -470,6 +470,8 @@ def test_exterior_batches_and_customised_fit(client, designed):
     assert client.get(f"/api/v1/plans/{pid}/thermal", params={"season": "spring"}).status_code == 422
     assert client.get(f"/api/v1/plans/{pid}/thermal", params={"month": 1}).json()["month"] == 1
     assert len(client.get(f"/api/v1/plans/{pid}/thermal/year").json()["months"]) == 12
+    assert client.get(f"/api/v1/plans/{pid}/thermal/fields/0").json()["rooms"]
+    assert client.get(f"/api/v1/plans/{pid}/thermal/fields/9").status_code == 404
     sig = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "s", "n": 40, "style": "signature"}).json()
     assert len(sig["designs"]) == 40 and all(d.get("look") for d in sig["designs"])
     g = client.get(f"/api/v1/plans/{pid}/exteriors/grammar").json()

@@ -148,10 +148,11 @@ export class ThermalView {
     left.append(this.planBox, day, key);
 
     const right = h("div", "th-right");
+    this.zoomBox = h("div", "th-card th-zoom");
     this.chartBox = h("div", "th-card th-chart");
     this.roomBox = h("div", "th-card th-room");
     this.fixBox = h("div", "th-card th-fixes");
-    right.append(this.chartBox, this.roomBox, this.fixBox);
+    right.append(this.zoomBox, this.chartBox, this.roomBox, this.fixBox);
     grid.append(left, right);
     this.table = h("div", "th-card th-table");
     this.note = h("p", "th-note");
@@ -163,6 +164,7 @@ export class ThermalView {
     const setup = { windows: st.windows, fans: String(st.fans), cool_roof: String(st.cool_roof), chajja: String(st.chajja) };
     const q = new URLSearchParams({ season: st.season, ...setup });
     if (st.month) q.set("month", String(st.month));
+    this.query = q.toString();
     this.setupKey = new URLSearchParams(setup).toString();
     const my = ++this.req;
     this.root.classList.add("is-busy");
@@ -175,13 +177,142 @@ export class ThermalView {
       this.data = d;
       const here = d.rooms.filter((x) => x.level === this.o.level);
       if (!here.some((x) => x.id === st.room)) st.room = (here.find((x) => x.habitable && x.name === d.summary.hottest?.name) || here.find((x) => x.habitable) || here[0])?.id;
+      this.fields = null;
       this.render();
       this.loadYear();
+      this.loadFields(my);
     } catch (e) {
       if (my === this.req) this.head.textContent = `The temperatures could not be worked out (${e.message}).`;
     } finally {
       if (my === this.req) this.root.classList.remove("is-busy");
     }
+  }
+
+  // Inside the rooms: the temperature across each floor, hour by hour.
+  async loadFields(my) {
+    try {
+      const r = await fetch(`${this.o.api}/plans/${this.o.planId}/thermal/fields/${this.o.level}?${this.query}`);
+      if (!r.ok || my !== this.req) return;
+      const d = await r.json();
+      if (my !== this.req) return;
+      const map = new Map();
+      for (const f of d.rooms) {
+        const bin = atob(f.temps), buf = new ArrayBuffer(bin.length), u8 = new Uint8Array(buf);
+        for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        map.set(f.id, { ...f, data: new Int16Array(buf) });
+      }
+      this.fields = { cell: d.cell, rooms: map };
+      if (this.cam) this.scaleCamera();
+      this.paintHour();
+    } catch { /* the rooms keep their single temperature */ }
+  }
+
+  // One room's field at a point (plan metres), or null outside it.
+  fieldAt(f, x, y, hour) {
+    const cell = this.fields.cell;
+    const i = Math.floor((x - f.x0) / cell), j = Math.floor((y - f.y0) / cell);
+    if (i < 0 || j < 0 || i >= f.nx || j >= f.ny) return null;
+    const v = f.data[hour * f.nx * f.ny + j * f.nx + i];
+    return v === -32768 ? null : v / 10;
+  }
+
+  // ── inside one room, up close ───────────────────────────────────────
+  paintZoom() {
+    const box = this.zoomBox, r = this.rooms().find((x) => x.id === this.st.room);
+    const f = r && this.fields?.rooms.get(r.id);
+    box.innerHTML = "";
+    box.append(h("span", "th-card__k", r ? `Inside the ${r.name.toLowerCase()}` : "Inside the room"));
+    if (!f) { box.append(h("p", "th-empty", this.fields ? "Pick a room on the plan." : "Mapping the heat inside the rooms…")); this.zoom = null; return; }
+    const cell = this.fields.cell, W = f.nx, H = f.ny;
+    const stage = h("div", "th-zoom__stage");
+    const small = document.createElement("canvas"); small.width = W; small.height = H;
+    const big = document.createElement("canvas"); big.width = W * 6; big.height = H * 6; big.className = "th-zoom__img";
+    const x1 = f.x0 + W * cell, y1 = f.y0 + H * cell;
+    const svg = s("svg", { viewBox: `${f.x0} ${-y1} ${W * cell} ${H * cell}`, class: "th-zoom__svg", preserveAspectRatio: "none" });
+    svg.append(s("polygon", { points: f.polygon.map((p) => `${p[0]},${-p[1]}`).join(" "), class: "th-z-room" }));
+    for (const it of f.furniture) {
+      const [a, b, c, d] = it.box;
+      const g = s("g", { class: "th-z-item" });
+      g.append(s("rect", { x: a, y: -d, width: c - a, height: d - b }));
+      const t = s("title"); t.textContent = it.name; g.append(t);
+      svg.append(g);
+    }
+    for (const w of f.walls) svg.append(s("line", { x1: w.a[0], y1: -w.a[1], x2: w.b[0], y2: -w.b[1], class: "th-z-wall" }));
+    for (const w of f.windows) svg.append(s("line", { x1: w.a[0], y1: -w.a[1], x2: w.b[0], y2: -w.b[1], class: "th-z-win" }));
+    const labels = s("g", { class: "th-z-src" });
+    svg.append(labels);
+    const probe = h("div", "th-probe"); probe.hidden = true;
+    stage.style.aspectRatio = `${W} / ${H}`;
+    stage.style.maxWidth = `${Math.round(460 * W / H)}px`;
+    stage.append(big, svg, probe);
+    // Ranged frame by frame, as a thermal camera does, so the differences
+    // across the room show at every hour; the numbers say what the colours span.
+    const key = h("div", "th-key th-key--zoom");
+    const kLo = h("span"), kHi = h("span");
+    key.append(kLo, h("i", "th-key__ramp is-iron"), kHi);
+    const note = h("p", "th-zoom__note");
+    box.append(stage, key, note);
+    svg.addEventListener("pointermove", (e) => {
+      const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+      const m = pt.matrixTransform(svg.getScreenCTM().inverse());
+      const v = this.fieldAt(f, m.x, -m.y, this.st.hour);
+      if (v == null) { probe.hidden = true; return; }
+      const b = stage.getBoundingClientRect();
+      const item = f.furniture.find((it) => m.x >= it.box[0] && m.x <= it.box[2] && -m.y >= it.box[1] && -m.y <= it.box[3]);
+      probe.hidden = false;
+      probe.textContent = `${v.toFixed(1)}°C${item ? ` · ${item.name}` : ""}`;
+      probe.style.left = `${Math.min(e.clientX - b.left + 12, b.width - 120)}px`; probe.style.top = `${e.clientY - b.top - 28}px`;
+    });
+    svg.addEventListener("pointerleave", () => { probe.hidden = true; });
+    this.zoom = { f, r, small, big, labels, note, kLo, kHi };
+    this.drawZoom();
+  }
+
+  drawZoom() {
+    const z = this.zoom; if (!z) return;
+    const { f, small, big, labels, note, r } = z, hour = this.st.hour, W = f.nx, H = f.ny;
+    const ctx = small.getContext("2d"), img = ctx.createImageData(W, H), base = hour * W * H;
+    let mn = Infinity, mx = -Infinity;
+    for (let k = base; k < base + W * H; k++) { const v = f.data[k]; if (v !== -32768) { if (v < mn) mn = v; if (v > mx) mx = v; } }
+    mn /= 10; mx /= 10;
+    const mid = (mn + mx) / 2, span = Math.max(4, mx - mn + 0.6);
+    const lo = mid - span / 2, hi = mid + span / 2;
+    z.kLo.textContent = `${lo.toFixed(1)}°`; z.kHi.textContent = `${hi.toFixed(1)}°`;
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      const v = f.data[base + j * W + i], k = (H - 1 - j) * W + i;
+      if (v === -32768) { img.data[k * 4 + 3] = 0; continue; }
+      const t = v / 10;
+      const [cr, cg, cb] = iron((t - lo) / (hi - lo));
+      img.data[k * 4] = cr; img.data[k * 4 + 1] = cg; img.data[k * 4 + 2] = cb; img.data[k * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    const g = big.getContext("2d");
+    g.clearRect(0, 0, big.width, big.height);
+    g.filter = "blur(5px)"; g.imageSmoothingEnabled = true;
+    g.drawImage(small, 0, 0, big.width, big.height);
+    g.filter = "none";
+    // Keep the room's edge crisp: clip the blur back to the room.
+    g.globalCompositeOperation = "destination-in";
+    g.drawImage(small, 0, 0, big.width, big.height);
+    g.globalCompositeOperation = "source-over";
+    // What is giving off heat at this hour.
+    labels.innerHTML = "";
+    const on = f.sources.filter((x) => x.hours.includes(hour));
+    for (const x of on) {
+      labels.append(s("circle", { cx: x.x, cy: -x.y, r: 0.12 }));
+      const t = s("text", { x: x.x, y: -x.y - 0.22 }); t.textContent = x.name; labels.append(t);
+    }
+    const sunny = mx - mn > 3 && this.data.sun[hour].altitude > 0;
+    note.textContent = `${ampm(hour)}: ${mn.toFixed(1)}–${mx.toFixed(1)}°C across the room, air ${r.temps[hour]}°C`
+      + (on.length ? ` · giving off heat: ${on.map((x) => x.name.toLowerCase()).join(", ")}` : "")
+      + (sunny ? " · the brightest patch is sun on the floor" : "");
+  }
+
+  // The camera's scale once the room fields are in: the floor's whole day.
+  scaleCamera() {
+    let lo = Infinity, hi = -Infinity;
+    for (const f of this.fields.rooms.values()) { lo = Math.min(lo, f.lo); hi = Math.max(hi, f.hi); }
+    if (Number.isFinite(lo)) { this.cam.lo = Math.floor(lo - 1); this.cam.hi = Math.ceil(hi + 1); }
   }
 
   // The year under the same set-up: fetched once per set-up, after the day.
@@ -384,6 +515,15 @@ export class ThermalView {
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       const k = j * W + i, own = owner[k];
       let base;
+      const rf = own >= 0 && this.fields?.rooms.get(rooms[own].id);
+      const fv = rf ? this.fieldAt(rf, c.x0 + (i + 0.5) * c.cell, c.y0 + (j + 0.5) * c.cell, hour) : null;
+      if (fv != null) {
+        const kk = (H - 1 - j) * W + i;
+        field[kk] = fv;
+        const [r, g, b] = iron((fv - lo) / (hi - lo));
+        img.data[kk * 4] = r; img.data[kk * 4 + 1] = g; img.data[kk * 4 + 2] = b; img.data[kk * 4 + 3] = 255;
+        continue;
+      }
       if (own >= 0) {
         const r = rooms[own], ta = r.temps[hour];
         base = r.ceiling ? ta + 0.2 * (r.ceiling[hour] - ta) : ta;
@@ -418,7 +558,9 @@ export class ThermalView {
     const sun = d.sun[hour];
     this.clock.textContent = `${ampm(hour)} · outdoors ${d.outdoor[hour]}°C${sun.altitude > 0 ? ` · sun ${Math.round(sun.altitude)}° up in the ${compass(sun.azimuth)}` : " · night"}`;
     const cam = this.st.look === "camera" && this.cam;
+    if (cam && this.fields && !this.cam.scaled) { this.scaleCamera(); this.cam.scaled = true; }
     if (cam) this.drawCamera(hour);
+    if (this.zoom?.r.id !== this.st.room) this.paintZoom(); else this.drawZoom();
     this.keyRamp.classList.toggle("is-iron", !!cam);
     this.keyLo.textContent = cam ? `${this.cam.lo}°` : "Cooler";
     this.keyHi.textContent = cam ? `${this.cam.hi}°` : "Hotter";

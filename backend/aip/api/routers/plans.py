@@ -259,6 +259,32 @@ async def get_thermal(
     return await asyncio.to_thread(thermal, plan, opt)
 
 
+@router.get("/{plan_id}/thermal/fields/{level_index}")
+async def get_thermal_fields(
+    plan_id: str,
+    level_index: int,
+    principal: Principal = Depends(get_principal),
+    season: str = Query(default="summer", pattern="^(summer|monsoon|winter)$"),
+    month: int | None = Query(default=None, ge=1, le=12),
+    windows: str = Query(default="open", pattern="^(open|night|shut)$"),
+    fans: bool = Query(default=True),
+    cool_roof: bool = Query(default=False),
+    chajja: float = Query(default=0.6, ge=0.0, le=1.5),
+) -> dict[str, Any]:
+    """The temperature across the floor of every room on one level, hour by
+    hour, for the thermal-camera view: walls, glass, sun patches, the breeze,
+    people and appliances."""
+    import asyncio
+
+    from aip.engines.architecture.thermal import Options, room_fields
+
+    plan = _load(plan_id, principal)
+    if not any(lv.index == level_index for lv in plan.levels):
+        raise HTTPException(status_code=404, detail=f"No level {level_index}.")
+    opt = Options(season=season, month=month, windows=windows, fans=fans, cool_roof=cool_roof, chajja=chajja)
+    return await asyncio.to_thread(room_fields, plan, level_index, opt)
+
+
 @router.get("/{plan_id}/thermal/year")
 async def get_thermal_year(
     plan_id: str,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from aip.engines.architecture.thermal import CITIES, Options, month_climate, nearest_city, season_month, thermal, thermal_year
+from aip.engines.architecture.thermal import CITIES, room_fields, Options, month_climate, nearest_city, season_month, thermal, thermal_year
 
 
 def test_rooms_follow_the_day_and_the_season(plan):
@@ -76,3 +76,27 @@ def test_the_year_runs_hot_to_cool(plan):
     hot = max(y["months"], key=lambda m: m["max"])
     cool = min(y["months"], key=lambda m: m["max"])
     assert hot["indoor_peak"] > cool["indoor_peak"]
+
+
+def test_inside_each_room_the_sun_patch_and_the_people_show(plan):
+    import base64
+
+    import numpy as np
+
+    d = room_fields(plan, plan.levels[0].index)
+    assert d["rooms"]
+    lit = slept = False
+    for r in d["rooms"]:
+        a = np.frombuffer(base64.b64decode(r["temps"]), dtype="<i2").reshape(24, r["ny"], r["nx"]).astype(float)
+        a[a == -32768] = np.nan
+        a /= 10
+        assert np.isfinite(a).any()
+        # A west or east window throws a patch on the floor far warmer than the room's coolest corner.
+        if r["windows"] and (np.nanmax(a[15]) - np.nanmin(a[15]) > 4 or np.nanmax(a[9]) - np.nanmin(a[9]) > 4):
+            lit = True
+        if any(s["name"].endswith("bed") for s in r["sources"]):
+            bed = next(s for s in r["sources"] if s["name"].endswith("bed"))
+            j, i = int((bed["y"] - r["y0"]) / d["cell"]), int((bed["x"] - r["x0"]) / d["cell"])
+            if 0 <= j < r["ny"] and 0 <= i < r["nx"] and a[2, j, i] > np.nanmedian(a[2]):
+                slept = True
+    assert lit and slept

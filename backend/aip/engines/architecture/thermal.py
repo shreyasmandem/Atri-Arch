@@ -176,6 +176,7 @@ class _Window:
     b: tuple[float, float]
     area: float
     height: float
+    sill: float = 0.9
 
 
 @dataclass(slots=True)
@@ -296,7 +297,8 @@ def _zones(plan: FloorPlan, wind: Direction, speed: float) -> list[_Zone]:
                         continue
                     c = o.position * L
                     if t0 <= c <= t1:
-                        wins.append(_Window(at(max(t0, c - o.width / 2)), at(min(t1, c + o.width / 2)), o.area, o.height))
+                        wins.append(_Window(at(max(t0, c - o.width / 2)), at(min(t1, c + o.width / 2)), o.area, o.height,
+                                            o.sill_height))
                 opaque = (t1 - t0) * r.ceiling_height - sum(x.area for x in wins)
                 z.faces.append(_Face(at(t0), at(t1), max(opaque, 0.0),
                                      (math.degrees(math.atan2(n.x, n.y)) + north) % 360, wins))
@@ -416,6 +418,9 @@ def _run(zones: list[_Zone], plan: FloorPlan, opt: Options, climate: dict,
                         # The slab stores much of the day's heat itself, so its underside
                         # moves less than a thin wall's would (about 0.6 of U / h_in).
                         x["ceiling"] = tm + (to + roof_sol - tm) * 0.6 * u_roof / H_IN if z.roof else None
+                        x["mass"] = tm
+                        x["sun"] = (alt, az)
+                        x["beam"] = [(b, sh) for b, _d, sh in face_sun]
                     hours.append(x)
                 tm += q_mass * dt / cm
         out.append({"zone": z, "hours": hours})
@@ -609,8 +614,206 @@ def thermal_year(plan: FloorPlan, opt: Options | None = None) -> dict:
     return {"city": city, "months": months}
 
 
+# ---------------------------------------------------------------------------
+# Inside a room: the temperature across its floor
+# ---------------------------------------------------------------------------
+
+#: Heat sources among the furniture: item id prefix -> (watts, hours in use, spread m).
+_SOURCES = {
+    "bed": (150.0, set(range(22, 24)) | set(range(0, 7)), 0.7),       # two people asleep
+    "sofa": (150.0, set(range(18, 22)), 0.7),                          # the family in the evening
+    "tv": (120.0, set(range(19, 23)), 0.45),
+    "fridge": (90.0, set(range(24)), 0.4),                             # its back runs warm all day
+    "study_desk": (90.0, set(range(10, 13)) | set(range(15, 19)), 0.45),
+    "washer": (200.0, {8, 9}, 0.4),
+    "dining_table": (225.0, {8, 13, 20}, 0.7),
+}
+#: How hot a source makes the air it sits in, per watt, at its centre.
+_SOURCE_K = 0.008
+#: Floor in direct sun: degrees warmer per W/m2 of beam through the glass.
+_PATCH_K = 0.016
+FIELD_CELL = 0.12
+
+
+def _stove(room: Room, faces: list[_Face]) -> tuple[float, float] | None:
+    """Where the hob is: along the kitchen's longest outside wall (Indian
+    kitchens put the counter there, under the window), 0.35 m in."""
+    if not faces:
+        return None
+    f = max(faces, key=lambda f: math.dist(f.a, f.b))
+    mx, my = (f.a[0] + f.b[0]) / 2, (f.a[1] + f.b[1]) / 2
+    cx, cy = room.centre.x, room.centre.y
+    d = math.hypot(cx - mx, cy - my) or 1.0
+    return mx + (cx - mx) / d * 0.35, my + (cy - my) / d * 0.35
+
+
+def _seg_dist(px, py, a, b):
+    import numpy as np
+
+    ax, ay = a
+    dx, dy = b[0] - ax, b[1] - ay
+    L2 = dx * dx + dy * dy or 1e-9
+    t = np.clip(((px - ax) * dx + (py - ay) * dy) / L2, 0, 1)
+    return np.hypot(px - ax - t * dx, py - ay - t * dy)
+
+
+def room_fields(plan: FloorPlan, level_index: int, opt: Options | None = None) -> dict:
+    """The temperature across the floor of every room on one level, hour by
+    hour: what a thermal camera looking down into the room would see.
+
+    Each room's air temperature (from the room model) is shaped by what is
+    around it: the inside face of each outside wall and the glass, the sun
+    patch the windows throw on the floor at that hour (traced from the sun's
+    altitude and bearing through each opening, less what the chajja shades),
+    a hot roof slab overhead, the breeze where it runs through the room (from
+    the wind solve), and the people and appliances among the furniture."""
+    import base64
+
+    import numpy as np
+    import shapely
+    from shapely.geometry import Polygon
+
+    from aip.engines.architecture.windflow import solve_level
+
+    opt = opt or Options()
+    city, plan = _where(plan)
+    month = opt.month or season_month(city, opt.season)
+    climate = month_climate(city, month)
+    wind, speed = _wind(plan, climate)
+    zones = [z for z in _zones(plan, wind, speed) if z.level == level_index]
+    if not zones:
+        return {"level": level_index, "cell": FIELD_CELL, "rooms": []}
+    sky = _sky(plan, climate, 4)
+    runs = _run(zones, plan, opt, climate, sky=sky, surfaces=True)
+    north = float(plan.site.north_angle or 0.0)
+
+    # The breeze: air speed across the floor, from the wind solve.
+    flow = solve_level(plan, level_index, wind=wind, speed=speed)
+    g = flow["grid"]
+    fu = np.frombuffer(base64.b64decode(flow["u"]), dtype="<f2").astype(float).reshape(g["ny"], g["nx"])
+    fv = np.frombuffer(base64.b64decode(flow["v"]), dtype="<f2").astype(float).reshape(g["ny"], g["nx"])
+    fmag = np.hypot(fu, fv)
+
+    # The furniture, for its outlines and its heat.
+    furniture: dict[str, list] = {}
+    try:
+        from aip.engines.interior.engine import design_interior
+
+        for ri in design_interior(plan, room_ids={z.room.id for z in zones}).rooms:
+            furniture[ri.room_id] = list(ri.furniture)
+    except Exception:  # noqa: BLE001 - a field without furniture beats no field
+        pass
+
+    out = []
+    for res in runs:
+        z, hs = res["zone"], res["hours"]
+        r = z.room
+        xs, ys = [p.x for p in r.polygon], [p.y for p in r.polygon]
+        x0, y0 = min(xs), min(ys)
+        nx = max(2, int(math.ceil((max(xs) - x0) / FIELD_CELL)))
+        ny = max(2, int(math.ceil((max(ys) - y0) / FIELD_CELL)))
+        px = x0 + (np.arange(nx) + 0.5) * FIELD_CELL
+        py = y0 + (np.arange(ny) + 0.5) * FIELD_CELL
+        PX, PY = np.meshgrid(px, py)
+        inside = shapely.contains_xy(Polygon([(p.x, p.y) for p in r.polygon]).buffer(1e-6), PX, PY)
+
+        # Distances, worked out once: to each outside face and window, and to the room's edge.
+        face_d = [_seg_dist(PX, PY, f.a, f.b) for f in z.faces]
+        win_d = [[_seg_dist(PX, PY, w.a, w.b) for w in f.windows] for f in z.faces]
+        edge_d = np.min([_seg_dist(PX, PY, (r.polygon[i].x, r.polygon[i].y),
+                                   (r.polygon[(i + 1) % len(r.polygon)].x, r.polygon[(i + 1) % len(r.polygon)].y))
+                         for i in range(len(r.polygon))], axis=0)
+        # Breeze speed at each cell.
+        gi = np.clip(((PY - g["y0"]) / g["cell"]).astype(int), 0, g["ny"] - 1)
+        gj = np.clip(((PX - g["x0"]) / g["cell"]).astype(int), 0, g["nx"] - 1)
+        breeze = fmag[gi, gj]
+
+        # Heat sources.
+        sources = []
+        items = []
+        for it in furniture.get(r.id, []):
+            fp = it.footprint
+            items.append({"id": it.item_id, "name": it.name,
+                          "box": [round(fp.min_x, 2), round(fp.min_y, 2), round(fp.max_x, 2), round(fp.max_y, 2)]})
+            for key, (watts, hours, spread) in _SOURCES.items():
+                if it.item_id.startswith(key):
+                    sources.append((it.x, it.y, watts, hours, spread, it.name))
+                    break
+        if r.type is RoomType.KITCHEN:
+            st = _stove(r, z.faces)
+            if st:
+                cook = {h for h in range(24) if _gains("kitchen", h) > 500}
+                sources.append((st[0], st[1], 1400.0, cook, 0.55, "Hob"))
+                items.append({"id": "hob", "name": "Hob", "box": [round(st[0] - 0.35, 2), round(st[1] - 0.3, 2),
+                                                                 round(st[0] + 0.35, 2), round(st[1] + 0.3, 2)]})
+        src_d2 = [(PX - sx) ** 2 + (PY - sy) ** 2 for sx, sy, *_ in sources]
+
+        frames = []
+        for hour, x in enumerate(hs):
+            ti, to, tm = x["t"], x["to"], x["mass"]
+            T = np.full((ny, nx), ti)
+            # Interior walls hold near the mass; outside walls at their inside surface.
+            T += (tm - ti) * 0.35 * np.exp(-edge_d / 0.3)
+            for f, d, fs in zip(z.faces, face_d, x["faces"]):
+                T += (fs["in"] - ti) * 0.7 * np.exp(-d / 0.4)
+            for f, wds, fs in zip(z.faces, win_d, x["faces"]):
+                for wd in wds:
+                    T += (fs["win"] - ti) * 0.6 * np.exp(-wd / 0.45)
+            if x.get("ceiling") is not None:
+                T += (x["ceiling"] - ti) * 0.22
+            # Sun patches: trace the beam through each window onto the floor.
+            alt, az = x["sun"]
+            if alt > 2:
+                rad = math.radians(az - north)
+                sx, sy = math.sin(rad), math.cos(rad)            # toward the sun, in plan
+                cot = 1 / math.tan(math.radians(alt))
+                for f, fs, (beam, shade) in zip(z.faces, x["faces"], x["beam"]):
+                    if beam <= 5 or not f.windows:
+                        continue
+                    for w in f.windows:
+                        head = w.sill + w.height * (1 - shade)
+                        if head <= w.sill + 0.05:
+                            continue
+                        near, far = w.sill * cot, head * cot
+                        ax_, ay_ = w.a
+                        ex, ey = w.b[0] - ax_, w.b[1] - ay_
+                        # p = a + t*e + u*(-s): solve for t, u at each cell.
+                        det = ex * (-sy) - ey * (-sx)
+                        if abs(det) < 1e-6:
+                            continue
+                        qx, qy = PX - ax_, PY - ay_
+                        t = (qx * (-sy) - qy * (-sx)) / det
+                        u = (ex * qy - ey * qx) / det
+                        lit = (t >= 0) & (t <= 1) & (u >= min(near, 0.0)) & (u <= far)
+                        # Only light that falls inside the room, beyond the wall.
+                        T += np.where(lit & (u > 0.05), beam * SHGC * _PATCH_K * np.exp(-np.maximum(u - far * 0.7, 0) / 1.5), 0)
+            # People and appliances.
+            for (sx_, sy_, watts, hours, spread, _n), d2 in zip(sources, src_d2):
+                if hour in hours:
+                    T += watts * _SOURCE_K * np.exp(-d2 / (2 * spread ** 2))
+            # The breeze: where air moves, the room runs toward the outdoor air.
+            if _open(opt.windows, hour):
+                T += (to - T) * np.clip(breeze / max(speed, 0.5) * 1.1, 0, 0.75)
+            T = np.where(inside, T, np.nan)
+            frames.append(T)
+        stack = np.stack(frames)
+        lo, hi = float(np.nanmin(stack)), float(np.nanmax(stack))
+        enc = np.where(np.isnan(stack), -32768, np.round(stack * 10)).astype("<i2")
+        out.append({
+            "id": r.id, "name": r.display_name(), "x0": round(x0, 3), "y0": round(y0, 3), "nx": nx, "ny": ny,
+            "polygon": [[round(p.x, 3), round(p.y, 3)] for p in r.polygon],
+            "temps": base64.b64encode(enc.tobytes()).decode("ascii"), "lo": round(lo, 1), "hi": round(hi, 1),
+            "furniture": items,
+            "windows": [{"a": w.a, "b": w.b} for f in z.faces for w in f.windows],
+            "walls": [{"a": f.a, "b": f.b} for f in z.faces],
+            "sources": [{"name": n, "x": round(sx_, 2), "y": round(sy_, 2), "hours": sorted(h)} for sx_, sy_, _w, h, _s, n in sources],
+        })
+    return {"level": level_index, "cell": FIELD_CELL, "month": month, "city": city, "rooms": out,
+            "encoding": "int16 tenths of a degree, [hour][row][col], rows from y0 upward; -32768 outside the room"}
+
+
 def _compass(bearing: float) -> str:
     return ("N", "NE", "E", "SE", "S", "SW", "W", "NW")[int(((bearing % 360) + 22.5) // 45) % 8]
 
 
-__all__ = ["CITIES", "MONTHS", "Options", "SEASONS", "month_climate", "nearest_city", "season_month", "thermal", "thermal_year"]
+__all__ = ["CITIES", "MONTHS", "Options", "SEASONS", "month_climate", "nearest_city", "room_fields", "season_month", "thermal", "thermal_year"]

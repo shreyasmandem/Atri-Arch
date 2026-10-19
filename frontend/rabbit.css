@@ -939,6 +939,16 @@ input[type="range"].stance::-moz-range-thumb { width: 16px; height: 16px; border
 .th-mo__n { letter-spacing: 0.08em; text-transform: uppercase; }
 .th-mo__c { font-weight: 500; color: var(--cream-3); font-variant-numeric: tabular-nums; min-height: 1.2em; }
 @media (max-width: 720px) { .th-year__row { grid-template-columns: repeat(12, minmax(40px, 1fr)); overflow-x: auto; padding-bottom: 4px; } .th-mo { grid-template-rows: auto 56px auto auto; } }
+.th-zoom__stage { position: relative; width: 100%; margin: 0 auto; background: #06040f; }
+.th-zoom__img, .th-zoom__svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.th-z-room { fill: none; stroke: rgba(255, 255, 255, 0.5); stroke-width: 0.04; }
+.th-z-item rect { fill: none; stroke: rgba(255, 255, 255, 0.45); stroke-width: 0.025; stroke-dasharray: 0.08 0.05; }
+.th-z-wall { stroke: rgba(255, 255, 255, 0.85); stroke-width: 0.1; }
+.th-z-win { stroke: #7fd6ff; stroke-width: 0.12; }
+.th-z-src circle { fill: #fff; }
+.th-z-src text { fill: #fff; font: 600 0.2px var(--ui); text-anchor: middle; paint-order: stroke; stroke: rgba(0, 0, 0, 0.6); stroke-width: 0.04; }
+.th-key--zoom { justify-content: center; }
+.th-zoom__note { margin: 0; font-size: 12px; color: var(--cream-2); line-height: 1.45; }
 @media (max-width: 900px) { .th-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 720px) {
   .th-bar { grid-template-columns: 110px minmax(0, 1fr) 62px; }
