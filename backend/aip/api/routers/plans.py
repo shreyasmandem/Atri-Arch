@@ -253,12 +253,70 @@ async def get_exteriors(
     plan_id: str,
     principal: Principal = Depends(get_principal),
     prefs: str = Query(default="", max_length=1200, description="What the client said about the look they want"),
+    seed: str | None = Query(default=None, max_length=40, description="Any value: a fresh batch from the grammar"),
+    n: int = Query(default=12, ge=1, le=40, description="Designs in a fresh batch"),
+    avoid: list[str] = Query(default=[], max_length=80, description="Design ids already shown, never repeated"),
+    style: str | None = Query(default=None, max_length=40, description="Lead a fresh batch with this house style"),
 ) -> dict[str, Any]:
-    """Distinct exterior designs for this plan from the exterior designer, best first."""
-    from aip.agents.exterior_agent import design_exteriors
+    """Distinct exterior designs for this plan, best first, with the grammar to
+    customise them. Without `seed`, the exterior designer's set for what the
+    client said; with one, a fresh batch kept far from everything in `avoid`."""
+    from aip.engines.experience import registry
+    from aip.engines.experience.exteriors import generate, grammar, heard, prefer_from_text
 
     plan = _load(plan_id, principal)
-    return {"designs": await design_exteriors(plan, prefs)}
+    if seed is not None:
+        # The client's words steer the batch as well as the style, and no
+        # building another house has claimed is offered again.
+        designs = [e.to_dict() for e in generate(plan, n, seed=seed, avoid=set(avoid), style=style,
+                                                 prefer=prefer_from_text(prefs), taken=registry.taken_forms(plan_id))]
+    else:
+        from aip.agents.exterior_agent import design_exteriors
+
+        designs = await design_exteriors(plan, prefs)
+    return {"designs": designs, "grammar": grammar(), "style": plan.style, "heard": heard(prefs)}
+
+
+@router.get("/{plan_id}/exteriors/grammar")
+async def exterior_grammar(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """The customising vocabulary and colour schemes, with the plan's style and
+    the design its model shows when none is chosen: what a drawing sheet needs
+    to offer colours without loading a gallery."""
+    from aip.engines.experience.exteriors import generate, grammar
+
+    plan = _load(plan_id, principal)
+    return {"grammar": grammar(), "style": plan.style, "default": generate(plan, 1)[0].id}
+
+
+@router.post("/{plan_id}/exteriors/claim")
+async def claim_exterior(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    design: str = Query(..., max_length=240, description="The exterior this house settles on"),
+) -> dict[str, Any]:
+    """Claim an exact exterior for this house, so no other house is offered
+    it; says whether another house already has it."""
+    from aip.engines.experience import registry
+
+    _load(plan_id, principal)
+    return registry.claim(plan_id, design)
+
+
+@router.get("/{plan_id}/exteriors/fit")
+async def fit_exterior(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    design: str = Query(..., max_length=200, description="A design id (ex:...), possibly customised"),
+) -> dict[str, Any]:
+    """A customised design made buildable on this plan: its normalised id,
+    name and story, and a note for anything that had to change."""
+    from aip.engines.experience.exteriors import Exterior
+
+    ex = Exterior.parse(design)
+    if ex is None:
+        raise HTTPException(status_code=422, detail="Not an exterior design id.")
+    fitted, notes = ex.fitted(len(_load(plan_id, principal).levels) <= 1)
+    return {"design": fitted.to_dict(), "notes": notes}
 
 
 @router.get("/{plan_id}/palettes")

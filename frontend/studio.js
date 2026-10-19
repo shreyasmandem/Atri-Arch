@@ -441,8 +441,9 @@ async function initHome() {
       setMode("upload");
       $("upload").requestSubmit();
     },
-    start: (request, brief) => {
+    start: (request, brief, words = "") => {
       S.chatBrief = brief;
+      S.chatWords = words;
       if (brief?.colours) S.palette = { ...(S.palette || {}), text: brief.colours };
       const form = readBrief();
       const amenities = [...new Set([...(form.amenities || []), ...(request?.amenities || [])])];
@@ -1513,6 +1514,52 @@ function initPlate() {
 const ORTHO = { elevation_N: "N", elevation_E: "E", elevation_S: "S", elevation_W: "W",
   section_aa: "sectionA", section_bb: "sectionB", roof_plan: "roof", site_plan: "site" };
 
+function sheetModelUrl(id) {
+  const pal = S.palette || {};
+  const q = new URLSearchParams(); if (pal.id) q.set("palette", pal.id); if (pal.text) q.set("colours", pal.text); if (pal.design) q.set("design", pal.design);
+  return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
+}
+
+// Colours on an elevation sheet: the design's own, its style's schemes, then
+// every other, each a click that recolours the house (the 3D panel follows).
+async function sheetColours(box, id, key, show) {
+  if (!box) return;
+  box.hidden = !show;
+  if (!show) return;
+  const g = (S.exGrammar ||= {});
+  if (!g[id]) {
+    try { g[id] = await fetch(`${API}/plans/${id}/exteriors/grammar`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status)))); }
+    catch { box.hidden = true; return; }
+  }
+  if (S.sheet !== key) return;
+  const { grammar, style, default: fallback } = g[id];
+  const pal = (S.palette ||= {});
+  const mine = grammar.styles?.find((x) => x.id === style)?.schemes || [];
+  const ordered = [null, ...grammar.schemes.filter((x) => mine.includes(x.id)), ...grammar.schemes.filter((x) => !mine.includes(x.id))];
+  box.innerHTML = "";
+  box.append(el("span", "plate3d__k", "Colours"));
+  const row = el("div", "plate3d__dots");
+  row.setAttribute("role", "group"); row.setAttribute("aria-label", "Elevation colours");
+  for (const sc of ordered) {
+    const b = el("button", "plate3d__dot"); b.type = "button";
+    const name = sc ? sc.name : "Design's own colours";
+    b.title = mine.includes(sc?.id) ? `${name} · suits this style` : name;
+    b.setAttribute("aria-label", b.title);
+    b.setAttribute("aria-pressed", String((pal.tint?.id ?? null) === (sc?.id ?? null)));
+    b.style.background = sc ? `conic-gradient(${sc.wall} 0 50%, ${sc.clad} 0 70%, ${sc.roof} 0 88%, ${sc.metal} 0)` : "";
+    if (!sc) b.classList.add("is-own");
+    if (sc && mine.includes(sc.id)) b.classList.add("is-suggested");
+    b.addEventListener("click", async () => {
+      pal.base ||= exParse(pal.design) ? pal.design : fallback;
+      pal.tint = schemeTint(sc);
+      pal.design = exTint(pal.base, pal.tint);
+      await loadOrthoSheet(key);
+    });
+    row.append(b);
+  }
+  box.append(row, el("span", "plate3d__now", pal.tint?.name || "Design's own colours"));
+}
+
 async function loadOrthoSheet(key) {
   const plate = $("plate");
   const kind = ORTHO[key];
@@ -1539,10 +1586,9 @@ async function loadOrthoSheet(key) {
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
     host.append(el("p", "model-cap", "Building the model…"));
-    const pal = S.palette || {};
-    const q = new URLSearchParams(); if (pal.id) q.set("palette", pal.id); if (pal.text) q.set("colours", pal.text); if (pal.design) q.set("design", pal.design);
-    await S.sheetViewer.load(`${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`);
-    host.querySelector(".model-cap")?.remove();
+    S.sheetViewerUrl = null;
+    const colours = el("div", "plate3d__colours"); colours.hidden = true;
+    plate.append(colours);
     sunIn.addEventListener("input", () => {
       const h = +sunIn.value; sunOut.textContent = `${String(Math.floor(h)).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`;
       S.sheetViewer?.setSun(h);
@@ -1550,6 +1596,16 @@ async function loadOrthoSheet(key) {
     cutIn.addEventListener("input", () => S.sheetViewer?.setOrtho(S.sheetViewer.orthoKind, { cut: +cutIn.value }));
   }
   if (S.sheet !== key || !S.sheetViewer) return;
+  // The sheet shows the design and colours chosen now, rebuilt in place when
+  // they change: a recoloured house redraws its elevations.
+  const url = sheetModelUrl(id);
+  if (S.sheetViewerUrl !== url) {
+    await S.sheetViewer.load(url, { keepView: !!S.sheetViewerUrl });
+    S.sheetViewerUrl = url;
+    plate.querySelector(".model-cap")?.remove();
+    if (S.sheet !== key || !S.sheetViewer) return;
+  }
+  sheetColours(plate.querySelector(".plate3d__colours"), id, key, /^[NESW]$/.test(kind));
   plate.querySelector(".plate3d__ctl--cut").hidden = !kind.startsWith("section");
   S.sheetViewer.setOrtho(kind, { cut: +(plate.querySelector(".plate3d__ctl--cut input")?.value || 0.5) });
   const [set, items] = sheetSets().find(([, it]) => it.some(([k]) => k === key)) || ["", []];
@@ -2062,7 +2118,7 @@ async function renderModel() {
   try {
     const { Viewer3D } = await import("./viewer3d.js");
     if (S.view !== "model" || S.activeId !== id) return;
-    S.viewer = new Viewer3D(stage);
+    S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
     const st = await S.viewer.load(modelUrl(), { front: road });
     const levels = cur().plan?.levels?.length || 1;
@@ -2114,141 +2170,692 @@ async function renderModel() {
 
 /* ── 3D: colour schemes, recommended and browsable ─────────────────── */
 
+// Exterior design ids, mirrored from engines/experience/exteriors.py:
+// ex:roof.base.upper.screen.windows.planters.accent.feature[~w:hex,c:hex,r:hex,m:hex]
+const EX_PARTS = ["roof", "base", "upper", "screen", "windows", "planters", "accent", "feature"];
+const EX_TINTS = { w: "wall", c: "clad", r: "roof_tint", m: "metal", f: "frame", d: "door" };
+const EX_OPTS = { b: "boundary", l: "railing", h: "shade", e: "canopy", g: "gate", v: "paving", t: "garden", s: "solar",
+  x: "panel", q: "parapet", k: "deck", i: "lights" };
+const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pitch", butterfly: "Butterfly", hip: "Hip, tiled", gable: "Gable",
+  plaster: "Plaster", stone: "Stone", brick: "Brick", concrete: "Concrete", timber: "Timber", metal: "Metal", none: "None",
+  fins: "Fins", louvres: "Louvres", frame: "Box frame", jaali: "Jaali", perforated: "Perforated", punched: "Punched", band: "Glazing band",
+  jharokha: "Jharokha", colonnade: "Colonnade", chhatri: "Chhatri", cornice: "Cornice", breeze: "Breeze-block", greenwall: "Green wall", balcony: "Balcony",
+  hedge: "Hedge", grille: "Grille", glass: "Glass", solid: "Solid wall", terracotta: "Terracotta tile", acp: "ACP panel",
+  slate: "Stacked slate" };
+// A count too large to read as digits, in words: "120 quintillion".
+function bigWords(n) {
+  const names = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion", "septillion", "octillion"];
+  let i = 0;
+  while (n >= 1000 && i < names.length - 1) { n /= 1000; i++; }
+  return `${n >= 100 ? Math.round(n) : n.toFixed(n >= 10 ? 0 : 1)} ${names[i]}`.trim();
+}
+function exParse(id) {
+  if (!id || !id.startsWith("ex:")) return null;
+  const [core, tail = ""] = id.slice(3).split("~");
+  const p = core.split(".");
+  if (p.length === 7) p.push("none");
+  if (p.length !== 8) return null;
+  const d = Object.fromEntries(EX_PARTS.map((k, i) => [k, p[i]]));
+  d.planters = d.planters === "p";
+  for (const kv of tail.split(",")) {
+    const [k, v = ""] = kv.split(":");
+    if (EX_TINTS[k] && /^[0-9a-f]{6}$/i.test(v)) d[EX_TINTS[k]] = v.toLowerCase();
+    else if (EX_OPTS[k] && /^[a-z]+$/.test(v)) d[EX_OPTS[k]] = v;
+  }
+  return d;
+}
+// A design in a colour scheme's tints: only the surfaces the scheme names change.
+const EX_TINT_FIELDS = ["wall", "clad", "roof_tint", "metal", "frame", "door"];
+function exTint(id, tint) {
+  const p = exParse(id);
+  if (!p || !tint) return id;
+  for (const k of EX_TINT_FIELDS) if (tint[k]) p[k] = tint[k];
+  return exId(p);
+}
+const schemeTint = (sc) => sc && Object.fromEntries([["id", sc.id], ["name", sc.name],
+  ...[["wall", "wall"], ["clad", "clad"], ["roof_tint", "roof"], ["metal", "metal"], ["frame", "frame"], ["door", "door"]]
+    .map(([k, f]) => [k, String(sc[f] || "").replace("#", "").toLowerCase()])]);
+function exId(d) {
+  const core = "ex:" + EX_PARTS.map((k) => (k === "planters" ? (d.planters ? "p" : "n") : d[k])).join(".");
+  const t = [...Object.entries(EX_TINTS), ...Object.entries(EX_OPTS)].filter(([, f]) => d[f]).map(([k, f]) => `${k}:${d[f]}`).join(",");
+  return t ? `${core}~${t}` : core;
+}
+
 // The palette card: the recommended scheme first, the others a click away,
 // and a line where the client can say what colours they like in words.
 async function paletteCard(card, id, modelUrl) {
   const pal = S.palette;
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js"), import("./materials.js")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };
   const LABELS = { plaster: "Walls", trim: "Bands", clad: "Cladding", roof: "Roof", frame: "Frames", door: "Main door",
     living: "Living", master: "Master bed", bedroom: "Bedrooms", kitchen: "Kitchen", accent_wall: "Feature wall",
     floor_stone: "Floor", joinery: "Joinery", upholstery: "Fabric" };
+  const TINTS = ["wall", "clad", "roof_tint", "metal", "frame", "door"];
+  const front = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[
+    (S.plans[id]?.plan?.site?.road_directions || ["N"])[0]] || null;
+  const hx = (h) => String(h || "").replace("#", "").toLowerCase();
   let list = [];
   let designs = [];
-  let busy = false;
+  let grammar = null;
+  let loading = false, batch = 0, seq = 0, live = 0, timer = 0, lastTab = null, lastGroup = null;
+  // What the client said about the look, sent with every batch so each one
+  // follows the brief as well as the style; and what the server heard in it.
+  const cb = S.chatBrief || {};
+  const briefPrefs = [S.chatWords, cb.notes, (cb.styles || []).join(" "), cb.colours, pal.text].filter(Boolean).join(". ").slice(0, 1100);
+  let heard = [], planStyle = S.plans[id]?.plan?.style || "";
+  const styleName = (k) => grammar?.styles?.find((x) => x.id === k)?.name || "";
+  // pal.base is the chosen design as drawn; pal.tint the exterior colours laid
+  // over it (null: the design's own); pal.design what the model is built from.
+  const idx = () => Math.max(0, designs.findIndex((x) => x.id === pal.base));
+  const tinted = (did, tint = pal.tint) => exTint(did, tint);
+  const thumbUrl = (did) => {
+    const q = new URLSearchParams({ design: did, furniture: "false" });
+    if (pal.id) q.set("palette", pal.id);
+    return `${API}/plans/${id}/model.glb?${q}`;
+  };
+  // A design's colours: its card's own choice if one was made there (null:
+  // the design's own), otherwise whatever the Colours tab set for all.
+  const cardTint = (d) => (d && d.tint !== undefined ? d.tint : pal.tint);
+  // Whether the house's exterior is its own: claimed after each change lands.
+  let uniq = null;
+  const uniqBadge = () => {
+    if (!uniq || uniq.design !== pal.design) return null;
+    const u = el("span", `ex__uniq${uniq.unique ? "" : " is-shared"}`,
+      uniq.unique ? "Unique to your house" : "Another house has this exact look: change any detail to make it yours");
+    u.setAttribute("role", "status");
+    return u;
+  };
+  const claim = async (designId) => {
+    try {
+      const r = await fetch(`${API}/plans/${id}/exteriors/claim?design=${encodeURIComponent(designId)}`, { method: "POST" });
+      if (!r.ok || designId !== pal.design) return;
+      uniq = { design: designId, ...(await r.json()) };
+      const head = card.querySelector(".ex__title");
+      head?.querySelector(".ex__uniq")?.remove();
+      const u = uniqBadge();
+      if (head && u) head.append(u);
+    } catch { /* uniqueness is a courtesy; the design stands either way */ }
+  };
+  const rebuild = async () => {
+    if (!S.viewer || !designs.length) return;
+    pal.design = tinted(designs[idx()].id, cardTint(designs[idx()]));
+    const asked = pal.design;
+    live++; card.classList.add("is-live");
+    try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not rebuild the exterior (${e.message}).`); }
+    if (--live === 0) card.classList.remove("is-live");
+    if (asked === pal.design) claim(asked);
+  };
+  const choose = (did) => { pal.base = did; pal.notes = []; draw(); rebuild(); };
+  const merge = (xs) => {
+    const known = new Set(designs.map((d) => d.id));
+    const fresh = (xs || []).filter((d) => exParse(d.id) && !known.has(d.id));
+    designs.push(...fresh);
+    return fresh;
+  };
+  const loadMore = async (n = 12, style = pal.style || "") => {
+    if (loading) return [];
+    loading = true;
+    let fresh = [];
+    try {
+      const q = new URLSearchParams({ seed: `${Date.now().toString(36)}-${++batch}`, n: String(n) });
+      if (style) q.set("style", style);
+      if (briefPrefs) q.set("prefs", briefPrefs);
+      for (const d of designs.slice(-40)) q.append("avoid", d.id);
+      const r = await fetch(`${API}/plans/${id}/exteriors?${q}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const x = await r.json();
+      grammar = x.grammar || grammar;
+      heard = x.heard || heard;
+      planStyle = x.style || planStyle;
+      fresh = merge(x.designs.map((d) => ({ ...d, fam: style })));
+    } catch (e) { toast(`Could not generate more designs (${e.message}).`); }
+    loading = false;
+    return fresh;
+  };
   const fetchList = async () => {
     const q = new URLSearchParams(); if (pal.text) q.set("colours", pal.text);
     const r = await fetch(`${API}/plans/${id}/palettes${q.size ? `?${q}` : ""}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     list = d.schemes;
-    // Facades come from the exterior designer, composed for what the client said.
-    if (!designs.length) {
-      const cb = S.chatBrief || {};
-      const prefs = [cb.notes, (cb.styles || []).join(" "), cb.colours, pal.text].filter(Boolean).join(". ");
-      fetch(`${API}/plans/${id}/exteriors${prefs ? `?prefs=${encodeURIComponent(prefs.slice(0, 1100))}` : ""}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((x) => {
-          if (!x?.designs?.length) return;
-          designs = x.designs;
-          // The designer's first choice becomes what the model shows.
-          if (!pal.design && S.viewer) {
-            pal.design = designs[0].id;
-            S.viewer.load(modelUrl(), { keepView: true }).catch(() => {});
-          }
-          draw();
-        })
-        .catch(() => {});
-      designs = d.designs || [];
-    }
     pal.prefs = d.preferences;
   };
-  const apply = async (scheme) => {
-    if (busy || !S.viewer) return;
-    busy = true; card.classList.add("is-busy");
-    pal.id = scheme.id;
-    try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not recolour the model (${e.message}).`); }
-    busy = false; card.classList.remove("is-busy");
-    draw();
+  // The designer's set for what the client said, and a fresh batch beside it,
+  // so the gallery opens with plenty to choose from.
+  const start = async () => {
+    const agent = fetch(`${API}/plans/${id}/exteriors${briefPrefs ? `?prefs=${encodeURIComponent(briefPrefs)}` : ""}`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const settle = () => {
+      if (!designs.length) return draw();
+      // A design chosen elsewhere (a drawing sheet) leads the gallery rather than being lost.
+      if (pal.base && exParse(pal.base) && !designs.some((d) => d.id === pal.base)) {
+        designs.unshift({ id: pal.base, name: "Your current design", story: "The design the drawings show.", fam: "" });
+      }
+      if (!designs.some((d) => d.id === pal.base)) pal.base = designs[0].id;
+      draw();
+      if (tinted(designs[idx()].id) !== pal.design) rebuild();
+    };
+    // The grammar's batch is instant; the designer (a model call) can take a
+    // while, so its picks join at the front of the gallery when they arrive.
+    await loadMore(12);
+    if (designs.length) settle();
+    const x = await agent;
+    if (x?.designs?.length) {
+      grammar = x.grammar || grammar;
+      const lead = x.designs.filter((d) => exParse(d.id));
+      if (!designs.length) {
+        designs = lead;
+        return settle();
+      }
+      // The gallery is already on screen: the designer's picks join at the
+      // end, so nothing moves under the client's hand.
+      const shownIds = new Set(designs.map((d) => d.id));
+      designs.push(...lead.filter((d) => !shownIds.has(d.id)));
+      draw();
+    } else if (!designs.length) draw();
   };
-  const draw = () => {
+  // The whole-house scheme: interiors, frames and doors as well as the outside.
+  const apply = async (scheme) => {
+    if (!S.viewer) return;
+    pal.id = scheme.id;
+    draw();
+    live++; card.classList.add("is-live");
+    try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not recolour the model (${e.message}).`); }
+    if (--live === 0) card.classList.remove("is-live");
+  };
+
+  // Thumbnails render when their tile scrolls into view, latest first.
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) if (e.isIntersecting) { io.unobserve(e.target); e.target._load?.(); }
+  }, { rootMargin: "80px" });
+  const tile = ({ selected, url, label, title, strip, onPick }) => {
+    const b = el("button", "ex-tile"); b.type = "button";
+    b.setAttribute("aria-pressed", String(selected));
+    if (title) b.title = title;
+    const fig = el("span", "ex-tile__img is-loading");
+    const img = el("img"); img.alt = ""; img.decoding = "async";
+    img.addEventListener("load", () => fig.classList.remove("is-loading"));
+    fig.append(img);
+    b._load = () => thumb(url, front).then((src) => { if (src) img.src = src; else fig.classList.replace("is-loading", "is-failed"); });
+    io.observe(b);
+    const cap = el("span", "ex-tile__cap");
+    cap.append(el("span", "ex-tile__name", label));
+    if (strip) {
+      const st = el("span", "ex-tile__strip"); st.setAttribute("aria-hidden", "true");
+      for (const hex of strip) { const i = el("i"); i.style.background = hex; st.append(i); }
+      cap.append(st);
+    }
+    b.append(fig, cap);
+    b.addEventListener("click", onPick);
+    return b;
+  };
+  // The schemes a card offers: the design's own colours, then the five that
+  // suit its style best (its style's own first).
+  const cardSchemes = (d) => {
+    const all = grammar?.schemes || [];
+    const mine = grammar?.styles?.find((x) => x.id === (d.fam || planStyle))?.schemes || [];
+    return [null, ...[...all.filter((x) => mine.includes(x.id)), ...all.filter((x) => !mine.includes(x.id))].slice(0, 5)];
+  };
+  // A gallery card: the picture chooses the design; the dots under it
+  // recolour this card, and choose the design in those colours.
+  const designCard = (d, s) => {
+    const p = exParse(d.id) || {};
+    const wrap = el("div", "ex-card");
+    wrap.classList.toggle("is-on", d.id === pal.base);
+    const pick = tile({ selected: d.id === pal.base, url: thumbUrl(tinted(d.id, cardTint(d))), label: d.name, title: d.story,
+      onPick: () => choose(d.id) });
+    const dots = el("div", "ex-card__dots");
+    dots.setAttribute("role", "group"); dots.setAttribute("aria-label", `${d.name} colours`);
+    const now = cardTint(d)?.id ?? null;
+    const own = [p.wall ? `#${p.wall}` : s.exterior.plaster, s.exterior.clad, p.roof_tint ? `#${p.roof_tint}` : s.exterior.roof,
+      grammar?.accents?.[p.accent] || s.exterior.frame];
+    for (const sc of cardSchemes(d)) {
+      const b = el("button", "ex-card__dot"); b.type = "button";
+      const name = sc ? sc.name : "Its own colours";
+      b.title = name;
+      b.setAttribute("aria-label", `${d.name} in ${name}`);
+      b.setAttribute("aria-pressed", String((sc?.id ?? null) === now));
+      const [w, c, r, m] = sc ? [sc.wall, sc.clad, sc.roof, sc.metal] : own;
+      b.style.background = `conic-gradient(${w} 0 50%, ${c} 0 70%, ${r} 0 88%, ${m} 0)`;
+      b.addEventListener("click", (e) => {
+        d.tint = schemeTint(sc);
+        choose(d.id);
+        if (e.detail === 0) card.querySelector(`[aria-label="${d.name} in ${name}"]`)?.focus({ preventScroll: true });
+      });
+      dots.append(b);
+    }
+    wrap.append(pick, dots);
+    return wrap;
+  };
+  const skeleton = (panel, n = 6) => {
+    const grid = el("div", "ex-grid");
+    for (let i = 0; i < n; i++) {
+      const t = el("span", "ex-tile is-ghost");
+      t.append(el("span", "ex-tile__img is-loading"), el("span", "ex-tile__cap"));
+      grid.append(t);
+    }
+    panel.append(el("p", "ex__hint", "Composing exterior designs for this house…"), grid);
+  };
+
+  // A row of choices drawn as chips; `paint` may decorate each chip.
+  const chips = (title, options, current, pick, { paint, cls = "", disabled = () => false } = {}) => {
+    const box = el("div", "ex-group");
+    const head = el("span", "pal__rk", title);
+    head.id = `ex-g-${title.replace(/\W+/g, "-").toLowerCase()}`;
+    const row = el("div", `ex-chips ${cls}`);
+    row.setAttribute("role", "group"); row.setAttribute("aria-labelledby", head.id);
+    for (const [value, label] of options) {
+      const b = el("button", "ex-chip"); b.type = "button";
+      b.setAttribute("aria-pressed", String(value === current));
+      b.disabled = disabled(value);
+      if (paint) paint(b, value);
+      b.append(el("span", "ex-chip__t", label));
+      // A keyboard choice keeps the keyboard where it was across the redraw.
+      b.addEventListener("click", (e) => { lastGroup = e.detail === 0 ? head.id : null; pick(value, b); });
+      row.append(b);
+    }
+    box.append(head, row);
+    return box;
+  };
+
+  const designsPanel = (panel, s) => {
+    // House styles: each pulls its own batch, kept for when the client comes back.
+    const own = styleName(planStyle);
+    const styles = [["", own ? `For this house · ${own}` : "For this house"],
+      ...(grammar?.styles || []).filter((x) => x.id !== planStyle).map((x) => [x.id, x.name])];
+    const filt = chips("Style", styles, pal.style || "", async (v) => {
+      pal.style = v; draw();
+      if (v && !designs.some((d) => d.fam === v)) { await loadMore(12, v); draw(); }
+    }, { cls: "ex-chips--scroll" });
+    panel.append(filt);
+    // Say what the designs are drawn from: the style, and the brief's own words.
+    const from = pal.style ? styleName(pal.style) : own;
+    if (from || heard.length) {
+      panel.append(el("p", "ex__hint ex__from", [from && `${from} designs`, heard.length && `following your brief: ${heard.join(", ")}`]
+        .filter(Boolean).join(" · ")));
+    }
+    if (grammar?.combinations) {
+      panel.append(el("p", "ex__hint", `${bigWords(grammar.combinations)} possible exteriors. The one you settle on is kept for your house alone.`));
+    }
+    const shown = designs.filter((d) => !pal.style || d.fam === pal.style);
+    if (!shown.length) return skeleton(panel);
+    if (pal.tint) {
+      const note = el("p", "ex__hint");
+      const clr = el("button", "pal__clr", "use each design's own colours"); clr.type = "button";
+      clr.addEventListener("click", () => { pal.tint = null; draw(); rebuild(); });
+      note.append(`Shown in ${pal.tint.name} colours · `, clr);
+      panel.append(note);
+    }
+    const grid = el("div", "ex-grid");
+    // The end of the gallery (or of the phone's sideways strip): reaching it
+    // pulls the next batch.
+    const sentinel = el("span", "ex-sentinel"); sentinel.setAttribute("aria-hidden", "true");
+    grid.append(sentinel);
+    const add = (xs) => {
+      for (const d of xs) {
+        grid.insertBefore(designCard(d, s), sentinel);
+      }
+    };
+    add(shown);
+    panel.append(grid);
+    const more = el("button", "ghost-btn ex-more", "Generate 12 more designs"); more.type = "button";
+    const go = async () => {
+      if (loading) return;
+      more.disabled = true; more.textContent = "Designing…"; more.setAttribute("aria-busy", "true");
+      const fresh = await loadMore(12);
+      add(fresh);
+      more.disabled = false; more.textContent = "Generate 12 more designs"; more.removeAttribute("aria-busy");
+      const tab = card.querySelector("#ex-tab-designs"); if (tab) tab.textContent = `Designs ${designs.length}`;
+      const k = card.querySelector(".ex__title .pal__k"); if (k) k.textContent = `Exterior ${idx() + 1} of ${designs.length}`;
+    };
+    more.addEventListener("click", go);
+    panel.append(more);
+    // Up to a point on a desktop, where the button keeps going after that; a
+    // phone has no room for the button, so its strip just keeps coming.
+    const phone = matchMedia("(max-width: 720px)");
+    new IntersectionObserver(([e]) => { if (e.isIntersecting && (designs.length < 120 || phone.matches)) go(); }).observe(sentinel);
+  };
+
+  // Colours, one surface at a time: named paints, and any colour at all.
+  const SURFACES = [["wall", "Walls"], ["clad", "Cladding & stone"], ["roof_tint", "Roof"], ["metal", "Accent metal"],
+    ["frame", "Window frames"], ["door", "Main door"]];
+  const setTint = (f, hex, redraw = true) => {
+    const d = designs[idx()];
+    const p = exParse(d?.id) || {};
+    const base = cardTint(d) || Object.fromEntries(TINTS.map((k) => [k, p[k] || ""]));
+    pal.tint = { ...base, id: "custom", name: "Custom", [f]: hx(hex) };
+    if (d) delete d.tint;                 // the Colours tab now speaks for this design
+    clearTimeout(timer);
+    timer = setTimeout(rebuild, redraw ? 30 : 220);
+    if (redraw) draw();
+  };
+  const coloursPanel = (panel, s) => {
+    const d = designs[idx()];
+    if (!d) return skeleton(panel, 4);
+    const p = exParse(d.id) || {};
+    const ct = cardTint(d);               // this design's colours, wherever they were chosen
+    panel.append(el("p", "ex__hint", `${(grammar?.schemes || []).length} colour schemes for ${d.name}, then every surface on its own below.`));
+    const own = [p.wall ? `#${p.wall}` : s.exterior.plaster, s.exterior.clad, p.roof_tint ? `#${p.roof_tint}` : s.exterior.roof,
+      grammar?.accents?.[p.accent] || s.exterior.frame];
+    // The style's own schemes first, then every other.
+    const fam = d.fam || planStyle;
+    const mine = grammar?.styles?.find((x) => x.id === fam)?.schemes || [];
+    const all = grammar?.schemes || [];
+    const groups = [[mine.length ? `Suggested for ${styleName(fam)}` : "", [null, ...all.filter((x) => mine.includes(x.id))]],
+      [mine.length ? "More schemes" : "", all.filter((x) => !mine.includes(x.id))]];
+    for (const [heading, schemesIn] of groups) {
+      if (heading) panel.append(el("h3", "ex__h", heading));
+      const grid = el("div", "ex-grid");
+      for (const sc of schemesIn) {
+        const tint = schemeTint(sc);
+        grid.append(tile({
+          selected: (ct?.id ?? null) === (sc?.id ?? null), url: thumbUrl(tinted(d.id, tint)),
+          label: sc ? sc.name : "Design's own", strip: sc ? [sc.wall, sc.clad, sc.roof, sc.metal] : own,
+          onPick: () => { pal.tint = tint; delete d.tint; draw(); rebuild(); },
+        }));
+      }
+      panel.append(grid);
+    }
+    const fine = el("div", "ex-custom");
+    fine.append(el("h3", "ex__h", ct?.id === "custom" ? "Every surface · your own mix" : "Every surface"));
+    const fallback = { wall: own[0], clad: own[1], roof_tint: own[2], metal: own[3], frame: s.exterior.frame, door: s.exterior.door };
+    for (const [f, title] of SURFACES) {
+      const now = ct?.[f] || p[f] || "";
+      const row = el("div", "ex-paint");
+      const head = el("div", "ex-paint__head");
+      const named = (grammar?.paints?.[f] || []).find((x) => hx(x.hex) === now);
+      head.append(el("span", "pal__rk", title),
+        el("span", "ex-paint__now", now ? (named?.name || (ct?.[f] === now && ct.id !== "custom" ? ct.name : `#${now}`)) : "as designed"));
+      const sws = el("div", "ex-paint__sws");
+      sws.setAttribute("role", "group"); sws.setAttribute("aria-label", `${title} colours`);
+      for (const { name, hex } of grammar?.paints?.[f] || []) {
+        const b = el("button", "ex-dot"); b.type = "button";
+        b.style.background = hex; b.title = name; b.setAttribute("aria-label", `${title}: ${name}`);
+        b.setAttribute("aria-pressed", String(hx(hex) === now));
+        b.addEventListener("click", (e) => {
+          setTint(f, hex);
+          if (e.detail === 0) card.querySelector(`[aria-label="${title}: ${name}"]`)?.focus({ preventScroll: true });
+        });
+        sws.append(b);
+      }
+      const pick = el("label", "ex-dot ex-dot--any"); pick.title = `Any ${title.toLowerCase()} colour`;
+      const inp = el("input"); inp.type = "color"; inp.name = f;
+      const cur = now ? `#${now}` : fallback[f];
+      inp.value = /^#[0-9a-f]{6}$/i.test(cur || "") ? cur : "#cccccc";
+      inp.setAttribute("aria-label", `Any ${title.toLowerCase()} colour`);
+      inp.addEventListener("input", () => setTint(f, inp.value, false));
+      inp.addEventListener("change", () => setTint(f, inp.value));
+      pick.append(inp);
+      sws.append(pick);
+      row.append(head, sws);
+      fine.append(row);
+    }
+    if (ct) {
+      const r = el("button", "ghost-btn pal__reset", "Back to the design's own colours"); r.type = "button";
+      r.addEventListener("click", () => { pal.tint = null; delete d.tint; draw(); rebuild(); });
+      fine.append(r);
+    }
+    panel.append(fine);
+    // The whole-house palette lives here too, folded away: it colours the
+    // inside as well, and the exterior colours above sit over it.
+    const house = el("details", "ex-house");
+    house.open = !!pal.open;
+    house.addEventListener("toggle", () => { pal.open = house.open; });
+    house.append(el("summary", null, `Whole-house palette · ${s.name}`));
     const i = Math.max(0, list.findIndex((x) => x.id === pal.id));
-    const s = list[i];
-    if (!s) return;
-    card.hidden = false; card.innerHTML = "";
-    card.classList.toggle("is-min", !pal.open);
-    // Minimised: the name, one strip of colour and the arrows. Open: the
-    // story, both swatch rows, the reasons and the colours field.
-    const head = el("div", "pal__head");
-    const toggle = el("button", "pal__toggle"); toggle.type = "button";
-    toggle.setAttribute("aria-expanded", String(!!pal.open));
-    toggle.title = pal.open ? "Minimise" : "Show palette details";
-    toggle.append(el("span", "pal__k", i === 0 ? "Recommended" : `${i + 1} / ${list.length}`), el("b", "pal__name", s.name));
+    const nav = el("div", "pal__head");
     const strip = el("span", "pal__strip");
     for (const hex of [s.exterior.plaster, s.exterior.clad, s.exterior.roof, s.interior.living, s.interior.master, s.interior.accent_wall]) {
       const c = el("i"); c.style.background = hex; strip.append(c);
     }
-    toggle.append(strip);
-    toggle.addEventListener("click", () => { pal.open = !pal.open; draw(); });
-    const nav = el("div", "pal__nav");
-    const prev = el("button", "ghost-btn", "‹"); prev.type = "button"; prev.title = "Previous palette"; prev.setAttribute("aria-label", "Previous palette");
-    const next = el("button", "ghost-btn", "›"); next.type = "button"; next.title = "Next palette"; next.setAttribute("aria-label", "Next palette");
-    prev.addEventListener("click", () => apply(list[(i - 1 + list.length) % list.length]));
-    next.addEventListener("click", () => apply(list[(i + 1) % list.length]));
-    nav.append(prev, next);
-    head.append(toggle, nav);
-    card.append(head);
-    // The facade language, cycled the same way.
-    if (designs.length) {
-      const di = Math.max(0, designs.findIndex((x) => x.id === pal.design));
-      const row = el("div", "pal__head pal__design");
-      const lab = el("span", "pal__toggle");
-      lab.append(el("span", "pal__k", `Facade ${di + 1} / ${designs.length}`), el("b", "pal__name", designs[di].name));
-      lab.title = designs[di].story;
-      const dn = el("div", "pal__nav");
-      for (const [t, step] of [["‹", -1], ["›", 1]]) {
-        const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", step < 0 ? "Previous facade" : "Next facade");
-        bt.addEventListener("click", async () => {
-          if (busy || !S.viewer) return;
-          pal.design = designs[(di + step + designs.length) % designs.length].id;
-          busy = true; card.classList.add("is-busy");
-          try { await S.viewer.load(modelUrl(), { keepView: true }); } catch (e) { toast(`Could not rebuild the facade (${e.message}).`); }
-          busy = false; card.classList.remove("is-busy"); draw();
-        });
-        dn.append(bt);
-      }
-      row.append(lab, dn);
-      card.append(row);
+    const lab = el("span", "pal__toggle");
+    lab.append(el("span", "pal__k", i === 0 ? "Recommended" : `${i + 1} / ${list.length}`), el("b", "pal__name", s.name), strip);
+    const arrows = el("div", "pal__nav");
+    for (const [t, step, name] of [["‹", -1, "Previous palette"], ["›", 1, "Next palette"]]) {
+      const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", name);
+      bt.addEventListener("click", () => apply(list[(i + step + list.length) % list.length]));
+      arrows.append(bt);
     }
-    if (!pal.open) return;
-    card.append(el("p", "pal__story", s.story));
+    nav.append(lab, arrows);
+    house.append(nav, el("p", "pal__story", s.story));
     for (const [title, group] of [["Exterior", s.exterior], ["Interior", s.interior]]) {
       const row = el("div", "pal__row");
       row.append(el("span", "pal__rk", title));
       const sws = el("div", "pal__sws");
       for (const [k, hex] of Object.entries(group)) sws.append(swatch(hex, LABELS[k] || k));
       row.append(sws);
-      card.append(row);
+      house.append(row);
     }
-    if (s.reasons?.length) card.append(el("p", "pal__why", s.reasons.join(" · ")));
     const form = el("form", "pal__form");
     const input = el("input", "pal__input"); input.type = "text"; input.name = "colours"; input.maxLength = 600;
     input.placeholder = "Colours you like… e.g. sage bedrooms, navy front door, no pink";
     input.value = pal.text || "";
     input.setAttribute("aria-label", "Colours you like, in your own words");
-    const go = el("button", "ghost-btn", "Apply"); go.type = "submit";
-    form.append(input, go);
+    const goB = el("button", "ghost-btn", "Apply"); goB.type = "submit";
+    form.append(input, goB);
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       pal.text = input.value.trim();
-      pal.id = null;
-      try { await fetchList(); pal.id = list[0]?.id; await apply(list[0]); } catch (err) { toast(`Could not read those colours (${err.message}).`); }
+      try { await fetchList(); await apply(list[0]); } catch (err) { toast(`Could not read those colours (${err.message}).`); }
     });
-    card.append(form);
-    const pr = pal.prefs;
-    if (pr && (pr.likes?.length || pr.avoids?.length || pr.mentions?.length)) {
-      const bits = [];
-      if (pr.mentions?.length) bits.push(pr.mentions.join(", "));
-      if (pr.likes?.length) bits.push(`likes ${pr.likes.join(", ")}`);
-      if (pr.avoids?.length) bits.push(`avoids ${pr.avoids.join(", ")}`);
-      card.append(el("p", "pal__heard", `Heard: ${bits.join(" · ")}`));
+    house.append(form);
+    panel.append(house);
+  };
+
+  // A customised design replaces the one it started from (kept for Reset);
+  // each change is fitted to the plan by the server, then the model reloads
+  // with the camera where it is. Rapid changes collapse into the last one.
+  const edit = (di, patch) => {
+    const d = designs[di];
+    const wanted = exId({ ...(exParse(d.id) || {}), ...patch });
+    designs[di] = { ...d, id: wanted, custom: true, orig: d.orig || d };
+    pal.base = wanted;
+    clearTimeout(timer);
+    timer = setTimeout(() => commit(di, wanted, Object.keys(patch)[0]), 60);
+  };
+  const commit = async (di, wanted, focusKey) => {
+    const mine = ++seq;
+    try {
+      const r = await fetch(`${API}/plans/${id}/exteriors/fit?design=${encodeURIComponent(wanted)}`);
+      if (r.ok) {
+        const x = await r.json();
+        if (mine !== seq) return;
+        designs[di] = { ...x.design, custom: true, orig: designs[di].orig };
+        pal.base = x.design.id;
+        pal.notes = x.notes;
+      }
+    } catch { /* the model endpoint fits the design itself */ }
+    if (mine !== seq) return;
+    const scroll = card.querySelector(".ex-panel")?.scrollTop;
+    draw();
+    const panel = card.querySelector(".ex-panel"); if (panel && scroll != null) panel.scrollTop = scroll;
+    if (lastGroup) card.querySelector(`[aria-labelledby="${lastGroup}"] [aria-pressed="true"]`)?.focus({ preventScroll: true });
+    rebuild();
+  };
+  // Roof silhouettes, drawn small, so the choice reads before the label.
+  const ROOF_ICON = { flat: "M5 20V10h14v10M4 10V8h16v2", slab: "M5 20v-9h14v9M2 10.5h20", mono: "M5 20v-8l14-4v12M3 12.6l18-5.2",
+    butterfly: "M5 20V9l7 3 7-3v11M3 8.4l9 3.8 9-3.8", hip: "M5 20v-8h14v8M3 12l5-5h8l5 5z", gable: "M5 20v-9h14v9M3 11.5L12 4l9 7.5" };
+  const FINISH = { plaster: ["plaster", "#e9e2d4"], stone: ["stone", "#9a8a76"], brick: ["brick", "#9a5238"], concrete: ["concrete", "#a9a7a1"],
+    timber: ["timber", "#8a5a34"], metal: ["seam", "#3a3b3d"], terracotta: ["tiles", "#b0613f"], acp: ["acpanel", "#8f9296"],
+    slate: ["slate", "#56585b"] };
+  const PANEL = { none: ["plaster", "#e9e2d4"], stone: FINISH.stone, timber: FINISH.timber, slate: FINISH.slate,
+    terracotta: FINISH.terracotta, acp: FINISH.acp, brick: FINISH.brick };
+  const DRIVE = { stone: ["paving", "#a29a8c"], concrete: ["concrete", "#a9a7a1"], gravel: ["gravel", "#b7aa94"], grass: ["grass", "#6f8a4f"] };
+  // Every choice the customise tab offers, grouped the way a client thinks
+  // about a house: the top, the walls, the openings, the way in, the plot.
+  // An option's first value is the house's own, so the id leaves it out.
+  const OPTIONS = {
+    roof: ["Roof", null], solar: ["Solar panels", [["off", "None"], ["on", "On the roof"]]],
+    feature: ["Signature element", null],
+    base: ["Ground floor", null], upper: ["Upper floors", null],
+    windows: ["Glazing", null], shade: ["Window shades", [["slim", "Slim chajja"], ["deep", "Deep chajja"], ["box", "Box frames"], ["none", "None"]]],
+    screen: ["Sun screen", null],
+    canopy: ["Entrance canopy", [["slab", "Concrete"], ["glass", "Glass"], ["pergola", "Pergola"], ["none", "None"]]],
+    railing: ["Balcony railings", [["glass", "Glass"], ["metal", "Metal"], ["solid", "Solid wall"]]],
+    boundary: ["Boundary wall", [["plaster", "Plaster"], ["stone", "Stone"], ["brick", "Brick"], ["hedge", "Hedge"], ["grille", "Grille"]]],
+    gate: ["Gate", [["none", "Open"], ["sliding", "Steel sliding"], ["timber", "Timber"]]],
+    paving: ["Driveway", [["stone", "Stone pavers"], ["concrete", "Concrete"], ["gravel", "Gravel"], ["grass", "Grass pavers"]]],
+    garden: ["Garden", [["standard", "Standard"], ["lush", "Lush"], ["minimal", "Minimal"], ["none", "Paved"]]],
+    planters: ["Planters", [[false, "None"], [true, "Along the front"]]],
+    panel: ["Feature panel", [["none", "None"], ["stone", "Stone"], ["timber", "Wood-look"], ["slate", "Slate"],
+      ["terracotta", "Terracotta"], ["acp", "ACP"], ["brick", "Brick"]]],
+    parapet: ["Parapet", [["plain", "Plain"], ["glass", "Glass strip"], ["grooved", "Grooved"], ["screen", "CNC screen"], ["stepped", "Stepped"]]],
+    deck: ["Roof terrace", [["none", "Open"], ["pergola", "Pergola"], ["garden", "Roof garden"]]],
+    lights: ["Facade lighting", [["none", "None"], ["washers", "Wall washers"], ["strips", "LED strips"]]],
+    accent: ["Accent", null],
+  };
+  const SECTIONS = [["form", "Roof & form", ["roof", "parapet", "deck", "solar", "feature"]], ["walls", "Walls", ["base", "upper", "panel"]],
+    ["openings", "Windows & shade", ["windows", "shade", "screen"]], ["entry", "Entrance, balconies & lights", ["canopy", "railing", "lights"]],
+    ["site", "Gate, drive & garden", ["boundary", "gate", "paving", "garden", "planters"]], ["accent", "Accent finish", ["accent"]]];
+  const customiser = (panel, di) => {
+    const d = designs[di];
+    const now = d && exParse(d.id);
+    if (!now || !grammar) return skeleton(panel, 2);
+    const one = (S.plans[id]?.plan?.levels?.length || 1) <= 1;
+    const flatRoof = now.roof === "flat" || now.roof === "slab";
+    const choices = (key) => OPTIONS[key][1]
+      || (key === "accent" ? Object.keys(grammar.accents || {}).map((k) => [k, k[0].toUpperCase() + k.slice(1)])
+        : (grammar[key] || []).map((v) => [v, EX_NICE[v] || v]));
+    // An option left out of the id is its first value.
+    const value = (key) => (now[key] === undefined || now[key] === "" ? choices(key)[0][0] : now[key]);
+    const label = (key) => (choices(key).find(([v]) => v === value(key)) || [, ""])[1];
+    const icon = (b, v) => {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add("ex-chip__icon");
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", ROOF_ICON[v] || ""); svg.append(path); b.append(svg);
+    };
+    const tex = (map, tintOf) => (b, v) => {
+      const [kind, hex] = map[v] || Object.values(map)[0];
+      const t = tintOf?.(v);
+      const c = texSwatch(kind, t ? `#${t}` : hex, 44); c.className = "ex-chip__sw"; c.setAttribute("aria-hidden", "true");
+      b.append(c);
+    };
+    const wallTint = (v) => (v === "plaster" ? (pal.tint?.wall || now.wall) : (pal.tint?.clad || now.clad));
+    const DECOR = {
+      roof: { paint: icon, cls: "ex-chips--icons" },
+      base: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw" },
+      upper: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw", disabled: (v) => one && v !== "plaster" },
+      paving: { paint: tex(DRIVE), cls: "ex-chips--sw ex-chips--4" },
+      feature: { disabled: (v) => one && (v === "jharokha" || v === "balcony") },
+      solar: { disabled: (v) => v === "on" && !flatRoof },
+      panel: { paint: tex(PANEL), cls: "ex-chips--sw ex-chips--4" },
+      parapet: { disabled: (v) => v !== "plain" && now.roof !== "flat" },
+      deck: { disabled: (v) => v !== "none" && now.roof !== "flat" },
+      accent: { cls: "ex-chips--dots", paint: (b, v) => { const i = el("i", "ex-chip__dot"); i.style.background = grammar.accents[v]; b.prepend(i); } },
+    };
+    const pick = (key) => (v) => {
+      if (key === "accent" && pal.tint?.metal) pal.tint = { ...pal.tint, id: "custom", name: "Custom", metal: "" };
+      // The house's own value stays out of the id, keeping it short.
+      const first = choices(key)[0][0];
+      const store = OPTIONS[key][1] && key !== "planters" && v === first ? "" : v;
+      edit(di, { [key]: store });
+    };
+    pal.sec ||= { form: true };
+    for (const [sid, title, keys] of SECTIONS) {
+      const sec = el("details", "ex-sec");
+      sec.open = !!pal.sec[sid];
+      sec.addEventListener("toggle", () => { pal.sec[sid] = sec.open; });
+      const sum = el("summary", "ex-sec__sum");
+      // The summary names what is there: an absent solar array or signature says nothing.
+      const said = keys.map((k) => {
+        const v = value(k);
+        if (k === "gate") return v === "none" ? "Open gate" : label(k);
+        if (k === "planters") return v ? "Planters" : "";
+        if (k === "solar") return v === "on" ? "Solar panels" : "";
+        if (k === "boundary") return `${label(k)} boundary`;
+        if (k === "canopy") return v === "none" ? "" : `${label(k)} canopy`;
+        if (k === "railing") return `${label(k)} railings`;
+        if (k === "panel") return v === "none" ? "" : `${label(k)} panel`;
+        if (k === "parapet") return v === "plain" ? "" : `${label(k)} parapet`;
+        return v === "none" || v === "off" ? "" : label(k);
+      }).filter(Boolean);
+      sum.append(el("span", "ex-sec__t", title), el("span", "ex-sec__now", said.join(" · ") || "Plain"));
+      const body = el("div", "ex-sec__body");
+      for (const key of keys) {
+        const g = chips(OPTIONS[key][0], choices(key), value(key), pick(key), DECOR[key] || {});
+        if (key === "solar" && !flatRoof) g.append(el("p", "ex__hint", "Solar panels need a flat or slab roof."));
+        if ((key === "parapet" || key === "deck") && now.roof !== "flat") g.append(el("p", "ex__hint", "Needs a flat parapet roof."));
+        body.append(g);
+      }
+      sec.append(sum, body);
+      panel.append(sec);
     }
+    const notes = el("p", "pal__why pal__notes", (pal.notes || []).join(" ")); notes.setAttribute("aria-live", "polite");
+    panel.append(notes);
+    if (d.orig) {
+      const r = el("button", "ghost-btn pal__reset", `Reset to ${d.orig.name}`); r.type = "button";
+      r.addEventListener("click", () => { designs[di] = d.orig; choose(d.orig.id); });
+      panel.append(r);
+    }
+  };
+
+  const TABS = [["designs", "Designs"], ["colours", "Colours"], ["customise", "Customise"]];
+  const draw = () => {
+    const s = list[Math.max(0, list.findIndex((x) => x.id === pal.id))];
+    if (!s) return;
+    const keep = card.querySelector(".ex-panel")?.scrollTop || 0;
+    card.hidden = false; card.innerHTML = "";
+    card.className = `pal ex${pal.min ? " is-min" : ""}${live ? " is-live" : ""}`;
+    pal.tab ||= "designs";
+    const di = idx(), d = designs[di];
+    const head = el("div", "ex__head");
+    const title = el("div", "ex__title");
+    title.append(el("span", "pal__k", d ? `Exterior ${di + 1} of ${designs.length}${d.custom ? " · customised" : ""}` : "Exterior designs"),
+      el("b", "pal__name", d ? d.name : "Composing…"));
+    if (d?.story) title.title = d.story;
+    const badge = d && uniqBadge();
+    if (badge) title.append(badge);
+    const nav = el("div", "pal__nav");
+    for (const [t, step, name] of [["‹", -1, "Previous design"], ["›", 1, "Next design"]]) {
+      const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", name); bt.disabled = !d;
+      bt.addEventListener("click", () => choose(designs[(di + step + designs.length) % designs.length].id));
+      nav.append(bt);
+    }
+    const min = el("button", "ghost-btn", pal.min ? "+" : "–"); min.type = "button";
+    min.setAttribute("aria-label", pal.min ? "Show exterior designs" : "Minimise exterior designs");
+    min.setAttribute("aria-expanded", String(!pal.min));
+    min.addEventListener("click", () => { pal.min = !pal.min; draw(); });
+    nav.append(min);
+    head.append(title, nav);
+    card.append(head);
+    if (pal.min) return;
+    if (d?.story) card.append(el("p", "pal__story ex__story", d.story));
+    const tabs = el("div", "ex__tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Exterior");
+    TABS.forEach(([k, label], n) => {
+      const b = el("button", "ex__tab", k === "designs" && designs.length ? `${label} ${designs.length}` : label);
+      b.type = "button"; b.id = `ex-tab-${k}`; b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(pal.tab === k)); b.setAttribute("aria-controls", "ex-panel");
+      b.tabIndex = pal.tab === k ? 0 : -1;
+      b.addEventListener("click", (e) => { pal.tab = k; draw(); if (e.detail === 0) card.querySelector(`#ex-tab-${k}`)?.focus(); });
+      b.addEventListener("keydown", (e) => {
+        const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        const nk = TABS[(n + step + TABS.length) % TABS.length][0];
+        pal.tab = nk; draw(); card.querySelector(`#ex-tab-${nk}`)?.focus();
+      });
+      tabs.append(b);
+    });
+    card.append(tabs);
+    const panel = el("div", "ex-panel"); panel.id = "ex-panel";
+    panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", `ex-tab-${pal.tab}`);
+    if (pal.tab === "colours") coloursPanel(panel, s);
+    else if (pal.tab === "customise") customiser(panel, di);
+    else designsPanel(panel, s);
+    card.append(panel);
+    if (lastTab === pal.tab) panel.scrollTop = keep;
+    lastTab = pal.tab;
+    const on = panel.querySelector(".ex-chips--scroll [aria-pressed='true']");
+    if (on) on.parentElement.scrollLeft = on.offsetLeft - on.parentElement.offsetLeft - 8;
   };
   try {
     await fetchList();
     if (!pal.id || !list.some((x) => x.id === pal.id)) pal.id = list[0]?.id;
     draw();
+    start();
   } catch { card.hidden = true; }
 }
 

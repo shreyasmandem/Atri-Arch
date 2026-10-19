@@ -449,3 +449,23 @@ def test_a_plan_the_client_holds_can_be_put_back_after_a_restart(client, designe
 
 def test_restoring_something_that_is_not_a_plan_is_a_422(client):
     assert client.post("/api/v1/plans/restore", json={"plan": {"hello": 1}}).status_code == 422
+
+
+def test_exterior_batches_and_customised_fit(client, designed):
+    pid = designed["winner_plan_id"]
+    first = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "a", "n": 8}).json()
+    assert len(first["designs"]) == 8 and "balcony" in first["grammar"]["feature"]
+    worded = client.get(f"/api/v1/plans/{pid}/exteriors",
+                        params={"seed": "w", "n": 4, "style": "biophilic", "prefs": "wooden, lots of greenery"}).json()
+    assert worded["heard"] == ["wooden", "greenery"] and len(worded["designs"]) == 4
+    ids = [d["id"] for d in first["designs"]]
+    more = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "b", "n": 8, "avoid": ids}).json()
+    assert not set(ids) & {d["id"] for d in more["designs"]}
+    fit = client.get(f"/api/v1/plans/{pid}/exteriors/fit",
+                     params={"design": "ex:hip.stone.timber.none.punched.n.teak.chhatri~w:efe9dc"}).json()
+    assert fit["design"]["roof"] == "flat" and fit["notes"] and fit["design"]["colours"]["wall"] == "#efe9dc"
+    assert client.get(f"/api/v1/plans/{pid}/exteriors/fit", params={"design": "nope"}).status_code == 422
+    g = client.get(f"/api/v1/plans/{pid}/exteriors/grammar").json()
+    assert g["default"].startswith("ex:") and g["grammar"]["schemes"]
+    glb = client.get(f"/api/v1/plans/{pid}/model.glb", params={"design": fit["design"]["id"], "furniture": "false"})
+    assert glb.status_code == 200 and glb.content[:4] == b"glTF"

@@ -8,11 +8,12 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { dress, skyTexture } from "./materials.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // A neutral "photo studio" environment, generated in code so nothing extra
 // has to be downloaded: a warm ceiling glow, a cool sky side, a dark floor.
-function studioEnvironment(renderer) {
+export function studioEnvironment(renderer) {
   const env = new THREE.Scene();
   const room = new THREE.Mesh(new THREE.BoxGeometry(20, 12, 20),
     new THREE.MeshBasicMaterial({ color: 0x8a8580, side: THREE.BackSide }));
@@ -37,9 +38,31 @@ function studioEnvironment(renderer) {
   return tex;
 }
 
+// Free a replaced model's GPU buffers: a customised facade reloads often.
+function disposeTree(root) {
+  root.traverse((o) => {
+    o.geometry?.dispose();
+    for (const m of [].concat(o.material || [])) m.dispose?.();
+  });
+}
+
+// The ground beyond the plot, fading to the horizon instead of ending in an edge.
+function fadeMap() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  const r = g.createRadialGradient(64, 64, 20, 64, 64, 64);
+  r.addColorStop(0, "#fff"); r.addColorStop(0.7, "#bbb"); r.addColorStop(1, "#000");
+  g.fillStyle = r; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
 export class Viewer3D {
-  constructor(host) {
+  // `daylight`: the exterior under a sky on open ground, as a house is seen;
+  // without it, the dark studio table the drawings and hero use.
+  constructor(host, { daylight = false } = {}) {
     this.host = host;
+    this.daylight = daylight;
     const r = (this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }));
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     r.outputColorSpace = THREE.SRGBColorSpace;
@@ -54,6 +77,8 @@ export class Viewer3D {
     // A soft studio environment for reflections: glass, metal and polished
     // stone need something to reflect, or they read as flat colour.
     scene.environment = studioEnvironment(r);
+    this.sky = daylight ? skyTexture() : null;
+    scene.background = this.sky;
     r.toneMappingExposure = 1.0;
     this.hemi = new THREE.HemisphereLight(0xf4ead8, 0x221c16, 0.7);
     scene.add(this.hemi);
@@ -92,11 +117,15 @@ export class Viewer3D {
   }
 
   async load(url, { keepView = false, front = null, zoom = 1, lift = 0.3 } = {}) {
+    // Live edits fire loads back to back: only the latest may land, or a slow
+    // earlier model could replace a newer one.
+    const seq = (this.loadSeq = (this.loadSeq || 0) + 1);
     const gltf = await new GLTFLoader().loadAsync(url);
+    if (seq !== this.loadSeq) return null;
     keepView = keepView && !!this.model;
     this.lamps = [];
     this.panes = [];
-    if (this.model) this.scene.remove(this.model);
+    if (this.model) { this.scene.remove(this.model); disposeTree(this.model); }
     const m = (this.model = gltf.scene);
     let tris = 0;
     m.traverse((o) => {
@@ -111,6 +140,7 @@ export class Viewer3D {
           if (mat.name === "glass") this.panes.push(mat);
         }
         if (mat && mat.emissive && mat.emissive.getHex() !== 0) { o.castShadow = false; mat.emissiveIntensity = 0; this.lamps.push(mat); }
+        dress(mat);
       }
     });
     this.scene.add(m);
@@ -123,12 +153,14 @@ export class Viewer3D {
     m.position.sub(new THREE.Vector3(centre.x, box.min.y, centre.z));
     const span = Math.max(size.x, size.z, size.y * 1.5);
 
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(span * 1.6, 64),
-      new THREE.MeshStandardMaterial({ color: 0x141312, roughness: 1 }));
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(span * (this.daylight ? 3 : 1.6), 64),
+      this.daylight
+        ? new THREE.MeshStandardMaterial({ color: 0x8f8877, roughness: 1, transparent: true, alphaMap: (this.fade ||= fadeMap()) })
+        : new THREE.MeshStandardMaterial({ color: 0x141312, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.002;
     ground.receiveShadow = true;
-    if (this.ground) this.scene.remove(this.ground);
+    if (this.ground) { this.scene.remove(this.ground); disposeTree(this.ground); }
     this.ground = ground;
     this.scene.add(ground);
 
@@ -181,6 +213,14 @@ export class Viewer3D {
       m.opacity = night ? 0.85 : 0.32;
     }
     this.renderer.setClearColor(night ? 0x07080c : 0x0b0a09, 1);
+    // Daylight outside: the sky, open ground and a sky-tinted fill. Inside,
+    // at night and for Vastu the studio dark reads the rooms better.
+    const day = this.daylight && mode === "exterior";
+    this.scene.background = day ? this.sky : null;
+    if (this.ground) this.ground.material.opacity = day || !this.daylight ? 1 : 0;
+    this.hemi.color.setHex(day ? 0xdde6ee : 0xf4ead8);
+    this.hemi.groundColor.setHex(day ? 0x6b5f4f : 0x221c16);
+    if (day) this.hemi.intensity = 0.95;
     this.mode = mode;
     this.modeLevel = level;
     return { levels: top + 1 };

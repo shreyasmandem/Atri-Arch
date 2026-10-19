@@ -121,6 +121,17 @@ class Palette:
             interior = None
         self.roof_kind: str = ext["roof"]
         self.pergola: bool = bool(ext.get("pergola"))
+        # Set by the exterior design: the boundary wall and balustrade kinds.
+        self.boundary: str = ""
+        self.railing: str = ""
+        self.shade: str = ""
+        self.canopy: str = ""
+        self.gate: str = ""
+        self.garden: str = ""
+        self.solar: bool = False
+        self.parapet: str = ""
+        self.deck: str = ""
+        self.lights: str = ""
         joinery = _hex(interior.joinery, (0.45, 0.32, 0.22)) if interior else (0.45, 0.32, 0.22)
         uph = _hex(interior.upholstery, (0.72, 0.68, 0.62)) if interior else (0.72, 0.68, 0.62)
         accent = _hex(interior.accent, (0.36, 0.42, 0.40)) if interior else (0.36, 0.42, 0.40)
@@ -175,6 +186,16 @@ class Palette:
             "ex_metal": Material("dark_metal", (0.16, 0.16, 0.17), 0.45, 0.6),
             "ex_glassband": Material("glazing_band", (0.10, 0.12, 0.14), 0.08, 0.4),
             "ex_accent": Material("exterior_accent", (0.54, 0.42, 0.30), 0.5, 0.3),
+            "ex_roof": Material("roof_metal", (0.16, 0.16, 0.17), 0.45, 0.6),
+            # Matte enough not to mirror the sky white from above.
+            "solar": Material("solar_panel", (0.09, 0.13, 0.22), 0.45, 0.05),
+            "solar_frame": Material("solar_frame", (0.72, 0.73, 0.74), 0.35, 0.8),
+            "ex_terracotta": Material("terracotta_tile", (0.69, 0.38, 0.26), 0.85),
+            "ex_acp": Material("acp_panel", (0.56, 0.57, 0.58), 0.35, 0.5),
+            "ex_slate": Material("slate_stack", (0.31, 0.32, 0.33), 0.8),
+            "ex_panel": Material("panel_stone_cladding", ext["clad"], 0.85),
+            # Warm facade lighting: a lamp, so it glows in the night view.
+            "facade_light": Material("facade_light", (0.95, 0.93, 0.88), 0.4, 0.0, 1.0, (1.0, 0.8, 0.52)),
         }
         self.scheme = scheme
         if scheme is not None:
@@ -583,8 +604,20 @@ def _window(b: Builder, node: str, o: Opening, mid: Vec2, yaw: float, base: floa
         # Stone sill and a concrete sunshade, both projecting outward.
         sx, sz = cx + out.x * (t / 2 + 0.03), cz - out.y * (t / 2 + 0.03)
         b.box(node, "sill", (sx, y0 - 0.025, sz), (w + 0.12, 0.05, 0.12), yaw)
-        hx, hz = cx + out.x * (t / 2 + CHAJJA_DEPTH / 2), cz - out.y * (t / 2 + CHAJJA_DEPTH / 2)
-        b.box(node, "slab", (hx, base + head + 0.12, hz), (w + 0.3, 0.075, CHAJJA_DEPTH), yaw)
+        shade = getattr(b.p, "shade", "") or "slim"
+        if shade == "box":
+            # A projecting box frame round the opening, in the accent.
+            d = 0.38
+            px, pz = cx + out.x * (t / 2 + d / 2), cz - out.y * (t / 2 + d / 2)
+            b.box(node, "ex_accent", (px, y0 + h + 0.06, pz), (w + 0.24, 0.12, d), yaw)
+            b.box(node, "ex_accent", (px, y0 - 0.06, pz), (w + 0.24, 0.12, d), yaw)
+            for u in (-w / 2 - 0.06, w / 2 + 0.06):
+                x, z = off(u)
+                b.box(node, "ex_accent", (x + out.x * (t / 2 + d / 2), y0 + h / 2, z - out.y * (t / 2 + d / 2)), (0.12, h + 0.24, d), yaw)
+        elif shade != "none":
+            depth = 0.9 if shade == "deep" else CHAJJA_DEPTH
+            hx, hz = cx + out.x * (t / 2 + depth / 2), cz - out.y * (t / 2 + depth / 2)
+            b.box(node, "slab", (hx, base + head + 0.12, hz), (w + (0.6 if shade == "deep" else 0.3), 0.1 if shade == "deep" else 0.075, depth), yaw)
 
 
 def _door(b: Builder, node: str, o: Opening, mid: Vec2, yaw: float, base: float, head: float,
@@ -619,9 +652,30 @@ def _entrance(b: Builder, plan: FloorPlan, mid: Vec2, out: Vec2, width: float, b
         depth = 0.32 * (k + 1)
         c = mid + out * (0.15 + depth / 2)
         b.box("site", "plinth", (c.x, rise * (steps - k) / 2, -c.y), (width + 1.2, rise * (steps - k), depth), yaw)
+    kind = getattr(b.p, "canopy", "") or "slab"
+    if kind == "none":
+        return
     cdepth = 1.4
     c = mid + out * (cdepth / 2)
-    b.box("level_0/facade", "slab", (c.x, base + head + 0.25, -c.y), (width + 1.6, 0.12, cdepth), yaw)
+    y = base + head + 0.25
+    if kind == "glass":
+        # A glass canopy on two steel brackets.
+        b.box("level_0/facade", "rail_glass", (c.x, y, -c.y), (width + 1.4, 0.03, cdepth), yaw)
+        for s in (-1, 1):
+            q = c + Vec2(math.cos(yaw), math.sin(yaw)) * (s * (width / 2 + 0.4))
+            b.box("level_0/facade", "rail_metal", (q.x, y - 0.06, -q.y), (0.05, 0.1, cdepth), yaw)
+        return
+    if kind == "pergola":
+        # Timber rafters on two posts: shade with the sky through it.
+        along = Vec2(math.cos(yaw), math.sin(yaw))
+        for k in range(int((width + 1.6) / 0.3) + 1):
+            q = c + along * (-(width + 1.6) / 2 + k * 0.3)
+            b.box("level_0/facade", "timber", (q.x, y, -q.y), (0.06, 0.16, cdepth + 0.3), yaw)
+        for s in (-1, 1):
+            q = mid + out * (cdepth - 0.1) + along * (s * (width / 2 + 0.6))
+            b.box("level_0/facade", "timber", (q.x, PLINTH / 2 + y / 2 - 0.05, -q.y), (0.14, y - PLINTH / 2, 0.14), yaw)
+        return
+    b.box("level_0/facade", "slab", (c.x, y, -c.y), (width + 1.6, 0.12, cdepth), yaw)
 
 
 def _railing(b: Builder, node: str, a: Vec2, c: Vec2, base: float, out: Vec2) -> None:
@@ -629,7 +683,20 @@ def _railing(b: Builder, node: str, a: Vec2, c: Vec2, base: float, out: Vec2) ->
     length = d.length
     yaw = _yaw(d.normalised())
     mid = (a + c) * 0.5
-    b.box(node, "rail_glass", (mid.x, base + 0.5, -mid.y), (length, 0.95, 0.015), yaw)
+    kind = getattr(b.p, "railing", "") or "glass"
+    if kind == "solid":
+        # A solid parapet, plastered, with a coping.
+        b.box(node, "plaster", (mid.x, base + 0.5, -mid.y), (length, 1.0, 0.14), yaw)
+        b.box(node, "slab", (mid.x, base + 1.03, -mid.y), (length + 0.06, 0.06, 0.22), yaw)
+        return
+    if kind == "metal":
+        # Square balusters at a child-safe spacing under a flat top rail.
+        k = max(2, int(length / 0.12))
+        for i in range(k + 1):
+            p = a + d * (i / k)
+            b.box(node, "rail_metal", (p.x, base + 0.52, -p.y), (0.022, 0.92, 0.022), yaw)
+    else:
+        b.box(node, "rail_glass", (mid.x, base + 0.5, -mid.y), (length, 0.95, 0.015), yaw)
     b.box(node, "rail_metal", (mid.x, base + 1.0, -mid.y), (length, 0.05, 0.06), yaw)
     b.box(node, "slab", (mid.x, base + 0.05, -mid.y), (length, 0.1, 0.18), yaw)
     n = max(2, int(length / 1.2) + 1)
@@ -743,8 +810,7 @@ def _flat_roof(b: Builder, plan: FloorPlan, top: Level, y: float, footprint, pal
             continue
         mid = (a + c) * 0.5
         yaw = _yaw(d.normalised())
-        b.box("roof", "plaster", (mid.x, y + PARAPET / 2, -mid.y), (d.length + 0.12, PARAPET, 0.12), yaw)
-        b.box("roof", "slab", (mid.x, y + PARAPET + 0.03, -mid.y), (d.length + 0.2, 0.06, 0.2), yaw)
+        _parapet(b, palette.parapet, a, c, mid, d, yaw, y)
     # Stair head-room and a water tank over it.
     stair = next((r for r in top.rooms if r.type is RoomType.STAIRCASE), None)
     if stair is not None:
@@ -752,6 +818,8 @@ def _flat_roof(b: Builder, plan: FloorPlan, top: Level, y: float, footprint, pal
         b.box("roof", "plaster", (bb.centre.x, y + 1.3, -bb.centre.y), (bb.width, 2.6, bb.height))
         b.box("roof", "slab", (bb.centre.x, y + 2.66, -bb.centre.y), (bb.width + 0.3, 0.12, bb.height + 0.3))
         b.cylinder("roof", "water", (bb.centre.x, y + 2.72, -bb.centre.y), 0.65, 1.1, 16)
+    if palette.deck == "garden":
+        _roof_garden(b, top, footprint, y)
     if palette.pergola:
         env = top.envelope()
         # Timber slats over the half of the terrace away from the stair head-room.
@@ -762,6 +830,140 @@ def _flat_roof(b: Builder, plan: FloorPlan, top: Level, y: float, footprint, pal
         for z in (env.min_y + 0.4, env.max_y - 0.4):
             for x in (x0, x1):
                 b.box("roof", "timber", (x, y + 1.3, -z), (0.15, 2.6, 0.15))
+
+
+def _parapet(b: Builder, kind: str, a: Vec2, c: Vec2, mid: Vec2, d: Vec2, yaw: float, y: float) -> None:
+    """One run of the parapet, the crown of a flat-roofed house: plain, a glass
+    strip over a low wall, grooved bands, a CNC-cut screen, or stepped like a haveli's."""
+    L = d.length
+    if kind == "glass":
+        b.box("roof", "plaster", (mid.x, y + 0.25, -mid.y), (L + 0.12, 0.5, 0.14), yaw)
+        b.box("roof", "rail_glass", (mid.x, y + 0.82, -mid.y), (L, 0.62, 0.02), yaw)
+        b.box("roof", "rail_metal", (mid.x, y + 1.15, -mid.y), (L + 0.1, 0.04, 0.06), yaw)
+        return
+    if kind == "screen":
+        b.box("roof", "plaster", (mid.x, y + 0.12, -mid.y), (L + 0.12, 0.24, 0.12), yaw)
+        u = d.normalised()
+        k = max(2, int(L / 0.16))
+        for i in range(k):
+            p = a + u * ((i + 0.5) * L / k)
+            b.box("roof", "slab", (p.x, y + 0.62, -p.y), (0.06, 0.76, 0.1), yaw)
+        b.box("roof", "slab", (mid.x, y + PARAPET + 0.03, -mid.y), (L + 0.2, 0.06, 0.2), yaw)
+        return
+    b.box("roof", "plaster", (mid.x, y + PARAPET / 2, -mid.y), (L + 0.12, PARAPET, 0.12), yaw)
+    b.box("roof", "slab", (mid.x, y + PARAPET + 0.03, -mid.y), (L + 0.2, 0.06, 0.2), yaw)
+    if kind == "grooved":
+        for gy in (y + 0.35, y + 0.65):
+            b.box("roof", "frame", (mid.x, gy, -mid.y), (L + 0.13, 0.03, 0.125), yaw)
+    elif kind == "stepped":
+        u = d.normalised()
+        k = max(1, int(L / 0.9))
+        for i in range(k):
+            p = a + u * ((i + 0.5) * L / k)
+            b.box("roof", "plaster", (p.x, y + PARAPET + 0.25, -p.y), (0.45, 0.44, 0.16), yaw)
+            b.box("roof", "slab", (p.x, y + PARAPET + 0.49, -p.y), (0.52, 0.05, 0.22), yaw)
+
+
+def _roof_garden(b: Builder, top: Level, footprint, y: float) -> None:
+    """A planted terrace: a lawn bed over most of the roof, planters round it."""
+    from shapely.geometry import box as sbox
+
+    bed = footprint.buffer(-1.0)
+    stair = next((r for r in top.rooms if r.type is RoomType.STAIRCASE), None)
+    if stair is not None:
+        bb = stair.bbox
+        bed = bed.difference(sbox(bb.min_x - 0.8, bb.min_y - 0.8, bb.max_x + 0.8, bb.max_y + 0.8))
+    for g in getattr(bed, "geoms", [bed]):
+        if g.is_empty or g.geom_type != "Polygon" or g.area < 2.0:
+            continue
+        b.slab("roof", "lawn", [Vec2(px, py) for px, py in list(g.exterior.coords)[:-1]], y, y + 0.12)
+        ring_ = g.exterior
+        k = max(2, int(ring_.length / 1.6))
+        for i in range(k):
+            q = ring_.interpolate(i / k, normalized=True)
+            b.box("roof", "ex_concrete", (q.x, y + 0.25, -q.y), (0.5, 0.5, 0.5))
+            b.blob("roof", "leaf" if i % 2 else "leaf2", (q.x, y + 0.7, -q.y), 0.38, 0.85)
+
+
+def _boundary(b: Builder, kind: str, a: Vec2, c: Vec2, mid: Vec2, length: float, yaw: float) -> None:
+    """One run of the boundary: a full wall (plaster, stone, brick), a low
+    wall under a clipped hedge, or a low wall under a metal grille."""
+    if kind == "hedge":
+        b.box("site", "compound", (mid.x, 0.3, -mid.y), (length, 0.6, 0.22), yaw)
+        b.box("site", "slab", (mid.x, 0.62, -mid.y), (length + 0.05, 0.05, 0.28), yaw)
+        k = max(1, int(length / 0.55))
+        for i in range(k):
+            p = a + (c - a) * ((i + 0.5) / k)
+            b.blob("site", "leaf" if i % 2 else "leaf2", (p.x, 1.05, -p.y), 0.42, 0.95)
+        return
+    if kind == "grille":
+        b.box("site", "compound", (mid.x, 0.35, -mid.y), (length, 0.7, 0.22), yaw)
+        b.box("site", "slab", (mid.x, 0.72, -mid.y), (length + 0.05, 0.05, 0.28), yaw)
+        b.box("site", "rail_metal", (mid.x, 1.62, -mid.y), (length, 0.05, 0.06), yaw)
+        k = max(2, int(length / 0.14))
+        for i in range(k + 1):
+            p = a + (c - a) * (i / k)
+            b.box("site", "rail_metal", (p.x, 1.18, -p.y), (0.025, 0.9, 0.025), yaw)
+        return
+    b.box("site", "compound", (mid.x, 0.75, -mid.y), (length, 1.5, 0.2), yaw)
+    b.box("site", "slab", (mid.x, 1.53, -mid.y), (length + 0.05, 0.06, 0.28), yaw)
+
+
+def _gate(b: Builder, kind: str, seg, at: Vec2) -> None:
+    """A gate across the opening in the boundary: steel bars or timber boards."""
+    from shapely.geometry import Point
+
+    if kind not in ("sliding", "timber"):
+        return
+    (xa, ya), (xb, yb) = seg.coords[0], seg.coords[-1]
+    d = Vec2(xb - xa, yb - ya).normalised()
+    t = seg.project(Point(at.x, at.y))
+    c = Vec2(xa, ya) + d * t
+    yaw = math.atan2(d.y, d.x)
+    w = 3.6
+    if kind == "timber":
+        b.box("site", "timber", (c.x, 0.85, -c.y), (w, 1.5, 0.06), yaw)
+        for k in range(1, 6):
+            b.box("site", "rail_metal", (c.x, 0.1 + k * 0.28, -c.y), (w, 0.02, 0.08), yaw)
+    else:
+        b.box("site", "rail_metal", (c.x, 1.55, -c.y), (w, 0.06, 0.06), yaw)
+        b.box("site", "rail_metal", (c.x, 0.15, -c.y), (w, 0.06, 0.06), yaw)
+        for k in range(int(w / 0.12) + 1):
+            q = c + d * (-w / 2 + k * 0.12)
+            b.box("site", "rail_metal", (q.x, 0.85, -q.y), (0.025, 1.4, 0.025), yaw)
+    for s in (-1, 1):
+        q = c + d * (s * (w / 2 + 0.12))
+        b.box("site", "compound", (q.x, 0.85, -q.y), (0.3, 1.7, 0.3), yaw)
+
+
+def _solar(b: Builder, top: Level, footprint, y: float) -> None:
+    """Rows of panels over the roof, tilted to the sun, clear of the stair head-room."""
+    from shapely.geometry import box as sbox
+
+    if footprint is None or footprint.is_empty:
+        return
+    free = footprint.buffer(-0.9)
+    stair = next((r for r in top.rooms if r.type is RoomType.STAIRCASE), None)
+    if stair is not None:
+        bb = stair.bbox
+        free = free.difference(sbox(bb.min_x - 0.4, bb.min_y - 0.4, bb.max_x + 0.4, bb.max_y + 0.4))
+    if free.is_empty:
+        return
+    x0, y0, x1, y1 = free.bounds
+    pw, pd, rise = 1.0, 1.7, 0.42          # a panel, landscape across, and its tilt
+    yy = y0
+    while yy + pd * 0.95 <= y1:
+        xx = x0
+        while xx + pw <= x1:
+            if free.contains(sbox(xx, yy, xx + pw, yy + pd * 0.95)):
+                lo, hi = y + 0.25, y + 0.25 + rise
+                a, bq, c, d = (xx, lo, -yy), (xx + pw, lo, -yy), (xx + pw, hi, -(yy + pd * 0.95)), (xx, hi, -(yy + pd * 0.95))
+                b.quad_strip("roof", "solar", a, bq, c, d)
+                b.box("roof", "solar_frame", (xx + pw / 2, lo - 0.02, -yy), (pw, 0.04, 0.04))
+                for px in (xx + 0.1, xx + pw - 0.1):
+                    b.box("roof", "solar_frame", (px, y + 0.12 + rise / 2, -(yy + pd * 0.9)), (0.04, rise + 0.2, 0.04))
+            xx += pw + 0.05
+        yy += pd + 0.6
 
 
 def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
@@ -789,14 +991,14 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
             gate = Point(gate_c.x, gate_c.y).buffer(1.9)
             diff = seg.difference(gate)
             pieces = list(getattr(diff, "geoms", [diff]))
+            _gate(b, getattr(b.p, "gate", ""), seg, gate_c)
         for pc in pieces:
             if pc.is_empty or pc.length < 0.1:
                 continue
             (x0, y0), (x1, y1) = pc.coords[0], pc.coords[-1]
             mid = Vec2((x0 + x1) / 2, (y0 + y1) / 2)
             yaw = math.atan2(y1 - y0, x1 - x0)
-            b.box("site", "compound", (mid.x, 0.75, -mid.y), (pc.length, 1.5, 0.2), yaw)
-            b.box("site", "slab", (mid.x, 1.53, -mid.y), (pc.length + 0.05, 0.06, 0.28), yaw)
+            _boundary(b, getattr(b.p, "boundary", ""), Vec2(x0, y0), Vec2(x1, y1), mid, pc.length, yaw)
 
     # Drive from the gate to the building.
     drive = None
@@ -807,6 +1009,23 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
         for g in getattr(drive, "geoms", [drive]):
             if g.geom_type == "Polygon" and g.area > 0.5:
                 b.slab("site", "paving", [Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], 0.0, 0.03)
+
+    # A lush garden plants the inside of the boundary too, which a tight
+    # city plot has room for even when its setbacks take no tree.
+    if getattr(b.p, "garden", "") == "lush":
+        edge = plot.buffer(-0.5)
+        keep_off = (footprint.buffer(0.6) if footprint is not None else Polygon()).union(
+            drive.buffer(0.4) if drive is not None else Polygon())
+        if gate_c is not None:
+            keep_off = keep_off.union(Point(gate_c.x, gate_c.y).buffer(2.3))
+        if not edge.is_empty and edge.geom_type == "Polygon":
+            ring_ = edge.exterior
+            k = int(ring_.length / 1.1)
+            for i in range(k):
+                q = ring_.interpolate(i / k, normalized=True)
+                if keep_off.contains(q):
+                    continue
+                b.blob("site", "leaf" if i % 3 else "leaf2", (q.x, 0.45, -q.y), 0.48, 0.85)
 
     # Trees and shrubs in the free setback, kept off the building and drive.
     free = plot.buffer(-1.2)
@@ -820,7 +1039,7 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
     fx0, fy0, fx1, fy1 = free.bounds
     placed: list[Vec2] = []
     for _ in range(400):
-        if len(placed) >= 14:
+        if len(placed) >= {"lush": 26, "minimal": 5, "none": 0}.get(getattr(b.p, "garden", ""), 14):
             break
         p = Vec2(rng.uniform(fx0, fx1), rng.uniform(fy0, fy1))
         if not free.contains(Point(p.x, p.y)) or any(p.distance_to(q) < 3.2 for q in placed):
@@ -998,8 +1217,6 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
     b = Builder(palette)
     road = _road(plan)
     ground_fp = _footprint(plan.levels[0]) if plan.levels else None
-    if include_ground:
-        _site(b, plan, ground_fp, road)
 
     from aip.engines.experience import exteriors, facades
 
@@ -1007,7 +1224,17 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
     if ex is None and design_id not in facades.DESIGNS:
         ex = exteriors.generate(plan, 1)[0]
     # The outside face of each floor's walls takes the design's skin.
+    if ex is not None:
+        ex, _ = ex.fitted(len(plan.levels) <= 1)
     palette.skins = exteriors.skins(ex, len(plan.levels)) if ex is not None else {}
+    if ex is not None:
+        if ex.roof == "slab":
+            # A slab roof plate is concrete until the design tints it.
+            palette.m["ex_roof"] = Material("roof_plate", palette.m["slab"].rgb, 0.9)
+        exteriors.recolour(palette, ex)
+    # The site after the design: its boundary wall is part of the design.
+    if include_ground:
+        _site(b, plan, ground_fp, road)
 
     bases: list[float] = []
     dressed: list[tuple[Level, float, Any]] = []
@@ -1055,7 +1282,7 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
         fp = _footprint(top)
         if roof_kind in ("slab", "butterfly", "gable"):
             b.slab("roof", "slab", _poly_pts(fp), y - SLAB, y)
-            exteriors.roof(b, roof_kind, fp, y, road)
+            exteriors.roof(b, roof_kind, fp, y, road, slab_mat="ex_roof" if ex is not None else "slab")
             if roof_kind == "slab":
                 _flat_roof_extras(b, top, y)
         elif roof_kind == "pitch":
@@ -1067,6 +1294,8 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
             _hip_roof(b, env, y)
         else:
             _flat_roof(b, plan, top, y, fp, palette)
+        if palette.solar and roof_kind in ("flat", "slab"):
+            _solar(b, top, fp, y + (0.18 if roof_kind == "slab" else 0.0))
     if include_furniture:
         _interiors(b, plan, bases)
     return b.scene()

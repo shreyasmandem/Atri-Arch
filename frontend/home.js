@@ -39,7 +39,9 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
   const sheet = el("button", "link-btn", "Fill in a form"); sheet.type = "button";
   sheet.addEventListener("click", () => openManual("brief"));
   const go = el("button", "btn btn--cream btn--start", "Start designing"); go.type = "button"; go.disabled = true;
-  go.addEventListener("click", () => state.ready && start(state.request, state.brief));
+  // The client's own words travel with the brief: the exterior designs read them.
+  const said = () => state.history.filter((m) => m.role === "user").map((m) => m.text).join(". ");
+  go.addEventListener("click", () => state.ready && start(state.request, state.brief, said()));
   actions.append(sheet, go);
   strip.append(facts, actions);
 
@@ -190,7 +192,7 @@ export function mountHome({ host, api: API, setField, start, openManual, uploadF
         go.classList.remove("is-pulse"); void go.offsetWidth; go.classList.add("is-pulse");
       }
       // "Yes, start": the client confirmed, so the studio starts on its own.
-      if (d.ready && d.start && d.request) setTimeout(() => start(d.request, d.brief), 900);
+      if (d.ready && d.start && d.request) setTimeout(() => start(d.request, d.brief, said()), 900);
       scroll();
     } catch (err) {
       typing.remove();

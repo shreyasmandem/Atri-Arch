@@ -30,6 +30,8 @@ from aip.engines.experience.exteriors import (
     WINDOWS,
     Exterior,
     generate,
+    prefer_from_text,
+    with_style_details,
 )
 
 logger = get_logger("aip.agents.exterior")
@@ -93,6 +95,7 @@ async def design_exteriors(plan: FloorPlan, preferences: str = "", *, use_llm: b
                         )
                     except (KeyError, TypeError):
                         continue
+                    ex = with_style_details(ex, plan.style)
                     if ex.id in seen:
                         continue
                     seen.add(ex.id)
@@ -103,7 +106,7 @@ async def design_exteriors(plan: FloorPlan, preferences: str = "", *, use_llm: b
                     out.append(item)
         except Exception as exc:  # noqa: BLE001 - the grammar still designs
             logger.info("exterior.llm_unavailable %s", exc)
-    for ex in generate(plan, 10):
+    for ex in generate(plan, 10, prefer=prefer_from_text(preferences)):
         if len(out) >= 10:
             break
         if ex.id not in seen:
