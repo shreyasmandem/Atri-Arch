@@ -1411,7 +1411,9 @@ class PartiPlanner:
                 if self.vastu_w and (p.req is not None or p.type is T.STAIRCASE):
                     ideal = self.prefer(p.type)
                     if ideal is not None:
-                        hit(VASTU_PEN * self.vastu_w * self._miss(placed[i], ideal, cu, cv), "vastu")
+                        # A strict or orthodox client asked for Vastu first: it pulls three times as hard.
+                        pen = VASTU_PEN * (3.0 if self.vastu_w >= 0.8 else 1.0)
+                        hit(pen * self.vastu_w * self._miss(placed[i], ideal, cu, cv), "vastu")
             for i, t in enumerate(types):
                 if t is T.CORRIDOR and sum(1 for j in range(n) if adj[i][j] >= 1.0) < 3:
                     hit(20, "stub_passage")

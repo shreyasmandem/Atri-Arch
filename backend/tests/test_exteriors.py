@@ -184,3 +184,31 @@ def test_batches_reach_the_new_vocabulary(plan):
             seen_roofs.add(e.roof)
             seen_features.add(e.feature)
     assert {"vault", "sawtooth"} <= seen_roofs and {"arcade", "portico"} & seen_features
+
+
+def test_signature_elements_take_their_designs_character(plan):
+    from aip.engines.experience.exteriors import FEATURES, traits
+
+    stone = Exterior(roof="flat", base="stone", screen="jaali", feature="arcade")
+    timber = Exterior(roof="hip", base="timber", upper="timber", feature="colonnade")
+    modern = Exterior(roof="slab", base="concrete", upper="acp", feature="colonnade")
+    assert traits(stone)["family"] == "masonry" and traits(timber)["family"] == "timber" and traits(modern)["family"] == "modern"
+    assert traits(timber)["column"] in ("timber", "bracketed") and traits(modern)["column"] in ("square", "steel")
+    # The same design draws the same way, whatever its colours.
+    from dataclasses import replace
+    assert traits(replace(stone, wall="c27b5c")) == traits(stone)
+    # Across many designs the elements vary.
+    seen = {(t["column"], t["arch"], t["canopy"]) for t in (traits(e) for e in generate(plan, 40, seed="var"))}
+    assert len(seen) >= 6
+    assert {"floatbox", "featurewall", "thinnai", "bangla", "pergolaframe", "cornerglass"} <= set(FEATURES)
+
+
+def test_every_signature_element_builds_in_every_family(plan):
+    from aip.engines.experience.exteriors import FEATURES
+
+    one = len(plan.levels) <= 1
+    for feature in FEATURES[1:]:
+        for kw in ({"base": "stone", "screen": "jaali"}, {"base": "timber", "upper": "timber", "roof": "hip"},
+                   {"base": "concrete", "upper": "acp", "roof": "slab"}):
+            ex, _ = Exterior(feature=feature, **kw).fitted(one_floor=one)
+            assert len(build_scene(plan, include_furniture=False, design_id=ex.id).geometry) > 10, (feature, kw)

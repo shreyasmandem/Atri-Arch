@@ -1787,6 +1787,19 @@ class LayoutGenerator:
                                    breakdown, fixed))
         self._recipes.clear()
 
+        # A client who keeps Vastu strictly gets the finalists tuned for it.
+        from aip.domain.brief import VastuStance
+
+        if self.brief.vastu in (VastuStance.STRICT, VastuStance.ORTHODOX):
+            scored.sort(key=lambda item: -item[0])
+            tune_until = time.perf_counter() + 2.5
+            for i, (exact, breakdown, plan) in enumerate(scored[:6]):
+                if plan.metadata["guardrail"]:
+                    continue
+                tuned = self._vastu_tune(plan, fitness_fn, exact, tune_until)
+                if tuned is not None:
+                    scored[i] = tuned
+
         clean = [item for item in scored if not item[2].metadata["guardrail"]]
         flawed = [item for item in scored if item[2].metadata["guardrail"]]
         selected = self._select_diverse(clean, count)
@@ -2000,6 +2013,53 @@ class LayoutGenerator:
             plan = self._assemble(rooms_by_level)
             self._recipes[plan.id] = recipe
             yield plan
+
+    #: Rooms the Vastu tuning never moves: the stair stacks, passages and the
+    #: foyer belong to the entrance, outdoor rooms belong to their faces.
+    _TUNE_FIXED = frozenset({RoomType.STAIRCASE, RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER, RoomType.SHAFT,
+                             RoomType.COURTYARD, RoomType.VERANDAH, RoomType.BALCONY, RoomType.TERRACE, RoomType.GARAGE})
+
+    def _vastu_tune(self, plan: FloorPlan, fitness_fn, score: float, deadline: float):
+        """Swap rooms of similar size on each floor, steepest gain first,
+        keeping a swap only while the plan's whole fitness rises (Vastu is
+        part of it, never all of it) and the plan stays clean. Returns the
+        tuned (score, breakdown, plan), or None when nothing improved."""
+        from aip.engines.architecture.editor import apply_edits
+
+        lead = plan.metadata.get("_lead", 0.0)
+        current, best_score, best_breakdown = plan, score, None
+        for _ in range(4):
+            best = None
+            for level in current.levels:
+                rooms = [r for r in level.rooms if r.type not in self._TUNE_FIXED and r.area > 0]
+                for i, a in enumerate(rooms):
+                    for b in rooms[i + 1:]:
+                        if a.type is b.type or not 0.6 <= a.area / b.area <= 1.67:
+                            continue
+                        if time.perf_counter() > deadline:
+                            break
+                        try:
+                            new, applied, _refused = apply_edits(current, [{"op": "swap", "a": a.id, "b": b.id}])
+                        except Exception:  # noqa: BLE001 - a swap that cannot be made is skipped
+                            continue
+                        if not applied:
+                            continue
+                        self._judge(new)
+                        if new.metadata["guardrail"]:
+                            continue
+                        exact, breakdown = fitness_fn(new)
+                        cand = exact + lead - _QUALITY_WEIGHT * min(6.0, _severity(new.metadata["quality"]))
+                        if cand > best_score + 0.002 and (best is None or cand > best[0]):
+                            best = (cand, breakdown, new)
+            if best is None:
+                break
+            best_score, best_breakdown, current = best
+        if current is plan:
+            return None
+        current.metadata["_lead"] = lead
+        current.metadata["vastu_tuned"] = True
+        log_event(logger, "layout.vastu_tuned", plan=current.id, before=round(score, 4), after=round(best_score, 4))
+        return best_score, best_breakdown, current
 
     def _judge(self, plan: FloorPlan) -> None:
         """Write the guardrail and quality findings onto the plan."""
@@ -4135,7 +4195,8 @@ class LayoutGenerator:
 
                 vastu = quick_vastu_score(plan, self.brief.tradition_weight)
                 breakdown["vastu"] = vastu
-                weight = 0.10 + 0.20 * self.brief.tradition_weight
+                # A strict or orthodox client asked for Vastu first: it weighs more.
+                weight = 0.10 + (0.35 if self.brief.tradition_weight >= 0.8 else 0.20) * self.brief.tradition_weight
                 score = score * (1 - weight) + vastu * weight
             except Exception:  # pragma: no cover - Vastu is optional in fitness
                 pass

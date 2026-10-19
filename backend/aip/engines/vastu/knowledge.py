@@ -87,6 +87,8 @@ class RuleCategory(str, Enum):
     SLOPE = "slope"
     CIRCULATION = "circulation"
     SLEEPING = "sleeping"
+    RELATIONS = "relations"                  # what sits above, beside or in front of what
+    SITE = "site"                            # decided on the plot, not in the drawings
 
     @property
     def label(self) -> str:
@@ -772,6 +774,233 @@ RULES: tuple[VastuRule, ...] = (
         ),
         remedy="Move parking to the north-west or south-east of the plot.",
     ),
+    # ================================================================
+    # Added from the guideline review (docs/VASTU_AND_DESIGN_GUIDELINES.md).
+    # Every rule below is listed there with its sources and how it is checked.
+    # ================================================================
+
+    # ------------------------------------------------- more room zones --
+    VastuRule(
+        id="VS.BALCONY.NORTH_EAST",
+        title="Balconies open to the north or east",
+        category=RuleCategory.ZONE_PLACEMENT,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-Z9",
+        subject=RoomType.BALCONY,
+        ideal=_d("N", "NE", "E", "NNE", "ENE"),
+        acceptable=_d("NNW", "ESE", "NW"),
+        weight=0.4,
+        modern_validity=0.65,
+        traditional_rationale="The north and east are kept light and open to receive the morning; the south-west is kept closed and heavy.",
+        modern_rationale=(
+            "A north or east balcony gets soft morning sun and stays usable through an Indian afternoon; "
+            "a south-west balcony is the hottest outdoor space in the house."
+        ),
+        remedy="Put the balcony on the north or east face, or shade a west one deeply.",
+        tags=("outdoor",),
+    ),
+    VastuRule(
+        id="VS.VERANDAH.NORTH_EAST",
+        title="Verandahs and sit-outs on the north or east",
+        category=RuleCategory.ZONE_PLACEMENT,
+        school=School.REGIONAL_SOUTH,
+        citation="South Indian regional practice; guideline G-Z10",
+        subject=RoomType.VERANDAH,
+        ideal=_d("N", "NE", "E", "NNE", "ENE"),
+        acceptable=_d("NNW", "ESE", "SE"),
+        prohibited=_d("SW", "SSW", "WSW"),
+        weight=0.45,
+        modern_validity=0.6,
+        traditional_rationale="The thinnais and verandahs of south Indian houses face the morning street on the north and east.",
+        modern_rationale="A shaded north or east verandah is the coolest place to sit outside on a summer evening.",
+        remedy="Move the verandah to the north or east side of the house.",
+        tags=("outdoor",),
+    ),
+    VastuRule(
+        id="VS.GUEST.NORTHWEST",
+        title="Guest bedroom in the north-west",
+        category=RuleCategory.ZONE_PLACEMENT,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-Z6",
+        subject=RoomType.GUEST_BEDROOM,
+        ideal=_d("NW", "WNW", "NNW"),
+        acceptable=_d("W", "N", "SE"),
+        weight=0.35,
+        modern_validity=0.3,
+        traditional_rationale="Vayavya, the air quarter, holds what moves: guests who come and go.",
+        modern_rationale="Little functional basis beyond keeping the south-west for the owners and the north-east open.",
+        remedy="Give guests the north-west room and keep the south-west for the owners.",
+    ),
+
+    # --------------------------------------------------- relations ------
+    VastuRule(
+        id="VS.STACK.KITCHEN_TOILET",
+        title="No toilet directly above or below the kitchen",
+        category=RuleCategory.RELATIONS,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; NBC Part 9 (plumbing) intent; guideline G-R1",
+        weight=0.6,
+        modern_validity=0.85,
+        traditional_rationale="Fire (cooking) and waste must never share a column of the house.",
+        modern_rationale=(
+            "A soil stack or a leaking trap over a cooking counter is a hygiene and maintenance failure; "
+            "stacking wet rooms over wet rooms is also cheaper to plumb."
+        ),
+        remedy="Stack bathrooms over bathrooms; keep the kitchen's column free of toilets on every floor.",
+        tags=("sanitation", "plumbing"),
+    ),
+    VastuRule(
+        id="VS.PUJA.AWAY_FROM_TOILET",
+        title="Puja room shares no wall, floor or ceiling with a toilet",
+        category=RuleCategory.RELATIONS,
+        school=School.REGIONAL_NORTH,
+        citation="North Indian regional practice; guideline G-R2",
+        weight=0.7,
+        modern_validity=0.5,
+        traditional_rationale="The shrine is the purest room in the house and must not touch the impure one.",
+        modern_rationale="Damp and odour travel through a shared wall; the shrine is also where lamps and incense burn.",
+        remedy="Put a store, corridor or wardrobe between the puja and any toilet, and do not stack them.",
+        tags=("sacred", "sanitation"),
+    ),
+    VastuRule(
+        id="VS.ENTRANCE.STAIR_NOT_FACING",
+        title="The main door does not open straight onto the staircase",
+        category=RuleCategory.RELATIONS,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-E5",
+        weight=0.5,
+        modern_validity=0.6,
+        traditional_rationale="Energy entering the door should settle in the house, not run up and away by the stair.",
+        modern_rationale="A stair in the doorway gives no place to arrive, take off shoes or receive a visitor, and exposes the upper floor.",
+        remedy="Put a foyer or living space between the door and the stair, or turn the stair's first flight away from the door.",
+        tags=("entrance",),
+    ),
+    VastuRule(
+        id="VS.ENTRANCE.TOILET_NOT_FACING",
+        title="No toilet straight ahead of the main door",
+        category=RuleCategory.RELATIONS,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-E6",
+        weight=0.55,
+        modern_validity=0.75,
+        traditional_rationale="The first thing seen on entering should be auspicious, never the place of waste.",
+        modern_rationale="A toilet in the line of the front door puts it on view to every visitor and every delivery.",
+        remedy="Move the toilet off the entrance axis or give it a door from a side passage.",
+        tags=("entrance", "sanitation"),
+    ),
+    VastuRule(
+        id="VS.MASTER.LARGEST",
+        title="The master bedroom is the largest bedroom",
+        category=RuleCategory.RELATIONS,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-Z2",
+        weight=0.35,
+        modern_validity=0.5,
+        traditional_rationale="The head of the house sleeps in the largest, heaviest room in the south-west.",
+        modern_rationale="The owners' room usually carries the walk-in wardrobe and the en-suite, so it needs the most area.",
+        remedy="Give the south-west master bedroom the most area of the bedrooms.",
+        tags=("sleeping",),
+    ),
+
+    # ------------------------------------------------------- entrance ---
+    VastuRule(
+        id="VS.ENTRANCE.PADA",
+        title="Main door in an auspicious part of its wall (towards north-east, south-east or north-west)",
+        category=RuleCategory.ENTRANCE,
+        school=School.BRIHAT_SAMHITA,
+        citation="Brihat Samhita, ch. 53 (door padas), as read in current practice; guideline G-E3",
+        weight=0.55,
+        modern_validity=0.35,
+        traditional_rationale=(
+            "Each side of the house is divided into nine padas; the door belongs in the auspicious ones, "
+            "which lie towards the north-east on the north and east sides, towards the south-east on the south "
+            "side and towards the north-west on the west side."
+        ),
+        modern_rationale="An off-centre door away from the south-west corner leaves the heavy corner of the plan for private rooms.",
+        remedy="Shift the main door along its wall towards the north-east (north/east sides), south-east (south side) or north-west (west side).",
+        tags=("entrance",),
+    ),
+
+    # ---------------------------------------------------------- water ---
+    VastuRule(
+        id="VS.POOL.NORTH_EAST",
+        title="A pool or water feature in the north, north-east or east of the plot",
+        category=RuleCategory.WATER,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice (water in Ishanya); guideline G-W3",
+        ideal=_d("N", "NE", "E", "NNE", "ENE"),
+        acceptable=_d("NNW", "ESE", "NW"),
+        prohibited=_d("SW", "SSW", "WSW", "SE", "S"),
+        weight=0.55,
+        modern_validity=0.45,
+        traditional_rationale="Water belongs to the north-east, Ishanya; the south-west (earth) and south-east (fire) must stay dry.",
+        modern_rationale="A north-east pool takes morning sun and is shaded by the house in the afternoon, so it stays cooler and cleaner.",
+        remedy="Place the pool in the north or north-east garden.",
+        tags=("water",),
+    ),
+
+    # ------------------------------------------- on site, not drawn -----
+    VastuRule(
+        id="VS.SITE.BOREWELL_NORTHEAST",
+        title="Borewell or well in the north-east of the plot",
+        category=RuleCategory.SITE,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-W1",
+        weight=0.5, modern_validity=0.4,
+        traditional_rationale="Ground water is drawn in Ishanya.",
+        modern_rationale="Keep it well away from the septic tank (at least 15 m where the soil allows) and off the boundary wall.",
+        remedy="Drill in the north-east, about a third of the way in from the corner, clear of the septic tank.",
+        tags=("site", "water"),
+    ),
+    VastuRule(
+        id="VS.SITE.SUMP_NORTHEAST",
+        title="Underground sump in the north, east or north-east",
+        category=RuleCategory.SITE,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-W2",
+        weight=0.5, modern_validity=0.45,
+        traditional_rationale="Stored water below ground belongs in the north-east.",
+        modern_rationale="Keep the sump clear of the septic tank and above the flood line.",
+        remedy="Build the underground sump in the north-east or north.",
+        tags=("site", "water"),
+    ),
+    VastuRule(
+        id="VS.SITE.SEPTIC_NORTHWEST",
+        title="Septic tank in the north-west, never the north-east or south-west",
+        category=RuleCategory.SITE,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-W5",
+        weight=0.5, modern_validity=0.6,
+        traditional_rationale="Waste goes to the north-west, away from water and from the heavy south-west.",
+        modern_rationale="Downhill of and well away from any borewell or sump, reachable by a tanker for emptying.",
+        remedy="Put the septic tank in the north-west, off the boundary and the foundations.",
+        tags=("site", "sanitation"),
+    ),
+    VastuRule(
+        id="VS.SITE.OVERHEAD_TANK_SOUTHWEST",
+        title="Overhead water tank over the south-west",
+        category=RuleCategory.SITE,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-W4",
+        weight=0.45, modern_validity=0.5,
+        traditional_rationale="Weight belongs in the south-west; a tank over the north-east burdens the light corner.",
+        modern_rationale="Over the stair or a load-bearing core the tank's weight goes straight to the foundations.",
+        remedy="Seat the overhead tank over the stair head in the south-west or west.",
+        tags=("site", "water", "mass"),
+    ),
+    VastuRule(
+        id="VS.SITE.TREES_SOUTHWEST",
+        title="Tall trees and higher boundary walls on the south and west",
+        category=RuleCategory.SITE,
+        school=School.CONTEMPORARY,
+        citation="Contemporary practice; guideline G-S4",
+        weight=0.35, modern_validity=0.6,
+        traditional_rationale="The south-west is closed and heavy; the north-east is left open and low.",
+        modern_rationale="Trees on the south and west shade the hottest walls; the north-east stays open to the morning light and breeze.",
+        remedy="Plant shade trees on the south and west; keep the north-east planting low.",
+        tags=("site", "landscape"),
+    ),
+
 )
 
 

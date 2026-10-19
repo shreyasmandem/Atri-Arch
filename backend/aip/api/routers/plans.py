@@ -536,7 +536,14 @@ async def run_vastu(
     """
     plan = _plan_from_payload(payload.plan, payload.plan_id, principal)
     report = analyse_vastu(plan, payload.tradition_weight)
-    return json.loads(report.model_dump_json())
+    out = json.loads(report.model_dump_json())
+    if payload.compare_to:
+        # What an edit did to the Vastu: scored at the same stance, rule by rule.
+        from aip.engines.vastu.engine import vastu_changes
+
+        before = analyse_vastu(_load(payload.compare_to, principal), payload.tradition_weight)
+        out["since_edit"] = vastu_changes(before, report)
+    return out
 
 
 @router.post("/cost")

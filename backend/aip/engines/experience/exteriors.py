@@ -46,7 +46,7 @@ SCREENS = ("none", "fins", "louvres", "frame", "jaali", "perforated", "slats", "
 WINDOWS = ("punched", "band")
 #: The design's signature element: what a passer-by remembers the house by.
 FEATURES = ("none", "jharokha", "colonnade", "chhatri", "cornice", "breeze", "greenwall", "balcony",
-            "arcade", "portico", "bay")
+            "arcade", "portico", "bay", "floatbox", "featurewall", "thinnai", "bangla", "pergolaframe", "cornerglass")
 ACCENTS = {"bronze": "#8a6a4c", "charcoal": "#2b2a29", "teak": "#7a4b2a", "white": "#efece6",
            "terracotta": "#a8553a", "sage": "#7d8b6a", "navy": "#2b3a52", "brass": "#b08a3e",
            "ochre": "#c08a2e", "indigo": "#34406e", "forest": "#2f4a36", "rose": "#b46a6a",
@@ -111,31 +111,31 @@ WALL_TONES = {"lime": ("#efe9dc", ("#a8553a", "#3d3f42", "#8c8a84")), "sand": ("
 #: What each style tends towards; a design outside it is still allowed, only less likely.
 STYLE_BIAS: dict[str, dict[str, tuple[str, ...]]] = {
     "contemporary": {"roof": ("flat", "slab", "mono", "sawtooth"), "screen": ("fins", "frame", "louvres", "perforated", "slats"),
-                     "feature": ("none", "cornice", "breeze", "greenwall", "bay", "portico"), "accent": ("bronze", "charcoal", "slate", "teak")},
+                     "feature": ("none", "cornice", "breeze", "greenwall", "bay", "portico", "floatbox", "featurewall", "cornerglass"), "accent": ("bronze", "charcoal", "slate", "teak")},
     "modern_minimal": {"roof": ("slab", "flat"), "screen": ("none", "frame"), "upper": ("plaster", "metal"),
-                       "feature": ("none", "bay"), "accent": ("white", "charcoal", "slate")},
+                       "feature": ("none", "bay", "floatbox", "cornerglass"), "accent": ("white", "charcoal", "slate")},
     "tropical_modern": {"roof": ("slab", "mono", "butterfly", "vault"), "upper": ("timber",), "screen": ("louvres", "fins", "slats", "bamboo"),
-                        "feature": ("greenwall", "breeze", "none"), "accent": ("teak", "forest", "sage")},
+                        "feature": ("greenwall", "breeze", "none", "pergolaframe"), "accent": ("teak", "forest", "sage")},
     "kerala_vernacular": {"roof": ("hip", "gable"), "base": ("stone", "plaster"), "upper": ("timber", "plaster"),
-                          "feature": ("colonnade",), "accent": ("teak", "terracotta", "forest")},
+                          "feature": ("colonnade", "thinnai"), "accent": ("teak", "terracotta", "forest")},
     "traditional_indian": {"roof": ("hip", "flat"), "screen": ("jaali",), "base": ("stone",),
-                           "feature": ("jharokha", "colonnade", "cornice", "arcade", "portico"), "accent": ("ochre", "terracotta", "teak", "indigo")},
+                           "feature": ("jharokha", "colonnade", "cornice", "arcade", "portico", "thinnai"), "accent": ("ochre", "terracotta", "teak", "indigo")},
     "chettinad": {"roof": ("hip", "flat"), "screen": ("jaali",), "base": ("stone", "brick"),
-                  "feature": ("colonnade", "cornice", "arcade"), "accent": ("ochre", "indigo", "rose", "teak")},
+                  "feature": ("colonnade", "cornice", "arcade", "thinnai"), "accent": ("ochre", "indigo", "rose", "teak")},
     "rajasthani_haveli": {"roof": ("flat",), "screen": ("jaali",), "base": ("stone",),
-                          "feature": ("jharokha", "chhatri"), "accent": ("sand", "rose", "ochre", "terracotta")},
+                          "feature": ("jharokha", "chhatri", "bangla"), "accent": ("sand", "rose", "ochre", "terracotta")},
     "indo_saracenic": {"roof": ("flat", "vault"), "screen": ("jaali", "frame"), "base": ("stone", "brick"),
-                       "feature": ("chhatri", "colonnade", "cornice", "arcade"), "accent": ("sand", "terracotta", "white")},
+                       "feature": ("chhatri", "colonnade", "cornice", "arcade", "bangla"), "accent": ("sand", "terracotta", "white")},
     "scandinavian": {"roof": ("gable", "mono"), "upper": ("timber",), "screen": ("none",),
-                     "feature": ("none",), "accent": ("charcoal", "white", "slate")},
+                     "feature": ("none", "cornerglass"), "accent": ("charcoal", "white", "slate")},
     "japandi": {"roof": ("slab", "gable"), "upper": ("timber",), "screen": ("louvres", "none", "slats"),
-                "feature": ("none", "greenwall"), "accent": ("teak", "charcoal", "sand")},
+                "feature": ("none", "greenwall", "pergolaframe"), "accent": ("teak", "charcoal", "sand")},
     "industrial": {"base": ("concrete", "brick"), "upper": ("metal", "brick"), "screen": ("perforated", "frame"),
-                   "feature": ("none", "breeze"), "accent": ("charcoal", "slate", "terracotta"), "roof": ("sawtooth",)},
+                   "feature": ("none", "breeze", "featurewall"), "accent": ("charcoal", "slate", "terracotta"), "roof": ("sawtooth",)},
     "biophilic": {"roof": ("slab", "butterfly", "vault"), "upper": ("timber",), "screen": ("louvres", "fins", "bamboo"),
-                  "feature": ("greenwall",), "accent": ("forest", "sage", "teak")},
+                  "feature": ("greenwall", "pergolaframe"), "accent": ("forest", "sage", "teak")},
     "mid_century_modern": {"roof": ("butterfly", "mono", "slab", "vault"), "base": ("brick", "stone"), "screen": ("frame", "fins"),
-                           "feature": ("breeze", "none", "bay"), "accent": ("ochre", "teak", "sage", "navy")},
+                           "feature": ("breeze", "none", "bay", "featurewall", "floatbox"), "accent": ("ochre", "teak", "sage", "navy")},
 }
 
 NAMES = {
@@ -143,6 +143,8 @@ NAMES = {
     "flat": "Parapet", "slab": "Slab", "mono": "Skillion", "butterfly": "Butterfly", "hip": "Tiled", "gable": "Gable",
     "vault": "Vault", "sawtooth": "Sawtooth", "slats": "Slat", "bamboo": "Bamboo",
     "arcade": "Arcade", "portico": "Portico", "bay": "Bay-window",
+    "floatbox": "Floating-box", "featurewall": "Monolith", "thinnai": "Thinnai", "bangla": "Bangla",
+    "pergolaframe": "Pergola", "cornerglass": "Glass-corner",
     "timber": "Timber", "metal": "Metal", "brick": "Brick", "stone": "Stone", "concrete": "Concrete", "plaster": "Lime",
     "terracotta": "Terracotta", "acp": "Panel", "slate": "Slate",
     "jharokha": "Jharokha", "colonnade": "Colonnade", "chhatri": "Chhatri", "cornice": "Cornice", "breeze": "Breeze-block",
@@ -443,7 +445,7 @@ class Exterior:
         if one_floor and e.upper != "plaster":
             e = replace(e, upper="plaster")
             notes.append("A single-storey house has no upper floor to clad.")
-        if e.feature in ("jharokha", "balcony", "bay") and one_floor:
+        if e.feature in ("jharokha", "balcony", "bay", "floatbox", "cornerglass") and one_floor:
             notes.append(f"A {NAMES[e.feature].lower()} needs an upper floor; it is left off.")
             e = replace(e, feature="none")
         if e.deck and e.roof != "flat":
@@ -454,8 +456,8 @@ class Exterior:
         if e.solar == "on" and e.roof not in ("flat", "slab"):
             notes.append("Solar panels sit on a flat or slab roof; they are left off this one.")
             e = replace(e, solar="")
-        if e.feature == "chhatri" and e.roof != "flat":
-            notes.append("Chhatris stand on a flat parapet roof; the roof is set to flat.")
+        if e.feature in ("chhatri", "bangla") and e.roof != "flat":
+            notes.append(f"A {NAMES[e.feature].lower()} pavilion stands on a flat parapet roof; the roof is set to flat.")
             e = replace(e, roof="flat")
         return e, notes
 
@@ -493,7 +495,21 @@ class Exterior:
                 "cornice": ", deep cornices marking every floor", "breeze": ", a breeze-block screen wall",
                 "greenwall": ", a planted green wall", "balcony": ", cantilevered balconies over the street",
                 "arcade": ", an arcade of arches along the front", "portico": ", a double-height portico at the door",
-                "bay": ", projecting bay windows"}[self.feature]
+                "bay": ", projecting bay windows",
+                "floatbox": ", a deep framed box floating off the upper floor",
+                "featurewall": ", a monolith wall rising the full height of the front",
+                "thinnai": ", thinnai platforms flanking the door under a tiled lean-to",
+                "bangla": ", a bangla-roofed pavilion on the terrace",
+                "pergolaframe": ", a double-height timber pergola standing off the front",
+                "cornerglass": ", the upper corner opened in glass"}[self.feature]
+        # Say which way this design draws its signature element.
+        if self.feature != "none":
+            tr = traits(self)
+            word = {"colonnade": WORD["column"][tr["column"]], "portico": WORD["column"][tr["column"]],
+                    "arcade": WORD["arch"][tr["arch"]], "jharokha": WORD["canopy"][tr["canopy"]],
+                    "chhatri": WORD["canopy"]["dome" if tr["canopy"] == "flat" else tr["canopy"]]}.get(self.feature)
+            if word:
+                feat = feat.replace(", a ", f", a {word} ", 1).replace(", an ", f", a {word} ", 1).replace(", jharokha", f", {word} jharokha", 1).replace(", chhatri", f", {word} chhatri", 1)
         return f"{base[0].upper()}{base[1:]}, {upper}{screen}{feat}{win}{plant}, under {roof}."
 
     def to_dict(self) -> dict[str, Any]:
@@ -683,7 +699,9 @@ def _harmonious(e: Exterior, one_floor: bool) -> bool:
         return False
     if e.feature == "chhatri" and e.roof != "flat":
         return False                         # chhatris stand on a flat roof
-    if e.feature in ("jharokha", "balcony", "bay") and one_floor:
+    if e.feature in ("jharokha", "balcony", "bay", "floatbox", "cornerglass") and one_floor:
+        return False
+    if e.feature == "bangla" and e.roof != "flat":
         return False
     if e.roof in ("vault", "sawtooth") and e.feature == "chhatri":
         return False
@@ -864,80 +882,190 @@ def apply(b, plan: FloorPlan, ex: Exterior, levels: list[tuple[Any, float, Any]]
                      "vault": "vault", "sawtooth": "sawtooth"}[ex.roof]}
 
 
+# ---------------------------------------------------------------------------
+# Signature elements, each in the character of its design
+# ---------------------------------------------------------------------------
+
+def _pick(ex: Exterior, key: str, options: tuple):
+    """A stable choice for this design: the same design always draws the same
+    way, but no two designs need share one. Tints do not change the shape."""
+    h = int(hashlib.sha1(f"{ex.form}:{key}".encode()).hexdigest()[:8], 16)
+    return options[h % len(options)]
+
+
+def traits(ex: Exterior) -> dict[str, Any]:
+    """How this design's signature element is drawn, read from its materials
+    and roof: the family its detailing belongs to, then a variation within it."""
+    timber = "timber" in (ex.base, ex.upper) or ex.roof in ("hip", "gable")
+    masonry = ex.base in ("stone", "brick", "terracotta") or ex.screen == "jaali"
+    family = "timber" if timber and not masonry else "masonry" if masonry else "modern"
+    column = _pick(ex, "column", {"timber": ("timber", "bracketed"), "masonry": ("round", "twin", "octagonal"),
+                                  "modern": ("square", "steel")}[family])
+    arch = _pick(ex, "arch", {"timber": ("segmental", "round"), "masonry": ("round", "pointed", "scalloped"),
+                              "modern": ("segmental", "lintel")}[family])
+    canopy = _pick(ex, "canopy", {"timber": ("pyramid", "bangla"), "masonry": ("dome", "bangla", "pyramid"),
+                                  "modern": ("flat", "pyramid")}[family])
+    frame = _pick(ex, "frame", ("ex_accent", "skin", "ex_accent"))
+    return {"family": family, "column": column, "arch": arch, "canopy": canopy,
+            "bay": _pick(ex, "bay", (2.2, 2.6, 3.0)), "count": _pick(ex, "count", (1, 2, 3, 4)),
+            "cornice": _pick(ex, "cornice", ("single", "double", "dentil")),
+            "frame": SKIN.get(ex.upper, "plaster") if frame == "skin" else "ex_accent"}
+
+
+WORD = {"column": {"timber": "timber-post", "bracketed": "bracketed", "round": "round-column", "twin": "twin-column",
+                   "octagonal": "octagonal-column", "square": "square-pier", "steel": "steel-column"},
+        "arch": {"round": "round-arched", "pointed": "pointed-arch", "scalloped": "scalloped-arch",
+                 "segmental": "segmental-arch", "lintel": "flat-lintel"},
+        "canopy": {"dome": "domed", "bangla": "bangla-roofed", "pyramid": "pyramid-roofed", "flat": "flat-roofed"}}
+
+
+def _column(b, node: str, kind: str, p: Vec2, y0: float, height: float, yaw: float) -> None:
+    """One column of the given kind standing at p from y0."""
+    if kind in ("timber", "bracketed"):
+        _box(b, node, "plinth", p, y0 + 0.12, (0.34, 0.24, 0.34), yaw)
+        b.cylinder(node, "timber", (p.x, y0 + 0.24, -p.y), 0.1, height - 0.24, 12)
+        if kind == "bracketed":
+            for s_ in (-1, 1):
+                q = p + Vec2(math.cos(yaw), math.sin(yaw)) * (s_ * 0.22)
+                _box(b, node, "timber", q, y0 + height - 0.2, (0.36, 0.12, 0.14), yaw)
+        return
+    if kind == "steel":
+        b.cylinder(node, "rail_metal", (p.x, y0, -p.y), 0.06, height, 10)
+        return
+    if kind == "square":
+        _box(b, node, "plaster", p, y0 + height / 2, (0.32, height, 0.32), yaw)
+        return
+    if kind == "twin":
+        for s_ in (-1, 1):
+            q = p + Vec2(math.cos(yaw), math.sin(yaw)) * (s_ * 0.13)
+            b.cylinder(node, "plaster", (q.x, y0 + 0.1, -q.y), 0.08, height - 0.2, 12)
+    else:
+        b.cylinder(node, "plaster", (p.x, y0 + 0.1, -p.y), 0.15, height - 0.2, 8 if kind == "octagonal" else 16)
+    # A base and a capital: what makes a masonry column read as one.
+    _box(b, node, "slab", p, y0 + 0.05, (0.46, 0.1, 0.46), yaw)
+    _box(b, node, "slab", p, y0 + height - 0.06, (0.46, 0.12, 0.46), yaw)
+
+
+def _arch(b, node: str, kind: str, e: Edge, ta: float, tb: float, off: float, top: float, yaw: float) -> None:
+    """An arch across one bay [ta, tb] of edge e, its crown just under `top`."""
+    span = (tb - ta) * e.length
+    if span < 0.9:
+        return
+    mid = e.at((ta + tb) / 2, off)
+    half = span / 2 - 0.2
+    if kind == "lintel":
+        _box(b, node, "plaster", mid, top - 0.2, (span, 0.4, 0.3), yaw)
+        return
+    rise = {"segmental": half * 0.45, "pointed": half * 1.25}.get(kind, half)
+    spring = top - 0.25 - rise
+    steps = 15
+    for j in range(steps + 1):
+        x = -half + 2 * half * j / steps
+        if kind == "pointed":
+            y = rise * (1 - abs(x) / half) ** 0.7
+        elif kind == "segmental":
+            y = rise * (1 - (x / half) ** 2)
+        else:
+            y = math.sqrt(max(0.0, half * half - x * x)) * rise / half
+            if kind == "scalloped":
+                y -= 0.07 * abs(math.sin(6 * math.pi * j / steps))
+        q = mid + e.dir * x
+        _box(b, node, "plaster", q, spring + y, (2 * half / steps + 0.06, 0.14, 0.3), yaw)
+    # The spandrel over the arch, up to the beam.
+    _box(b, node, "plaster", mid, top - 0.12, (span, 0.24, 0.3), yaw)
+
+
+def _cap(b, node: str, kind: str, c: Vec2, y: float, w: float, d: float, yaw: float) -> None:
+    """A canopy w x d whose underside is at y: dome, bangla, pyramid or flat."""
+    if kind == "flat":
+        _box(b, node, "ex_accent", c, y + 0.06, (w + 0.2, 0.12, d + 0.2), yaw)
+        return
+    _box(b, node, "ex_accent", c, y + 0.05, (w + 0.15, 0.1, d + 0.15), yaw)
+    if kind == "dome":
+        b.blob(node, "ex_accent", (c.x, y + 0.1, -c.y), min(w, d) * 0.45, 0.55)
+        b.cylinder(node, "brass", (c.x, y + 0.1 + min(w, d) * 0.4, -c.y), 0.03, 0.3, 6)
+        return
+    if kind == "pyramid":
+        for k in range(5):
+            s = 1 - k / 5
+            _box(b, node, "roof_tile", c, y + 0.15 + k * 0.1, (w * s + 0.1, 0.1, d * s + 0.1), yaw)
+        return
+    # Bangla: a roof that curves down to its eaves, the Bengali hut roof in stone.
+    u = Vec2(math.cos(yaw), math.sin(yaw))
+    for j in range(11):
+        x = -w / 2 - 0.1 + (w + 0.2) * j / 10
+        rise = 0.45 * (1 - (2 * x / (w + 0.2)) ** 2)
+        _box(b, node, "roof_tile", c + u * x, y + 0.12 + rise, ((w + 0.2) / 10 + 0.04, 0.08, d + 0.3), yaw)
+
+
 def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
-    """The design's signature element, always clear of doors (and of windows
-    where it would cover them)."""
+    """The design's signature element, drawn in the design's own character
+    (see `traits`) and always clear of doors, and of windows it would cover."""
     f = ex.feature
     if f == "none" or not levels:
         return
+    tr = traits(ex)
     n = len(levels)
+    fronts_done = False
     for li, (level, base, fp) in enumerate(levels):
         h = level.floor_to_floor
         node = f"level_{level.index}/facade"
-        for e in edges(fp):
+        es = edges(fp)
+        front = max((e for e in es if street(e)), key=lambda x: x.length, default=None)
+        for e in es:
             L, yaw = e.length, _yaw(e)
             doors = door_spans(level, e)
             if f == "colonnade" and li == 0 and street(e) and L > 3.0:
-                # Posts along the front, a beam and a shallow roof: the verandah line.
-                k = max(2, int(L / 2.4))
+                # The verandah line: columns of the design's kind, a beam and a shallow roof.
+                k = max(2, round(L / tr["bay"]))
                 for i in range(k + 1):
-                    t = i / k
-                    if _free(t, 0.2 / L, doors):
-                        p = e.at(t, 1.5)
-                        b.cylinder(node, "plaster", (p.x, base, -p.y), 0.13, h - 0.25, 14)
-                        _box(b, node, "slab", p, base + 0.04, (0.42, 0.08, 0.42), yaw)
-                _box(b, node, "ex_accent", e.at(0.5, 1.5), base + h - 0.32, (L + 0.3, 0.26, 0.3), yaw)
+                    if _free(i / k, 0.2 / L, doors):
+                        _column(b, node, tr["column"], e.at(i / k, 1.5), base, h - 0.3, yaw)
+                _box(b, node, tr["frame"], e.at(0.5, 1.5), base + h - 0.32, (L + 0.3, 0.26, 0.3), yaw)
                 b.slab(node, "slab", [e.at(0, 0), e.at(1, 0), e.at(1, 1.75), e.at(0, 1.75)], base + h - 0.18, base + h - 0.06)
+            elif f == "arcade" and li == 0 and street(e) and L > 3.0:
+                # Piers and arches of the design's shape, a verandah behind them.
+                k = max(2, round(L / tr["bay"]))
+                posts = [i / k for i in range(k + 1) if _free(i / k, 0.25 / L, doors) or i in (0, k)]
+                for t in posts:
+                    _box(b, node, "plaster", e.at(t, 1.6), base + (h - 0.3) / 2, (0.4, h - 0.3, 0.4), yaw)
+                for ta, tb in zip(posts, posts[1:]):
+                    _arch(b, node, tr["arch"], e, ta, tb, 1.6, base + h - 0.3, yaw)
+                _box(b, node, tr["frame"], e.at(0.5, 1.6), base + h - 0.3, (L + 0.4, 0.3, 0.42), yaw)
+                b.slab(node, "slab", [e.at(0, 0), e.at(1, 0), e.at(1, 1.85), e.at(0, 1.85)], base + h - 0.15, base + h - 0.03)
             elif f == "jharokha" and li >= 1 and street(e) and L > 3.0:
-                # Projecting bay windows on brackets, each under a small canopy.
-                wins = clear(0.12, 0.88, door_spans(level, e, 0.3))
-                for t0, t1 in wins[:2]:
+                # Projecting bays on brackets, as many as the face takes, under the design's canopy.
+                wins = clear(0.1, 0.9, door_spans(level, e, 0.3))
+                for t0, t1 in wins[:min(3, tr["count"] + 1)]:
                     w = min(1.8, (t1 - t0) * L * 0.8)
                     if w < 1.0:
                         continue
                     c = e.at((t0 + t1) / 2, 0.38)
-                    _box(b, node, "ex_accent", c, base + 0.55, (w, 0.14, 0.76), yaw)
+                    _box(b, node, tr["frame"], c, base + 0.55, (w, 0.14, 0.76), yaw)
                     for s_ in (-1, 1):
                         _box(b, node, "joinery", c + e.dir * (s_ * (w / 2 - 0.05)), base + 1.25, (0.1, 1.3, 0.7), yaw)
+                        _box(b, node, "joinery", c + e.dir * (s_ * (w / 2 - 0.2)) - e.out * 0.1, base + 0.35, (0.12, 0.3, 0.5), yaw)
                     _box(b, node, "ex_glassband", c + e.out * 0.3, base + 1.25, (w - 0.2, 1.1, 0.04), yaw)
-                    _box(b, node, "ex_accent", c, base + 1.98, (w + 0.3, 0.12, 0.95), yaw)
-                    b.blob(node, "ex_accent", (c.x, base + 2.1, -c.y), w * 0.32, 0.45)
+                    _cap(b, node, tr["canopy"], c, base + 1.92, w, 0.9, yaw)
             elif f == "balcony" and li >= 1 and street(e) and L > 3.0:
-                # A cantilevered slab with a glass balustrade, centred on the
-                # widest opening (the balcony is what the door opens onto).
+                # A cantilevered balcony off the widest opening; its depth and
+                # width follow the design, its guard is the design's railing.
                 ops = door_spans(level, e, 0.0)
                 t = sum(max(ops, key=lambda s_: s_[1] - s_[0])) / 2 if ops else 0.5
-                w = min(L * 0.5, 3.6)
+                w = min(L * {1: 0.4, 2: 0.5, 3: 0.6, 4: 0.75}[tr["count"]], 4.2)
                 t = min(max(t, w / 2 / L + 0.02), 1 - w / 2 / L - 0.02)
-                dep = 1.1
+                dep = 0.9 + 0.15 * tr["count"]
                 c = e.at(t, dep / 2)
                 _box(b, node, "slab", c, base - 0.07, (w, 0.16, dep), yaw)
-                _box(b, node, "rail_glass", e.at(t, dep - 0.03), base + 0.55, (w - 0.06, 0.95, 0.03), yaw)
-                _box(b, node, "ex_accent", e.at(t, dep - 0.03), base + 1.04, (w, 0.05, 0.07), yaw)
+                guard = "rail_glass" if ex.railing in ("", "glass") else "rail_metal" if ex.railing == "metal" else "plaster"
+                _box(b, node, guard, e.at(t, dep - 0.03), base + 0.55, (w - 0.06, 0.95, 0.03 if guard != "plaster" else 0.12), yaw)
+                _box(b, node, tr["frame"], e.at(t, dep - 0.03), base + 1.04, (w, 0.05, 0.07), yaw)
                 for s_ in (-1, 1):
                     q = c + e.dir * (s_ * (w / 2 - 0.02))
-                    _box(b, node, "rail_glass", q, base + 0.55, (0.03, 0.95, dep - 0.06), yaw)
-                    _box(b, node, "ex_accent", q, base + 1.04, (0.05, 0.05, dep), yaw)
-            elif f == "arcade" and li == 0 and street(e) and L > 3.0:
-                # Piers and round arches along the front, a verandah behind them.
-                k = max(2, int(L / 2.6))
-                posts = [i / k for i in range(k + 1) if _free(i / k, 0.25 / L, doors) or i in (0, k)]
-                for t in posts:
-                    p = e.at(t, 1.6)
-                    _box(b, node, "plaster", p, base + (h - 0.3) / 2, (0.38, h - 0.3, 0.38), yaw)
-                for ta, tb in zip(posts, posts[1:]):
-                    r = (tb - ta) * L / 2
-                    if r < 0.5:
-                        continue
-                    spring = base + h - 0.45 - r
-                    for j in range(13):
-                        a = math.pi * j / 12
-                        q = e.at((ta + tb) / 2, 1.6) + e.dir * (-math.cos(a) * r)
-                        _box(b, node, "plaster", q, spring + math.sin(a) * r, (0.16, 0.16, 0.34), yaw)
-                _box(b, node, "ex_accent", e.at(0.5, 1.6), base + h - 0.3, (L + 0.4, 0.3, 0.42), yaw)
-                b.slab(node, "slab", [e.at(0, 0), e.at(1, 0), e.at(1, 1.85), e.at(0, 1.85)], base + h - 0.15, base + h - 0.03)
+                    _box(b, node, guard, q, base + 0.55, (0.03, 0.95, dep - 0.06), yaw)
             elif f == "portico" and li == 0 and street(e) and L > 3.0:
-                # Double-height columns either side of the main door, under a slab.
+                # Double-height columns of the design's kind at the door, under a slab
+                # or, on a pitched house, a pediment.
                 ds = door_spans(level, e, 0.0)
                 if ds:
                     ta, tb = max(ds, key=lambda s_: s_[1] - s_[0])
@@ -945,28 +1073,38 @@ def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
                     mid = e.at((ta + tb) / 2, 0.0)
                     half = max(1.3, (tb - ta) * L / 2 + 0.7)
                     for s_ in (-1, 1):
-                        q = mid + e.dir * (s_ * half) + e.out * 2.0
-                        b.cylinder(node, "plaster", (q.x, base, -q.y), 0.2, tall, 16)
-                        _box(b, node, "slab", q, base + 0.05, (0.6, 0.1, 0.6), yaw)
+                        _column(b, node, tr["column"], mid + e.dir * (s_ * half) + e.out * 2.0, base, tall, yaw)
                     corners = [mid + e.dir * (-half - 0.4), mid + e.dir * (half + 0.4),
                                mid + e.dir * (half + 0.4) + e.out * 2.5, mid + e.dir * (-half - 0.4) + e.out * 2.5]
                     b.slab(node, "slab", corners, base + tall, base + tall + 0.2)
-                    _box(b, node, "ex_accent", mid + e.out * 2.5, base + tall + 0.1, (2 * half + 0.8, 0.22, 0.08), yaw)
+                    _box(b, node, tr["frame"], mid + e.out * 2.5, base + tall + 0.1, (2 * half + 0.8, 0.22, 0.08), yaw)
+                    if ex.roof in ("hip", "gable"):
+                        y = base + tall + 0.2
+                        a_, c_ = mid + e.dir * (-half - 0.4) + e.out * 2.5, mid + e.dir * (half + 0.4) + e.out * 2.5
+                        apex = mid + e.out * 2.5
+                        b.tri(node, "plaster", (a_.x, y, -a_.y), (c_.x, y, -c_.y), (apex.x, y + 1.0, -apex.y))
             elif f == "bay" and li >= 1 and street(e) and L > 3.0:
-                # A projecting box window round the widest window on the face.
-                wins = [sp for sp in door_spans(level, e, 0.0, windows=True)]
+                # A projecting box window round the widest window, framed in the design's material.
+                wins = door_spans(level, e, 0.0, windows=True)
                 if wins:
                     ta, tb = max(wins, key=lambda s_: s_[1] - s_[0])
                     w = min(3.0, (tb - ta) * L + 0.5)
                     c = e.at((ta + tb) / 2, 0.35)
-                    _box(b, node, "ex_accent", c, base + 0.45, (w, 0.12, 0.7), yaw)
-                    _box(b, node, "ex_accent", c, base + 2.25, (w, 0.12, 0.7), yaw)
+                    for yy in (base + 0.45, base + 2.25):
+                        _box(b, node, tr["frame"], c, yy, (w, 0.12, 0.7), yaw)
                     for s_ in (-1, 1):
-                        _box(b, node, "ex_accent", c + e.dir * (s_ * (w / 2 - 0.05)), base + 1.35, (0.1, 1.8, 0.7), yaw)
+                        _box(b, node, tr["frame"], c + e.dir * (s_ * (w / 2 - 0.05)), base + 1.35, (0.1, 1.8, 0.7), yaw)
                     _box(b, node, "ex_glassband", c + e.out * 0.32, base + 1.35, (w - 0.2, 1.68, 0.03), yaw)
             elif f == "cornice":
+                # A cornice at every floor: single, doubled, or with a dentil course.
                 _box(b, node, "slab", e.at(0.5, 0.2), base + h - 0.12, (L + 0.5, 0.2, 0.42), yaw)
-                _box(b, node, "ex_accent", e.at(0.5, 0.26), base + h - 0.3, (L + 0.42, 0.1, 0.3), yaw)
+                _box(b, node, tr["frame"], e.at(0.5, 0.26), base + h - 0.3, (L + 0.42, 0.1, 0.3), yaw)
+                if tr["cornice"] == "double":
+                    _box(b, node, "slab", e.at(0.5, 0.14), base + h - 0.48, (L + 0.3, 0.12, 0.28), yaw)
+                elif tr["cornice"] == "dentil":
+                    k = max(4, int(L / 0.3))
+                    for i in range(k):
+                        _box(b, node, "slab", e.at((i + 0.5) / k, 0.12), base + h - 0.42, (0.12, 0.12, 0.2), yaw)
             elif f == "breeze" and li == min(1, n - 1) and street(e) and L > 3.0:
                 # A breeze-block panel between the windows: shade with air through it.
                 for t0, t1 in clear(0.08, 0.92, door_spans(level, e, 0.2, windows=True)):
@@ -993,17 +1131,82 @@ def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
                         for j in range(max(3, int((h - 0.4) / 0.6))):
                             q = c + e.dir * (-w / 2 + 0.3 + i * 0.6) + e.out * 0.1
                             b.blob(node, "leaf" if (i + j) % 2 else "leaf2", (q.x, base + 0.35 + j * 0.6, -q.y), 0.27, 0.8)
-    if f == "chhatri" and ex.roof == "flat":
+            elif f == "floatbox" and li >= 1 and e is front and L > 3.0:
+                # A deep framed box floating off the upper floor round its widest window.
+                wins = door_spans(level, e, 0.0, windows=True)
+                ta, tb = max(wins, key=lambda s_: s_[1] - s_[0]) if wins else (0.3, 0.7)
+                w = min(L - 0.4, max(2.4, (tb - ta) * L + 1.2))
+                t = min(max((ta + tb) / 2, w / 2 / L), 1 - w / 2 / L)
+                d = 0.6 + 0.2 * tr["count"]
+                c = e.at(t, d / 2)
+                for yy in (base + 0.08, base + h - 0.1):
+                    _box(b, node, tr["frame"], c, yy, (w, 0.24, d), yaw)
+                for s_ in (-1, 1):
+                    _box(b, node, tr["frame"], c + e.dir * (s_ * (w / 2 - 0.12)), base + h / 2, (0.24, h, d), yaw)
+            elif f == "featurewall" and e is front and L > 3.0 and not fronts_done:
+                # A monolith wall standing up the full height of the house at one end of the front.
+                fronts_done = True
+                end = _pick(ex, "wallend", (0.04, 0.96))
+                tall = sum(lv.floor_to_floor for lv, _b, _f in levels) + 1.2
+                mat = {"masonry": "clad", "timber": "ex_timber", "modern": "ex_concrete"}[tr["family"]]
+                _box(b, "level_0/facade", mat, e.at(end, 0.55), tall / 2, (0.4, tall, 1.3), yaw)
+            elif f == "thinnai" and li == 0 and e is front and L > 3.0:
+                # Raised verandah platforms either side of the door, timber posts and a tiled lean-to.
+                ds = door_spans(level, e, 0.0)
+                gap = max(ds, key=lambda s_: s_[1] - s_[0]) if ds else (0.45, 0.55)
+                for t0, t1 in clear(0.02, 0.98, [gap]):
+                    w = (t1 - t0) * L
+                    if w < 1.2:
+                        continue
+                    c = e.at((t0 + t1) / 2, 0.7)
+                    _box(b, node, "plinth", c, base + 0.22, (w, 0.44, 1.2), yaw)
+                    for t in (t0 + 0.15 / L, t1 - 0.15 / L):
+                        _column(b, node, "timber" if tr["family"] != "masonry" else "round", e.at(t, 1.2), base + 0.44, h - 0.9, yaw)
+                lo, hi = e.at(0, 1.6), e.at(1, 1.6)
+                y = base + h - 0.4
+                b.quad_strip(node, "roof_tile", (e.a.x, y + 0.4, -e.a.y), (e.c.x, y + 0.4, -e.c.y), (hi.x, y, -hi.y), (lo.x, y, -lo.y))
+            elif f == "pergolaframe" and li == 0 and e is front and L > 3.0:
+                # A double-height timber frame standing off the front, rafters across it.
+                tall = sum(lv.floor_to_floor for lv, _b, _f in levels[:2]) - 0.1
+                k = max(2, round(L / tr["bay"]))
+                for i in range(k + 1):
+                    p = e.at(i / k, 1.8)
+                    if _free(i / k, 0.2 / L, doors):
+                        _box(b, node, "timber", p, base + tall / 2, (0.18, tall, 0.18), yaw)
+                _box(b, node, "timber", e.at(0.5, 1.8), base + tall, (L, 0.22, 0.16), yaw)
+                for i in range(int(L / 0.45) + 1):
+                    _box(b, node, "timber", e.at(i * 0.45 / L, 0.95), base + tall + 0.15, (0.07, 0.16, 1.9), yaw)
+            elif f == "cornerglass" and li >= 1 and e is front and L > 3.0:
+                # The upper floor's street corner opened in glass, framed thin.
+                end = _pick(ex, "glassend", (0, 1))
+                w = min(2.4, L * 0.35)
+                t = (w / 2) / L if end == 0 else 1 - (w / 2) / L
+                c = e.at(t, 0.12)
+                _box(b, node, "ex_glassband", c, base + h / 2, (w, h - 0.3, 0.04), yaw)
+                for yy in (base + 0.1, base + h - 0.12):
+                    _box(b, node, tr["frame"], e.at(t, 0.2), yy, (w + 0.2, 0.14, 0.4), yaw)
+                for i in range(1, 3):
+                    _box(b, node, "frame", c + e.dir * (-w / 2 + i * w / 3), base + h / 2, (0.05, h - 0.3, 0.06), yaw)
+    if f in ("chhatri", "bangla") and ex.roof == "flat":
         level, base, fp = levels[-1]
         if fp is not None and not fp.is_empty:
             x0, y0, x1, y1 = fp.bounds
-            for cx, cy in ((x0 + 0.9, y0 + 0.9), (x1 - 0.9, y1 - 0.9)):
-                for dx in (-0.45, 0.45):
-                    for dy in (-0.45, 0.45):
-                        b.cylinder("roof", "plaster", (cx + dx, roof_y + 0.2, -(cy + dy)), 0.07, 1.5, 10)
-                b.slab("roof", "slab", [Vec2(cx - 0.65, cy - 0.65), Vec2(cx + 0.65, cy - 0.65), Vec2(cx + 0.65, cy + 0.65),
-                                        Vec2(cx - 0.65, cy + 0.65)], roof_y + 1.7, roof_y + 1.82)
-                b.blob("roof", "ex_accent", (cx, roof_y + 2.05, -cy), 0.6, 0.6)
+            if f == "bangla":
+                # One rooftop pavilion under a curved bangla roof, on slender columns.
+                cx, cy = _pick(ex, "pav", (((x0 + x1) / 2, y1 - 1.4), ((x0 + x1) / 2, y0 + 1.4)))
+                w, d = min(3.2, (x1 - x0) * 0.4), 2.0
+                for dx in (-w / 2 + 0.15, w / 2 - 0.15):
+                    for dy in (-d / 2 + 0.15, d / 2 - 0.15):
+                        _column(b, "roof", "round" if tr["family"] == "masonry" else tr["column"], Vec2(cx + dx, cy + dy), roof_y + 0.15, 1.9, 0.0)
+                _cap(b, "roof", "bangla", Vec2(cx, cy), roof_y + 2.05, w, d, 0.0)
+            else:
+                # Chhatris on the roof corners: one to four, under the design's canopy.
+                spots = [(x0 + 0.9, y0 + 0.9), (x1 - 0.9, y1 - 0.9), (x1 - 0.9, y0 + 0.9), (x0 + 0.9, y1 - 0.9)]
+                for cx, cy in spots[:tr["count"]]:
+                    for dx in (-0.45, 0.45):
+                        for dy in (-0.45, 0.45):
+                            b.cylinder("roof", "plaster", (cx + dx, roof_y + 0.2, -(cy + dy)), 0.07, 1.5, 10)
+                    _cap(b, "roof", "dome" if tr["canopy"] == "flat" else tr["canopy"], Vec2(cx, cy), roof_y + 1.7, 1.3, 1.3, 0.0)
 
 
 def _panel(b, ex: Exterior, levels, street) -> None:

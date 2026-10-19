@@ -459,6 +459,8 @@ class VastuRequest(BaseModel):
     plan_id: str | None = None
     plan: dict[str, Any] | None = None
     tradition_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    #: The plan this one was edited from: the report then says what the edit changed.
+    compare_to: str | None = Field(default=None, max_length=64)
 
 
 class CostRequest(BaseModel):

@@ -469,3 +469,22 @@ def test_exterior_batches_and_customised_fit(client, designed):
     assert g["default"].startswith("ex:") and g["grammar"]["schemes"]
     glb = client.get(f"/api/v1/plans/{pid}/model.glb", params={"design": fit["design"]["id"], "furniture": "false"})
     assert glb.status_code == 200 and glb.content[:4] == b"glTF"
+
+
+def test_vastu_after_an_edit_says_what_changed(client, designed):
+    pid = designed["winner_plan_id"]
+    rooms = client.get(f"/api/v1/plans/{pid}/rooms").json()["rooms"]
+    ground = [r for r in rooms if r.get("level", 0) == 0]
+    for a in ground:
+        for b in ground:
+            if a["id"] >= b["id"]:
+                continue
+            edit = client.post(f"/api/v1/plans/{pid}/edit", json={"ops": [{"op": "swap", "a": a["id"], "b": b["id"]}]})
+            if edit.status_code != 200:
+                continue
+            new_id = edit.json()["plan_id"]
+            out = client.post("/api/v1/plans/vastu", json={"plan_id": new_id, "tradition_weight": 0.75, "compare_to": pid}).json()
+            since = out["since_edit"]
+            assert set(since) >= {"score_before", "score_after", "delta", "changes"}
+            assert out["tradition_weight"] == 0.75
+            return

@@ -1194,11 +1194,19 @@ async function adoptEdited(newId) {
     .then((r) => r.json());
   const [plan, vastu, cost] = await Promise.all([
     jf(`${API}/plans/${newId}`),
-    jf(`${API}/plans/vastu`, { plan_id: newId, tradition_weight: 0.5 }),
+    jf(`${API}/plans/vastu`, { plan_id: newId, tradition_weight: S.plans[oldId]?.vastu?.tradition_weight ?? 0.5, compare_to: oldId }),
     jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0 }),
   ]);
-  S.plans[newId] = { plan, vastu, cost };
+  S.plans[newId] = { plan, vastu, cost, parent: oldId };
   rememberPlan(plan);
+  // Say what the edit did to the Vastu, right away.
+  const since = vastu?.since_edit;
+  if (since && (since.delta || since.changes?.length)) {
+    // Name the change that moved the score the way it went (the Vastu tab lists the rest).
+    const top = since.changes?.find((c) => c.better === since.delta >= 0) || since.changes?.[0];
+    const more = (since.changes?.length || 0) - 1;
+    toast(`Vastu ${Math.round(since.score_before)} → ${Math.round(since.score_after)}${top ? `: ${top.title.toLowerCase()} ${top.better ? "now met" : "no longer met"}` : ""}${more > 0 ? ` (+${more} more on the Vastu tab)` : ""}`);
+  }
   // The winner on screen may be a refined copy of a candidate; its tab is the candidate's.
   const slotId = S.planIds.includes(oldId) ? oldId : snap.candidateId;
   const swap = (id) => (id === oldId || id === slotId ? newId : id);
@@ -1728,35 +1736,123 @@ function renderMandala() {
 
 /* ── vastu ─────────────────────────────────────────────────────────── */
 
+// The nine squares of the Vastu Purusha mandala, as the plan is read.
+const VX_ZONES = [
+  ["NW", "Vayavya", "air"], ["N", "Uttara", "wealth"], ["NE", "Ishanya", "water"],
+  ["W", "Paschima", "gain"], ["C", "Brahmasthan", "space"], ["E", "Purva", "sun"],
+  ["SW", "Nairutya", "earth"], ["S", "Dakshina", "rest"], ["SE", "Agneya", "fire"],
+];
+const VX_CATS = { zone_placement: "Room zones", entrance: "Entrance", brahmasthan: "Centre", water: "Water", fire: "Fire",
+  mass_distribution: "Mass and open space", proportion: "Shape", openings: "Openings", slope: "Slope",
+  circulation: "Stairs", sleeping: "Sleeping", relations: "Rooms and neighbours" };
+// Sixteen compass points to the eight squares (and the centre).
+const vxZone = (d) => {
+  const k = String(d || "").toUpperCase();
+  if (!k || k === "C" || k === "CENTRE") return "C";
+  return { NNE: "N", ENE: "E", ESE: "E", SSE: "S", SSW: "S", WSW: "W", WNW: "W", NNW: "N" }[k] || k;
+};
+const vxTone = (verdict) => ({ ideal: "good", acceptable: "good", neutral: "mid", discouraged: "bad", prohibited: "bad" }[verdict] || "none");
+
+function vxRing(score) {
+  const r = 34, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, score / 100));
+  const svg = `<svg viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" class="vx-ring__bg"/>`
+    + `<circle cx="42" cy="42" r="${r}" class="vx-ring__fg" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/></svg>`;
+  const box = el("div", "vx-ring");
+  box.innerHTML = svg;
+  box.append(el("b", null, String(Math.round(score))));
+  return box;
+}
+
 function renderVastu() {
   const s = scrollPane("vastu");
   const v = cur().vastu;
   if (!v) { s.append(el("p", "empty-note", "No Vastu assessment for this scheme.")); return; }
 
-  const stats = el("div", "stat-row");
-  for (const [pig, k, val, sub] of [
-    ["orpiment", "Score", `${Math.round(v.score)}/100`, v.grade],
-    ["indigo", "Assessed", `${v.rules_assessed}`, `of ${v.rules_total} rules`],
-    ["chalk", "Excluded", `${v.rules_not_assessable}`, "not guessed at"],
-    ["hingula", "Violations", `${v.violations}`, `${v.serious_violations} serious`],
-  ]) {
-    const d = el("dl", "stat"); d.dataset.pig = pig;
-    d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); stats.append(d);
-  }
-  s.append(stats);
-  s.append(el("p", "lede", v.summary || ""));
+  // ── the reading at a glance ──────────────────────────────────────
+  const head = el("section", "vx-head");
+  const txt = el("div", "vx-head__t");
+  txt.append(el("span", "vx-k", "Vastu"), el("h2", "vx-grade", `${Math.round(v.score)} / 100 · ${v.grade}`),
+    el("p", "vx-sum", v.summary || ""),
+    el("p", "vx-meta", `${v.rules_assessed} of ${v.rules_total} rules measured on this plan · ${v.violations} not met`
+      + (v.serious_violations ? ` (${v.serious_violations} serious)` : "")));
+  head.append(vxRing(v.score), txt);
+  s.append(head);
 
-  // Stance control — re-scoring is instant, so the reconciliation is something
-  // you watch happen rather than something you are told about.
-  s.append(el("h3", "sec", "Stance"));
-  const lab = el("label", "fld fld--full");
-  lab.append(el("span", null, `Tradition weight — ${cap(v.stance_label)}`));
+  // Stance: how much the client weighs tradition against function.
+  const lab = el("label", "vx-stance");
+  lab.append(el("span", null, `Your stance: ${cap(v.stance_label)}`));
   const sl = el("input"); Object.assign(sl, { type: "range", min: 0, max: 4, step: 1, value: Math.round(v.tradition_weight * 4) });
   sl.className = "stance";
+  sl.setAttribute("aria-label", "How strictly to read Vastu, from modern to traditional");
   sl.addEventListener("change", () => rescore(+sl.value / 4));
-  lab.append(sl); s.append(lab);
-  if (v.reconciliation_note) s.append(el("p", "note-card", v.reconciliation_note));
+  const ends = el("span", "vx-stance__ends"); ends.append(el("i", null, "Modern"), el("i", null, "Traditional"));
+  lab.append(sl, ends);
+  s.append(lab);
 
+  // ── what the last edit did ───────────────────────────────────────
+  const since = v.since_edit;
+  if (since) {
+    const card = el("section", `vx-since${since.delta < 0 ? " is-down" : since.delta > 0 ? " is-up" : ""}`);
+    card.append(el("h3", "sec", "Since your edit"),
+      el("p", "vx-since__score", since.delta
+        ? `${Math.round(since.score_before)} → ${Math.round(since.score_after)} (${since.delta > 0 ? "+" : ""}${since.delta})`
+        : `Unchanged at ${Math.round(since.score_after)}`));
+    const word = (x) => (x === null || x === undefined ? "not measured" : x >= 0.95 ? "met" : x >= 0.6 ? "acceptable" : x >= 0.3 ? "weak" : "not met");
+    for (const c of (since.changes || []).slice(0, 6)) {
+      const row = el("div", `vx-change ${c.better ? "is-up" : "is-down"}`);
+      row.append(el("i", "vx-change__a", c.better ? "▲" : "▼"), el("span", "vx-change__t", c.title),
+        el("span", "vx-change__w", `${word(c.before)} → ${word(c.after)}`));
+      if (c.note) row.append(el("span", "vx-change__n", c.note));
+      card.append(row);
+    }
+    if (!since.changes?.length) card.append(el("p", "vx-meta", "No rule changed its reading."));
+    s.append(card);
+  }
+
+  // ── the mandala: every room in its square ────────────────────────
+  const gp = v.graph_placements || [];
+  if (gp.length) {
+    s.append(el("h3", "sec", "Rooms on the Vastu mandala"));
+    const grid = el("div", "vx-grid");
+    grid.setAttribute("role", "img");
+    grid.setAttribute("aria-label", "The plan read as the nine squares of the Vastu mandala, each room in its square");
+    for (const [z, name, element] of VX_ZONES) {
+      const cell = el("div", "vx-cell"); cell.dataset.z = z;
+      cell.append(el("span", "vx-cell__h", `${z === "C" ? "Centre" : z} · ${name}`), el("span", "vx-cell__e", element));
+      const chips = el("div", "vx-cell__rooms");
+      for (const p of gp.filter((x) => vxZone(x.direction) === z)) {
+        const chip = el("span", "vx-chip", p.room); chip.dataset.v = vxTone(p.verdict);
+        chip.title = `${p.room}: ${p.verdict}${p.better_directions?.length ? ` · better ${p.better_directions.map((b) => b.direction).join(", ")}` : ""}`;
+        chips.append(chip);
+      }
+      cell.append(chips);
+      grid.append(cell);
+    }
+    s.append(grid);
+    const key = el("p", "vx-key");
+    for (const [t, l] of [["good", "ideal or acceptable"], ["mid", "neutral"], ["bad", "discouraged"], ["none", "no reading"]]) {
+      const i = el("i", "vx-chip vx-chip--key"); i.dataset.v = t; key.append(i, el("span", null, l));
+    }
+    s.append(key);
+  }
+
+  // ── by category ──────────────────────────────────────────────────
+  const cats = (v.category_scores || []).filter((c) => c.rules_assessed > 0 && VX_CATS[c.category]);
+  if (cats.length) {
+    s.append(el("h3", "sec", "By category"));
+    const box = el("div", "vx-cats");
+    for (const c of cats.sort((a, b) => b.weight - a.weight)) {
+      const row = el("div", "vx-cat");
+      const pct = Math.round(c.score > 1 ? c.score : c.score * 100);
+      const bar = el("span", "vx-cat__bar"); const fill = el("i"); fill.style.width = `${pct}%`; fill.dataset.v = pct >= 75 ? "good" : pct >= 50 ? "mid" : "bad";
+      bar.append(fill);
+      row.append(el("span", "vx-cat__l", VX_CATS[c.category]), bar, el("span", "vx-cat__v", `${pct}`));
+      box.append(row);
+    }
+    s.append(box);
+  }
+
+  // ── the fixes worth most ─────────────────────────────────────────
   if (v.top_remedies?.length) {
     s.append(el("h3", "sec", "What fixing each thing is worth"));
     for (const r of v.top_remedies) {
@@ -1771,85 +1867,66 @@ function renderVastu() {
       s.append(p);
     }
   }
+  if (v.reconciliation_note) s.append(el("p", "note-card", v.reconciliation_note));
 
+  // ── for the builder: decided on the plot ─────────────────────────
+  const site = (v.verdicts || []).filter((x) => x.category === "site");
+  if (site.length) {
+    s.append(el("h3", "sec", "Site checklist for the builder"));
+    s.append(el("p", "lede", "Placed on the plot during construction, so they are not in the drawings or the score."));
+    const ul = el("ul", "vx-check");
+    for (const x of site) {
+      const li = el("li");
+      li.append(el("b", null, x.title), el("span", null, x.remedy || ""));
+      ul.append(li);
+    }
+    s.append(ul);
+  }
+
+  // ── every rule, folded away ──────────────────────────────────────
+  const fold = (title, n, fill, open = false) => {
+    if (!n) return;
+    const d = el("details", "vx-fold"); d.open = open;
+    d.append(el("summary", null, `${title} (${n})`));
+    fill(d);
+    s.append(d);
+  };
   const violated = (v.verdicts || []).filter((x) => x.assessable && x.compliance < 0.6);
-  if (violated.length) {
-    s.append(el("h3", "sec", `Rules not satisfied (${violated.length})`));
-    for (const x of violated) s.append(vastuRow(x, x.verdict === "prohibited" ? "major" : "moderate"));
-  }
   const met = (v.verdicts || []).filter((x) => x.assessable && x.compliance >= 0.6);
-  if (met.length) {
-    s.append(el("h3", "sec", `Rules satisfied (${met.length})`));
-    for (const x of met) s.append(vastuRow(x, "info"));
-  }
-  const skipped = (v.verdicts || []).filter((x) => !x.assessable);
-  if (skipped.length) {
-    s.append(el("h3", "sec", `Not assessable (${skipped.length})`));
-    s.append(el("p", "lede", "Excluded from the score rather than guessed at. Scoring a rule the model cannot evaluate is how these systems manufacture false precision."));
+  const skipped = (v.verdicts || []).filter((x) => !x.assessable && x.category !== "site");
+  fold("Rules not satisfied", violated.length, (d) => { for (const x of violated) d.append(vastuRow(x, x.verdict === "prohibited" ? "major" : "moderate")); }, true);
+  fold("Rules satisfied", met.length, (d) => { for (const x of met) d.append(vastuRow(x, "info")); });
+  fold("Not measured on this plan", skipped.length, (d) => {
+    d.append(el("p", "lede", "Left out of the score rather than guessed at."));
     for (const x of skipped) {
-      const d = el("div", "find"); d.dataset.sev = "info";
-      d.append(el("i", "find__s"), el("span", "find__t", x.title),
-        el("span", "find__c", x.reason_not_assessable || `Superseded by ${x.defeated_by}`));
-      s.append(d);
+      const r = el("div", "find"); r.dataset.sev = "info";
+      r.append(el("i", "find__s"), el("span", "find__t", x.title), el("span", "find__c", x.reason_not_assessable || `Superseded by ${x.defeated_by}`));
+      d.append(r);
     }
-  }
-
-  // ── knowledge graph ──────────────────────────────────────────────
-  // The rule corpus can only speak where a text speaks. The graph derives a
-  // verdict for every room by reasoning through what it is used for, and shows
-  // the chain that produced it — which is the part a client can actually argue
-  // with.
-  const gp = v.graph_placements || [];
-  if (gp.length) {
-    s.append(el("h3", "sec", "Knowledge graph — every room, derived"));
-
-    const gstats = el("div", "stat-row");
-    const derived = gp.filter((p) => p.derived).length;
-    const undet = gp.filter((p) => p.verdict === "undetermined").length;
-    const cov = v.graph_coverage || {};
-    for (const [pig, k, val, sub] of [
-      ["indigo", "Graph score", `${Math.round(v.graph_score)}/100`, "area-weighted"],
-      ["ochre", "Rooms derived", `${derived}`, "no rule enumerates these"],
-      ["chalk", "Coverage", `${cov.coverage_gain || "—"}×`,
-        `${cov.placements_derivable_by_graph || 0} vs ${cov.placements_asserted_by_text || 0} placements`],
-      [undet ? "hingula" : "orpiment", "Undetermined", `${undet}`, "excluded from score"],
-    ]) {
-      const d = el("dl", "stat"); d.dataset.pig = pig;
-      d.append(el("dt", null, k), el("dd", null, val), el("small", null, sub)); gstats.append(d);
-    }
-    s.append(gstats);
-    if (v.graph_note) s.append(el("p", "note-card", v.graph_note));
-
+  });
+  fold("How each room's reading was derived", gp.length, (d) => {
+    if (v.graph_note) d.append(el("p", "note-card", v.graph_note));
     for (const p of gp) {
       const box = el("div", "deriv");
       box.dataset.v = p.verdict;
-
       const h = el("div", "deriv__h");
-      h.append(el("b", null, p.room));
-      h.append(el("span", "deriv__dir", `${p.direction} · ${p.quarter}`));
-      h.append(el("span", "deriv__sc", p.verdict === "undetermined" ? "—" : p.score.toFixed(2)));
-      h.append(el("span", "deriv__tag", p.derived ? "derived" : "cited"));
+      h.append(el("b", null, p.room), el("span", "deriv__dir", `${p.direction} · ${p.quarter}`),
+        el("span", "deriv__sc", p.verdict === "undetermined" ? "—" : p.score.toFixed(2)),
+        el("span", "deriv__tag", p.derived ? "derived" : "cited"));
       box.append(h);
-
       if (p.derivation) box.append(chainRow("supports", p.derivation));
       if (p.objection) box.append(chainRow("objects", p.objection));
-      if (!p.derivation && !p.objection) {
-        box.append(el("p", "deriv__x", p.explanation));
-      }
-
+      if (!p.derivation && !p.objection) box.append(el("p", "deriv__x", p.explanation));
       if (p.agrees_with_text === false) {
-        box.append(el("p", "deriv__warn",
-          "The derivation disagrees with a cited text. The text governs the score; the disagreement is shown rather than hidden."));
+        box.append(el("p", "deriv__warn", "The derivation disagrees with a cited text. The text governs the score; the disagreement is shown rather than hidden."));
       }
       if (p.better_directions?.length) {
-        box.append(el("p", "deriv__alt",
-          "Better: " + p.better_directions
-            .map((b) => `${b.direction} (${b.score.toFixed(2)})`).join(", ")));
+        box.append(el("p", "deriv__alt", "Better: " + p.better_directions.map((b) => `${b.direction} (${b.score.toFixed(2)})`).join(", ")));
       }
       if (p.citations?.length) box.append(el("p", "deriv__cite", p.citations.join(" · ")));
-      s.append(box);
+      d.append(box);
     }
-  }
+  });
 }
 
 function chainRow(kind, chain) {
@@ -1878,7 +1955,7 @@ async function rescore(w) {
   try {
     const r = await fetch(`${API}/plans/vastu`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan_id: S.activeId, tradition_weight: w }),
+      body: JSON.stringify({ plan_id: S.activeId, tradition_weight: w, ...(cur().parent ? { compare_to: cur().parent } : {}) }),
     });
     if (!r.ok) throw new Error(String(r.status));
     S.plans[S.activeId].vastu = await r.json();
@@ -2279,7 +2356,8 @@ const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pit
   jharokha: "Jharokha", colonnade: "Colonnade", chhatri: "Chhatri", cornice: "Cornice", breeze: "Breeze-block", greenwall: "Green wall", balcony: "Balcony",
   hedge: "Hedge", grille: "Grille", glass: "Glass", solid: "Solid wall", terracotta: "Terracotta tile", acp: "ACP panel",
   slate: "Stacked slate", vault: "Barrel vault", sawtooth: "Sawtooth", slats: "Timber slats", bamboo: "Bamboo",
-  arcade: "Arcade", portico: "Portico", bay: "Bay window" };
+  arcade: "Arcade", portico: "Portico", bay: "Bay window", floatbox: "Floating box", featurewall: "Monolith wall",
+  thinnai: "Thinnai", bangla: "Bangla pavilion", pergolaframe: "Pergola frame", cornerglass: "Glass corner" };
 // A count too large to read as digits, in words: "120 quintillion".
 function bigWords(n) {
   const names = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion", "septillion", "octillion"];
@@ -2842,7 +2920,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       base: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw" },
       upper: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw", disabled: (v) => one && v !== "plaster" },
       paving: { paint: tex(DRIVE), cls: "ex-chips--sw ex-chips--4" },
-      feature: { disabled: (v) => one && ["jharokha", "balcony", "bay"].includes(v) },
+      feature: { disabled: (v) => one && ["jharokha", "balcony", "bay", "floatbox", "cornerglass"].includes(v) },
       solar: { disabled: (v) => v === "on" && !flatRoof },
       panel: { paint: tex(PANEL), cls: "ex-chips--sw ex-chips--4" },
       parapet: { disabled: (v) => v !== "plain" && now.roof !== "flat" },
