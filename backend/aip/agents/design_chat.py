@@ -117,8 +117,12 @@ def _apply(ex: Exterior, form: dict, options: dict, paint: dict, reset: list,
             changes[k] = v
             said.append(f"{k} now {str(v).replace('_', ' ')}")
     for k, v in (options or {}).items():
-        if k in _OPTIONS and v in _OPTIONS[k] and v != getattr(ex, k):
-            changes[k] = v
+        if k not in _OPTIONS or v not in _OPTIONS[k]:
+            continue
+        # An option's first value is what the house has when the id leaves it out.
+        cur = getattr(ex, k) or _OPTIONS[k][0]
+        if v != cur:
+            changes[k] = "" if v == _OPTIONS[k][0] else v
             said.append(f"{k} now {v}")
     if changes:
         ex = replace(ex, **changes)
@@ -177,7 +181,10 @@ _FIELD_WORDS = {
     "railing": ("railing", "railings"), "shade": ("chajja", "chajjas", "sunshade", "sunshades", "shade"),
     "canopy": ("canopy", "porch"), "parapet": ("parapet",), "garden": ("garden",), "solar": ("solar",),
     "deck": ("terrace", "deck"), "lights": ("lights", "lighting"), "yard": ("yard",), "panel": ("panel",),
+    "garage": ("garage", "car porch", "carport", "parking", "car park"),
 }
+#: Values too common to read without their field named ("open" the windows is not the garage).
+_NEEDS_FIELD = {"open", "closed", "none", "on", "off", "plain", "standard"}
 #: How a client says some values.
 _VALUE_WORDS = {"hip": ("hip", "hipped"), "gable": ("gable", "pitched"), "butterfly": ("butterfly",),
                 "jaali": ("jaali", "jali"), "louvres": ("louvres", "louvers"), "fins": ("fins",),
@@ -185,7 +192,9 @@ _VALUE_WORDS = {"hip": ("hip", "hipped"), "gable": ("gable", "pitched"), "butter
                 "sliding": ("sliding",), "glass": ("glass",), "brick": ("brick",), "stone": ("stone",),
                 "timber": ("timber", "wood", "wooden"), "concrete": ("concrete",), "terracotta": ("terracotta",),
                 "deep": ("deep",), "pergola": ("pergola",), "on": ("solar panels", "add solar"),
-                "strips": ("led strips", "strip lights"), "washers": ("wall washers", "uplights")}
+                "strips": ("led strips", "strip lights"), "washers": ("wall washers", "uplights"),
+                "closed": ("closed", "close", "shut", "shutter", "rolling shutter", "covered"),
+                "open": ("open", "uncovered", "carport")}
 
 
 def _vocab_in(clause: str) -> dict[str, str]:
@@ -202,6 +211,8 @@ def _vocab_in(clause: str) -> dict[str, str]:
             owners = [g for g, vs in fields.items() if v in vs]
             # "screen" names the street screen; it is a parapet only when the parapet is named.
             if f not in named and any(v in ws for g, ws in _FIELD_WORDS.items() if g != f):
+                continue
+            if v in _NEEDS_FIELD and f not in named:
                 continue
             if f in named or (len(owners) == 1 and not named & set(owners) - {f}):
                 hit.setdefault(f, v)

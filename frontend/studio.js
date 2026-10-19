@@ -16,7 +16,7 @@ const API = (() => {
   const o = new URLSearchParams(location.search).get("api") || (local ? "" : window.AIP_API);
   if (o) return o.replace(/\/$/, "");
   if (location.port === "8080" || location.port === "3000" || location.port === "5500") {
-    return `http://${location.hostname || "127.0.0.1"}:8000/api/v1`;
+    return `http://${location.hostname || "127.0.0.1"}:8010/api/v1`;
   }
   return `${location.origin}/api/v1`;
 })();
@@ -1605,7 +1605,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p1");
+    const { Viewer3D } = await import("./viewer3d.js?v=p6");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2079,7 +2079,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p1");
+  const { Viewer3D } = await import("./viewer3d.js?v=p6");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2221,7 +2221,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p1");
+    const { Viewer3D } = await import("./viewer3d.js?v=p6");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2232,7 +2232,7 @@ async function renderModel() {
     let vastu = null;
     const pick = async (b, mode, lv) => {
       modes.querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
-      if (mode !== "vastu") { S.viewer.clearVastu(); S.viewer.setMode(mode, lv); return; }
+      if (mode !== "vastu") { S.viewer.clearVastu(); S.viewer.pickMode(mode, lv); return; }
       // Vastu: the floor cut open, its grid laid on it and every room pinned.
       S.viewer.setMode("interior", lv);
       try {
@@ -2248,10 +2248,21 @@ async function renderModel() {
     };
     for (const [mode, lv, label] of options) {
       const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab");
+      b.dataset.mode = mode; b.dataset.level = String(lv);
       b.addEventListener("click", () => pick(b, mode, lv));
       modes.append(b);
     }
     modes.firstChild?.setAttribute("aria-selected", "true");
+    // Zooming in walks inside: the tab follows, and the caption says how to get back out.
+    const outside = () => cap.textContent;
+    let said = "";
+    S.viewer.autoInterior((mode, lv) => {
+      modes.querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.mode === mode && +x.dataset.level === lv)));
+      if (mode === "interior") {
+        said ||= outside();
+        cap.textContent = `Inside · ${floorName(lv)}  ·  zoom closer into a room, or zoom out to step back outside`;
+      } else if (said) { cap.textContent = said; said = ""; }
+    });
     cap.textContent = `${st.width.toFixed(1)} × ${st.depth.toFixed(1)} m  ·  ${st.height.toFixed(1)} m high  ·  ${st.triangles.toLocaleString()} triangles`;
   } catch (err) {
     cap.textContent = `The model could not be shown here (${err.message}). It can still be downloaded.`;
@@ -2329,7 +2340,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p1");
+    const { Viewer3D } = await import("./viewer3d.js?v=p6");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2351,7 +2362,7 @@ let EX_PART_ORDER = [];
 const EX_PARTS = ["roof", "base", "upper", "screen", "windows", "planters", "accent", "feature"];
 const EX_TINTS = { w: "wall", c: "clad", r: "roof_tint", m: "metal", f: "frame", d: "door" };
 const EX_OPTS = { b: "boundary", l: "railing", h: "shade", e: "canopy", g: "gate", v: "paving", t: "garden", s: "solar",
-  x: "panel", q: "parapet", k: "deck", i: "lights", y: "yard" };
+  x: "panel", q: "parapet", k: "deck", i: "lights", y: "yard", a: "garage" };
 const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pitch", butterfly: "Butterfly", hip: "Hip, tiled", gable: "Gable",
   plaster: "Plaster", stone: "Stone", brick: "Brick", concrete: "Concrete", timber: "Timber", metal: "Metal", none: "None",
   fins: "Fins", louvres: "Louvres", frame: "Box frame", jaali: "Jaali", perforated: "Perforated", punched: "Punched", band: "Glazing band",
@@ -2892,6 +2903,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     railing: ["Balcony railings", [["glass", "Glass"], ["metal", "Metal"], ["solid", "Solid wall"]]],
     boundary: ["Boundary wall", [["plaster", "Plaster"], ["stone", "Stone"], ["brick", "Brick"], ["hedge", "Hedge"], ["grille", "Grille"]]],
     gate: ["Gate", [["none", "Open"], ["sliding", "Steel sliding"], ["timber", "Timber"]]],
+    garage: ["Garage", [["open", "Open car porch"], ["closed", "Closed, rolling shutter"]]],
     paving: ["Driveway", [["stone", "Stone pavers"], ["concrete", "Concrete"], ["gravel", "Gravel"], ["grass", "Grass pavers"]]],
     garden: ["Garden", [["standard", "Standard"], ["lush", "Lush"], ["minimal", "Minimal"], ["none", "Paved"]]],
     planters: ["Planters", [[false, "None"], [true, "Along the front"]]],
@@ -2906,7 +2918,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
   };
   const SECTIONS = [["form", "Roof & form", ["roof", "parapet", "deck", "solar", "feature"]], ["walls", "Walls", ["base", "upper", "panel"]],
     ["openings", "Windows & shade", ["windows", "shade", "screen"]], ["entry", "Entrance, balconies & lights", ["canopy", "railing", "lights"]],
-    ["site", "Gate, drive & garden", ["boundary", "gate", "paving", "garden", "yard", "planters"]], ["accent", "Accent finish", ["accent"]]];
+    ["site", "Gate, drive & garden", ["boundary", "gate", "garage", "paving", "garden", "yard", "planters"]], ["accent", "Accent finish", ["accent"]]];
   const customiser = (panel, di) => {
     const d = designs[di];
     const now = d && exParse(d.id);
@@ -2952,7 +2964,10 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       edit(di, { [key]: store });
     };
     pal.sec ||= { form: true };
-    for (const [sid, title, keys] of SECTIONS) {
+    // The garage choice only where the plan has a car porch.
+    const hasGarage = (S.plans[id]?.plan?.levels || []).some((lv) => (lv.rooms || []).some((r) => r.type === "garage"));
+    for (const [sid, title, allKeys] of SECTIONS) {
+      const keys = allKeys.filter((k) => k !== "garage" || hasGarage);
       const sec = el("details", "ex-sec");
       sec.open = !!pal.sec[sid];
       sec.addEventListener("toggle", () => { pal.sec[sid] = sec.open; });
@@ -2961,6 +2976,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       const said = keys.map((k) => {
         const v = value(k);
         if (k === "gate") return v === "none" ? "Open gate" : label(k);
+        if (k === "garage") return v === "closed" ? "Shuttered garage" : "Open car porch";
         if (k === "planters") return v ? "Planters" : "";
         if (k === "solar") return v === "on" ? "Solar panels" : "";
         if (k === "boundary") return `${label(k)} boundary`;

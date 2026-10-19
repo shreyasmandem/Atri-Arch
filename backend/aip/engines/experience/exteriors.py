@@ -89,6 +89,8 @@ PARTS: dict[str, tuple[str, str, tuple[str, ...]]] = {
     "compound": ("Boundary wall", "Outside", ("boundary", "boundary wall", "compound wall", "compound", "fence")),
     "gate": ("Gate", "Outside", ("gate", "main gate", "timber gate")),
     "gate_steel": ("Gate steelwork", "Outside", ("sliding gate", "steel gate", "gate bars")),
+    "shutter": ("Garage shutter", "Outside", ("shutter", "garage shutter", "garage door", "rolling shutter")),
+    "car": ("Car", "Outside", ("car",)),
     "paving": ("Paving and drive", "Outside", ("paving", "drive", "driveway", "path", "pavers")),
     "lawn": ("Lawn", "Outside", ("lawn", "grass")),
     "pool_tile": ("Pool tiles", "Outside", ("pool tiles", "pool")),
@@ -111,12 +113,14 @@ DECKS = ("none", "pergola", "garden")                            # what the roof
 LIGHTS = ("none", "washers", "strips")                           # facade lighting, lit at night
 #: A garden feature, placed in its traditional quarter (see landscape.YARD_FEATURES).
 YARDS = ("none", "tulsi", "jhoola", "waterwall", "koipond", "gazebo", "rockgarden", "sitout")
+#: The car porch's street face: open under a beam, or closed by a rolling shutter.
+GARAGES = ("open", "closed")
 #: Discrete extras in the id's tail: id key -> (Exterior field, vocabulary).
 #: The first value of each is what the house has when the id leaves it out.
 OPTION_KEYS = {"b": ("boundary", BOUNDARIES), "l": ("railing", RAILINGS), "h": ("shade", SHADES),
                "e": ("canopy", CANOPIES), "g": ("gate", GATES), "v": ("paving", PAVINGS),
                "t": ("garden", GARDENS), "s": ("solar", SOLAR), "x": ("panel", PANELS), "q": ("parapet", PARAPETS),
-               "k": ("deck", DECKS), "i": ("lights", LIGHTS), "y": ("yard", YARDS)}
+               "k": ("deck", DECKS), "i": ("lights", LIGHTS), "y": ("yard", YARDS), "a": ("garage", GARAGES)}
 #: Named paints per surface, for picking colours one surface at a time.
 PAINTS: dict[str, tuple[tuple[str, str], ...]] = {
     "wall": (("Lime white", "#efe9dc"), ("Ivory", "#f4efe4"), ("Gallery white", "#f6f4f0"), ("Warm sand", "#e3cfa8"),
@@ -460,6 +464,7 @@ class Exterior:
     deck: str = ""
     lights: str = ""
     yard: str = ""
+    garage: str = ""
     #: Colours a client painted on single parts, "key-hex.key-hex" (see PARTS).
     paints: str = ""
 
@@ -941,6 +946,7 @@ def recolour(palette, ex: Exterior) -> None:
     palette.garden, palette.solar = ex.garden, ex.solar == "on"
     palette.parapet, palette.deck, palette.lights = ex.parapet, ex.deck, ex.lights
     palette.yard = ex.yard
+    palette.garage = ex.garage
     if ex.deck == "pergola":
         palette.pergola = True
     elif ex.deck:

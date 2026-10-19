@@ -128,6 +128,7 @@ export class Viewer3D {
     this.panes = [];
     if (this.model) { this.scene.remove(this.model); disposeTree(this.model); }
     const m = (this.model = gltf.scene);
+    this._house = 0;
     let tris = 0;
     m.traverse((o) => {
       if (!o.isMesh) return;
@@ -153,6 +154,7 @@ export class Viewer3D {
     const centre = box.getCenter(new THREE.Vector3());
     m.position.sub(new THREE.Vector3(centre.x, box.min.y, centre.z));
     const span = Math.max(size.x, size.z, size.y * 1.5);
+    this.span = span;
 
     const ground = new THREE.Mesh(new THREE.CircleGeometry(span * (this.daylight ? 3 : 1.6), 64),
       this.daylight
@@ -194,6 +196,84 @@ export class Viewer3D {
   // Exterior: the whole house. Interior: the roof and every floor above the
   // one in view lifted away, ceiling lights hidden so the rooms read from
   // above. Night: dusk light, the lamps on and glowing through the glass.
+  // ── zoom in to go inside ────────────────────────────────────────────
+  // Close in on the house and its roof and upper floors lift away, showing
+  // the floor at the camera's height; draw back and it closes up again. Only
+  // an outside view steps in on its own, and only a step it took itself
+  // steps back out, so a floor picked from the tabs stays put.
+  autoInterior(onChange) {
+    this.onAutoMode = onChange;
+    if (this._autoBound) return;
+    this._autoBound = true;
+    this.controls.minDistance = 1.5;
+    this.controls.addEventListener("change", () => this._autoStep());
+  }
+
+  _autoStep() {
+    if (!this.model || !this.span || this.orthoKind || this._gliding) return;
+    const d = this.camera.position.distanceTo(this.controls.target);
+    // The house itself, not the plot round it, and the view's shape: a tall
+    // phone view stands further back to show the same house.
+    if (!this._house) {
+      const box = new THREE.Box3();
+      this.model.traverse((o) => { if (o.isMesh && /^level_\d+__/.test(o.name)) box.expandByObject(o); });
+      const sz = box.isEmpty() ? new THREE.Vector3(this.span, 0, this.span) : box.getSize(new THREE.Vector3());
+      this._house = Math.max(sz.x, sz.z, sz.y * 1.2);
+    }
+    const reach = this._house * Math.max(1, 1 / (this.camera.aspect || 1)) ** 0.85;
+    // In once the house fills the view; out only well beyond, so it never flickers.
+    if ((this.mode || "exterior") === "exterior" && d < reach * 1.6) {
+      const levels = [];
+      this.model.traverse((o) => { const m = /^level_(\d+)$/.exec(o.name); if (m) levels.push(+m[1]); });
+      const top = levels.length ? Math.max(...levels) : 0;
+      // The floor at eye level, at the plans' 3.15 m floor to floor.
+      const level = Math.max(0, Math.min(top, Math.floor((this.camera.position.y - 0.6) / 3.15)));
+      this._auto = true;
+      this.setMode("interior", level);
+      this.onAutoMode?.("interior", level);
+      this._glideInto(level, d);
+    } else if (this._auto && this.mode === "interior" && d > reach * 2.4) {
+      this._auto = false;
+      this.setMode("exterior");
+      this.onAutoMode?.("exterior", 0);
+    }
+  }
+
+  // Into the floor as a dollhouse: from the side the client was looking,
+  // high enough to see down into every room, the floor filling the view.
+  _glideInto(level, d) {
+    const box = new THREE.Box3();
+    this.model.traverse((o) => { if (o.isMesh && o.name.startsWith(`level_${level}__`)) box.expandByObject(o); });
+    if (box.isEmpty()) return;
+    const centre = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const floorY = box.min.y + 1.0;
+    const target = new THREE.Vector3(centre.x, floorY, centre.z);
+    const dir = this.camera.position.clone().sub(this.controls.target).setY(0);
+    if (dir.lengthSq() < 1e-6) dir.set(1, 0, 1);
+    dir.normalize();
+    // As far off as the client zoomed, tipped to look down at about 50 degrees.
+    const dist = Math.max(d, Math.max(size.x, size.z) * 0.9);
+    const to = target.clone().add(dir.multiplyScalar(dist * 0.77)).setY(floorY + dist * 0.64);
+    const from = this.camera.position.clone(), fromT = this.controls.target.clone();
+    const t0 = performance.now(), ms = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 650;
+    this._gliding = true;
+    const step = (now) => {
+      const k = ms ? Math.min(1, (now - t0) / ms) : 1, e = 1 - (1 - k) ** 3;
+      this.camera.position.lerpVectors(from, to, e);
+      this.controls.target.lerpVectors(fromT, target, e);
+      this.controls.update();
+      if (k < 1) requestAnimationFrame(step); else this._gliding = false;
+    };
+    requestAnimationFrame(step);
+  }
+
+  // A mode picked by hand: the zoom no longer owns it.
+  pickMode(mode, level = 0) {
+    this._auto = false;
+    return this.setMode(mode, level);
+  }
+
   // ── parts: what a click lands on, and lighting a part up ────────────
   // Each mesh is named node__material__key (arch3d); the key names the part.
   partAt(clientX, clientY) {

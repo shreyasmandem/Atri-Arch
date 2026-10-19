@@ -285,3 +285,26 @@ def test_a_new_tiled_roof_takes_the_tile_colour(plan):
     ex = Exterior("flat", "plaster", "plaster", "none", "punched", False, "white", "none")
     r = asyncio.run(edit_exterior(plan, ex.id, "a hip roof with mangalore red tiles", use_llm=False, parts=["ex_roof", "plaster"]))
     assert r["design"]["roof"] == "hip" and r["design"]["paints"] == {"roof_tile": "#a8553a"}
+
+
+def test_the_garage_is_open_or_closed(brief):
+    from dataclasses import replace
+
+    import pytest
+
+    from aip.domain.brief import RoomRequirement
+    from aip.domain.plan import RoomType
+    from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
+
+    b = brief.model_copy(deep=True)
+    b.requirements.append(RoomRequirement(type=RoomType.GARAGE, preferred_area=15.0, priority=1.1, level=0))
+    plan = LayoutGenerator(b, GeneratorConfig(population=24, generations=16, seed=5)).generate(count=1)[0]
+    if not any(r.type is RoomType.GARAGE for lv in plan.levels for r in lv.rooms):
+        pytest.skip("no garage placed on this plot")
+    base = Exterior("flat", "plaster", "plaster", "none", "punched", False, "white", "none")
+    closed_id = replace(base, garage="closed").id
+    assert "a:closed" in closed_id and Exterior.parse(closed_id).garage == "closed"
+    open_ = {n.rsplit("__", 1)[-1] for n in build_scene(plan, include_furniture=False, design_id=base.id).geometry}
+    shut = {n.rsplit("__", 1)[-1] for n in build_scene(plan, include_furniture=False, design_id=closed_id).geometry}
+    assert "car" in open_ and "shutter" not in open_
+    assert "shutter" in shut and "car" not in shut

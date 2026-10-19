@@ -133,6 +133,7 @@ class Palette:
         self.deck: str = ""
         self.lights: str = ""
         self.yard: str = ""
+        self.garage: str = ""
         joinery = _hex(interior.joinery, (0.45, 0.32, 0.22)) if interior else (0.45, 0.32, 0.22)
         uph = _hex(interior.upholstery, (0.72, 0.68, 0.62)) if interior else (0.72, 0.68, 0.62)
         accent = _hex(interior.accent, (0.36, 0.42, 0.40)) if interior else (0.36, 0.42, 0.40)
@@ -160,6 +161,10 @@ class Palette:
             # The gate has finishes of its own, so it can be painted apart from the pergola and railings.
             "gate": Material("gate_timber", (0.46, 0.31, 0.19), 0.7),
             "gate_steel": Material("gate_steel", (0.22, 0.22, 0.23), 0.35, 0.8),
+            "shutter": Material("rolling_shutter", (0.60, 0.61, 0.62), 0.45, 0.6),
+            "car": Material("car_paint", (0.62, 0.64, 0.66), 0.3, 0.6),
+            "car_glass": Material("car_glass", (0.08, 0.09, 0.10), 0.1, 0.3),
+            "tyre": Material("tyre", (0.06, 0.06, 0.06), 0.9),
             "lawn": Material("lawn", (0.33, 0.47, 0.24), 1.0),
             "paving": Material("paving", (0.70, 0.67, 0.62), 0.9),
             "compound": Material("compound_wall", (0.86, 0.84, 0.80), 0.95),
@@ -505,12 +510,54 @@ def _merged_walls(level: Level) -> list[Wall]:
     return out
 
 
+def _garage_faces(level: Level, walls: list, road: Vec2 | None) -> dict[int, tuple[float, float, Room]]:
+    """The street face of each car porch: (start, end) along that wall, by wall.
+    The porch's outside wall that faces the road most, or its longest."""
+    out: dict[int, tuple[float, float, Room]] = {}
+    centre = level.envelope().centre
+    for g in (r for r in level.rooms if r.type is RoomType.GARAGE and len(r.polygon) >= 3):
+        best, score = None, -9.0
+        for w in walls:
+            if w.kind is not WallKind.EXTERIOR or g.id not in w.rooms:
+                continue
+            d = w.end - w.start
+            if d.length < 1.5:
+                continue
+            u = d.normalised()
+            ts = [(p - w.start).dot(u) for p in g.polygon]
+            t0, t1 = max(0.0, min(ts)), min(d.length, max(ts))
+            if t1 - t0 < 1.5:
+                continue
+            sc = (w.outward_normal(centre).dot(road) if road is not None else 0.0) + (t1 - t0) * 0.01
+            if sc > score:
+                best, score = (id(w), t0, t1), sc
+        if best:
+            out[best[0]] = (best[1], best[2], g)
+    return out
+
+
+def _car(b: Builder, node: str, g: Room, base: float, along: Vec2) -> None:
+    """A car parked in the porch, nose to the street: its width runs along the
+    street wall, its length into the porch."""
+    c = g.centre
+    yaw = _yaw(along)
+    for dz, w, h, l, mat in ((0.42, 1.78, 0.62, 4.3, "car"), (0.98, 1.6, 0.5, 2.3, "car_glass"), (1.24, 1.5, 0.04, 2.1, "car")):
+        b.box(node, mat, (c.x, base + dz, -c.y), (w, h, l), yaw)
+    n = Vec2(-along.y, along.x)
+    for s1 in (-1, 1):
+        for s2 in (-1, 1):
+            p = c + along * (s2 * 0.82) + n * (s1 * 1.35)
+            b.box(node, "tyre", (p.x, base + 0.32, -p.y), (0.24, 0.62, 0.62), yaw)
+
+
 def _walls(b: Builder, plan: FloorPlan, level: Level, base: float, node: str, road: Vec2 | None) -> None:
     by_id = {r.id: r for r in level.rooms}
     accents = _accent_walls(level)
     centre = level.envelope().centre
     height = level.floor_to_floor - SLAB
-    for wall in _merged_walls(level):
+    walls = _merged_walls(level)
+    porches = _garage_faces(level, walls, road) if level.index == 0 else {}
+    for wall in walls:
         d = wall.end - wall.start
         length = d.length
         if length < 0.02:
@@ -568,7 +615,52 @@ def _walls(b: Builder, plan: FloorPlan, level: Level, base: float, node: str, ro
                         break
 
         cursor = 0.0
-        for o in sorted(wall.openings, key=lambda o: o.position):
+        porch = porches.get(id(wall))
+        openings = sorted(wall.openings, key=lambda o: o.position)
+        if porch:
+            # The car porch's street face: open under a beam, or a rolling shutter.
+            g0, g1, groom = porch
+            openings = [o for o in openings if not (g0 - 0.1 <= o.position * length <= g1 + 0.1)]
+            shut = getattr(b.p, "garage", "") == "closed"
+            span = (g0 + 0.15, g1 - 0.15)
+            opening_head = min(2.6, height - 0.3)
+            done = False
+            for o in openings + [None]:
+                c = o.position * length if o else length + 1
+                if not done and c > span[0]:
+                    piece(cursor, span[0], 0.0, height)
+                    piece(span[0], span[1], opening_head, height)
+                    mid = wall.start + unit * ((span[0] + span[1]) / 2)
+                    if shut:
+                        w_ = span[1] - span[0]
+                        b.box(node, "shutter", (mid.x, base + opening_head / 2, -mid.y), (w_, opening_head, 0.05), yaw)
+                        for k in range(1, int(opening_head / 0.09)):
+                            q = mid + out * 0.03
+                            b.box(node, "shutter", (q.x, base + k * 0.09, -q.y), (w_, 0.012, 0.02), yaw)
+                        hood = mid + out * 0.12
+                        b.box(node, "shutter", (hood.x, base + opening_head + 0.12, -hood.y), (w_ + 0.1, 0.24, 0.24), yaw)
+                    else:
+                        _car(b, node, groom, base, unit)
+                    cursor, done = span[1], True
+                if o is None:
+                    break
+                left, right = max(0.0, c - o.width / 2), min(length, c + o.width / 2)
+                if right <= left:
+                    continue
+                piece(cursor, left, 0.0, height)
+                sill = 0.0 if o.kind.is_door else min(o.sill_height, height)
+                head = min(o.head_height, height - 0.05)
+                piece(left, right, 0.0, sill)
+                piece(left, right, head, height)
+                m_ = wall.start + unit * c
+                if o.kind.is_door:
+                    _door(b, node, o, m_, yaw, base, head, t, main=False)
+                else:
+                    _window(b, node, o, m_, yaw, base, sill, head, t, out)
+                cursor = right
+            piece(cursor, length, 0.0, height)
+            continue
+        for o in openings:
             c = o.position * length
             left, right = max(0.0, c - o.width / 2), min(length, c + o.width / 2)
             if right <= left:
