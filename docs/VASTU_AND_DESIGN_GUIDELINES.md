@@ -185,6 +185,88 @@ local bye-law always wins. Values here are the NBC 2016 figures as commonly cite
 
 ---
 
+## Part 3: Exterior signatures and garden features
+
+Current Indian elevation guides favour "a box plus one or two signature moves"
+rather than stacking many. Each design in the studio carries one signature
+element, drawn in its own character (column, arch, canopy, rhythm and framing
+follow its materials and roof; see `traits()` in `engines/experience/exteriors.py`).
+
+| Element | Idea it comes from | Styles it leans to |
+|---|---|---|
+| Brick curtain | Houses wrapped in perforated brick jaali (Brick House, Pune; Thiruvananthapuram brick house) | Contemporary, industrial, Kerala, traditional |
+| Wave screen | Wavy perforated brick-and-stone screen (Gadi House, PMA Madhushala) | Tropical, biophilic |
+| Moon gate | A round aperture in a square screen (Safdarjung Residence) | Contemporary, Japandi, Indo-Saracenic |
+| Cantilever room | A first-floor room projecting 0.9 to 1.5 m over the porch | Contemporary, minimal, Scandinavian |
+| Fluted bands | Full-height fluted brick or cement-board bands | Contemporary, minimal |
+| Brise-soleil | Deep egg-crate sun-breakers (Chandigarh) | Minimal, mid-century, industrial |
+| Planter bands | Planter troughs at every slab edge | Tropical, biophilic |
+| Crown frame | A thin concrete frame crowning the roof | Contemporary, minimal, industrial |
+| Earlier elements | Jharokha, colonnade, chhatri, cornice, breeze-block, green wall, balcony, arcade, portico, bay window, floating box, monolith wall, thinnai, bangla pavilion, pergola frame, glass corner | By style |
+
+Garden features (the `yard` option), each placed in its traditional quarter
+when the plot has room (`landscape.yard_spot`):
+
+| Feature | Quarter | Basis |
+|---|---|---|
+| Tulsi platform (Vrindavan) | North-east | Raised tulsi in the north or east |
+| Water wall | North-east | A small, clean water feature in the north-east; trickling water masks traffic noise |
+| Koi pond | North / north-east | Water to the north-east; keep it clean against mosquitoes |
+| Jhoola swing | North-west | A bench or swing in the north-west facing east or north |
+| Gazebo | South-west | Heavier structures to the south and west |
+| Rock garden | South-west / west | Stone and gravel paths over manufactured paving |
+| Garden sit-out | North | Shade tree and benches; tall trees kept south and west |
+
+Sources: [Contemporary house elevation, Studio Matrx](https://www.studiomatrx.org/guides/contemporary-house-elevation),
+[Box-type elevation ideas, Ongrid](https://elevations.ongrid.design/learn/box-type-elevation-design-ideas/),
+[Elevation design styles, Ongrid](https://elevations.ongrid.design/learn/topics/elevation-design-styles/),
+[Award-winning Kerala brick house, Onmanorama](https://onmanorama.com/lifestyle/decor/2020/09/25/award-winning-house-kerala-garner-global-attention.html),
+[Gadi House, Dezeen](https://www.dezeen.com/2022/09/15/pma-madhushala-gadi-house-resdential-architecture-india/amp/),
+[Brick House Pune, Architizer](https://architizer.com/projects/brick-house-28/),
+[18 Screens House, Global Design News](https://globaldesignnews.com/18-screen-house-by-sanjay-puri-architects-design-a-mega-residence-of-concrete/),
+[Vastu for gardens, BricknBolt](https://www.bricknbolt.com/blogs-and-articles/home-design-guide/vastu-for-gardens-tips-guidelines),
+[Water features in Indian landscapes, Studio Matrx](https://www.studiomatrx.org/guides/water-features-landscape-design-india),
+[Vastu-compliant landscaping, JSW One Homes](https://www.jswonehomes.com/blogs/design/vastucompliant-landscaping-to-enhance-indian-homes).
+
+## Part 4: Signature homes (whole houses after admired ones)
+
+Beyond single elements, the studio offers complete houses designed as a whole
+after house types people travel to see (`engines/experience/looks.py`, the
+"Signature homes" chip in the Exterior tab). Each comes fitted to the plan and
+in three colourways; every part stays customisable afterwards.
+
+| Signature home | After | What makes it |
+|---|---|---|
+| Goan Villa | Portuguese-era villas of Goa | Pastel plaster, verandah of columns (balcão), white-framed windows, tiled hip roof |
+| Chettinad Mansion | Chettiar mansions, Karaikudi | Stone plinth, carved-pillar thinnai, jaali, stepped parapet, Athangudi colours |
+| Kerala Nalukettu | Kerala tharavads | Tiled hip roof on deep eaves, timber upper over laterite, verandah posts, lush garden |
+| Mumbai Art Deco | Marine Drive and Oval Maidan | Eyebrow chajjas, curving balconies, grooved parapet bands, pastel walls |
+| Laurie Baker Brick House | Laurie Baker's Kerala houses | Exposed brick, brick jaali curtain for air, sloping roof, nothing plastered |
+| Bawa Tropical House | Geoffrey Bawa's tropical modernism | White walls, terracotta hip roof, colonnade, deep overhangs, water |
+| Chandigarh Modernist | Le Corbusier's Chandigarh | Raw concrete, brick panels, egg-crate brise-soleil |
+| Rajput Haveli | Havelis of Jaipur and Jaisalmer | Sandstone, jaali, jharokhas, stepped parapet, water wall |
+| Jodhpur Blue House | Jodhpur's old city | Indigo walls, white trims, rooftop chhatris |
+| Bengal Terracotta Bari | Bishnupur temples and Bengal baris | Terracotta skin, bangla-roofed pavilion |
+| Mughal Garden Pavilion | Mughal garden pavilions | Red sandstone, pointed-arch arcade, water channel |
+| Colonial Bungalow | Cantonment bungalows, Bengaluru and Pune | Portico, white trims, tiled hip roof, grille boundary |
+| Pondicherry French House | White Town, Pondicherry | Ochre or yellow walls, white columns, grooved parapet, swing |
+| Japandi Courtyard House | Japanese calm in Indian timber | Slats, moon gate, gravel and rock garden |
+| Brutalist Concrete Villa | Contemporary Indian concrete houses | Board-marked concrete, cantilevered room, LED strips |
+| Glass Pavilion | Minimal modern houses | White box, glass corner, glass parapet, water wall |
+| Tropical Resort Villa | Kerala and Bali resort houses | Butterfly roof, timber and bamboo, planter bands, koi pond |
+| Nordic Black Cabin | Scandinavian cabins | Black timber gable, glass corner |
+
+Sources: [South Indian house design, BricknBolt](https://www.bricknbolt.com/blogs-and-articles/home-design-guide/south-indian-house-design),
+[Kerala architecture, Housing.com](https://housing.com/news/kerala-architecture/),
+[Kerala and Chettinad in contemporary homes, Benny Kuriakose](https://www.bennykuriakose.com/post/kerala-traditional-houses-and-chettinad-architecture-in-contemporary-homes),
+[Stunning traditional homes in India, Buildofy](https://www.buildofy.com/blog/5-most-stunning-traditional-homes-in-india-as-featured-on-buildofy/),
+[Guide to Art Deco in India, Lonely Planet](https://www.lonelyplanet.com/articles/guide-to-art-deco-in-india),
+[Geoffrey Bawa's tropical modernism, Commune](https://communedesign.com/post/geoffrey-bawas-tropical-modernism/),
+[Geoffrey Bawa, Ampersand Travel](https://ampersandtravel.com/blog/2024/geoffrey-bawa-the-pioneer-of-tropical-modernism),
+[Award-winning Kerala brick house, Onmanorama](https://onmanorama.com/lifestyle/decor/2020/09/25/award-winning-house-kerala-garner-global-attention.html).
+
+---
+
 ## Where sources disagree
 
 - **Toilets:** north-west and west are agreed; some sources allow the south-east and east, others forbid them. The rule favours north-west and west and forbids only the north-east.

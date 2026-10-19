@@ -2349,7 +2349,7 @@ async function renderExterior() {
 const EX_PARTS = ["roof", "base", "upper", "screen", "windows", "planters", "accent", "feature"];
 const EX_TINTS = { w: "wall", c: "clad", r: "roof_tint", m: "metal", f: "frame", d: "door" };
 const EX_OPTS = { b: "boundary", l: "railing", h: "shade", e: "canopy", g: "gate", v: "paving", t: "garden", s: "solar",
-  x: "panel", q: "parapet", k: "deck", i: "lights" };
+  x: "panel", q: "parapet", k: "deck", i: "lights", y: "yard" };
 const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pitch", butterfly: "Butterfly", hip: "Hip, tiled", gable: "Gable",
   plaster: "Plaster", stone: "Stone", brick: "Brick", concrete: "Concrete", timber: "Timber", metal: "Metal", none: "None",
   fins: "Fins", louvres: "Louvres", frame: "Box frame", jaali: "Jaali", perforated: "Perforated", punched: "Punched", band: "Glazing band",
@@ -2357,7 +2357,9 @@ const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pit
   hedge: "Hedge", grille: "Grille", glass: "Glass", solid: "Solid wall", terracotta: "Terracotta tile", acp: "ACP panel",
   slate: "Stacked slate", vault: "Barrel vault", sawtooth: "Sawtooth", slats: "Timber slats", bamboo: "Bamboo",
   arcade: "Arcade", portico: "Portico", bay: "Bay window", floatbox: "Floating box", featurewall: "Monolith wall",
-  thinnai: "Thinnai", bangla: "Bangla pavilion", pergolaframe: "Pergola frame", cornerglass: "Glass corner" };
+  thinnai: "Thinnai", bangla: "Bangla pavilion", pergolaframe: "Pergola frame", cornerglass: "Glass corner",
+  brickcurtain: "Brick curtain", wavescreen: "Wave screen", moongate: "Moon gate", cantilever: "Cantilever room",
+  flutedbands: "Fluted bands", brisesoleil: "Brise-soleil", planterbands: "Planter bands", rooftopframe: "Crown frame" };
 // A count too large to read as digits, in words: "120 quintillion".
 function bigWords(n) {
   const names = ["", "thousand", "million", "billion", "trillion", "quadrillion", "quintillion", "sextillion", "septillion", "octillion"];
@@ -2424,7 +2426,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
   const cb = S.chatBrief || {};
   const briefPrefs = [S.chatWords, cb.notes, (cb.styles || []).join(" "), cb.colours, pal.text].filter(Boolean).join(". ").slice(0, 1100);
   let heard = [], planStyle = S.plans[id]?.plan?.style || "";
-  const styleName = (k) => grammar?.styles?.find((x) => x.id === k)?.name || "";
+  const styleName = (k) => (k === "signature" ? "Signature homes" : grammar?.styles?.find((x) => x.id === k)?.name || "");
   // pal.base is the chosen design as drawn; pal.tint the exterior colours laid
   // over it (null: the design's own); pal.design what the model is built from.
   const idx = () => Math.max(0, designs.findIndex((x) => x.id === pal.base));
@@ -2643,11 +2645,13 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
   const designsPanel = (panel, s) => {
     // House styles: each pulls its own batch, kept for when the client comes back.
     const own = styleName(planStyle);
-    const styles = [["", own ? `For this house · ${own}` : "For this house"],
+    // Signature homes: whole houses after admired ones - a Goan villa, a
+    // Chettinad mansion, a Bawa house - each in its colourways.
+    const styles = [["", own ? `For this house · ${own}` : "For this house"], ["signature", "Signature homes"],
       ...(grammar?.styles || []).filter((x) => x.id !== planStyle).map((x) => [x.id, x.name])];
     const filt = chips("Style", styles, pal.style || "", async (v) => {
       pal.style = v; draw();
-      if (v && !designs.some((d) => d.fam === v)) { await loadMore(24, v); draw(); }
+      if (v && !designs.some((d) => d.fam === v)) { await loadMore(v === "signature" ? 40 : 24, v); draw(); }
     }, { cls: "ex-chips--scroll" });
     panel.append(filt);
     // Say what the designs are drawn from: the style, and the brief's own words.
@@ -2885,11 +2889,13 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     parapet: ["Parapet", [["plain", "Plain"], ["glass", "Glass strip"], ["grooved", "Grooved"], ["screen", "CNC screen"], ["stepped", "Stepped"]]],
     deck: ["Roof terrace", [["none", "Open"], ["pergola", "Pergola"], ["garden", "Roof garden"]]],
     lights: ["Facade lighting", [["none", "None"], ["washers", "Wall washers"], ["strips", "LED strips"]]],
+    yard: ["Garden feature", [["none", "None"], ["tulsi", "Tulsi platform"], ["jhoola", "Jhoola swing"], ["waterwall", "Water wall"],
+      ["koipond", "Koi pond"], ["gazebo", "Gazebo"], ["rockgarden", "Rock garden"], ["sitout", "Sit-out"]]],
     accent: ["Accent", null],
   };
   const SECTIONS = [["form", "Roof & form", ["roof", "parapet", "deck", "solar", "feature"]], ["walls", "Walls", ["base", "upper", "panel"]],
     ["openings", "Windows & shade", ["windows", "shade", "screen"]], ["entry", "Entrance, balconies & lights", ["canopy", "railing", "lights"]],
-    ["site", "Gate, drive & garden", ["boundary", "gate", "paving", "garden", "planters"]], ["accent", "Accent finish", ["accent"]]];
+    ["site", "Gate, drive & garden", ["boundary", "gate", "paving", "garden", "yard", "planters"]], ["accent", "Accent finish", ["accent"]]];
   const customiser = (panel, di) => {
     const d = designs[di];
     const now = d && exParse(d.id);
@@ -2920,7 +2926,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       base: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw" },
       upper: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw", disabled: (v) => one && v !== "plaster" },
       paving: { paint: tex(DRIVE), cls: "ex-chips--sw ex-chips--4" },
-      feature: { disabled: (v) => one && ["jharokha", "balcony", "bay", "floatbox", "cornerglass"].includes(v) },
+      feature: { disabled: (v) => one && ["jharokha", "balcony", "bay", "floatbox", "cornerglass", "cantilever", "planterbands"].includes(v) },
       solar: { disabled: (v) => v === "on" && !flatRoof },
       panel: { paint: tex(PANEL), cls: "ex-chips--sw ex-chips--4" },
       parapet: { disabled: (v) => v !== "plain" && now.roof !== "flat" },

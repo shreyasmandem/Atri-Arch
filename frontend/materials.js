@@ -201,6 +201,7 @@ const RULES = [
   [/dark_metal|roof_metal/, "seam", 0.6],
   [/paving_concrete/, "concrete", 0.6],
   [/gravel/, "gravel", 0.9],
+  [/boulder_stone/, "stone", 0.7],
   [/grass_pavers/, "grass", 0.9],
   [/solar_panel/, "solar", 0.8],
   [/paving/, "paving", 0.75],

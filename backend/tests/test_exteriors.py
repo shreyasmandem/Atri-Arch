@@ -212,3 +212,19 @@ def test_every_signature_element_builds_in_every_family(plan):
                    {"base": "concrete", "upper": "acp", "roof": "slab"}):
             ex, _ = Exterior(feature=feature, **kw).fitted(one_floor=one)
             assert len(build_scene(plan, include_furniture=False, design_id=ex.id).geometry) > 10, (feature, kw)
+
+
+def test_signature_homes_are_whole_valid_houses_in_colourways(plan):
+    from aip.engines.experience.looks import LOOKS, look_designs
+
+    designs = look_designs(plan)
+    assert len(designs) == 3 * len(LOOKS)
+    assert len({d["id"] for d in designs}) == len(designs)
+    for d in designs:
+        ex = Exterior.parse(d["id"])
+        assert ex is not None and d["look"] in LOOKS and d["story"].startswith(("After", LOOKS[d["look"]][1][:10]))
+    # Each look's colourways keep its form and change its colours.
+    goa = [Exterior.parse(d["id"]) for d in designs if d["look"] == "goan_villa"]
+    assert len({e.form for e in goa}) == 1 and len({e.wall for e in goa}) == 3
+    for d in designs[::3]:
+        build_scene(plan, include_furniture=False, design_id=d["id"])

@@ -132,6 +132,7 @@ class Palette:
         self.parapet: str = ""
         self.deck: str = ""
         self.lights: str = ""
+        self.yard: str = ""
         joinery = _hex(interior.joinery, (0.45, 0.32, 0.22)) if interior else (0.45, 0.32, 0.22)
         uph = _hex(interior.upholstery, (0.72, 0.68, 0.62)) if interior else (0.72, 0.68, 0.62)
         accent = _hex(interior.accent, (0.36, 0.42, 0.40)) if interior else (0.36, 0.42, 0.40)
@@ -166,6 +167,8 @@ class Palette:
             "pool_water": Material("pool_water", (0.22, 0.62, 0.70), 0.06, 0.1, 0.9),
             "pool_tile": Material("pool_tile", (0.55, 0.78, 0.82), 0.3),
             "bamboo": Material("bamboo_pole", (0.71, 0.60, 0.38), 0.6),
+            "yard_gravel": Material("yard_gravel", (0.72, 0.69, 0.62), 0.95),
+            "boulder": Material("boulder_stone", (0.48, 0.46, 0.42), 0.9),
             "f_wood": Material("floor_timber", (0.58, 0.42, 0.28), 0.6),
             "f_stone": Material("floor_stone", floor, 0.35),
             "f_tile": Material("floor_tile_matt", (0.78, 0.79, 0.78), 0.7),
@@ -888,6 +891,67 @@ def _roof_garden(b: Builder, top: Level, footprint, y: float) -> None:
             b.blob("roof", "leaf" if i % 2 else "leaf2", (q.x, y + 0.7, -q.y), 0.38, 0.85)
 
 
+def _yard(b: Builder, kind: str, c: Vec2, r: float) -> None:
+    """One garden feature centred at c within radius r."""
+    def ring(radius: float, n: int = 16) -> list[Vec2]:
+        return [Vec2(c.x + radius * math.cos(2 * math.pi * i / n), c.y + radius * math.sin(2 * math.pi * i / n)) for i in range(n)]
+
+    if kind == "tulsi":
+        # The Vrindavan: a stepped plinth with the tulsi growing from its top.
+        b.box("site", "sill", (c.x, 0.15, -c.y), (1.0, 0.3, 1.0))
+        b.box("site", "plaster", (c.x, 0.55, -c.y), (0.7, 0.5, 0.7))
+        b.box("site", "ex_accent", (c.x, 0.82, -c.y), (0.8, 0.06, 0.8))
+        b.blob("site", "leaf", (c.x, 1.05, -c.y), 0.28, 0.9)
+    elif kind == "jhoola":
+        # A swing on a timber frame over a stone pad.
+        b.slab("site", "paving", ring(r * 0.9, 12), 0.0, 0.04)
+        for s in (-1, 1):
+            b.box("site", "timber", (c.x + s * 1.1, 1.2, -c.y), (0.14, 2.4, 0.14))
+        b.box("site", "timber", (c.x, 2.4, -c.y), (2.5, 0.16, 0.16))
+        for s in (-1, 1):
+            b.box("site", "rail_metal", (c.x + s * 0.55, 1.6, -c.y), (0.02, 1.6, 0.02))
+        b.box("site", "timber", (c.x, 0.8, -c.y), (1.3, 0.06, 0.5))
+    elif kind == "waterwall":
+        # A stone wall with a sheet of water down its face into a basin.
+        b.box("site", "clad", (c.x, 0.9, -c.y), (2.2, 1.8, 0.3))
+        b.box("site", "pool_water", (c.x, 0.95, -(c.y - 0.17)), (1.6, 1.4, 0.02))
+        b.slab("site", "sill", [Vec2(c.x - 1.15, c.y - 0.2), Vec2(c.x + 1.15, c.y - 0.2), Vec2(c.x + 1.15, c.y - 0.9), Vec2(c.x - 1.15, c.y - 0.9)], 0.0, 0.25)
+        b.slab("site", "pool_water", [Vec2(c.x - 1.0, c.y - 0.3), Vec2(c.x + 1.0, c.y - 0.3), Vec2(c.x + 1.0, c.y - 0.8), Vec2(c.x - 1.0, c.y - 0.8)], 0.25, 0.27)
+    elif kind == "koipond":
+        # A round pond in a ring of boulders, stepping stones across it.
+        b.slab("site", "pool_tile", ring(r * 0.85, 20), -0.02, 0.0)
+        b.slab("site", "pool_water", ring(r * 0.85, 20), 0.0, 0.02)
+        for p in ring(r * 0.92, 12):
+            b.blob("site", "boulder", (p.x, 0.05, -p.y), 0.22, 0.6)
+        for k in (-0.5, 0.0, 0.5):
+            b.cylinder("site", "paving", (c.x + k * r, 0.0, -(c.y + 0.1 * k)), 0.22, 0.06, 10)
+        b.blob("site", "leaf2", (c.x + r * 0.6, 0.2, -(c.y + r * 0.5)), 0.3, 0.8)
+    elif kind == "gazebo":
+        # An octagonal pavilion: eight posts and a tiled pyramid roof.
+        b.slab("site", "paving", ring(1.7, 8), 0.0, 0.12)
+        posts = ring(1.5, 8)
+        for p in posts:
+            b.box("site", "timber", (p.x, 1.25, -p.y), (0.12, 2.3, 0.12))
+        top = (c.x, 3.3, -c.y)
+        eaves = ring(1.9, 8)
+        for a, d in zip(eaves, eaves[1:] + eaves[:1]):
+            b.tri("site", "roof_tile", (a.x, 2.4, -a.y), (d.x, 2.4, -d.y), top)
+    elif kind == "rockgarden":
+        # A gravel bed with boulders and low planting, raked smooth.
+        b.slab("site", "yard_gravel", ring(r, 14), 0.0, 0.04)
+        for k, p in enumerate(ring(r * 0.55, 5)):
+            b.blob("site", "boulder", (p.x, 0.12, -p.y), 0.22 + 0.08 * (k % 3), 0.65)
+        b.blob("site", "leaf", (c.x, 0.2, -c.y), 0.3, 0.7)
+    elif kind == "sitout":
+        # A stone pad under a shade tree with two benches.
+        b.slab("site", "paving", ring(r * 0.9, 12), 0.0, 0.05)
+        for s in (-1, 1):
+            b.box("site", "timber", (c.x + s * 0.9, 0.42, -c.y), (0.45, 0.08, 1.4))
+            b.box("site", "plinth", (c.x + s * 0.9, 0.2, -c.y), (0.35, 0.4, 1.1))
+        b.cylinder("site", "trunk", (c.x, 0.0, -(c.y + r * 0.6)), 0.12, 2.4, 8)
+        b.blob("site", "leaf", (c.x, 3.0, -(c.y + r * 0.6)), 1.3, 0.85)
+
+
 def _pool(b: Builder, rect) -> None:
     """A sunk pool: tiled tank, water just below the coping, a stone coping
     and a deck round it with two loungers."""
@@ -1041,6 +1105,13 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
     if pool is not None:
         _pool(b, pool[0])
 
+    # The garden feature the design carries, in its traditional quarter.
+    from aip.engines.experience.landscape import yard_spot
+
+    yard = yard_spot(plan, getattr(b.p, "yard", "")) if getattr(b.p, "yard", "") else None
+    if yard is not None:
+        _yard(b, b.p.yard, yard[0], yard[1])
+
     # A lush garden plants the inside of the boundary too, which a tight
     # city plot has room for even when its setbacks take no tree.
     if getattr(b.p, "garden", "") == "lush":
@@ -1068,6 +1139,8 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
         free = free.difference(drive.buffer(1.0))
     if pool is not None:
         free = free.difference(pool[0].buffer(2.6))       # no canopy over the water
+    if yard is not None:
+        free = free.difference(Point(yard[0].x, yard[0].y).buffer(yard[1] + 1.0))
     if free.is_empty:
         return
     rng = random.Random(int(hashlib.md5(plan.id.encode()).hexdigest()[:8], 16))

@@ -92,3 +92,66 @@ def pool_rect(plan: FloorPlan):
         if best is not None:
             return best, k
     return None
+
+
+#: Garden features: where each traditionally sits (compass bearing from the
+#: plot's centre) and how much clear ground it needs (radius, metres).
+#: Tulsi and water to the north-east, the swing to the north-west, the heavy
+#: rock garden and the gazebo to the south-west, the sit-out to the north.
+YARD_FEATURES: dict[str, tuple[float, float]] = {
+    "tulsi": (45.0, 0.9), "waterwall": (45.0, 1.4), "koipond": (20.0, 1.8), "jhoola": (315.0, 1.6),
+    "gazebo": (225.0, 2.0), "rockgarden": (240.0, 1.6), "sitout": (0.0, 1.5),
+}
+YARD_NAMES = {"tulsi": "tulsi platform", "waterwall": "water wall", "koipond": "koi pond", "jhoola": "jhoola swing",
+              "gazebo": "gazebo", "rockgarden": "rock garden", "sitout": "garden sit-out"}
+
+
+def yard_spot(plan: FloorPlan, kind: str):
+    """Where the garden feature goes: (centre Vec2, radius) in the open garden,
+    as near its traditional quarter as the plot allows, clear of the house,
+    the drive, the gate and the pool; None when nothing fits."""
+    from shapely.geometry import LineString, Point, Polygon
+    from shapely.prepared import prep
+
+    if kind not in YARD_FEATURES or not plan.site.boundary:
+        return None
+    bearing, radius = YARD_FEATURES[kind]
+    plot = Polygon([(p.x, p.y) for p in plan.site.boundary]).buffer(0)
+    free = plot.buffer(-0.5)
+    foot = _footprint(plan)
+    if foot is not None:
+        free = free.difference(foot.buffer(0.8))
+    road = road_vector(plan)
+    if road is not None:
+        minx, miny, maxx, maxy = plot.bounds
+        cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+        gate = Point(cx + road.x * (maxx - minx) / 2, cy + road.y * (maxy - miny) / 2)
+        free = free.difference(gate.buffer(2.6))
+        if foot is not None:
+            free = free.difference(LineString([(gate.x, gate.y), (foot.centroid.x, foot.centroid.y)]).buffer(1.8))
+    pool = pool_rect(plan)
+    if pool is not None:
+        free = free.difference(pool[0].buffer(1.3))
+    if free.is_empty:
+        return None
+    centre = plot.centroid
+    theta = math.radians(bearing - plan.site.north_angle)
+    want = Vec2(math.sin(theta), math.cos(theta))
+    x0, y0, x1, y1 = free.bounds
+    for r in (radius, radius * 0.75):
+        fit = prep(free)
+        best, best_score = None, -1e9
+        steps_x, steps_y = int((x1 - x0) / 0.3) + 1, int((y1 - y0) / 0.3) + 1
+        for i in range(steps_x):
+            for j in range(steps_y):
+                p = Point(x0 + i * 0.3, y0 + j * 0.3)
+                if not fit.contains(p.buffer(r, 8)):
+                    continue
+                dx, dy = p.x - centre.x, p.y - centre.y
+                d = math.hypot(dx, dy) or 1.0
+                score = (dx * want.x + dy * want.y) / d + 0.02 * d       # towards its quarter, then outwards
+                if score > best_score:
+                    best, best_score = Vec2(p.x, p.y), score
+        if best is not None:
+            return best, r
+    return None

@@ -265,7 +265,13 @@ async def get_exteriors(
     from aip.engines.experience.exteriors import generate, grammar, heard, prefer_from_text
 
     plan = _load(plan_id, principal)
-    if seed is not None:
+    if style == "signature":
+        # The signature homes: whole houses after admired house types, each
+        # in its colourways, fitted to this plan.
+        from aip.engines.experience.looks import look_designs
+
+        designs = [d for d in look_designs(plan) if d["id"] not in set(avoid)][:n]
+    elif seed is not None:
         # The client's words steer the batch as well as the style, and no
         # building another house has claimed is offered again.
         designs = [e.to_dict() for e in generate(plan, n, seed=seed, avoid=set(avoid), style=style,

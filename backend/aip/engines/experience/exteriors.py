@@ -46,7 +46,9 @@ SCREENS = ("none", "fins", "louvres", "frame", "jaali", "perforated", "slats", "
 WINDOWS = ("punched", "band")
 #: The design's signature element: what a passer-by remembers the house by.
 FEATURES = ("none", "jharokha", "colonnade", "chhatri", "cornice", "breeze", "greenwall", "balcony",
-            "arcade", "portico", "bay", "floatbox", "featurewall", "thinnai", "bangla", "pergolaframe", "cornerglass")
+            "arcade", "portico", "bay", "floatbox", "featurewall", "thinnai", "bangla", "pergolaframe", "cornerglass",
+            "brickcurtain", "wavescreen", "moongate", "cantilever", "flutedbands", "brisesoleil", "planterbands",
+            "rooftopframe")
 ACCENTS = {"bronze": "#8a6a4c", "charcoal": "#2b2a29", "teak": "#7a4b2a", "white": "#efece6",
            "terracotta": "#a8553a", "sage": "#7d8b6a", "navy": "#2b3a52", "brass": "#b08a3e",
            "ochre": "#c08a2e", "indigo": "#34406e", "forest": "#2f4a36", "rose": "#b46a6a",
@@ -69,12 +71,14 @@ PANELS = ("none", "stone", "timber", "slate", "terracotta", "acp", "brick")
 PARAPETS = ("plain", "glass", "grooved", "screen", "stepped")   # the crown of a flat-roofed house
 DECKS = ("none", "pergola", "garden")                            # what the roof terrace holds
 LIGHTS = ("none", "washers", "strips")                           # facade lighting, lit at night
+#: A garden feature, placed in its traditional quarter (see landscape.YARD_FEATURES).
+YARDS = ("none", "tulsi", "jhoola", "waterwall", "koipond", "gazebo", "rockgarden", "sitout")
 #: Discrete extras in the id's tail: id key -> (Exterior field, vocabulary).
 #: The first value of each is what the house has when the id leaves it out.
 OPTION_KEYS = {"b": ("boundary", BOUNDARIES), "l": ("railing", RAILINGS), "h": ("shade", SHADES),
                "e": ("canopy", CANOPIES), "g": ("gate", GATES), "v": ("paving", PAVINGS),
                "t": ("garden", GARDENS), "s": ("solar", SOLAR), "x": ("panel", PANELS), "q": ("parapet", PARAPETS),
-               "k": ("deck", DECKS), "i": ("lights", LIGHTS)}
+               "k": ("deck", DECKS), "i": ("lights", LIGHTS), "y": ("yard", YARDS)}
 #: Named paints per surface, for picking colours one surface at a time.
 PAINTS: dict[str, tuple[tuple[str, str], ...]] = {
     "wall": (("Lime white", "#efe9dc"), ("Ivory", "#f4efe4"), ("Gallery white", "#f6f4f0"), ("Warm sand", "#e3cfa8"),
@@ -111,31 +115,31 @@ WALL_TONES = {"lime": ("#efe9dc", ("#a8553a", "#3d3f42", "#8c8a84")), "sand": ("
 #: What each style tends towards; a design outside it is still allowed, only less likely.
 STYLE_BIAS: dict[str, dict[str, tuple[str, ...]]] = {
     "contemporary": {"roof": ("flat", "slab", "mono", "sawtooth"), "screen": ("fins", "frame", "louvres", "perforated", "slats"),
-                     "feature": ("none", "cornice", "breeze", "greenwall", "bay", "portico", "floatbox", "featurewall", "cornerglass"), "accent": ("bronze", "charcoal", "slate", "teak")},
+                     "feature": ("none", "cornice", "breeze", "greenwall", "bay", "portico", "floatbox", "featurewall", "cornerglass", "brickcurtain", "cantilever", "flutedbands", "rooftopframe", "moongate"), "accent": ("bronze", "charcoal", "slate", "teak")},
     "modern_minimal": {"roof": ("slab", "flat"), "screen": ("none", "frame"), "upper": ("plaster", "metal"),
-                       "feature": ("none", "bay", "floatbox", "cornerglass"), "accent": ("white", "charcoal", "slate")},
+                       "feature": ("none", "bay", "floatbox", "cornerglass", "cantilever", "flutedbands", "brisesoleil", "rooftopframe"), "accent": ("white", "charcoal", "slate")},
     "tropical_modern": {"roof": ("slab", "mono", "butterfly", "vault"), "upper": ("timber",), "screen": ("louvres", "fins", "slats", "bamboo"),
-                        "feature": ("greenwall", "breeze", "none", "pergolaframe"), "accent": ("teak", "forest", "sage")},
+                        "feature": ("greenwall", "breeze", "none", "pergolaframe", "wavescreen", "planterbands"), "accent": ("teak", "forest", "sage")},
     "kerala_vernacular": {"roof": ("hip", "gable"), "base": ("stone", "plaster"), "upper": ("timber", "plaster"),
-                          "feature": ("colonnade", "thinnai"), "accent": ("teak", "terracotta", "forest")},
+                          "feature": ("colonnade", "thinnai", "brickcurtain"), "accent": ("teak", "terracotta", "forest")},
     "traditional_indian": {"roof": ("hip", "flat"), "screen": ("jaali",), "base": ("stone",),
-                           "feature": ("jharokha", "colonnade", "cornice", "arcade", "portico", "thinnai"), "accent": ("ochre", "terracotta", "teak", "indigo")},
+                           "feature": ("jharokha", "colonnade", "cornice", "arcade", "portico", "thinnai", "brickcurtain"), "accent": ("ochre", "terracotta", "teak", "indigo")},
     "chettinad": {"roof": ("hip", "flat"), "screen": ("jaali",), "base": ("stone", "brick"),
                   "feature": ("colonnade", "cornice", "arcade", "thinnai"), "accent": ("ochre", "indigo", "rose", "teak")},
     "rajasthani_haveli": {"roof": ("flat",), "screen": ("jaali",), "base": ("stone",),
                           "feature": ("jharokha", "chhatri", "bangla"), "accent": ("sand", "rose", "ochre", "terracotta")},
     "indo_saracenic": {"roof": ("flat", "vault"), "screen": ("jaali", "frame"), "base": ("stone", "brick"),
-                       "feature": ("chhatri", "colonnade", "cornice", "arcade", "bangla"), "accent": ("sand", "terracotta", "white")},
+                       "feature": ("chhatri", "colonnade", "cornice", "arcade", "bangla", "moongate"), "accent": ("sand", "terracotta", "white")},
     "scandinavian": {"roof": ("gable", "mono"), "upper": ("timber",), "screen": ("none",),
-                     "feature": ("none", "cornerglass"), "accent": ("charcoal", "white", "slate")},
+                     "feature": ("none", "cornerglass", "cantilever"), "accent": ("charcoal", "white", "slate")},
     "japandi": {"roof": ("slab", "gable"), "upper": ("timber",), "screen": ("louvres", "none", "slats"),
-                "feature": ("none", "greenwall", "pergolaframe"), "accent": ("teak", "charcoal", "sand")},
+                "feature": ("none", "greenwall", "pergolaframe", "moongate"), "accent": ("teak", "charcoal", "sand")},
     "industrial": {"base": ("concrete", "brick"), "upper": ("metal", "brick"), "screen": ("perforated", "frame"),
-                   "feature": ("none", "breeze", "featurewall"), "accent": ("charcoal", "slate", "terracotta"), "roof": ("sawtooth",)},
+                   "feature": ("none", "breeze", "featurewall", "brickcurtain", "brisesoleil", "rooftopframe"), "accent": ("charcoal", "slate", "terracotta"), "roof": ("sawtooth",)},
     "biophilic": {"roof": ("slab", "butterfly", "vault"), "upper": ("timber",), "screen": ("louvres", "fins", "bamboo"),
-                  "feature": ("greenwall", "pergolaframe"), "accent": ("forest", "sage", "teak")},
+                  "feature": ("greenwall", "pergolaframe", "planterbands", "wavescreen"), "accent": ("forest", "sage", "teak")},
     "mid_century_modern": {"roof": ("butterfly", "mono", "slab", "vault"), "base": ("brick", "stone"), "screen": ("frame", "fins"),
-                           "feature": ("breeze", "none", "bay", "featurewall", "floatbox"), "accent": ("ochre", "teak", "sage", "navy")},
+                           "feature": ("breeze", "none", "bay", "featurewall", "floatbox", "brisesoleil", "brickcurtain"), "accent": ("ochre", "teak", "sage", "navy")},
 }
 
 NAMES = {
@@ -144,7 +148,9 @@ NAMES = {
     "vault": "Vault", "sawtooth": "Sawtooth", "slats": "Slat", "bamboo": "Bamboo",
     "arcade": "Arcade", "portico": "Portico", "bay": "Bay-window",
     "floatbox": "Floating-box", "featurewall": "Monolith", "thinnai": "Thinnai", "bangla": "Bangla",
-    "pergolaframe": "Pergola", "cornerglass": "Glass-corner",
+    "pergolaframe": "Pergola", "cornerglass": "Glass-corner", "brickcurtain": "Brick-curtain", "wavescreen": "Wave-screen",
+    "moongate": "Moon-gate", "cantilever": "Cantilever", "flutedbands": "Fluted", "brisesoleil": "Brise-soleil",
+    "planterbands": "Planter-band", "rooftopframe": "Crown-frame",
     "timber": "Timber", "metal": "Metal", "brick": "Brick", "stone": "Stone", "concrete": "Concrete", "plaster": "Lime",
     "terracotta": "Terracotta", "acp": "Panel", "slate": "Slate",
     "jharokha": "Jharokha", "colonnade": "Colonnade", "chhatri": "Chhatri", "cornice": "Cornice", "breeze": "Breeze-block",
@@ -251,6 +257,15 @@ STYLE_DNA: dict[str, dict[str, Any]] = {
                            "schemes": ("warm_minimal", "clay_copper", "kutch_mud", "goa_villa", "mustard_clay", "olive_cream")},
 }
 
+for _k, _y in {"contemporary": ("sitout", "waterwall", "rockgarden"), "modern_minimal": ("rockgarden", "waterwall", "none"),
+               "tropical_modern": ("koipond", "jhoola", "gazebo"), "kerala_vernacular": ("tulsi", "jhoola", "koipond"),
+               "traditional_indian": ("tulsi", "jhoola", "waterwall"), "chettinad": ("tulsi", "jhoola"),
+               "rajasthani_haveli": ("tulsi", "waterwall", "jhoola"), "indo_saracenic": ("waterwall", "gazebo", "tulsi"),
+               "scandinavian": ("sitout", "rockgarden"), "japandi": ("rockgarden", "koipond", "waterwall"),
+               "industrial": ("sitout", "rockgarden"), "biophilic": ("koipond", "gazebo", "jhoola"),
+               "mid_century_modern": ("sitout", "koipond", "gazebo")}.items():
+    STYLE_DNA[_k]["yard"] = _y
+
 for _k, _v in {
     "contemporary": {"panel": ("stone", "acp", "timber", "slate"), "parapet": ("glass", "grooved", "plain"), "deck": ("pergola", "none"), "lights": ("strips", "washers")},
     "modern_minimal": {"panel": ("none", "acp", "slate"), "parapet": ("plain", "glass"), "deck": ("none",), "lights": ("strips", "none")},
@@ -299,6 +314,13 @@ WORDS: tuple[tuple[str, dict[str, Any]], ...] = (
     (r"\bpergola", {"deck": ("pergola",), "canopy": ("pergola",), "roof": ("flat",)}),
     (r"\b(roof garden|terrace garden|rooftop garden)", {"deck": ("garden",), "roof": ("flat",)}),
     (r"\bglass (parapet|railing)", {"parapet": ("glass",), "railing": ("glass",)}),
+    (r"\btulsi", {"yard": ("tulsi",)}),
+    (r"\b(swing|jhoola|jhula)", {"yard": ("jhoola",)}),
+    (r"\b(fountain|water feature|water wall)", {"yard": ("waterwall",)}),
+    (r"\b(koi|pond|lily pond)", {"yard": ("koipond",)}),
+    (r"\bgazebo", {"yard": ("gazebo",)}),
+    (r"\b(rock garden|zen garden|pebble)", {"yard": ("rockgarden",)}),
+    (r"\b(sit-?out|garden seating|outdoor seating)", {"yard": ("sitout",)}),
 )
 
 
@@ -399,6 +421,7 @@ class Exterior:
     parapet: str = ""
     deck: str = ""
     lights: str = ""
+    yard: str = ""
 
     @property
     def id(self) -> str:
@@ -445,7 +468,7 @@ class Exterior:
         if one_floor and e.upper != "plaster":
             e = replace(e, upper="plaster")
             notes.append("A single-storey house has no upper floor to clad.")
-        if e.feature in ("jharokha", "balcony", "bay", "floatbox", "cornerglass") and one_floor:
+        if e.feature in ("jharokha", "balcony", "bay", "floatbox", "cornerglass", "cantilever", "planterbands") and one_floor:
             notes.append(f"A {NAMES[e.feature].lower()} needs an upper floor; it is left off.")
             e = replace(e, feature="none")
         if e.deck and e.roof != "flat":
@@ -456,6 +479,9 @@ class Exterior:
         if e.solar == "on" and e.roof not in ("flat", "slab"):
             notes.append("Solar panels sit on a flat or slab roof; they are left off this one.")
             e = replace(e, solar="")
+        if e.feature == "rooftopframe" and e.roof not in ("flat", "slab"):
+            notes.append("A crown frame stands on a flat or slab roof; the roof is set to flat.")
+            e = replace(e, roof="flat")
         if e.feature in ("chhatri", "bangla") and e.roof != "flat":
             notes.append(f"A {NAMES[e.feature].lower()} pavilion stands on a flat parapet roof; the roof is set to flat.")
             e = replace(e, roof="flat")
@@ -490,6 +516,10 @@ class Exterior:
                   "bamboo": ", a screen of bamboo poles"}[self.screen]
         win = ", glazing in continuous bands" if self.windows == "band" else ""
         plant = ", planters along the edges" if self.planters else ""
+        if self.yard and self.yard != "none":
+            from aip.engines.experience.landscape import YARD_NAMES
+
+            plant += f", a {YARD_NAMES[self.yard]} in the garden"
         feat = {"none": "", "jharokha": ", jharokha bays projecting over the street",
                 "colonnade": ", a colonnaded verandah along the front", "chhatri": ", chhatri pavilions on the roof",
                 "cornice": ", deep cornices marking every floor", "breeze": ", a breeze-block screen wall",
@@ -501,7 +531,15 @@ class Exterior:
                 "thinnai": ", thinnai platforms flanking the door under a tiled lean-to",
                 "bangla": ", a bangla-roofed pavilion on the terrace",
                 "pergolaframe": ", a double-height timber pergola standing off the front",
-                "cornerglass": ", the upper corner opened in glass"}[self.feature]
+                "cornerglass": ", the upper corner opened in glass",
+                "brickcurtain": ", a perforated brick curtain across the front",
+                "wavescreen": ", a rippling perforated screen across the front",
+                "moongate": ", a square screen with a round moon-gate opening",
+                "cantilever": ", a first-floor room cantilevered over the porch",
+                "flutedbands": ", full-height fluted bands framing the front",
+                "brisesoleil": ", a deep egg-crate brise-soleil",
+                "planterbands": ", planter bands spilling green at every floor",
+                "rooftopframe": ", a thin concrete frame crowning the roof"}[self.feature]
         # Say which way this design draws its signature element.
         if self.feature != "none":
             tr = traits(self)
@@ -522,7 +560,7 @@ class Exterior:
 _WEIGHT = {"roof": 3.0, "feature": 2.5, "screen": 2.0, "upper": 1.5, "base": 1.2, "windows": 0.6,
            "planters": 0.4, "accent": 0.8, "wall": 1.5, "roof_tint": 0.6, "shade": 0.6, "canopy": 0.5,
            "boundary": 0.6, "gate": 0.3, "paving": 0.3, "garden": 0.4, "solar": 0.5, "panel": 1.2, "parapet": 0.8,
-           "deck": 0.7, "lights": 0.4}
+           "deck": 0.7, "lights": 0.4, "yard": 0.6}
 
 
 def distance(a: Exterior, b: Exterior) -> float:
@@ -548,6 +586,7 @@ def grammar() -> dict[str, Any]:
             "boundary": list(BOUNDARIES), "railing": list(RAILINGS), "shade": list(SHADES), "canopy": list(CANOPIES),
             "gate": list(GATES), "paving": list(PAVINGS), "garden": list(GARDENS), "solar": list(SOLAR),
             "panel": list(PANELS), "parapet": list(PARAPETS), "deck": list(DECKS), "lights": list(LIGHTS),
+            "yard": list(YARDS),
             "paints": {k: [{"name": n, "hex": h} for n, h in v] for k, v in PAINTS.items()},
             "styles": [{"id": k, "name": STYLE_NAMES.get(k, k.replace("_", " ").title()),
                         "schemes": list(STYLE_DNA.get(k, {}).get("schemes", ()))} for k in STYLE_BIAS]}
@@ -620,7 +659,7 @@ def generate(plan: FloorPlan, n: int = 10, prefer: dict[str, Any] | None = None,
             shade=option("shade", SHADES), canopy=option("canopy", CANOPIES), gate=option("gate", GATES),
             paving=option("paving", PAVINGS), garden=option("garden", GARDENS),
             solar="on" if roof in ("flat", "slab") and rng.random() < float(bias.get("solar", 0.2)) else "",
-            panel=option("panel", PANELS), lights=option("lights", LIGHTS),
+            panel=option("panel", PANELS), lights=option("lights", LIGHTS), yard=option("yard", YARDS),
             parapet=option("parapet", PARAPETS) if roof == "flat" else "",
             deck=option("deck", DECKS) if roof == "flat" else "",
         )
@@ -699,7 +738,9 @@ def _harmonious(e: Exterior, one_floor: bool) -> bool:
         return False
     if e.feature == "chhatri" and e.roof != "flat":
         return False                         # chhatris stand on a flat roof
-    if e.feature in ("jharokha", "balcony", "bay", "floatbox", "cornerglass") and one_floor:
+    if e.feature in ("jharokha", "balcony", "bay", "floatbox", "cornerglass", "cantilever", "planterbands") and one_floor:
+        return False
+    if e.feature == "rooftopframe" and e.roof not in ("flat", "slab"):
         return False
     if e.feature == "bangla" and e.roof != "flat":
         return False
@@ -823,6 +864,7 @@ def recolour(palette, ex: Exterior) -> None:
     palette.shade, palette.canopy, palette.gate = ex.shade, ex.canopy, ex.gate
     palette.garden, palette.solar = ex.garden, ex.solar == "on"
     palette.parapet, palette.deck, palette.lights = ex.parapet, ex.deck, ex.lights
+    palette.yard = ex.yard
     if ex.deck == "pergola":
         palette.pergola = True
     elif ex.deck:
@@ -1095,6 +1137,69 @@ def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
                     for s_ in (-1, 1):
                         _box(b, node, tr["frame"], c + e.dir * (s_ * (w / 2 - 0.05)), base + 1.35, (0.1, 1.8, 0.7), yaw)
                     _box(b, node, "ex_glassband", c + e.out * 0.32, base + 1.35, (w - 0.2, 1.68, 0.03), yaw)
+            elif f in ("brickcurtain", "wavescreen") and (li >= 1 or n == 1) and e is front and L > 3.0:
+                # A perforated curtain of bricks across the front: light and air
+                # through it, patterned shadow behind it; the wave version ripples.
+                mat = {"masonry": "ex_brick", "timber": "ex_terracotta", "modern": "ex_concrete"}[tr["family"]]
+                rows = int((h - 0.3) / 0.16)
+                cols = int((L - 0.3) / 0.3)
+                for j in range(rows):
+                    shift = 0.15 if j % 2 else 0.0
+                    for i in range(cols):
+                        t = (0.15 + shift + i * 0.3) / L
+                        if t > 0.97:
+                            continue
+                        wave = 0.16 * math.sin(2 * math.pi * (t * L) / 2.2 + j * 0.35) if f == "wavescreen" else 0.0
+                        _box(b, node, mat, e.at(t, 0.4 + wave), base + 0.2 + j * 0.16, (0.22, 0.075, 0.1), yaw)
+                _box(b, node, tr["frame"], e.at(0.5, 0.4), base + h - 0.05, (L, 0.1, 0.5), yaw)
+            elif f == "moongate" and e is front and L > 3.5 and li == n - 1:
+                # A square screen with a round opening cut through it, standing off the top floor.
+                side = min(3.4, h * 1.05, L * 0.5)
+                cr = side * 0.36
+                c = e.at(_pick(ex, "moonat", (0.3, 0.5, 0.7)), 0.45)
+                cells = int(side / 0.2)
+                for i in range(cells):
+                    for j in range(cells):
+                        x = -side / 2 + (i + 0.5) * side / cells
+                        y = -side / 2 + (j + 0.5) * side / cells
+                        if math.hypot(x, y) > cr:
+                            _box(b, node, "clad" if tr["family"] == "masonry" else tr["frame"], c + e.dir * x,
+                                 base + h / 2 + y * 0.95, (side / cells + 0.01, side / cells * 0.95 + 0.01, 0.2), yaw)
+            elif f == "cantilever" and li == 1 and e is front and L > 3.5:
+                # A first-floor room pushed out over the porch: a solid volume, glazed at its end.
+                w = min(4.2, L * 0.45)
+                t = _pick(ex, "cantat", (w / 2 / L + 0.02, 0.5, 1 - w / 2 / L - 0.02))
+                d = 1.3
+                c = e.at(t, d / 2)
+                skin = SKIN.get(ex.upper, "plaster")
+                _box(b, node, skin, c, base - 0.05, (w, 0.3, d), yaw)
+                _box(b, node, skin, c, base + h - 0.1, (w, 0.3, d), yaw)
+                for s_ in (-1, 1):
+                    _box(b, node, skin, c + e.dir * (s_ * (w / 2 - 0.1)), base + h / 2, (0.2, h, d), yaw)
+                _box(b, node, "ex_glassband", e.at(t, d - 0.05), base + h / 2, (w - 0.4, h - 0.5, 0.04), yaw)
+            elif f == "flutedbands" and li == 0 and e is front and L > 3.0:
+                # Full-height fluted bands framing the front, ribbed like a column.
+                tall = sum(lv.floor_to_floor for lv, _b, _f in levels) - 0.1
+                for t0 in (0.0, 1.0 - 1.2 / L):
+                    for k in range(10):
+                        _box(b, "level_0/facade", tr["frame"] if tr["frame"] != "ex_accent" else "ex_concrete",
+                             e.at(t0 + (0.06 + k * 0.12) / L, 0.06), tall / 2, (0.07, tall, 0.12), yaw)
+            elif f == "brisesoleil" and (li >= 1 or n == 1) and street(e) and L > 3.0:
+                # A deep egg-crate of fins over the face: Chandigarh's sun-breaker.
+                for j in range(int(h / 0.75) + 1):
+                    _box(b, node, "ex_concrete", e.at(0.5, 0.3), base + 0.1 + j * 0.75, (L, 0.08, 0.6), yaw)
+                k = max(2, int(L / 0.9))
+                for i in range(k + 1):
+                    if _free(i / k, 0.05 / L, doors):
+                        _box(b, node, "ex_concrete", e.at(i / k, 0.3), base + h / 2, (0.08, h, 0.6), yaw)
+            elif f == "planterbands" and li >= 1 and street(e) and L > 3.0:
+                # A planter trough along every slab edge, greenery spilling over it.
+                _box(b, node, "ex_concrete", e.at(0.5, 0.3), base - 0.05, (L, 0.45, 0.45), yaw)
+                for i in range(int(L / 0.45)):
+                    q = e.at((i + 0.5) * 0.45 / L, 0.33)
+                    b.blob(node, "leaf" if i % 2 else "leaf2", (q.x, base + 0.25, -q.y), 0.26, 0.8)
+                    if i % 3 == 0:
+                        b.blob(node, "leaf2", (q.x, base - 0.35, -q.y), 0.16, 1.6)
             elif f == "cornice":
                 # A cornice at every floor: single, doubled, or with a dentil course.
                 _box(b, node, "slab", e.at(0.5, 0.2), base + h - 0.12, (L + 0.5, 0.2, 0.42), yaw)
@@ -1187,6 +1292,18 @@ def _feature(b, ex: Exterior, levels, street, roof_y: float) -> None:
                     _box(b, node, tr["frame"], e.at(t, 0.2), yy, (w + 0.2, 0.14, 0.4), yaw)
                 for i in range(1, 3):
                     _box(b, node, "frame", c + e.dir * (-w / 2 + i * w / 3), base + h / 2, (0.05, h - 0.3, 0.06), yaw)
+    if f == "rooftopframe" and ex.roof in ("flat", "slab"):
+        # A thin concrete frame crowning the roof: the house drawn as one bold line.
+        level, base, fp = levels[-1]
+        if fp is not None and not fp.is_empty:
+            front = max((e for e in edges(fp) if street(e)), key=lambda x: x.length, default=None)
+            if front is not None:
+                w = front.length * _pick(ex, "crownw", (0.5, 0.65, 0.8))
+                c = front.at(0.5, -1.2)
+                yaw, y = _yaw(front), roof_y + (0.18 if ex.roof == "slab" else 0.0)
+                for s_ in (-1, 1):
+                    _box(b, "roof", "ex_concrete", c + front.dir * (s_ * w / 2), y + 1.6, (0.25, 3.2, 2.4), yaw)
+                _box(b, "roof", "ex_concrete", c, y + 3.2, (w + 0.25, 0.25, 2.4), yaw)
     if f in ("chhatri", "bangla") and ex.roof == "flat":
         level, base, fp = levels[-1]
         if fp is not None and not fp.is_empty:

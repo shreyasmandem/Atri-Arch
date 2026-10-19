@@ -72,3 +72,29 @@ def test_a_garden_pool_is_not_also_a_room():
     without = SimpleBriefRequest(plot_width=16, plot_depth=26, extra_rooms=extra).to_brief()
     assert not any((r.label or "").lower().endswith("pool") for r in with_pool.requirements)
     assert any((r.label or "").lower().endswith("pool") for r in without.requirements)
+
+
+def test_garden_features_find_their_quarter_and_build(pool_plan):
+    import math
+
+    from aip.engines.experience.arch3d import build_scene
+    from aip.engines.experience.exteriors import YARDS, Exterior
+    from aip.engines.experience.landscape import YARD_FEATURES, yard_spot
+
+    placed = 0
+    for kind in YARDS[1:]:
+        spot = yard_spot(pool_plan, kind)
+        if spot is not None:
+            placed += 1
+            c, r = spot
+            centre = pool_plan.site.centre
+            assert math.hypot(c.x - centre.x, c.y - centre.y) > 0.5
+        build_scene(pool_plan, include_furniture=False, design_id=Exterior(yard=kind).id)
+    assert placed >= 4
+    assert set(YARD_FEATURES) == set(YARDS[1:])
+
+
+def test_words_ask_for_garden_features():
+    from aip.engines.experience.exteriors import prefer_from_text
+
+    assert prefer_from_text("a tulsi in front and a jhoola")["yard"][:2] == ("tulsi", "jhoola")
