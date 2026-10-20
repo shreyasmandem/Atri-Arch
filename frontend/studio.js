@@ -7,7 +7,7 @@
    just quiet.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { atelier, person, avatar } from "./atelier.js";
+import { atelier, person, avatar } from "./atelier.js?v=s2";
 import { mountEditor } from "./editor.js";
 import { autoSetbacks } from "./setbacks.js";
 
@@ -429,7 +429,7 @@ async function initHome() {
   import("./steps.js").then(({ mountSteps }) => mountSteps()).catch(() => {});
   const grid = $("board-grid");
   if (grid) {
-    const { PEOPLE, glyph } = await import("./atelier.js");
+    const { PEOPLE, glyph } = await import("./atelier.js?v=s2");
     for (const p of Object.values(PEOPLE)) {
       const li = el("li", "member"); li.dataset.pig = p.pig;
       li.append(glyph(p.glyph, "member__gl"), el("b", null, p.name), el("span", null, p.role));
@@ -1605,7 +1605,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p6");
+    const { Viewer3D } = await import("./viewer3d.js?v=p7");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2079,7 +2079,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p6");
+  const { Viewer3D } = await import("./viewer3d.js?v=p7");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2221,7 +2221,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p6");
+    const { Viewer3D } = await import("./viewer3d.js?v=p7");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2260,7 +2260,7 @@ async function renderModel() {
       modes.querySelectorAll("button").forEach((x) => x.setAttribute("aria-selected", String(x.dataset.mode === mode && +x.dataset.level === lv)));
       if (mode === "interior") {
         said ||= outside();
-        cap.textContent = `Inside · ${floorName(lv)}  ·  zoom closer into a room, or zoom out to step back outside`;
+        cap.textContent = `Inside · ${floorName(lv)}  ·  ${lv > 0 ? "zoom in for the floor below, out to go back up" : "zoom out to go back up and outside"}`;
       } else if (said) { cap.textContent = said; said = ""; }
     });
     cap.textContent = `${st.width.toFixed(1)} × ${st.depth.toFixed(1)} m  ·  ${st.height.toFixed(1)} m high  ·  ${st.triangles.toLocaleString()} triangles`;
@@ -2340,7 +2340,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p6");
+    const { Viewer3D } = await import("./viewer3d.js?v=p7");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3257,6 +3257,23 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     card.hidden = false; card.innerHTML = "";
     const min = !page && pal.min;
     card.className = `pal ex${page ? " ex--page" : ""}${min ? " is-min" : ""}${live ? " is-live" : ""}`;
+    // On the Exterior page the panel folds to a slim rail, giving the house the room.
+    if (page) {
+      const wrap = card.closest(".exw");
+      wrap?.classList.toggle("is-min", !!pal.pageMin);
+      if (pal.pageMin) {
+        card.classList.add("is-rail");
+        const open = el("button", "ex-rail__open", "›"); open.type = "button";
+        open.setAttribute("aria-label", "Show the design panel"); open.setAttribute("aria-expanded", "false");
+        open.title = "Show the design panel";
+        open.addEventListener("click", () => { pal.pageMin = false; draw(); card.querySelector(".ex-rail__min")?.focus(); });
+        const dd = designs[idx()];
+        const name = el("span", "ex-rail__name", dd ? dd.name : "Exterior designs");
+        name.addEventListener("click", () => open.click());
+        card.append(open, name);
+        return;
+      }
+    }
     pal.tab ||= "designs";
     const di = idx(), d = designs[di];
     const head = el("div", "ex__head");
@@ -3271,6 +3288,13 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", name); bt.disabled = !d;
       bt.addEventListener("click", () => choose(designs[(di + step + designs.length) % designs.length].id));
       nav.append(bt);
+    }
+    if (page) {
+      const mb = el("button", "ghost-btn ex-rail__min", "‹‹"); mb.type = "button";
+      mb.setAttribute("aria-label", "Minimise the design panel"); mb.setAttribute("aria-expanded", "true");
+      mb.title = "Minimise the design panel";
+      mb.addEventListener("click", () => { pal.pageMin = true; draw(); card.querySelector(".ex-rail__open")?.focus(); });
+      nav.append(mb);
     }
     if (!page) {
       const mb = el("button", "ghost-btn", pal.min ? "+" : "–"); mb.type = "button";

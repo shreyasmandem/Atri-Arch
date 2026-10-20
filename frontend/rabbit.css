@@ -1164,6 +1164,17 @@ input[type="range"].stance::-moz-range-thumb { width: 16px; height: 16px; border
    its four elevations stand beside it. */
 .pane[data-view="exterior"] { min-height: 0; }
 .exw { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 30%); }
+.exw.is-min { grid-template-columns: 52px minmax(0, 1fr); }
+.exw.is-min .exw__side { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 28%); grid-template-rows: auto minmax(0, 1fr); }
+.exw.is-min .exw__stage { grid-row: 1 / span 2; min-height: 0; }
+.exw.is-min .exw__elevhead { grid-column: 2; border-top: 0; border-left: 1px solid var(--rule); }
+.exw.is-min .exw__elev { grid-column: 2; grid-template-columns: 1fr; border-left: 1px solid var(--rule); align-content: start; }
+.pal.ex.ex--page.is-rail { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 16px 0; overflow: hidden; }
+.ex-rail__open { width: 34px; height: 34px; border: 1px solid var(--rule-2); border-radius: 50%; background: none; color: var(--cream); font: 600 18px/1 var(--ui); cursor: pointer; }
+.ex-rail__open:hover { background: var(--cream); color: var(--ink); }
+.ex-rail__name { writing-mode: vertical-rl; transform: rotate(180deg); font: 600 11px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-2); white-space: nowrap; cursor: pointer; }
+.ex-rail__min { font-size: 12px; letter-spacing: -0.1em; }
+@media (max-width: 900px) { .exw.is-min { grid-template-columns: minmax(0, 1fr); } .pal.ex.ex--page.is-rail { flex-direction: row; justify-content: flex-start; padding: 10px 16px; } .ex-rail__name { writing-mode: horizontal-tb; transform: none; } .exw.is-min .exw__side { display: flex; flex-direction: column; } }
 .pal.ex.ex--page { position: static; inset: auto; z-index: auto; width: auto; max-height: none; min-height: 0; height: 100%; padding: 18px var(--gut, 24px) 0; background: none; border: 0; backdrop-filter: none; }
 .ex--page .ex-panel { padding-bottom: 24px; }
 .ex--page .ex-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }

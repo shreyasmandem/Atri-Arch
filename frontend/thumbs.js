@@ -7,7 +7,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { studioEnvironment } from "./viewer3d.js?v=p6";
+import { studioEnvironment } from "./viewer3d.js?v=p7";
 import { dress, skyTexture } from "./materials.js";
 
 const W = 360, H = 270;

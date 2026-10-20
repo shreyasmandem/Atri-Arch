@@ -261,7 +261,7 @@ class Atelier {
     if (this.stage3d) { this.stage3d.resume(); return; }
     const note = this.$("at-note");
     try {
-      const mod = await import("./stage3d.js");
+      const mod = await import("./stage3d.js?v=s2");
       if (!mod.webglAvailable()) throw new Error("this device has no WebGL");
       const box = document.createElement("div");
       box.className = "at-3d";

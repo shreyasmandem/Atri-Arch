@@ -223,28 +223,70 @@ export class Viewer3D {
     const reach = this._house * Math.max(1, 1 / (this.camera.aspect || 1)) ** 0.85;
     // In once the house fills the view; out only well beyond, so it never flickers.
     if ((this.mode || "exterior") === "exterior" && d < reach * 1.6) {
-      const levels = [];
-      this.model.traverse((o) => { const m = /^level_(\d+)$/.exec(o.name); if (m) levels.push(+m[1]); });
-      const top = levels.length ? Math.max(...levels) : 0;
-      // The floor at eye level, at the plans' 3.15 m floor to floor.
-      const level = Math.max(0, Math.min(top, Math.floor((this.camera.position.y - 0.6) / 3.15)));
+      // Inside from the top: the roof lifts first, then each floor in turn.
+      const top = this._topLevel();
       this._auto = true;
-      this.setMode("interior", level);
-      this.onAutoMode?.("interior", level);
-      this._glideInto(level, d);
-    } else if (this._auto && this.mode === "interior" && d > reach * 2.4) {
-      this._auto = false;
-      this.setMode("exterior");
-      this.onAutoMode?.("exterior", 0);
+      this.setMode("interior", top);
+      this.onAutoMode?.("interior", top);
+      this._entryD = this._glideInto(top, d) || d;
+    } else if (this._auto && this.mode === "interior") {
+      if (d > reach * 2.4) {
+        this._auto = false;
+        this.setMode("exterior");
+        this.onAutoMode?.("exterior", 0);
+        return;
+      }
+      // Peel the house: every further 28% closer lifts the floor in view
+      // away to show the one below; drawing back puts them back in order.
+      const top = this._topLevel();
+      const depth = Math.max(0, Math.floor(Math.log((this._entryD || d) / d) / Math.log(1 / 0.72)));
+      const level = Math.max(0, top - depth);
+      if (level !== this.modeLevel) {
+        this.setMode("interior", level);
+        this.onAutoMode?.("interior", level);
+        this._shiftTo(level);
+      }
     }
+  }
+
+  _topLevel() {
+    let top = 0;
+    this.model.traverse((o) => { const m = /^level_(\d+)$/.exec(o.name); if (m) top = Math.max(top, +m[1]); });
+    return top;
+  }
+
+  // The floor's box: its rooms, walls and furniture.
+  _levelBox(level) {
+    const box = new THREE.Box3();
+    this.model.traverse((o) => { if (o.isMesh && o.name.startsWith(`level_${level}__`)) box.expandByObject(o); });
+    return box;
+  }
+
+  // Down (or up) to another floor: the view drops by a storey, keeping its
+  // angle and distance, so the zoom carries on without a jump.
+  _shiftTo(level) {
+    const box = this._levelBox(level);
+    if (box.isEmpty()) return;
+    const dy = box.min.y + 1.0 - this.controls.target.y;
+    const fromC = this.camera.position.clone(), fromT = this.controls.target.clone();
+    const t0 = performance.now(), ms = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 450;
+    this._gliding = true;
+    const step = (now) => {
+      const k = ms ? Math.min(1, (now - t0) / ms) : 1, e = 1 - (1 - k) ** 3;
+      this.camera.position.set(fromC.x, fromC.y + dy * e, fromC.z);
+      this.controls.target.set(fromT.x, fromT.y + dy * e, fromT.z);
+      this.controls.update();
+      if (k < 1) requestAnimationFrame(step); else this._gliding = false;
+    };
+    requestAnimationFrame(step);
   }
 
   // Into the floor as a dollhouse: from the side the client was looking,
   // high enough to see down into every room, the floor filling the view.
+  // Returns the distance it settles at.
   _glideInto(level, d) {
-    const box = new THREE.Box3();
-    this.model.traverse((o) => { if (o.isMesh && o.name.startsWith(`level_${level}__`)) box.expandByObject(o); });
-    if (box.isEmpty()) return;
+    const box = this._levelBox(level);
+    if (box.isEmpty()) return 0;
     const centre = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const floorY = box.min.y + 1.0;
@@ -266,6 +308,7 @@ export class Viewer3D {
       if (k < 1) requestAnimationFrame(step); else this._gliding = false;
     };
     requestAnimationFrame(step);
+    return dist;
   }
 
   // A mode picked by hand: the zoom no longer owns it.

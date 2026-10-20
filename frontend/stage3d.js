@@ -31,10 +31,10 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
 const GAP = 3.6;          // metres between floor plates
 const WALL_H = 1.05;      // cut-away height: a model, not a building
 const H = 1.9;            // figure height: collectible proportions that read at plan scale
-const WALK = 1.6;         // m/s
-const RUN = 3.6;          // m/s, for long crossings
-const PACE = 2.2;         // m/s while drawing
-const ACCEL = 4.5;        // m/s²
+const WALK = 1.0;         // m/s: an unhurried stroll, easy to follow
+const RUN = 2.2;          // m/s, for long crossings
+const PACE = 1.4;         // m/s while drawing
+const ACCEL = 3.0;        // m/s²
 
 const COL = {
   ground: 0x0b0a09, plot: 0x1c1b19, slab: 0x141312, line: 0xede6dc, chalk: 0x8a847b,
@@ -788,7 +788,8 @@ export class Stage3D {
     let want = 1;
     if (s && !s.drawn && this.deadline) {
       const secs = Math.max(1.5, ((this.deadline - performance.now()) / 1000) * 0.85);
-      want = clamp(this._left() / (PACE * secs), 1, 9);
+      // Never more than 4x: past that the team blurs and nobody can follow the drawing.
+      want = clamp(this._left() / (PACE * secs), 1, 4);
     }
     want *= this.boost || 1;
     this.speed += (want - this.speed) * 0.35;
@@ -1681,7 +1682,7 @@ export class Stage3D {
   // when the board is still.
   async settle() {
     this.settling = true;
-    this.speed = 2.5;
+    this.speed = 1.8;
     this.view.rate = 4;
     this.pending = [];
     for (const c of this.critics.slice()) {
@@ -1750,7 +1751,7 @@ export class Stage3D {
       this._spawnCritic(now);
       for (const m of this.team) this._member_tick(m, step, dt, now);
       // The specialists keep a human pace even when the drafting fast-forwards.
-      const calm = dt * Math.min(this.speed, 1.2) * (this.boost || 1);
+      const calm = dt * Math.min(this.speed, 0.9) * (this.boost || 1);
       for (const c of this.critics.slice()) this._member_tick(c, calm, dt, now);
     }
 
