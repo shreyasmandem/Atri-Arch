@@ -10,10 +10,12 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { studioEnvironment } from "./viewer3d.js?v=p7";
 import { dress, skyTexture } from "./materials.js";
 
-const W = 360, H = 270;
-const cache = new Map();       // url -> Promise<string | null>
-const queue = [];              // { url, front, resolve }
-let R = null, scene = null, cam = null, sun = null, running = false;
+const W = 480, H = 360;
+// The catalogue's lead design is shot wide, like the photograph on a brochure cover.
+const SIZES = { card: [W, H], wide: [880, 400] };
+const cache = new Map();       // url|size -> Promise<string | null>
+const queue = [];              // { url, front, size, resolve }
+let R = null, scene = null, cam = null, sun = null, hemi = null, grade = null, running = false;
 
 function setup() {
   R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -21,28 +23,61 @@ function setup() {
   R.setSize(W, H, false);
   R.outputColorSpace = THREE.SRGBColorSpace;
   R.toneMapping = THREE.ACESFilmicToneMapping;
+  R.toneMappingExposure = 1.0;
   R.shadowMap.enabled = true;
-  R.shadowMap.type = THREE.PCFSoftShadowMap;
+  // Filtered shadows with a wide radius: the soft edge of late sun, not a stencil.
+  R.shadowMap.type = THREE.PCFShadowMap;
   scene = new THREE.Scene();
   scene.environment = studioEnvironment(R);
+  scene.environmentIntensity = 0.5;
   scene.background = skyTexture();
-  scene.add(new THREE.HemisphereLight(0xdde6ee, 0x6b5f4f, 0.95));
-  sun = new THREE.DirectionalLight(0xfff1dc, 2.3);
+  scene.fog = new THREE.Fog(0xd9d3c4, 60, 200);
+  hemi = new THREE.HemisphereLight(0xcfdbe8, 0x7a6a55, 0.45);
+  scene.add(hemi);
+  // Late-afternoon sun: low, warm, long shadows that model every ledge.
+  sun = new THREE.DirectionalLight(0xffe0b5, 3.3);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.bias = -0.0006;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = 3.5;
   const fill = new THREE.DirectionalLight(0xbcd0ff, 0.45);
   fill.position.set(-1, 0.6, -0.8);
   scene.add(sun, sun.target, fill);
   // Open ground past the plot, so the house stands somewhere.
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(80, 48), new THREE.MeshStandardMaterial({ color: 0x8f8877, roughness: 1 }));
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(80, 48), new THREE.MeshStandardMaterial({ color: 0x968b76, roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.position.y = -0.01; ground.receiveShadow = true;
   scene.add(ground);
-  cam = new THREE.PerspectiveCamera(30, W / H, 0.1, 500);
+  // A longer lens than the viewer's: verticals stay upright, as in architectural photography.
+  cam = new THREE.PerspectiveCamera(24, W / H, 0.1, 500);
+  grade = document.createElement("canvas");
 }
 
-async function render(url, front) {
+// The print: the render graded warm in the light and cool in the shade, with a
+// gentle vignette that holds the eye on the house.
+function develop(w, h) {
+  grade.width = w; grade.height = h;
+  const g = grade.getContext("2d");
+  g.drawImage(R.domElement, 0, 0, w, h);
+  g.globalCompositeOperation = "soft-light";
+  g.fillStyle = "rgba(255, 214, 160, 0.16)";
+  g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "multiply";
+  const v = g.createRadialGradient(w * 0.5, h * 0.55, Math.min(w, h) * 0.35, w * 0.5, h * 0.55, Math.hypot(w, h) * 0.62);
+  v.addColorStop(0, "rgba(255,255,255,1)");
+  v.addColorStop(1, "rgba(150,140,128,1)");
+  g.fillStyle = v;
+  g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "source-over";
+  return new Promise((ok) => grade.toBlob(ok, "image/webp", 0.88));
+}
+
+async function render(url, front, frame = "card") {
   if (!R) setup();
+  const [w, h] = SIZES[frame] || SIZES.card;
+  R.setSize(w, h, false);
+  cam.aspect = w / h;
+  cam.updateProjectionMatrix();
   const gltf = await new GLTFLoader().loadAsync(url);
   const m = gltf.scene;
   m.traverse((o) => {
@@ -60,18 +95,28 @@ async function render(url, front) {
   const low = new THREE.Box3().setFromObject(m).min.y;
   m.position.sub(new THREE.Vector3(c.x, low, c.z));
   scene.add(m);
-  // The street face, three-quarters on, as the main view opens.
-  const span = Math.max(size.x, size.z, size.y * 1.4);
-  const dist = span / (2 * Math.tan((cam.fov * Math.PI) / 360)) * 1.18;
-  const a = front ? Math.atan2(-front[1], front[0]) + 0.6 : 0.9;
-  cam.position.set(Math.cos(a) * dist, dist * 0.42, Math.sin(a) * dist);
+  // The street face, three-quarters on, from a little above eye level: the
+  // house as a passer-by sees it, filling the frame. A wide frame fits the
+  // house by its height, a card by its width.
+  const a = front ? Math.atan2(-front[1], front[0]) + 0.62 : 0.9;
+  // Fit the house's width (seen three-quarters on) and its height, each by its own angle of view.
+  const vt = Math.tan((cam.fov * Math.PI) / 360), ht = vt * (w / h);
+  const across = Math.abs(size.x * Math.sin(a)) + Math.abs(size.z * Math.cos(a));
+  // Perspective swells the near corner, so the frame keeps a margin round the house.
+  const dist = Math.max((across * 0.5) / ht, (size.y * 0.62) / vt) * (w / h > 1.6 ? 1.8 : 1.5);
+  cam.position.set(Math.cos(a) * dist, size.y * 0.5 + dist * 0.18, Math.sin(a) * dist);
   cam.lookAt(0, box.min.y - low + size.y * 0.42, 0);
-  const sc = sun.shadow.camera;
-  sc.left = -span * 1.4; sc.right = span * 1.4; sc.top = span * 1.4; sc.bottom = -span * 1.4; sc.far = span * 8;
+  const sc = sun.shadow.camera, reach = Math.max(size.x, size.z) * 1.6;
+  sc.left = -reach; sc.right = reach; sc.top = reach; sc.bottom = -reach; sc.far = reach * 8;
   sc.updateProjectionMatrix();
-  sun.position.set(Math.cos(a - 0.5) * span * 1.2, span * 2, Math.sin(a - 0.5) * span * 1.2);
+  // Sun low and off to one side: it rakes across the street face, and the
+  // house's shadow falls where the camera can see it.
+  sun.position.set(Math.cos(a - 1.35) * reach * 1.5, reach * 0.7, Math.sin(a - 1.35) * reach * 1.5);
+  // Haze toward the horizon, so the ground melts into the sky.
+  scene.fog.near = dist * 1.6; scene.fog.far = dist * 5.5;
   R.render(scene, cam);
-  const blob = await new Promise((ok) => R.domElement.toBlob(ok, "image/webp", 0.86));
+  const blob = await develop(w * 1.5, h * 1.5);
+  R.setSize(W, H, false);
   scene.remove(m);
   m.traverse((o) => { o.geometry?.dispose(); for (const x of [].concat(o.material || [])) x.dispose?.(); });
   return blob ? URL.createObjectURL(blob) : null;
@@ -100,6 +145,7 @@ async function renderElevations(url) {
   Object.assign(sc, { left: -span, right: span, top: span, bottom: -span, far: span * 10 });
   sc.updateProjectionMatrix();
   R.setSize(EW, EH, false);
+  const fog = scene.fog; scene.fog = null;
   const out = [];
   const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 500);
   for (const side of ["N", "E", "S", "W"]) {
@@ -119,6 +165,7 @@ async function renderElevations(url) {
     out.push(blob ? URL.createObjectURL(blob) : null);
   }
   R.setSize(W, H, false);
+  scene.fog = fog;
   scene.remove(m);
   m.traverse((o) => { o.geometry?.dispose(); for (const x of [].concat(o.material || [])) x.dispose?.(); });
   return out;
@@ -129,7 +176,7 @@ async function pump() {
   running = true;
   while (queue.length) {
     const job = queue.pop();               // latest first
-    try { job.resolve(await (job.run ? job.run() : render(job.url, job.front))); } catch { job.resolve(job.run ? [] : null); }
+    try { job.resolve(await (job.run ? job.run() : render(job.url, job.front, job.size))); } catch { job.resolve(job.run ? [] : null); }
   }
   running = false;
 }
@@ -145,14 +192,15 @@ export function elevations(url) {
 }
 
 /** A rendered image URL for this model, or null if it could not be drawn. */
-export function thumb(url, front = null) {
-  if (!cache.has(url)) {
-    cache.set(url, new Promise((resolve) => { queue.push({ url, front, resolve }); }));
+export function thumb(url, front = null, size = "card") {
+  const key = `${url}|${size}`;
+  if (!cache.has(key)) {
+    cache.set(key, new Promise((resolve) => { queue.push({ url, front, size, key, resolve }); }));
     pump();
   } else {
     // Asked again while still waiting: move it to the front of the line.
-    const i = queue.findIndex((j) => j.url === url);
+    const i = queue.findIndex((j) => j.key === key);
     if (i >= 0) queue.push(queue.splice(i, 1)[0]);
   }
-  return cache.get(url);
+  return cache.get(key);
 }

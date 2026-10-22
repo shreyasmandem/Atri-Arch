@@ -2318,7 +2318,7 @@ async function renderExterior() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   // The four elevations of what the model shows, drawn without the site.
-  const { elevations } = await import("./thumbs.js?v=p1");
+  const { elevations } = await import("./thumbs.js?v=p2");
   let drawn = "";
   const drawElevations = async () => {
     const url = modelUrl();
@@ -2425,7 +2425,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p1"), import("./materials.js")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p2"), import("./materials.js")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };
@@ -2495,14 +2495,16 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     designs.push(...fresh);
     return fresh;
   };
-  const loadMore = async (n = 12, style = pal.style || "") => {
+  const loadMore = async (n = 12, style = pal.style || "", extra = "") => {
     if (loading) return [];
     loading = true;
     let fresh = [];
     try {
       const q = new URLSearchParams({ seed: `${Date.now().toString(36)}-${++batch}`, n: String(n) });
       if (style) q.set("style", style);
-      if (briefPrefs) q.set("prefs", briefPrefs);
+      // What the catalogue is narrowed to steers the next batch, ahead of the brief.
+      const prefs = [extra, briefPrefs].filter(Boolean).join(". ").slice(0, 1150);
+      if (prefs) q.set("prefs", prefs);
       for (const d of designs.slice(-40)) q.append("avoid", d.id);
       const r = await fetch(`${API}/plans/${id}/exteriors?${q}`);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -2602,36 +2604,193 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     const mine = grammar?.styles?.find((x) => x.id === (d.fam || planStyle))?.schemes || [];
     return [null, ...[...all.filter((x) => mine.includes(x.id)), ...all.filter((x) => !mine.includes(x.id))].slice(0, 5)];
   };
-  // A gallery card: the picture chooses the design; the dots under it
-  // recolour this card, and choose the design in those colours.
-  const designCard = (d, s) => {
+  // ── the catalogue ──────────────────────────────────────────────────
+  // A lookbook: each design as an architectural photograph, the surfaces it
+  // is built from as a material board (real texture chips, as an architect
+  // pins samples beside a facade), its colourways, and a way to keep it.
+  const FINISH_OF = { plaster: ["plaster", "#e9e2d4"], stone: ["stone", "#9a8a76"], brick: ["brick", "#9a5238"],
+    concrete: ["concrete", "#a9a7a1"], timber: ["timber", "#8a5a34"], metal: ["seam", "#3a3b3d"],
+    terracotta: ["tiles", "#b0613f"], acp: ["acpanel", "#8f9296"], slate: ["slate", "#56585b"] };
+  const ROOF_FINISH = { flat: ["plaster", "Terrace"], slab: ["concrete", "Concrete slab"], hip: ["tile", "Clay tiles"],
+    gable: ["tile", "Clay tiles"], mono: ["seam", "Standing seam"], butterfly: ["seam", "Standing seam"],
+    vault: ["seam", "Curved sheet"], sawtooth: ["seam", "Standing seam"] };
+  const lower = (t) => String(t || "").toLowerCase();
+  // The colours a design wears: its card's colourway, else its own tints, else the scheme's.
+  const wears = (d, s) => {
+    const p = exParse(d.id) || {}, t = cardTint(d) || {};
+    const pick = (k, fall) => (t[k] ? `#${t[k]}` : p[k] ? `#${p[k]}` : fall);
+    return { p, wall: pick("wall", s.exterior.plaster), clad: pick("clad", ""), roof: pick("roof_tint", s.exterior.roof),
+      accent: grammar?.accents?.[p.accent] || s.exterior.frame };
+  };
+  // The board: ground floor, upper floors (when they differ), roof, accent.
+  const board = (d, s, size = 44) => {
+    const w = wears(d, s), p = w.p;
+    const one = (S.plans[id]?.plan?.levels?.length || 1) <= 1;
+    const skin = (mat) => {
+      const [kind, hex] = FINISH_OF[mat] || FINISH_OF.plaster;
+      return [kind, mat === "plaster" ? w.wall : (w.clad || hex), EX_NICE[mat] || mat];
+    };
+    const rows = [["Ground floor", ...skin(p.base)]];
+    if (!one && p.upper && p.upper !== p.base) rows.push(["Upper floors", ...skin(p.upper)]);
+    else if (p.base !== "plaster") rows.push(["Walls", "plaster", w.wall, "Painted plaster"]);
+    const [rk, rn] = ROOF_FINISH[p.roof] || ROOF_FINISH.flat;
+    rows.push(["Roof", rk, w.roof, rn]);
+    rows.push(["Accent", p.accent === "teak" ? "timber" : "seam", w.accent, `${p.accent?.[0]?.toUpperCase() || ""}${p.accent?.slice(1) || ""}`]);
+    const box = el("ul", "lb-board");
+    box.setAttribute("aria-label", `${d.name} materials`);
+    for (const [where, kind, hex, name] of rows) {
+      const li = el("li", "lb-board__chip");
+      const c = texSwatch(kind, hex || "#cccccc", size); c.setAttribute("aria-hidden", "true");
+      const cap = el("span", "lb-board__name", name);
+      cap.append(el("small", null, lower(where)));
+      li.append(c, cap);
+      li.title = `${where}: ${name}`;
+      box.append(li);
+    }
+    return box;
+  };
+  // One plain sentence on what the design is.
+  const spec = (d) => {
     const p = exParse(d.id) || {};
-    const wrap = el("div", "ex-card");
-    wrap.classList.toggle("is-on", d.id === pal.base);
-    const pick = tile({ selected: d.id === pal.base, url: thumbUrl(tinted(d.id, cardTint(d))), label: d.name, title: d.story,
-      onPick: () => choose(d.id) });
-    const dots = el("div", "ex-card__dots");
-    dots.setAttribute("role", "group"); dots.setAttribute("aria-label", `${d.name} colours`);
+    const roof = { flat: "A flat roof terrace", slab: "A cantilevered slab roof", mono: "A mono-pitch roof", butterfly: "A butterfly roof",
+      hip: "A tiled hip roof", gable: "A gable roof", vault: "A barrel-vault roof", sawtooth: "A sawtooth roof" }[p.roof] || "A roof";
+    const mats = [...new Set([p.base, p.upper].filter(Boolean))].map((m) => lower(EX_NICE[m] || m));
+    let line = `${roof} over ${mats.join(" and ")}`;
+    if (p.screen && p.screen !== "none") line += `, ${lower(EX_NICE[p.screen] || p.screen)} on the street face`;
+    if (p.feature && p.feature !== "none") line += `, with a ${lower(EX_NICE[p.feature] || p.feature)}`;
+    return `${line}.`;
+  };
+  // What the catalogue can be narrowed by.
+  const moodOf = (hex) => {
+    const n = parseInt(String(hex || "#cccccc").slice(1), 16);
+    const r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    const sat = mx === mn ? 0 : (mx - mn) / (1 - Math.abs(2 * l - 1));
+    if (l > 0.82) return "light";
+    if (l < 0.38) return "dark";
+    if (sat > 0.42) return "colourful";
+    return r >= b ? "earthy" : "cool";
+  };
+  const MOODS = [["light", "Light and airy"], ["earthy", "Warm and earthy"], ["cool", "Cool greys and blues"],
+    ["colourful", "Colourful"], ["dark", "Dark and bold"]];
+  const facetsOf = (d, s) => {
+    const w = wears(d, s), p = w.p;
+    return { roof: p.roof, walls: [...new Set([p.base, p.upper])], mood: moodOf(w.wall) };
+  };
+  pal.facets ||= { roof: [], walls: [], mood: [] };
+  pal.saved ||= [];
+  const saved = (d) => pal.saved.includes(d.id);
+  const toggleSave = (d) => {
+    pal.saved = saved(d) ? pal.saved.filter((x) => x !== d.id) : [...pal.saved, d.id];
+  };
+  const BOOKMARK = "M6 3.5h12v17l-6-4.2-6 4.2z";
+  const icon = (path, cls) => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add(cls);
+    const pa = document.createElementNS("http://www.w3.org/2000/svg", "path"); pa.setAttribute("d", path);
+    svg.append(pa);
+    return svg;
+  };
+  const designCard = (d, s, { lead = false } = {}) => {
+    const on = d.id === pal.base;
+    const wrap = el("article", `lb-card${lead ? " lb-card--lead" : ""}${on ? " is-on" : ""}`);
+    // The photograph chooses the design.
+    const photo = el("button", "lb-card__photo is-loading"); photo.type = "button";
+    photo.setAttribute("aria-pressed", String(on));
+    photo.setAttribute("aria-label", on ? `${d.name}, on your house` : `Put ${d.name} on your house`);
+    const img = el("img"); img.alt = ""; img.decoding = "async";
+    img.addEventListener("load", () => photo.classList.remove("is-loading"));
+    photo.append(img);
+    if (on) photo.append(el("span", "lb-card__on", "On your house"));
+    else if (lead) photo.append(el("span", "lb-card__on lb-card__on--pick", "The studio's pick for this house"));
+    if (d.look) photo.append(el("span", "lb-card__look", "Signature home"));
+    photo._load = () => thumb(thumbUrl(tinted(d.id, cardTint(d))), front, lead ? "wide" : "card")
+      .then((src) => { if (src) img.src = src; else photo.classList.replace("is-loading", "is-failed"); });
+    io.observe(photo);
+    photo.addEventListener("click", () => choose(d.id));
+    const body = el("div", "lb-card__body");
+    const head = el("div", "lb-card__head");
+    const name = el("h4", "lb-card__name", d.name);
+    const keep = el("button", "lb-card__keep"); keep.type = "button";
+    keep.setAttribute("aria-pressed", String(saved(d)));
+    keep.setAttribute("aria-label", saved(d) ? `Remove ${d.name} from your shortlist` : `Add ${d.name} to your shortlist`);
+    keep.title = saved(d) ? "On your shortlist" : "Add to shortlist";
+    keep.append(icon(BOOKMARK, "lb-card__keepicon"));
+    keep.addEventListener("click", (e) => {
+      toggleSave(d); draw();
+      // A keyboard toggle keeps the keyboard on the same bookmark across the redraw.
+      if (e.detail === 0) [...card.querySelectorAll(".lb-card__keep")].find((x) => x.getAttribute("aria-label").includes(` ${d.name} `))?.focus({ preventScroll: true });
+    });
+    head.append(name, keep);
+    body.append(head, el("p", "lb-card__spec", spec(d)), board(d, s, lead ? 52 : 40));
+    // Colourways: each a two-tone paint chip; choosing one puts the design on in those colours.
+    const ways = el("div", "lb-ways"); ways.setAttribute("role", "group"); ways.setAttribute("aria-label", `${d.name} colourways`);
     const now = cardTint(d)?.id ?? null;
-    const own = [p.wall ? `#${p.wall}` : s.exterior.plaster, s.exterior.clad, p.roof_tint ? `#${p.roof_tint}` : s.exterior.roof,
-      grammar?.accents?.[p.accent] || s.exterior.frame];
+    const p = exParse(d.id) || {};
+    const own = [p.wall ? `#${p.wall}` : s.exterior.plaster, s.exterior.clad, p.roof_tint ? `#${p.roof_tint}` : s.exterior.roof];
     for (const sc of cardSchemes(d)) {
-      const b = el("button", "ex-card__dot"); b.type = "button";
-      const name = sc ? sc.name : "Its own colours";
-      b.title = name;
-      b.setAttribute("aria-label", `${d.name} in ${name}`);
+      const b = el("button", "lb-ways__chip"); b.type = "button";
+      const nm = sc ? sc.name : "Its own colours";
+      b.title = nm;
+      b.setAttribute("aria-label", `${d.name} in ${nm}`);
       b.setAttribute("aria-pressed", String((sc?.id ?? null) === now));
-      const [w, c, r, m] = sc ? [sc.wall, sc.clad, sc.roof, sc.metal] : own;
-      b.style.background = `conic-gradient(${w} 0 50%, ${c} 0 70%, ${r} 0 88%, ${m} 0)`;
+      const [w, c, r] = sc ? [sc.wall, sc.clad, sc.roof] : own;
+      b.style.background = `linear-gradient(90deg, ${w} 0 58%, ${c} 58% 82%, ${r} 82%)`;
       b.addEventListener("click", (e) => {
         d.tint = schemeTint(sc);
         choose(d.id);
-        if (e.detail === 0) card.querySelector(`[aria-label="${d.name} in ${name}"]`)?.focus({ preventScroll: true });
+        if (e.detail === 0) card.querySelector(`[aria-label="${d.name} in ${nm}"]`)?.focus({ preventScroll: true });
       });
-      dots.append(b);
+      ways.append(b);
     }
-    wrap.append(pick, dots);
+    body.append(ways);
+    wrap.append(photo, body);
     return wrap;
+  };
+
+  // Side by side: the shortlist as an architect lays options out for a client.
+  const compare = (s) => {
+    const list = designs.filter(saved).slice(0, 4);
+    const dlg = el("dialog", "lb-cmp");
+    dlg.setAttribute("aria-label", "Compare your shortlist");
+    const top = el("div", "lb-cmp__top");
+    top.append(el("h3", "lb-cmp__title", `Your shortlist, side by side`));
+    const x = el("button", "ghost-btn", "Close"); x.type = "button";
+    x.addEventListener("click", () => dlg.close());
+    top.append(x);
+    dlg.append(top);
+    const grid = el("div", "lb-cmp__grid");
+    grid.style.setProperty("--n", String(list.length));
+    const ROWS = [["Roof", (p) => EX_NICE[p.roof] || p.roof], ["Ground floor", (p) => EX_NICE[p.base] || p.base],
+      ["Upper floors", (p) => EX_NICE[p.upper] || p.upper], ["Street screen", (p) => EX_NICE[p.screen || "none"]],
+      ["Signature element", (p) => EX_NICE[p.feature || "none"]], ["Windows", (p) => EX_NICE[p.windows] || p.windows],
+      ["Boundary", (p) => EX_NICE[p.boundary || "plaster"] || p.boundary], ["Gate", (p) => ({ none: "Open", sliding: "Steel sliding", timber: "Timber" })[p.gate || "none"]],
+      ["Garden feature", (p) => ({ tulsi: "Tulsi platform", jhoola: "Jhoola swing", waterwall: "Water wall", koipond: "Koi pond",
+        gazebo: "Gazebo", rockgarden: "Rock garden", sitout: "Garden sit-out" })[p.yard] || "None"]];
+    for (const d of list) {
+      const col = el("section", "lb-cmp__col");
+      const ph = el("div", "lb-cmp__photo is-loading");
+      const im = el("img"); im.alt = d.name;
+      im.addEventListener("load", () => ph.classList.remove("is-loading"));
+      ph.append(im);
+      thumb(thumbUrl(tinted(d.id, cardTint(d))), front).then((src) => { if (src) im.src = src; });
+      col.append(ph, el("h4", "lb-card__name", d.name), board(d, s, 36));
+      const dl = el("dl", "lb-cmp__facts");
+      const p = exParse(d.id) || {};
+      for (const [k, f] of ROWS) dl.append(el("dt", null, k), el("dd", null, f(p) || "None"));
+      col.append(dl);
+      const use = el("button", "btn lb-cmp__use", d.id === pal.base ? "On your house" : "Put on my house"); use.type = "button";
+      use.disabled = d.id === pal.base;
+      use.addEventListener("click", () => { dlg.close(); choose(d.id); });
+      const drop = el("button", "pal__clr", "Remove from shortlist"); drop.type = "button";
+      drop.addEventListener("click", () => { toggleSave(d); dlg.close(); draw(); if (pal.saved.length) compare(s); });
+      col.append(use, drop);
+      grid.append(col);
+    }
+    dlg.append(grid);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
   };
   const skeleton = (panel, n = 6) => {
     const grid = el("div", "ex-grid");
@@ -2669,50 +2828,141 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     const own = styleName(planStyle);
     // Signature homes: whole houses after admired ones - a Goan villa, a
     // Chettinad mansion, a Bawa house - each in its colourways.
-    const styles = [["", own ? `For this house · ${own}` : "For this house"], ["signature", "Signature homes"],
+    const styles = [["", own ? `For this house: ${own}` : "For this house"], ["signature", "Signature homes"],
       ...(grammar?.styles || []).filter((x) => x.id !== planStyle).map((x) => [x.id, x.name])];
     const filt = chips("Style", styles, pal.style || "", async (v) => {
       pal.style = v; draw();
       if (v && !designs.some((d) => d.fam === v)) { await loadMore(v === "signature" ? 40 : 24, v); draw(); }
     }, { cls: "ex-chips--scroll" });
     panel.append(filt);
-    // Say what the designs are drawn from: the style, and the brief's own words.
+
+    const inStyle = designs.filter((d) => !pal.style || d.fam === pal.style);
+    if (!inStyle.length) return skeleton(panel);
+    const F = pal.facets;
+    const active = F.roof.length + F.walls.length + F.mood.length;
+    const matches = (d) => {
+      const f = facetsOf(d, s);
+      return (!F.roof.length || F.roof.includes(f.roof))
+        && (!F.walls.length || f.walls.some((w) => F.walls.includes(w)))
+        && (!F.mood.length || F.mood.includes(f.mood))
+        && (!pal.shortOnly || saved(d));
+    };
+    const shown = inStyle.filter(matches);
+
+    // The tools: refine, the shortlist, compare, and how big to show the photographs.
+    const bar = el("div", "lb-bar");
+    const refine = el("button", "lb-tool", active ? `Refine (${active})` : "Refine"); refine.type = "button";
+    refine.setAttribute("aria-expanded", String(!!pal.refineOpen)); refine.setAttribute("aria-controls", "lb-refine");
+    refine.addEventListener("click", () => { pal.refineOpen = !pal.refineOpen; draw(); card.querySelector(".lb-bar .lb-tool")?.focus(); });
+    const short = el("button", "lb-tool", `Shortlist ${pal.saved.length}`); short.type = "button";
+    short.prepend(icon(BOOKMARK, "lb-tool__icon"));
+    short.setAttribute("aria-pressed", String(!!pal.shortOnly));
+    short.title = pal.saved.length ? "Show only your shortlist" : "Bookmark designs to shortlist them";
+    short.disabled = !pal.saved.length && !pal.shortOnly;
+    short.addEventListener("click", () => { pal.shortOnly = !pal.shortOnly; draw(); });
+    const cmp = el("button", "lb-tool", "Compare"); cmp.type = "button";
+    cmp.disabled = pal.saved.length < 2;
+    cmp.title = pal.saved.length < 2 ? "Shortlist two or more designs to compare them" : "Compare your shortlist side by side";
+    cmp.addEventListener("click", () => compare(s));
+    const view = el("div", "lb-view"); view.setAttribute("role", "group"); view.setAttribute("aria-label", "Photograph size");
+    for (const [v, label] of [[false, "Large"], [true, "Compact"]]) {
+      const b = el("button", null, label); b.type = "button";
+      b.setAttribute("aria-pressed", String(!!pal.dense === v));
+      b.addEventListener("click", () => { pal.dense = v; draw(); });
+      view.append(b);
+    }
+    bar.append(refine, short, cmp, view);
+    panel.append(bar);
+
+    if (pal.refineOpen) {
+      const box = el("div", "lb-refine"); box.id = "lb-refine";
+      const facet = (key, title, opts) => {
+        const g = el("div", "lb-facet");
+        const h = el("span", "lb-facet__t", title); h.id = `lb-f-${key}`;
+        const row = el("div", "lb-facet__row"); row.setAttribute("role", "group"); row.setAttribute("aria-labelledby", h.id);
+        const counts = {};
+        for (const d of inStyle) { const f = facetsOf(d, s)[key]; for (const v of [].concat(f)) counts[v] = (counts[v] || 0) + 1; }
+        for (const [v, label, paint] of opts) {
+          if (!counts[v] && !F[key].includes(v)) continue;
+          const b = el("button", "lb-facet__opt"); b.type = "button";
+          b.setAttribute("aria-pressed", String(F[key].includes(v)));
+          if (paint) b.append(paint());
+          b.append(el("span", null, label), el("small", null, String(counts[v] || 0)));
+          b.addEventListener("click", () => {
+            F[key] = F[key].includes(v) ? F[key].filter((x) => x !== v) : [...F[key], v];
+            draw();
+            card.querySelector(`#lb-f-${key} + .lb-facet__row button:nth-of-type(${[...row.children].indexOf(b) + 1})`)?.focus({ preventScroll: true });
+          });
+          row.append(b);
+        }
+        g.append(h, row);
+        box.append(g);
+      };
+      const roofIcon = (v) => () => { const i = icon(ROOF_ICON[v] || "", "lb-facet__icon"); return i; };
+      facet("roof", "Roof", ["flat", "slab", "mono", "butterfly", "hip", "gable", "vault", "sawtooth"].map((v) => [v, EX_NICE[v], roofIcon(v)]));
+      facet("walls", "Walls", Object.keys(FINISH_OF).map((v) => [v, EX_NICE[v] || v, () => {
+        const c = texSwatch(FINISH_OF[v][0], FINISH_OF[v][1], 22); c.className = "lb-facet__sw"; c.setAttribute("aria-hidden", "true"); return c; }]));
+      facet("mood", "Colour mood", MOODS.map(([v, label]) => [v, label]));
+      if (active) {
+        const clr = el("button", "pal__clr", "Clear all"); clr.type = "button";
+        clr.addEventListener("click", () => { pal.facets = { roof: [], walls: [], mood: [] }; draw(); });
+        box.append(clr);
+      }
+      panel.append(box);
+    }
+
     const from = pal.style ? styleName(pal.style) : own;
-    if (from || heard.length) {
-      panel.append(el("p", "ex__hint ex__from", [from && `${from} designs`, heard.length && `following your brief: ${heard.join(", ")}`]
-        .filter(Boolean).join(" · ")));
-    }
-    if (grammar?.combinations) {
-      panel.append(el("p", "ex__hint", `${bigWords(grammar.combinations)} possible exteriors. The one you settle on is kept for your house alone.`));
-    }
-    const shown = designs.filter((d) => !pal.style || d.fam === pal.style);
-    if (!shown.length) return skeleton(panel);
+    const said = el("p", "lb-count");
+    said.append(`${shown.length === inStyle.length ? shown.length : `${shown.length} of ${inStyle.length}`} ${from ? `${from.toLowerCase()} ` : ""}designs`);
+    if (heard.length) said.append(`, following your brief: ${heard.join(", ")}`);
     if (pal.tint) {
-      const note = el("p", "ex__hint");
-      const clr = el("button", "pal__clr", "use each design's own colours"); clr.type = "button";
+      said.append(`. Shown in ${pal.tint.name} colours, `);
+      const clr = el("button", "pal__clr", "use each design's own"); clr.type = "button";
       clr.addEventListener("click", () => { pal.tint = null; draw(); rebuild(); });
-      note.append(`Shown in ${pal.tint.name} colours · `, clr);
-      panel.append(note);
+      said.append(clr);
     }
-    const grid = el("div", "ex-grid");
-    // The end of the gallery (or of the phone's sideways strip): reaching it
-    // pulls the next batch.
+    panel.append(said);
+
+    // Narrowed to nothing, or to a few: design more that match.
+    const words = [...F.roof.map((v) => `${v} roof`), ...F.walls.map((v) => `${v} walls`),
+      ...F.mood.map((v) => ({ light: "light colours", earthy: "earthy colours", cool: "grey and blue colours", colourful: "colourful", dark: "dark colours" })[v])].join(", ");
+    const moreLike = async (btn) => {
+      btn.disabled = true; btn.textContent = "Designing…";
+      await loadMore(24, pal.style || "", words);
+      draw();
+    };
+    if (!shown.length) {
+      const empty = el("div", "lb-empty");
+      empty.append(el("p", null, pal.shortOnly ? "Nothing on your shortlist matches. Clear the filters, or bookmark more designs." : "No designs here match all of that yet."));
+      if (!pal.shortOnly && active) {
+        const b = el("button", "btn", `Design 24 with ${words}`); b.type = "button";
+        b.addEventListener("click", () => moreLike(b));
+        empty.append(b);
+      }
+      panel.append(empty);
+      return;
+    }
+
+    const grid = el("div", `lb-grid${pal.dense ? " lb-grid--dense" : ""}`);
+    // The end of the gallery (or of the phone's sideways strip): reaching it pulls the next batch.
     const sentinel = el("span", "ex-sentinel"); sentinel.setAttribute("aria-hidden", "true");
     grid.append(sentinel);
+    // The studio's pick leads, wide, when the whole collection is showing.
+    const leadOne = !pal.dense && !active && !pal.shortOnly && !pal.style;
     const add = (xs) => {
-      for (const d of xs) {
-        grid.insertBefore(designCard(d, s), sentinel);
-      }
+      for (const d of xs) grid.insertBefore(designCard(d, s, { lead: leadOne && d === shown[0] }), sentinel);
     };
     add(shown);
     panel.append(grid);
-    const more = el("button", "ghost-btn ex-more", "Generate 24 more designs"); more.type = "button";
+    if (pal.shortOnly) return;
+    const more = el("button", "ghost-btn ex-more", active ? `Design 24 more with ${words}` : "Design 24 more"); more.type = "button";
     const go = async () => {
       if (loading) return;
       more.disabled = true; more.textContent = "Designing…"; more.setAttribute("aria-busy", "true");
-      const fresh = await loadMore(24);
+      const fresh = await loadMore(24, pal.style || "", words);
+      if (active) { draw(); return; }
       add(fresh);
-      more.disabled = false; more.textContent = "Generate 24 more designs"; more.removeAttribute("aria-busy");
+      more.disabled = false; more.textContent = "Design 24 more"; more.removeAttribute("aria-busy");
       const tab = card.querySelector("#ex-tab-designs"); if (tab) tab.textContent = `Designs ${designs.length}`;
       const k = card.querySelector(".ex__title .pal__k"); if (k) k.textContent = `Exterior ${idx() + 1} of ${designs.length}`;
     };
@@ -2721,7 +2971,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     // Up to a point on a desktop, where the button keeps going after that; a
     // phone has no room for the button, so its strip just keeps coming.
     const phone = matchMedia("(max-width: 720px)");
-    new IntersectionObserver(([e]) => { if (e.isIntersecting && (designs.length < 240 || phone.matches)) go(); }).observe(sentinel);
+    if (!active) new IntersectionObserver(([e]) => { if (e.isIntersecting && (designs.length < 240 || phone.matches)) go(); }).observe(sentinel);
   };
 
   // Colours, one surface at a time: named paints, and any colour at all.
