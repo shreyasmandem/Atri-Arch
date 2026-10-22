@@ -2536,7 +2536,9 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       if (!designs.length) return draw();
       // A design chosen elsewhere (a drawing sheet) leads the gallery rather than being lost.
       if (pal.base && exParse(pal.base) && !designs.some((d) => d.id === pal.base)) {
-        designs.unshift({ id: pal.base, name: "Your current design", story: "The design the drawings show.", fam: "" });
+        // The house keeps its own name and story when its plan is edited (a pool moved, a room widened).
+        designs.unshift(pal.baseCard?.id === pal.base ? { ...pal.baseCard }
+          : { id: pal.base, name: "Your current design", story: "The design the drawings show.", fam: "" });
       }
       if (!designs.some((d) => d.id === pal.base)) pal.base = designs[0].id;
       draw();
@@ -3125,7 +3127,9 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     } catch { /* the model endpoint fits the design itself */ }
     if (mine !== seq) return;
     const scroll = card.querySelector(".ex-panel")?.scrollTop;
+    const inSheet = !!card.querySelector(".sp")?.contains(document.activeElement);
     draw();
+    if (inSheet && pal.specOpen) card.querySelector(`#sp-${pal.specOpen}-opts [aria-checked="true"]`)?.focus({ preventScroll: true });
     const panel = card.querySelector(".ex-panel"); if (panel && scroll != null) panel.scrollTop = scroll;
     if (lastGroup) card.querySelector(`[aria-labelledby="${lastGroup}"] [aria-pressed="true"]`)?.focus({ preventScroll: true });
     rebuild();
@@ -3166,87 +3170,145 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       ["koipond", "Koi pond"], ["gazebo", "Gazebo"], ["rockgarden", "Rock garden"], ["sitout", "Sit-out"]]],
     accent: ["Accent", null],
   };
-  const SECTIONS = [["form", "Roof & form", ["roof", "parapet", "deck", "solar", "feature"]], ["walls", "Walls", ["base", "upper", "panel"]],
-    ["openings", "Windows & shade", ["windows", "shade", "screen"]], ["entry", "Entrance, balconies & lights", ["canopy", "railing", "lights"]],
-    ["site", "Gate, drive & garden", ["boundary", "gate", "garage", "paving", "garden", "yard", "planters"]], ["accent", "Accent finish", ["accent"]]];
+  // The specification: every element of the outside as one row - its name,
+  // what it is now, drawn - grouped the way an architect lists a house's
+  // finishes. A row opens in place to show its choices; one at a time.
+  const GROUPS = [["The roof", ["roof", "parapet", "deck", "solar"]],
+    ["Walls", ["base", "upper", "panel", "accent"]],
+    ["Windows and the street face", ["windows", "shade", "screen", "feature"]],
+    ["The way in", ["canopy", "railing", "lights", "garage"]],
+    ["Around the house", ["boundary", "gate", "paving", "garden", "yard", "planters", "pool", "poolPlace"]]];
+  const BOUND = { plaster: FINISH.plaster, stone: FINISH.stone, brick: FINISH.brick, hedge: ["lawn", "#56703f"], grille: ["seam", "#3a3b3d"] };
+  const GARDEN = { standard: ["lawn", "#6f8a4f"], lush: ["lawn", "#4f6b3a"], minimal: ["gravel", "#b7aa94"], none: ["paving", "#a29a8c"] };
+  const POOLS_UI = [["none", "No pool"], ["plunge", "Plunge pool, 3 × 6 m"], ["family", "Family pool, 4 × 8 m"], ["lap", "Lap pool, 2.5 × 14 m"]];
+  const POOL_PLACES_UI = [["rear", "Behind the house, centred"], ["side", "Beside the house"], ["northeast", "In the north-east, for Vastu"], ["corner", "In the far corner"]];
+  // Move, resize or remove the pool: a change to the plan itself, so the
+  // drawings, the Vastu and the model all see the same garden.
+  const editPool = async (op, row) => {
+    row?.classList.add("is-busy");
+    try {
+      const r = await fetch(`${API}/plans/${id}/edit`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ops: [{ op: "pool", ...op }] }) });
+      const x = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(x.detail || `HTTP ${r.status}`);
+      toast(x.applied?.[0] || "Pool changed");
+      await adoptEdited(x.plan_id);
+    } catch (e) {
+      row?.classList.remove("is-busy");
+      toast(`The pool could not be changed: ${e.message}`);
+    }
+  };
   const customiser = (panel, di) => {
     const d = designs[di];
     const now = d && exParse(d.id);
     if (!now || !grammar) return skeleton(panel, 2);
-    const one = (S.plans[id]?.plan?.levels?.length || 1) <= 1;
+    const plan = S.plans[id]?.plan;
+    const one = (plan?.levels?.length || 1) <= 1;
     const flatRoof = now.roof === "flat" || now.roof === "slab";
-    const choices = (key) => OPTIONS[key][1]
+    const site = plan?.site || {};
+    const hasGarage = (plan?.levels || []).some((lv) => (lv.rooms || []).some((r) => r.type === "garage"));
+    const ROWS = {
+      ...Object.fromEntries(Object.entries(OPTIONS).map(([k, [name, opts]]) => [k, { name, opts }])),
+      pool: { name: "Pool", opts: POOLS_UI },
+      poolPlace: { name: "Pool position", opts: POOL_PLACES_UI },
+    };
+    const choices = (key) => ROWS[key].opts
       || (key === "accent" ? Object.keys(grammar.accents || {}).map((k) => [k, k[0].toUpperCase() + k.slice(1)])
         : (grammar[key] || []).map((v) => [v, EX_NICE[v] || v]));
     // An option left out of the id is its first value.
-    const value = (key) => (now[key] === undefined || now[key] === "" ? choices(key)[0][0] : now[key]);
-    const label = (key) => (choices(key).find(([v]) => v === value(key)) || [, ""])[1];
-    const icon = (b, v) => {
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add("ex-chip__icon");
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", ROOF_ICON[v] || ""); svg.append(path); b.append(svg);
+    const value = (key) => {
+      if (key === "pool") return site.pool || "none";
+      if (key === "poolPlace") return site.pool_place || "rear";
+      return now[key] === undefined || now[key] === "" ? choices(key)[0][0] : now[key];
     };
-    const tex = (map, tintOf) => (b, v) => {
+    const label = (key) => (choices(key).find(([v]) => v === value(key)) || [, ""])[1];
+    // What each choice looks like, drawn small: a roof's silhouette, a real texture, a colour.
+    const roofPic = (v) => {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add("sp-pic", "sp-pic--line");
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", ROOF_ICON[v] || ""); svg.append(path);
+      return svg;
+    };
+    const texPic = (map, tintOf) => (v, size) => {
       const [kind, hex] = map[v] || Object.values(map)[0];
       const t = tintOf?.(v);
-      const c = texSwatch(kind, t ? `#${t}` : hex, 44); c.className = "ex-chip__sw"; c.setAttribute("aria-hidden", "true");
-      b.append(c);
+      const c = texSwatch(kind, t ? `#${t}` : hex, size); c.className = "sp-pic"; c.setAttribute("aria-hidden", "true");
+      return c;
     };
     const wallTint = (v) => (v === "plaster" ? (pal.tint?.wall || now.wall) : (pal.tint?.clad || now.clad));
-    const DECOR = {
-      roof: { paint: icon, cls: "ex-chips--icons" },
-      base: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw" },
-      upper: { paint: tex(FINISH, wallTint), cls: "ex-chips--sw", disabled: (v) => one && v !== "plaster" },
-      paving: { paint: tex(DRIVE), cls: "ex-chips--sw ex-chips--4" },
-      feature: { disabled: (v) => one && ["jharokha", "balcony", "bay", "floatbox", "cornerglass", "cantilever", "planterbands"].includes(v) },
-      solar: { disabled: (v) => v === "on" && !flatRoof },
-      panel: { paint: tex(PANEL), cls: "ex-chips--sw ex-chips--4" },
-      parapet: { disabled: (v) => v !== "plain" && now.roof !== "flat" },
-      deck: { disabled: (v) => v !== "none" && now.roof !== "flat" },
-      accent: { cls: "ex-chips--dots", paint: (b, v) => { const i = el("i", "ex-chip__dot"); i.style.background = grammar.accents[v]; b.prepend(i); } },
+    const PIC = {
+      roof: roofPic, base: texPic(FINISH, wallTint), upper: texPic(FINISH, wallTint), panel: texPic(PANEL),
+      paving: texPic(DRIVE), boundary: texPic(BOUND), garden: texPic(GARDEN),
+      accent: (v) => { const i = el("i", "sp-pic sp-pic--dot"); i.style.background = grammar.accents[v]; return i; },
     };
-    const pick = (key) => (v) => {
+    // Why a choice is not open to this house, said where it is offered.
+    const WHY = {
+      upper: (v) => one && v !== "plaster" && "This house has one storey.",
+      feature: (v) => one && ["jharokha", "balcony", "bay", "floatbox", "cornerglass", "cantilever", "planterbands"].includes(v) && "Needs an upper floor.",
+      solar: (v) => v === "on" && !flatRoof && "Needs a flat or slab roof.",
+      parapet: (v) => v !== "plain" && now.roof !== "flat" && "Needs a flat roof.",
+      deck: (v) => v !== "none" && now.roof !== "flat" && "Needs a flat roof.",
+    };
+    const pick = (key, v, row) => {
+      if (key === "pool") return editPool({ kind: v }, row);
+      if (key === "poolPlace") return editPool({ place: v }, row);
       if (key === "accent" && pal.tint?.metal) pal.tint = { ...pal.tint, id: "custom", name: "Custom", metal: "" };
       // The house's own value stays out of the id, keeping it short.
       const first = choices(key)[0][0];
-      const store = OPTIONS[key][1] && key !== "planters" && v === first ? "" : v;
+      const store = ROWS[key].opts && key !== "planters" && v === first ? "" : v;
       edit(di, { [key]: store });
     };
-    pal.sec ||= { form: true };
-    // The garage choice only where the plan has a car porch.
-    const hasGarage = (S.plans[id]?.plan?.levels || []).some((lv) => (lv.rooms || []).some((r) => r.type === "garage"));
-    for (const [sid, title, allKeys] of SECTIONS) {
-      const keys = allKeys.filter((k) => k !== "garage" || hasGarage);
-      const sec = el("details", "ex-sec");
-      sec.open = !!pal.sec[sid];
-      sec.addEventListener("toggle", () => { pal.sec[sid] = sec.open; });
-      const sum = el("summary", "ex-sec__sum");
-      // The summary names what is there: an absent solar array or signature says nothing.
-      const said = keys.map((k) => {
-        const v = value(k);
-        if (k === "gate") return v === "none" ? "Open gate" : label(k);
-        if (k === "garage") return v === "closed" ? "Shuttered garage" : "Open car porch";
-        if (k === "planters") return v ? "Planters" : "";
-        if (k === "solar") return v === "on" ? "Solar panels" : "";
-        if (k === "boundary") return `${label(k)} boundary`;
-        if (k === "canopy") return v === "none" ? "" : `${label(k)} canopy`;
-        if (k === "railing") return `${label(k)} railings`;
-        if (k === "panel") return v === "none" ? "" : `${label(k)} panel`;
-        if (k === "parapet") return v === "plain" ? "" : `${label(k)} parapet`;
-        return v === "none" || v === "off" ? "" : label(k);
-      }).filter(Boolean);
-      sum.append(el("span", "ex-sec__t", title), el("span", "ex-sec__now", said.join(" · ") || "Plain"));
-      const body = el("div", "ex-sec__body");
-      for (const key of keys) {
-        const g = chips(OPTIONS[key][0], choices(key), value(key), pick(key), DECOR[key] || {});
-        if (key === "solar" && !flatRoof) g.append(el("p", "ex__hint", "Solar panels need a flat or slab roof."));
-        if ((key === "parapet" || key === "deck") && now.roof !== "flat") g.append(el("p", "ex__hint", "Needs a flat parapet roof."));
-        body.append(g);
+    const shows = (key) => (key !== "garage" || hasGarage) && (key !== "poolPlace" || (site.pool && site.pool !== "none"));
+    const sheet = el("div", "sp");
+    for (const [title, keys] of GROUPS) {
+      const rows = keys.filter(shows);
+      if (!rows.length) continue;
+      const grp = el("section", "sp-group");
+      grp.append(el("h4", "sp-group__t", title));
+      for (const key of rows) {
+        const open = pal.specOpen === key;
+        const row = el("div", `sp-row${open ? " is-open" : ""}`);
+        const head = el("button", "sp-row__head"); head.type = "button";
+        head.id = `sp-${key}`;
+        head.setAttribute("aria-expanded", String(open)); head.setAttribute("aria-controls", `sp-${key}-opts`);
+        const cur = el("span", "sp-row__now");
+        if (PIC[key]) cur.append(PIC[key](value(key), 26));
+        cur.append(el("span", null, label(key)));
+        head.append(el("span", "sp-row__name", ROWS[key].name), cur, el("span", "sp-row__chev"));
+        head.addEventListener("click", () => {
+          pal.specOpen = open ? null : key;
+          draw();
+          card.querySelector(`#sp-${key}`)?.focus({ preventScroll: true });
+        });
+        row.append(head);
+        if (open) {
+          const visual = !!PIC[key];
+          const opts = el("div", `sp-opts${visual ? " sp-opts--tiles" : ""}`);
+          opts.id = `sp-${key}-opts`;
+          opts.setAttribute("role", "radiogroup"); opts.setAttribute("aria-labelledby", head.id);
+          for (const [v, name] of choices(key)) {
+            const why = WHY[key]?.(v);
+            const b = el("button", visual ? "sp-tile" : "sp-opt"); b.type = "button";
+            b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(v === value(key)));
+            b.disabled = !!why;
+            if (visual) b.append(PIC[key](v, 64));
+            b.append(el("span", "sp-opt__name", name));
+            if (why) b.append(el("small", "sp-opt__why", why));
+            b.addEventListener("click", () => {
+              if (v === value(key)) return;
+              pick(key, v, row);
+              card.querySelector(`#sp-${key}`)?.focus({ preventScroll: true });
+            });
+            opts.append(b);
+          }
+          row.append(opts);
+        }
+        grp.append(row);
       }
-      sec.append(sum, body);
-      panel.append(sec);
+      sheet.append(grp);
     }
+    panel.append(sheet);
     const notes = el("p", "pal__why pal__notes", (pal.notes || []).join(" ")); notes.setAttribute("aria-live", "polite");
     panel.append(notes);
     if (d.orig) {
@@ -3526,6 +3588,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     }
     pal.tab ||= "designs";
     const di = idx(), d = designs[di];
+    if (d && d.id === pal.base) pal.baseCard = { id: d.id, name: d.name, story: d.story, fam: d.fam, custom: d.custom, look: d.look };
     const head = el("div", "ex__head");
     const title = el("div", "ex__title");
     title.append(el("span", "pal__k", d ? `Exterior ${di + 1} of ${designs.length}${d.custom ? " · customised" : ""}` : "Exterior designs"),

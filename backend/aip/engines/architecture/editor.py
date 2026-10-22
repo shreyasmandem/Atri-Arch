@@ -331,6 +331,33 @@ def apply_edits(plan: FloorPlan, ops: list[dict[str, Any]]) -> tuple[FloorPlan, 
                 for r in targets:
                     r.ceiling_height = round(h, 2)
                 msg = (f"{_label(targets[0])}" if len(targets) == 1 else f"{len(targets)} rooms") + f" ceiling {h:.2f} m"
+            elif kind == "pool":
+                # The garden pool: where it goes, what kind, or none at all.
+                from aip.engines.experience.landscape import POOL_NAMES, POOL_PLACES, POOLS, pool_placement
+
+                want_kind = str(op.get("kind", new.site.pool) or "").lower()
+                want_place = str(op.get("place", new.site.pool_place or "rear") or "rear").lower()
+                if want_kind not in ("", "none") and want_kind not in POOLS:
+                    raise EditError("That kind of pool is not known.")
+                if want_place not in POOL_PLACES:
+                    raise EditError("That is not a place a pool can go.")
+                new.site.pool = "" if want_kind in ("", "none") else want_kind
+                new.site.pool_place = "" if want_place == "rear" else want_place
+                if not new.site.pool:
+                    msg = "Pool removed"
+                else:
+                    placed = pool_placement(new)
+                    if placed is None:
+                        raise EditError(
+                            f"A {POOL_NAMES[new.site.pool]} does not fit: the house leaves too little open ground "
+                            "round it. A smaller pool may fit, or ask for more lawn in the brief.")
+                    _rect, got_kind, got_place = placed
+                    if "place" in op and got_place != want_place:
+                        # Say so rather than quietly putting it somewhere else.
+                        raise EditError(
+                            f"There is no room {POOL_PLACES[want_place][0].lower()}{POOL_PLACES[want_place][1:].split(',')[0]} "
+                            f"for a {POOL_NAMES[got_kind]}; the open ground there is too narrow.")
+                    msg = f"{POOL_NAMES[got_kind].capitalize()} {POOL_PLACES[got_place][0].lower()}{POOL_PLACES[got_place][1:]}"
             else:
                 raise EditError(f"Unknown edit {kind!r}.")
             applied.append(msg)

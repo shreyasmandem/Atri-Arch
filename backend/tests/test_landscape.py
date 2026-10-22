@@ -98,3 +98,39 @@ def test_words_ask_for_garden_features():
     from aip.engines.experience.exteriors import prefer_from_text
 
     assert prefer_from_text("a tulsi in front and a jhoola")["yard"][:2] == ("tulsi", "jhoola")
+
+
+def test_the_pool_goes_where_it_is_asked(pool_plan):
+    """Behind the house and centred on it by default, not wedged in a corner;
+    beside it, in the north-east or in the far corner when asked."""
+    from aip.engines.architecture.editor import apply_edits
+    from aip.engines.experience.landscape import _footprint, road_vector
+
+    foot = _footprint(pool_plan)
+    road = road_vector(pool_plan)
+    back = (-road.x, -road.y)
+    across = (-back[1], back[0])
+
+    def where(plan):
+        rect, _kind = pool_rect(plan)
+        c = rect.centroid
+        v = (c.x - foot.centroid.x, c.y - foot.centroid.y)
+        return v[0] * back[0] + v[1] * back[1], v[0] * across[0] + v[1] * across[1], rect
+
+    along, side, rect = where(pool_plan)
+    assert along > 0                                    # behind the house
+    assert abs(side) < 1.5                              # centred on it
+    corner, applied, _ = apply_edits(pool_plan, [{"op": "pool", "place": "corner"}])
+    assert applied and corner.site.pool_place == "corner"
+    assert where(corner)[2].centroid.distance(rect.centroid) > 0.5
+    beside, applied, refused = apply_edits(pool_plan, [{"op": "pool", "place": "side"}])
+    if applied:
+        # Level with the house, in a side yard.
+        a2, s2, _r = where(beside)
+        assert abs(s2) > abs(side) and abs(a2) < abs(along)
+    else:
+        assert "no room beside the house" in refused[0]
+    gone, applied, _ = apply_edits(pool_plan, [{"op": "pool", "kind": "none"}])
+    assert applied == ["Pool removed"] and pool_rect(gone) is None
+    _same, applied, refused = apply_edits(pool_plan, [{"op": "pool", "place": "roof"}])
+    assert not applied and refused

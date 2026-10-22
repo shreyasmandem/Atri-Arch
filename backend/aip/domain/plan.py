@@ -468,6 +468,8 @@ class Site(BaseModel):
     #: the pool they asked for ("" for none; see engines/experience/landscape.py).
     garden_share: float = Field(default=0.0, ge=0.0, le=0.8)
     pool: str = ""
+    #: Where the pool goes: rear (default), side, northeast or corner (landscape.POOL_PLACES).
+    pool_place: str = ""
     max_height: float = 11.5
     slope_percent: float = 0.0
     soil_bearing_kn_m2: float = 150.0
