@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { atelier, person, avatar } from "./atelier.js?v=s2";
-import { mountEditor } from "./editor.js";
+import { mountEditor } from "./editor.js?v=e2";
 import { autoSetbacks } from "./setbacks.js";
 
 const API = (() => {
@@ -1156,6 +1156,11 @@ function renderRail() {
       canUndo: () => (S.editHistory || []).length > 0,
       said: () => S.editSaid, setSaid: (t) => { S.editSaid = t; },
       onEdited: adoptEdited, onUndo: undoEdit,
+      // The plan on screen: rooms are picked by clicking them on it.
+      plate: () => $("plate"),
+      sheetLevel: () => { const k = /^plan_level_(\d+)$/.exec(S.sheet || ""); return k ? +k[1] : null; },
+      showLevel: (i) => loadSheet(`plan_level_${i}`),
+      setSync: (fn) => { S.editSync = fn; },
     });
   }
   reviseBox(anchor);
@@ -1504,7 +1509,15 @@ function resetPlate(animate = true) {
 function initEditDrawer() {
   const drawer = $("editdrawer"), open = $("edit-open");
   if (!drawer || !open) return;
-  const set = (on) => { drawer.hidden = !on; open.setAttribute("aria-expanded", String(on)); };
+  // The editor docks beside the plan, which makes room for it, so the room
+  // being changed stays in view and can be clicked.
+  const set = (on) => {
+    drawer.hidden = !on; open.setAttribute("aria-expanded", String(on));
+    drawer.closest(".pane")?.classList.toggle("is-editing", on);
+    open.textContent = on ? "Done editing" : "Edit design";
+    const svg = $("plate")?.querySelector("svg");
+    if (on) S.editSync?.(); else svg?.classList.remove("is-editing", "is-swapping");
+  };
   open.addEventListener("click", () => set(drawer.hidden));
   $("editdrawer-x")?.addEventListener("click", () => set(false));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !drawer.hidden) set(false); });
@@ -1654,6 +1667,7 @@ async function loadSheet(key) {
     if (S.sheet !== key) return;   // another sheet was asked for meanwhile
     plate.innerHTML = text;
     resetPlate(false);
+    if (!$("editdrawer")?.hidden) S.editSync?.();     // the room being edited stays marked
     const fresh = plate.querySelector("svg");
     if (fresh && ghost && !reducedMotion()) {
       fresh.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: "ease-out" });
@@ -2994,60 +3008,110 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     if (!d) return skeleton(panel, 4);
     const p = exParse(d.id) || {};
     const ct = cardTint(d);               // this design's colours, wherever they were chosen
-    panel.append(el("p", "ex__hint", `${(grammar?.schemes || []).length} colour schemes for ${d.name}, then every surface on its own below.`));
+    panel.append(el("p", "lb-count", `${(grammar?.schemes || []).length} colour schemes for ${d.name}. Pick one, then fine-tune any surface below.`));
     const own = [p.wall ? `#${p.wall}` : s.exterior.plaster, s.exterior.clad, p.roof_tint ? `#${p.roof_tint}` : s.exterior.roof,
       grammar?.accents?.[p.accent] || s.exterior.frame];
     // The style's own schemes first, then every other.
     const fam = d.fam || planStyle;
     const mine = grammar?.styles?.find((x) => x.id === fam)?.schemes || [];
     const all = grammar?.schemes || [];
-    const groups = [[mine.length ? `Suggested for ${styleName(fam)}` : "", [null, ...all.filter((x) => mine.includes(x.id))]],
+    const groups = [[mine.length ? `Suggested for ${styleName(fam)}` : "Colour schemes", [null, ...all.filter((x) => mine.includes(x.id))]],
       [mine.length ? "More schemes" : "", all.filter((x) => !mine.includes(x.id))]];
-    for (const [heading, schemesIn] of groups) {
-      if (heading) panel.append(el("h3", "ex__h", heading));
-      const grid = el("div", "ex-grid");
-      for (const sc of schemesIn) {
-        const tint = schemeTint(sc);
-        grid.append(tile({
-          selected: (ct?.id ?? null) === (sc?.id ?? null), url: thumbUrl(tinted(d.id, tint)),
-          label: sc ? sc.name : "Design's own", strip: sc ? [sc.wall, sc.clad, sc.roof, sc.metal] : own,
-          onPick: () => { pal.tint = tint; delete d.tint; draw(); rebuild(); },
-        }));
+    // A scheme: the house photographed in it, its name, and the paint strip it is made of.
+    const schemeCard = (sc) => {
+      const tint = schemeTint(sc);
+      const on = (ct?.id ?? null) === (sc?.id ?? null);
+      const name = sc ? sc.name : "The design's own colours";
+      const card_ = el("article", `lb-card cs-card${on ? " is-on" : ""}`);
+      const photo = el("button", "lb-card__photo is-loading"); photo.type = "button";
+      photo.setAttribute("aria-pressed", String(on));
+      photo.setAttribute("aria-label", on ? `${name}, on your house` : `Put ${d.name} in ${name}`);
+      const img = el("img"); img.alt = ""; img.decoding = "async";
+      img.addEventListener("load", () => photo.classList.remove("is-loading"));
+      photo.append(img);
+      if (on) photo.append(el("span", "lb-card__on", "On your house"));
+      photo._load = () => thumb(thumbUrl(tinted(d.id, tint)), front)
+        .then((src) => { if (src) img.src = src; else photo.classList.replace("is-loading", "is-failed"); });
+      io.observe(photo);
+      photo.addEventListener("click", () => { pal.tint = tint; delete d.tint; draw(); rebuild(); });
+      const body = el("div", "lb-card__body");
+      const strip = el("span", "cs-strip"); strip.setAttribute("aria-hidden", "true");
+      const hexes = sc ? [sc.wall, sc.clad, sc.roof, sc.metal] : own;
+      for (const [hex, where] of hexes.map((h, i) => [h, ["Walls", "Cladding", "Roof", "Metal"][i]])) {
+        const i = el("i"); i.style.background = hex; i.title = `${where} ${hex}`; strip.append(i);
       }
+      body.append(el("h4", "lb-card__name", name), strip);
+      card_.append(photo, body);
+      return card_;
+    };
+    for (const [heading, schemesIn] of groups) {
+      if (!schemesIn.length) continue;
+      if (heading) panel.append(el("h4", "sp-group__t cs-head", heading));
+      const grid = el("div", "lb-grid lb-grid--dense cs-grid");
+      for (const sc of schemesIn) grid.append(schemeCard(sc));
       panel.append(grid);
     }
-    const fine = el("div", "ex-custom");
-    fine.append(el("h3", "ex__h", ct?.id === "custom" ? "Every surface · your own mix" : "Every surface"));
+
+    // Every surface on its own: a row each, its paint now, opening to the paints for it.
+    const fine = el("section", "sp-group cs-surfaces");
+    fine.append(el("h4", "sp-group__t", ct?.id === "custom" ? "Every surface, your own mix" : "Every surface"));
     const fallback = { wall: own[0], clad: own[1], roof_tint: own[2], metal: own[3], frame: s.exterior.frame, door: s.exterior.door };
     for (const [f, title] of SURFACES) {
       const now = ct?.[f] || p[f] || "";
-      const row = el("div", "ex-paint");
-      const head = el("div", "ex-paint__head");
       const named = (grammar?.paints?.[f] || []).find((x) => hx(x.hex) === now);
-      head.append(el("span", "pal__rk", title),
-        el("span", "ex-paint__now", now ? (named?.name || (ct?.[f] === now && ct.id !== "custom" ? ct.name : `#${now}`)) : "as designed"));
-      const sws = el("div", "ex-paint__sws");
-      sws.setAttribute("role", "group"); sws.setAttribute("aria-label", `${title} colours`);
-      for (const { name, hex } of grammar?.paints?.[f] || []) {
-        const b = el("button", "ex-dot"); b.type = "button";
-        b.style.background = hex; b.title = name; b.setAttribute("aria-label", `${title}: ${name}`);
-        b.setAttribute("aria-pressed", String(hx(hex) === now));
-        b.addEventListener("click", (e) => {
-          setTint(f, hex);
-          if (e.detail === 0) card.querySelector(`[aria-label="${title}: ${name}"]`)?.focus({ preventScroll: true });
-        });
-        sws.append(b);
+      const nowName = now ? (named?.name || (ct?.[f] === now && ct.id !== "custom" ? ct.name : `#${now}`)) : "As designed";
+      const open = pal.colourOpen === f;
+      const row = el("div", `sp-row${open ? " is-open" : ""}`);
+      const head = el("button", "sp-row__head"); head.type = "button";
+      head.id = `cs-${f}`;
+      head.setAttribute("aria-expanded", String(open)); head.setAttribute("aria-controls", `cs-${f}-opts`);
+      const cur = el("span", "sp-row__now");
+      const chip = el("i", "sp-pic cs-chip"); chip.style.background = now ? `#${now}` : (fallback[f] || "#cccccc");
+      cur.append(chip, el("span", null, nowName));
+      head.append(el("span", "sp-row__name", title), cur, el("span", "sp-row__chev"));
+      head.addEventListener("click", () => {
+        pal.colourOpen = open ? null : f;
+        draw();
+        card.querySelector(`#cs-${f}`)?.focus({ preventScroll: true });
+      });
+      row.append(head);
+      if (open) {
+        const opts = el("div", "sp-opts cs-paints");
+        opts.id = `cs-${f}-opts`;
+        opts.setAttribute("role", "radiogroup"); opts.setAttribute("aria-labelledby", head.id);
+        const paint = (hex, name, checked, onPick) => {
+          const b = el("button", "cs-paint"); b.type = "button";
+          b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(checked));
+          const sw = el("i", "cs-paint__sw"); sw.style.background = hex;
+          b.append(sw, el("span", "cs-paint__name", name));
+          b.addEventListener("click", onPick);
+          return b;
+        };
+        opts.append(paint(fallback[f] || "#cccccc", "As designed", !now, () => {
+          if (!now) return;
+          const base = { ...(ct || {}) };
+          base[f] = "";
+          pal.tint = { ...Object.fromEntries(TINTS.map((k) => [k, base[k] || ""])), id: "custom", name: "Custom" };
+          delete d.tint; draw(); rebuild();
+        }));
+        for (const { name, hex } of grammar?.paints?.[f] || []) {
+          opts.append(paint(hex, name, hx(hex) === now, (e) => {
+            setTint(f, hex);
+            if (e.detail === 0) card.querySelector(`#cs-${f}-opts [aria-checked="true"]`)?.focus({ preventScroll: true });
+          }));
+        }
+        // Any colour at all.
+        const anyB = el("label", "cs-paint cs-paint--any");
+        const inp = el("input"); inp.type = "color"; inp.name = f;
+        const curHex = now ? `#${now}` : fallback[f];
+        inp.value = /^#[0-9a-f]{6}$/i.test(curHex || "") ? curHex : "#cccccc";
+        inp.setAttribute("aria-label", `Any ${title.toLowerCase()} colour`);
+        inp.addEventListener("input", () => setTint(f, inp.value, false));
+        inp.addEventListener("change", () => setTint(f, inp.value));
+        anyB.append(inp, el("span", "cs-paint__name", "Any colour"));
+        opts.append(anyB);
+        row.append(opts);
       }
-      const pick = el("label", "ex-dot ex-dot--any"); pick.title = `Any ${title.toLowerCase()} colour`;
-      const inp = el("input"); inp.type = "color"; inp.name = f;
-      const cur = now ? `#${now}` : fallback[f];
-      inp.value = /^#[0-9a-f]{6}$/i.test(cur || "") ? cur : "#cccccc";
-      inp.setAttribute("aria-label", `Any ${title.toLowerCase()} colour`);
-      inp.addEventListener("input", () => setTint(f, inp.value, false));
-      inp.addEventListener("change", () => setTint(f, inp.value));
-      pick.append(inp);
-      sws.append(pick);
-      row.append(head, sws);
       fine.append(row);
     }
     if (ct) {
@@ -3061,7 +3125,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     const house = el("details", "ex-house");
     house.open = !!pal.open;
     house.addEventListener("toggle", () => { pal.open = house.open; });
-    house.append(el("summary", null, `Whole-house palette · ${s.name}`));
+    house.append(el("summary", null, `Whole-house palette, inside and out: ${s.name}`));
     const i = Math.max(0, list.findIndex((x) => x.id === pal.id));
     const nav = el("div", "pal__head");
     const strip = el("span", "pal__strip");
@@ -4066,7 +4130,8 @@ function reviseBox(after) {
   if (S.imported) return;
   document.getElementById("revise")?.remove();
   const box = el("form", "revise"); box.id = "revise";
-  box.append(el("span", "revise__k", "Change something"));
+  box.append(el("h3", "revise__k", "Ask for a bigger change"),
+    el("p", "revise__note", "Describe it and the studio redraws the house, keeping what you do not mention."));
   const input = el("input", "revise__in"); input.type = "text"; input.maxLength = 2000;
   input.placeholder = "e.g. make the kitchen bigger, add a balcony off the master bedroom";
   input.setAttribute("aria-label", "Describe a change to this design");
@@ -4089,6 +4154,7 @@ function reviseBox(after) {
     ["Traditional look", "make it look traditional with a tiled roof"],
   ].filter(Boolean).slice(0, 8);
   const chips = el("div", "revise__ideas");
+  chips.append(el("span", "revise__try", "Try:"));
   for (const [label, text] of ideas) {
     const c = el("button", "revise__idea", label); c.type = "button";
     c.addEventListener("click", () => { input.value = text; box.requestSubmit(); });

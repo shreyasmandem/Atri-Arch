@@ -174,6 +174,8 @@ def floor_plan_svg(
             room.polygon,
             fill=style.accent if highlighted else canvas.style.room_colour(room),
             opacity=0.28 if highlighted else 1.0,
+            # The editor picks a room by clicking it on the plan.
+            extra=f'data-room="{room.id}"',
         )
 
     for wall in level.walls:
