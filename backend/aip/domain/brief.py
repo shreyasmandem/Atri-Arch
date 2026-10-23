@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
+from aip.core.words import plural
 from aip.domain.geometry import Direction
 from aip.domain.plan import RoomType, Site
 
@@ -328,7 +329,7 @@ class ClientBrief(BaseModel):
         parts = [
             f"{self.kind.value.replace('_', ' ')} named '{self.project_name}'",
             f"plot {self.site.plot_area:.0f} m2 in {self.site.locality}",
-            f"{self.levels} level(s), target built-up {self.target_built_area:.0f} m2",
+            f"{plural(self.levels, 'level')}, target built-up {self.target_built_area:.0f} m2",
             f"accommodation: {rooms or 'unspecified'}",
             f"style: {', '.join(s.label for s in self.style.styles)}",
             f"vastu stance: {self.vastu.value}",

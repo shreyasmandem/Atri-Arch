@@ -9,6 +9,8 @@
    touched stays as drawn. Undo walks back.
    ═══════════════════════════════════════════════════════════════════════ */
 
+import { icon } from "./icons.js?v=i1";
+
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -177,8 +179,8 @@ export function mountEditor(after, ctx) {
         const stepper = (label, value, key, more, less) => {
           const row = el("div", "ed__dim");
           row.append(el("span", "ed__lab", label));
-          const minus = el("button", "ed__step", "−"); minus.type = "button"; minus.setAttribute("aria-label", `${less} by ${step} m`);
-          const plus = el("button", "ed__step", "+"); plus.type = "button"; plus.setAttribute("aria-label", `${more} by ${step} m`);
+          const minus = el("button", "ed__step"); minus.type = "button"; minus.setAttribute("aria-label", `${less} by ${step} m`); minus.append(icon("minus"));
+          const plus = el("button", "ed__step"); plus.type = "button"; plus.setAttribute("aria-label", `${more} by ${step} m`); plus.append(icon("plus"));
           minus.addEventListener("click", () => send([{ op: "resize", room: sel, [key]: -step }], `${less} by ${step} m…`));
           plus.addEventListener("click", () => send([{ op: "resize", room: sel, [key]: step }], `${more} by ${step} m…`));
           row.append(minus, el("output", "ed__val", m(value)), plus);

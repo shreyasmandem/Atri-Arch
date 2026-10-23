@@ -35,6 +35,7 @@ from shapely import STRtree
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import nearest_points, unary_union
 
+from aip.core.words import plural
 from aip.domain.geometry import Vec2
 from aip.domain.plan import RoomType
 from aip.engines.architecture.importer import _LABELS, ParsedRoom, _clean_label, classify
@@ -309,7 +310,7 @@ def label_rooms(
     warnings: list[str] = []
     if guessed:
         warnings.append(
-            f"{guessed} room(s) had no readable name; their type was guessed from size and shape "
+            f"{plural(guessed, 'room')} had no readable name; their type was guessed from size and shape "
             f"(confidence {GUESSED_CONFIDENCE}). Check them, or put a text label inside each room."
         )
     return rooms, warnings
@@ -457,5 +458,5 @@ def rooms_from_linework(
     polys = [p for p in polys if len(p) >= 3]
     rooms, warnings = label_rooms(polys, list(labels))
     warnings.insert(0, f"Rooms were recovered from wall linework ({len(rooms)} enclosed spaces); "
-                       f"{len(bridges)} door opening(s) of up to {gap:.4g} units were treated as closed.")
+                       f"{plural(len(bridges), 'door opening')} of up to {gap:.4g} units {'was' if len(bridges) == 1 else 'were'} treated as closed.")
     return rooms, warnings

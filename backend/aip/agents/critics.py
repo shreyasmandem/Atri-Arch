@@ -34,6 +34,7 @@ from aip.agents.base import (
 )
 from aip.core.llm import Message, system, user
 from aip.core.providers import Capability
+from aip.core.words import plural
 from aip.domain.plan import FloorPlan
 from aip.engines.architecture.codes import compliance_analysis
 from aip.engines.architecture.metrics import (
@@ -397,7 +398,7 @@ class StructuralCritic(CriticAgent):
             score,
             rationale=(
                 f"Maximum span {max_span:.2f} m across {grid.column_count} columns; "
-                f"{len(findings)} structural concern(s)."
+                f"{plural(len(findings), 'structural concern')}."
             ),
             findings=findings,
             evidence=[

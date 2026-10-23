@@ -49,6 +49,7 @@ from aip.agents.critics import build_committee, committee_charter
 from aip.core.llm import LLMRouter, get_router, system, user
 from aip.core.logging import get_logger, log_event, span, trace_context
 from aip.core.providers import Capability
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief
 from aip.domain.plan import FloorPlan
 from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefError, LayoutGenerator
@@ -202,7 +203,7 @@ class DesignPipeline:
             if plans:
                 emit(
                     "generate", "skipped",
-                    f"Reviewing {len(plans)} uploaded scheme(s) rather than generating.",
+                    f"Reviewing {plural(len(plans), 'uploaded scheme')} rather than generating.",
                     0.34,
                     schemes=[{"id": p.id, "name": p.name, "area": p.total_built_area}
                              for p in plans],
@@ -291,7 +292,7 @@ class DesignPipeline:
             if degraded:
                 result.degraded = True
                 result.degraded_reason = (
-                    f"{len(degraded)} generative critique(s) ran in degraded mode "
+                    f"{plural(len(degraded), 'generative critique')} ran in degraded mode "
                     f"because no model provider was reachable. All analytical "
                     f"results - geometry, code compliance, Vastu, cost - are "
                     f"unaffected and remain valid."
@@ -406,7 +407,7 @@ class DesignPipeline:
             ctx.retrieved = evidence
             emit(
                 "retrieve", "done",
-                f"Retrieved {len(evidence)} reference passage(s) from the corpus.",
+                f"Retrieved {plural(len(evidence), 'reference passage')} from the corpus.",
                 0.16, count=len(evidence),
             )
         except Exception as exc:  # noqa: BLE001 - retrieval is an enhancement
@@ -433,7 +434,7 @@ class DesignPipeline:
             raise RuntimeError("the layout generator produced no viable schemes")
         emit(
             "generate", "done",
-            f"Generated {len(plans)} distinct scheme(s).",
+            f"Generated {plural(len(plans), 'distinct scheme')}.",
             0.34,
             schemes=[
                 {"id": p.id, "name": p.name, "area": p.total_built_area,
@@ -450,7 +451,7 @@ class DesignPipeline:
         committee = build_committee(include_generative=self.config.include_generative_critics)
         emit(
             "critique", "running",
-            f"{len(committee)} critics reviewing {len(plans)} scheme(s)...",
+            f"{len(committee)} critics reviewing {plural(len(plans), 'scheme')}...",
             0.36, critics=[c.id for c in committee],
         )
 
@@ -582,7 +583,7 @@ class DesignPipeline:
         )
         emit(
             "debate", "done",
-            f"{revised} position(s) revised; agreement moved from "
+            f"{plural(revised, 'position')} revised; agreement moved from "
             f"{consensus.overall_agreement:.0%} to {updated.overall_agreement:.0%}.",
             0.70, revised=revised,
         )
@@ -637,7 +638,7 @@ class DesignPipeline:
 
         emit(
             "refine", "running",
-            f"Repairing {len(findings)} finding(s) on the selected scheme...",
+            f"Repairing {plural(len(findings), 'finding')} on the selected scheme...",
             0.74, findings=[f.code for f in findings[:8]],
         )
 
@@ -660,7 +661,7 @@ class DesignPipeline:
 
         emit(
             "refine", "done",
-            f"Applied {len(applied)} repair(s); analytical score improved by {delta:+.3f}.",
+            f"Applied {plural(len(applied), 'repair')}; analytical score improved by {delta:+.3f}.",
             0.82, applied=len(applied), delta=round(delta, 4), repairs=applied[:8],
         )
         return repaired, delta
@@ -695,7 +696,7 @@ class DesignPipeline:
         emit(
             "negotiate", "running",
             (
-                f"Negotiating {len(open_now)} open constraint(s) between "
+                f"Negotiating {plural(len(open_now), 'open constraint')} between "
                 f"{len(protocol.workers)} agents..."
                 if open_now else
                 "Verifying all constraints hold on the selected scheme..."
@@ -820,24 +821,25 @@ def _negotiation_message(transcript: Any, accepted: int) -> str:
     if transcript.outcome == "satisfied":
         if accepted:
             return (
-                f"All constraints satisfied after {rounds} round(s); "
-                f"{accepted} agent proposal(s) were accepted."
+                f"All constraints satisfied after {plural(rounds, 'round')}; "
+                f"{plural(accepted, 'agent proposal')} {'was' if accepted == 1 else 'were'} accepted."
             )
         return "All constraints already held; no changes were needed."
     if transcript.outcome == "converged":
         return (
-            f"Negotiation converged after {rounds} round(s) with "
-            f"{accepted} accepted change(s); further rounds stopped paying for themselves."
+            f"Negotiation converged after {plural(rounds, 'round')} with "
+            f"{plural(accepted, 'accepted change')}; further rounds stopped paying for themselves."
         )
     if transcript.outcome == "converged_with_open_constraints":
         return (
-            f"{transcript.hard_open} hard constraint(s) remain open after {rounds} "
-            f"round(s). No agent could propose a change that improved the design, "
-            f"so they are reported rather than papered over."
+            f"{plural(transcript.hard_open, 'hard constraint')} "
+            f"{'remains' if transcript.hard_open == 1 else 'remain'} open after {plural(rounds, 'round')}. "
+            f"No agent could propose a change that improved the design, "
+            f"so {'it is' if transcript.hard_open == 1 else 'they are'} reported rather than papered over."
         )
     return (
-        f"Negotiation stopped at the time budget after {rounds} round(s) with "
-        f"{accepted} accepted change(s)."
+        f"Negotiation stopped at the time budget after {plural(rounds, 'round')} with "
+        f"{plural(accepted, 'accepted change')}."
     )
 
 

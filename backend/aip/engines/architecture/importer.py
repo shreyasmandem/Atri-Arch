@@ -40,6 +40,7 @@ import re
 from dataclasses import dataclass, field
 from xml.etree import ElementTree
 
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief, RoomRequirement, VastuStance
 from aip.domain.geometry import (
     Direction,
@@ -747,7 +748,7 @@ def _svg_from_strokes(
     if len(rooms) < 2:
         return None
     if len(kept) < len(strokes):
-        warnings.append(f"Ignored {len(strokes) - len(kept)} thin line(s) as dimension or hatch lines.")
+        warnings.append(f"Ignored {plural(len(strokes) - len(kept), 'thin line')} as dimension or hatch lines.")
     return rooms, warnings
 
 
@@ -982,7 +983,7 @@ def assemble(
         unrecognised = [u for u in unrecognised if u != "(unlabelled)"] + (
             ["(unlabelled)"] if any(not r.label.strip() for r in kept if r.type is RoomType.OTHER) else []
         )
-        warnings.append(f"Dropped {len(tiny)} outline(s) under 1.2 m2 as columns or fragments.")
+        warnings.append(f"Dropped {plural(len(tiny), 'outline')} under 1.2 m2 as columns or fragments.")
     if not kept:
         raise ImportError_("Every outline was too small to be a room after scaling.")
     extent = bounding_box([p for r in kept for p in r.polygon])

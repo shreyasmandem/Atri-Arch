@@ -8,7 +8,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { atelier, person, avatar } from "./atelier.js?v=s2";
-import { mountEditor } from "./editor.js?v=e2";
+import { mountEditor } from "./editor.js?v=e3";
+import { icon } from "./icons.js?v=i1";
 import { autoSetbacks } from "./setbacks.js";
 
 const API = (() => {
@@ -166,70 +167,6 @@ function backToBrief() {
 
 /* ═══ MANDALA ════════════════════════════════════════════════════════ */
 
-function strike(svg) {
-  if (!svg) return;
-  const N = 9, U = 900 / N, out = [];
-  for (let r = 0; r < N; r++)
-    for (let c = 0; c < N; c++)
-      out.push(`<rect class="pada" data-r="${r}" data-c="${c}" x="${c * U}" y="${r * U}" width="${U}" height="${U}" fill="transparent" stroke="#2A2724" stroke-width="1"/>`);
-  out.push(`<path d="M0 0L900 900M900 0L0 900" stroke="#2A2724" stroke-width="1" opacity=".45"/>`);
-  out.push(`<rect x="${3 * U}" y="${3 * U}" width="${3 * U}" height="${3 * U}" fill="none" stroke="#57524B" stroke-width="2"/>`);
-  svg.innerHTML = out.join("");
-}
-
-/** Project the plan onto the 9x9 field and light each room's padas. */
-function lightPadas(svg, plan) {
-  if (!svg || !plan?.levels?.length) return { occupied: 0, sectors: [] };
-  svg.querySelectorAll(".pada").forEach((p) => {
-    p.setAttribute("fill", "transparent"); p.setAttribute("stroke", "#2A2724"); p.removeAttribute("data-lit");
-  });
-
-  const rooms = plan.levels[0].rooms || [];
-  if (!rooms.length) return { occupied: 0, sectors: [] };
-
-  let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
-  for (const rm of rooms) for (const [x, y] of rm.polygon || []) {
-    mnX = Math.min(mnX, x); mxX = Math.max(mxX, x); mnY = Math.min(mnY, y); mxY = Math.max(mxY, y);
-  }
-  const w = mxX - mnX, h = mxY - mnY;
-  if (!(w > 0 && h > 0)) return { occupied: 0, sectors: [] };
-
-  const dirOf = new Map((plan.room_summary || []).map((r) => [r.id, r.direction]));
-  const sectors = [];
-
-  for (const rm of rooms) {
-    const xs = (rm.polygon || []).map((p) => p[0]);
-    const ys = (rm.polygon || []).map((p) => p[1]);
-    if (!xs.length) continue;
-    const dir = dirOf.get(rm.id) || "CENTRE";
-    const pig = PIG[dir] || "chalk";
-    sectors.push({ name: rm.name || cap(rm.type), dir, pig, area: rm.area });
-
-    const c0 = Math.floor(((Math.min(...xs) - mnX) / w) * 9);
-    const c1 = Math.ceil(((Math.max(...xs) - mnX) / w) * 9);
-    const r0 = Math.floor(((mxY - Math.max(...ys)) / h) * 9);   // +Y is north; SVG +Y is down
-    const r1 = Math.ceil(((mxY - Math.min(...ys)) / h) * 9);
-
-    for (let r = Math.max(0, r0); r < Math.min(9, r1); r++)
-      for (let c = Math.max(0, c0); c < Math.min(9, c1); c++) {
-        const p = svg.querySelector(`.pada[data-r="${r}"][data-c="${c}"]`);
-        if (p) { p.setAttribute("fill", HEX[pig]); p.setAttribute("fill-opacity", ".16"); p.setAttribute("data-lit", "1"); }
-      }
-  }
-
-  // The Brahmasthan is scored separately - a uniform wash over the centre
-  // would hide the one rule the whole diagram exists to enforce.
-  let occupied = 0;
-  for (let r = 3; r < 6; r++) for (let c = 3; c < 6; c++) {
-    const p = svg.querySelector(`.pada[data-r="${r}"][data-c="${c}"]`);
-    if (!p) continue;
-    if (p.getAttribute("data-lit")) {
-      occupied++;
-      p.setAttribute("fill", HEX.hingula); p.setAttribute("fill-opacity", ".34"); p.setAttribute("stroke", HEX.hingula);
-    } else { p.setAttribute("stroke", "#8A847B"); }
-  }
-  return { occupied, sectors };
-}
 
 /* ═══ THE BRIEF ══════════════════════════════════════════════════════ */
 
@@ -469,7 +406,6 @@ async function initHome() {
 
 (async function boot() {
   atelier.mount($("atelier"));
-  strike($("review-mandala"));
   initBrief();
 
   $("brief").addEventListener("submit", onSubmit);
@@ -1057,7 +993,11 @@ function buildSchemeTabs() {
     const row = ranked.find((r) => r.candidate_id === id);
     const b = el("button", "scheme-tab"); b.type = "button"; b.setAttribute("role", "tab");
     b.setAttribute("aria-selected", String(id === activeCandidate()));
-    b.append(document.createTextNode(S.imported && i === 0 ? "Uploaded plan" : `Scheme ${String.fromCharCode(65 + i)}`));
+    // "Scheme" drops on a narrower bar; the letter and score stay, and the name stays for screen readers.
+    if (S.imported && i === 0) b.append(document.createTextNode("Uploaded plan"));
+    else {
+      b.append(el("span", "scheme-tab__w", "Scheme "), document.createTextNode(String.fromCharCode(65 + i)));
+    }
     if (S.imported && i === 0) b.dataset.imported = "1";
 
     // A scheme with no score was not merely last - it was disqualified for a
@@ -1191,17 +1131,25 @@ function renderRail() {
 // re-scored in the background; the numbers beside it say so until they land.
 async function adoptEdited(newId) {
   const oldId = S.activeId;
+  // Undo puts back everything the edit and its re-score replace, the committee's words included.
   const snap = { planIds: [...S.planIds], winnerId: S.winnerId, candidateId: S.candidateId, activeId: oldId,
-    consensus: S.consensus ? structuredClone(S.consensus) : S.consensus, sheet: S.sheet };
-  (S.editHistory ||= []).push(snap);
-  S.plans[newId] = {};
+    consensus: S.consensus ? structuredClone(S.consensus) : S.consensus, sheet: S.sheet,
+    explanation: S.explanation, recommendations: S.recommendations, voices: S.voices };
   const jf = (u, body) => fetch(u, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : undefined)
-    .then((r) => r.json());
-  const [plan, vastu, cost] = await Promise.all([
-    jf(`${API}/plans/${newId}`),
-    jf(`${API}/plans/vastu`, { plan_id: newId, tradition_weight: S.plans[oldId]?.vastu?.tradition_weight ?? 0.5, compare_to: oldId }),
-    jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0 }),
-  ]);
+    .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+  let plan, vastu, cost;
+  try {
+    [plan, vastu, cost] = await Promise.all([
+      jf(`${API}/plans/${newId}`),
+      jf(`${API}/plans/vastu`, { plan_id: newId, tradition_weight: S.plans[oldId]?.vastu?.tradition_weight ?? 0.5, compare_to: oldId }),
+      jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0 }),
+    ]);
+  } catch (err) {
+    toast(`The edit was made but could not be loaded (${err.message}). The plan on screen is unchanged.`);
+    return;
+  }
+  if (S.activeId !== oldId) return;                    // the client moved to another scheme meanwhile
+  (S.editHistory ||= []).push(snap);
   S.plans[newId] = { plan, vastu, cost, parent: oldId };
   rememberPlan(plan);
   // Say what the edit did to the Vastu, right away.
@@ -1272,7 +1220,8 @@ function undoEdit() {
   const snap = (S.editHistory || []).pop();
   if (!snap) return;
   Object.assign(S, { planIds: snap.planIds, winnerId: snap.winnerId, candidateId: snap.candidateId,
-    activeId: snap.activeId, consensus: snap.consensus });
+    activeId: snap.activeId, consensus: snap.consensus, sheet: snap.sheet,
+    explanation: snap.explanation, recommendations: snap.recommendations, voices: snap.voices });
   buildSchemeTabs();
   renderAll();
   showView(S.view);
@@ -1321,7 +1270,7 @@ function renderVerdict() {
 
   $("v-score").textContent = row ? row.score.toFixed(2) : "—";
   $("v-agree").textContent = S.consensus ? `${Math.round(S.consensus.overall_agreement * 100)}% committee agreement` : "—";
-  if (vastu) { $("v-vastu").textContent = Math.round(vastu.score); $("v-vastu-note").textContent = `${vastu.grade} · ${vastu.rules_assessed} rules assessed`; }
+  if (vastu) { $("v-vastu").textContent = Math.round(vastu.score); $("v-vastu-note").textContent = `${vastu.grade}, ${String(vastu.stance_label || "balanced").toLowerCase()}`; }
   if (cost) { $("v-cost").textContent = inr(cost.total); $("v-cost-note").textContent = `${inr(cost.p10)} – ${inr(cost.p90)}`; }
   if (plan) {
     $("v-area").textContent = `${Math.round(plan.total_built_area)} m²`;
@@ -1383,12 +1332,12 @@ async function loadAnalysis() {
 /* ═══ VIEWS ══════════════════════════════════════════════════════════ */
 
 const VIEW_GROUPS = {
-  vastu: [["vastu", "Score"], ["mandala", "Mandala"]],
   report: [["findings", "Findings"], ["negotiation", "Negotiation"], ["audit", "Audit"]],
 };
 const groupOf = (v) => Object.keys(VIEW_GROUPS).find((g) => VIEW_GROUPS[g].some(([k]) => k === v)) || v;
 
 function showView(v, { fromHistory = false } = {}) {
+  if (v === "mandala") v = "vastu";       // the mandala is part of the Vastu page now
   if (VIEW_GROUPS[v] && !VIEW_GROUPS[v].some(([k]) => k === v)) v = S.lastIn?.[v] || VIEW_GROUPS[v][0][0];
   // Each view is a step the browser's (and the phone's) back button can undo.
   if (!fromHistory && S.phase === "review" && history.state?.view !== v) history.pushState({ studio: true, view: v }, "", `#${v}`);
@@ -1414,7 +1363,6 @@ function showView(v, { fromHistory = false } = {}) {
     sub.append(b);
   }
 
-  if (v === "mandala") renderMandala();
   if (v === "vastu") renderVastu();
   if (v === "cost") renderCost();
   if (v === "interior") renderInterior();
@@ -1618,7 +1566,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p7");
+    const { Viewer3D } = await import("./viewer3d.js?v=p8");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -1708,46 +1656,6 @@ function downloadDxf() {
 
 /* ── mandala ───────────────────────────────────────────────────────── */
 
-function renderMandala() {
-  const { plan } = cur();
-  const { occupied, sectors } = lightPadas($("review-mandala"), plan);
-
-  const note = $("brahma-note");
-  if (occupied) {
-    note.dataset.tone = "breach";
-    note.textContent = `Brahmasthan built over — ${occupied} of 9 central padas are occupied. The corpus treats the centre as the seat of Brahma and requires it unbuilt; an open centre is also what drives stack ventilation and daylights a deep plan.`;
-  } else {
-    note.dataset.tone = "clear";
-    note.textContent = "Brahmasthan clear. The central nine padas are unbuilt, satisfying the strongest rule in the corpus and leaving the plan's core available for a courtyard or void.";
-  }
-
-  const legend = $("quarter-legend"); legend.innerHTML = "";
-  for (const [pig, label] of [
-    ["indigo", "Ishanya · north-east · analysis"],
-    ["orpiment", "Vayavya · north-west · judgement"],
-    ["hingula", "Agneya · south-east · breach"],
-    ["ochre", "Nairutya · south-west · mass and cost"],
-  ]) {
-    const d = el("div"); const i = el("i"); i.style.background = HEX[pig];
-    d.append(i, el("span", null, label)); legend.append(d);
-  }
-
-  const list = $("room-sectors"); list.innerHTML = "";
-  list.append(el("h3", "sec", `Rooms by sector (${sectors.length})`));
-  const tbl = el("table", "led");
-  tbl.innerHTML = "<thead><tr><th>Room</th><th>Sector</th><th class='n'>Area</th></tr></thead>";
-  const tb = el("tbody");
-  for (const s of sectors.sort((a, b) => b.area - a.area)) {
-    const tr = el("tr");
-    const td = el("td", null, s.name);
-    const dot = el("i"); dot.style.cssText = `display:inline-block;width:8px;height:8px;transform:rotate(45deg);background:${HEX[s.pig]};margin-right:8px`;
-    td.prepend(dot);
-    tr.append(td, el("td", null, s.dir), el("td", "n", `${s.area.toFixed(1)} m²`));
-    tb.append(tr);
-  }
-  tbl.append(tb); list.append(tbl);
-}
-
 /* ── vastu ─────────────────────────────────────────────────────────── */
 
 // The nine squares of the Vastu Purusha mandala, as the plan is read.
@@ -1759,141 +1667,236 @@ const VX_ZONES = [
 const VX_CATS = { zone_placement: "Room zones", entrance: "Entrance", brahmasthan: "Centre", water: "Water", fire: "Fire",
   mass_distribution: "Mass and open space", proportion: "Shape", openings: "Openings", slope: "Slope",
   circulation: "Stairs", sleeping: "Sleeping", relations: "Rooms and neighbours" };
-// Sixteen compass points to the eight squares (and the centre).
-const vxZone = (d) => {
-  const k = String(d || "").toUpperCase();
-  if (!k || k === "C" || k === "CENTRE") return "C";
-  return { NNE: "N", ENE: "E", ESE: "E", SSE: "S", SSW: "S", WSW: "W", WNW: "W", NNW: "N" }[k] || k;
-};
-const vxTone = (verdict) => ({ ideal: "good", acceptable: "good", neutral: "mid", discouraged: "bad", prohibited: "bad" }[verdict] || "none");
+// The stance, as five named readings from modern to orthodox.
+const VX_STANCES = [[0, "Modern"], [0.25, "Advisory"], [0.5, "Balanced"], [0.75, "Strict"], [1, "Orthodox"]];
+const VX_WORD = { ideal: "Ideal here", acceptable: "Acceptable here", neutral: "Neutral here", discouraged: "Discouraged here",
+  prohibited: "Forbidden here", undetermined: "No reading" };
+const vxName = (z) => VX_ZONES.find(([k]) => k === z)?.[1] || z;
 
-function vxRing(score) {
-  const r = 34, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, score / 100));
-  const svg = `<svg viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="${r}" class="vx-ring__bg"/>`
-    + `<circle cx="42" cy="42" r="${r}" class="vx-ring__fg" stroke-dasharray="${(c * f).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 42 42)"/></svg>`;
-  const box = el("div", "vx-ring");
-  box.innerHTML = svg;
-  box.append(el("b", null, String(Math.round(score))));
-  return box;
+// The plan drawn on the Vastu Purusha mandala: north up, the 9 x 9 padas
+// over the house, the nine zones named round it, every room marked by what
+// the reading says of it where it stands.
+function vxMandala(plan, v, level, onRoom) {
+  const levels = plan?.levels || [];
+  const lv = levels.find((l) => l.index === level) || levels[0];
+  const ground = levels.find((l) => l.index === 0) || lv;
+  if (!lv) return el("p", "empty-note", "No plan to read.");
+  const na = ((plan.site?.north_angle || 0) * Math.PI) / 180;
+  // Points come as [x, y] or {x, y}; turned so north is up.
+  const rot = (q) => {
+    const x = Array.isArray(q) ? q[0] : q.x, y = Array.isArray(q) ? q[1] : q.y;
+    return [x * Math.cos(na) + y * Math.sin(na), -x * Math.sin(na) + y * Math.cos(na)];
+  };
+  // The mandala is laid on the ground floor's footprint, so every floor reads against the same field.
+  const field = ground.rooms.flatMap((r) => (r.polygon || []).map(rot));
+  const xs = field.map((p) => p[0]), ys = field.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const w = x1 - x0, h = y1 - y0, m = Math.max(w, h) * 0.2, fs = Math.max(w, h) / 30;
+  const NS = "http://www.w3.org/2000/svg";
+  const n = (tag, attrs = {}, text) => {
+    const e = document.createElementNS(NS, tag);
+    for (const [k, val] of Object.entries(attrs)) e.setAttribute(k, val);
+    if (text != null) e.textContent = text;
+    return e;
+  };
+  const svg = n("svg", { viewBox: `${x0 - m} ${-(y1 + m)} ${w + 2 * m} ${h + 2 * m}`, class: "vxm" });
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `${floorName(lv.index)} plan on the Vastu mandala, north at the top`);
+  // The padas: hairlines; the nine zones a step brighter; the Brahmasthan dashed.
+  const g = n("g", { class: "vxm__grid" });
+  for (let i = 0; i <= 9; i++) {
+    const cls = i % 3 === 0 ? "vxm__zone" : "vxm__pada";
+    g.append(n("line", { x1: x0 + (w * i) / 9, y1: -y0, x2: x0 + (w * i) / 9, y2: -y1, class: cls }));
+    g.append(n("line", { x1: x0, y1: -(y0 + (h * i) / 9), x2: x1, y2: -(y0 + (h * i) / 9), class: cls }));
+  }
+  g.append(n("rect", { x: x0 + w / 3, y: -(y0 + (2 * h) / 3), width: w / 3, height: h / 3, class: "vxm__brahma" }));
+  svg.append(g);
+  // The rooms, marked by their reading.
+  const reads = Object.fromEntries((v.graph_placements || []).map((p) => [p.room_id, p]));
+  const rooms = n("g", { class: "vxm__rooms" });
+  for (const r of lv.rooms) {
+    if (!r.polygon || r.polygon.length < 3) continue;
+    const pts = r.polygon.map(rot);
+    const p = reads[r.id];
+    const poly = n("polygon", { points: pts.map(([x, y]) => `${x},${-y}`).join(" "), class: "vxm__room", "data-v": p?.verdict || "none" });
+    const tip = p ? `${p.room}: ${(VX_WORD[p.verdict] || p.verdict).toLowerCase()}, in the ${p.direction} (${p.quarter})`
+      + (p.better_directions?.length && !["ideal", "acceptable"].includes(p.verdict) ? `. Better in the ${p.better_directions.map((b) => b.direction).join(", ")}` : "")
+      : r.name || r.type;
+    poly.append(n("title", {}, tip));
+    if (p) {
+      poly.setAttribute("tabindex", "0");
+      poly.addEventListener("click", () => onRoom?.(r.id));
+      poly.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRoom?.(r.id); } });
+    }
+    rooms.append(poly);
+    // The name sits across the room, turns up a tall narrow one, and is left to the tooltip where neither fits.
+    const rx = pts.map((q) => q[0]), ry = pts.map((q) => q[1]);
+    const bw = Math.max(...rx) - Math.min(...rx), bh = Math.max(...ry) - Math.min(...ry);
+    const cx = (Math.max(...rx) + Math.min(...rx)) / 2, cy = (Math.max(...ry) + Math.min(...ry)) / 2;
+    const label = (r.name || r.type || "").replace(/_/g, " ");
+    const size = fs * 0.78, long = label.length * size * 0.56;
+    if (long < bw * 0.88 && size * 1.6 < bh) rooms.append(n("text", { x: cx, y: -cy, "font-size": size, class: "vxm__name" }, label));
+    else if (long < bh * 0.88 && size * 1.6 < bw) rooms.append(n("text", { x: cx, y: -cy, "font-size": size, class: "vxm__name", transform: `rotate(-90 ${cx} ${-cy})` }, label));
+  }
+  svg.append(rooms);
+  // The zones, named round the field: Ishanya at the north-east, Brahmasthan at the heart.
+  const at = { NW: [0, 2], N: [1, 2], NE: [2, 2], W: [0, 1], E: [2, 1], SW: [0, 0], S: [1, 0], SE: [2, 0] };
+  const lab = n("g", { class: "vxm__labels", "font-size": fs });
+  for (const [z, [cx, cy]] of Object.entries(at)) {
+    const x = cx === 0 ? x0 - m * 0.5 : cx === 2 ? x1 + m * 0.5 : x0 + w / 2;
+    const y = cy === 0 ? y0 - m * 0.42 : cy === 2 ? y1 + m * 0.42 : y0 + h / 2;
+    const t = n("text", { x, y: -y, class: "vxm__label" });
+    t.append(n("tspan", { x, dy: "-0.2em", class: "vxm__dir" }, z), n("tspan", { x, dy: "1.25em", class: "vxm__zn" }, vxName(z)));
+    lab.append(t);
+  }
+  svg.append(lab);
+  return svg;
 }
 
 function renderVastu() {
   const s = scrollPane("vastu");
   const v = cur().vastu;
+  const plan = cur().plan;
   if (!v) { s.append(el("p", "empty-note", "No Vastu assessment for this scheme.")); return; }
+  const reads = v.graph_placements || [];
 
-  // ── the reading at a glance ──────────────────────────────────────
-  const head = el("section", "vx-head");
-  const txt = el("div", "vx-head__t");
-  txt.append(el("span", "vx-k", "Vastu"), el("h2", "vx-grade", `${Math.round(v.score)} / 100 · ${v.grade}`),
-    el("p", "vx-sum", v.summary || ""),
-    el("p", "vx-meta", `${v.rules_assessed} of ${v.rules_total} rules measured on this plan · ${v.violations} not met`
-      + (v.serious_violations ? ` (${v.serious_violations} serious)` : "")));
-  head.append(vxRing(v.score), txt);
-  s.append(head);
+  // ── the reading: the plan on the mandala, and what it comes to ────
+  const top = el("section", "vx2");
+  const draw = el("figure", "vx2__draw");
+  const levels = plan?.levels || [];
+  S.vastuLevel = levels.some((l) => l.index === S.vastuLevel) ? S.vastuLevel : 0;
+  const showRoom = (id) => {
+    const row = s.querySelector(`#vx-room-${id}`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "center" });
+    row.classList.remove("is-flash"); void row.offsetWidth; row.classList.add("is-flash");
+  };
+  const paint = () => {
+    draw.replaceChildren();
+    if (levels.length > 1) {
+      const floors = el("div", "vx2__floors"); floors.setAttribute("role", "radiogroup"); floors.setAttribute("aria-label", "Floor");
+      for (const lv of levels) {
+        const b = el("button", null, floorName(lv.index)); b.type = "button"; b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", String(lv.index === S.vastuLevel));
+        b.addEventListener("click", () => { S.vastuLevel = lv.index; paint(); draw.querySelector('[aria-checked="true"]')?.focus(); });
+        floors.append(b);
+      }
+      draw.append(floors);
+    }
+    draw.append(vxMandala(plan, v, S.vastuLevel, showRoom));
+    const key = el("figcaption", "vx2__key");
+    for (const [k, t] of [["fits", "Placed as the texts ask"], ["discouraged", "Discouraged where it stands"], ["prohibited", "Forbidden where it stands"], ["brahma", "Brahmasthan, the centre kept open"]]) {
+      const i = el("i"); i.dataset.v = k;
+      const item = el("span", "vx2__k"); item.append(i, document.createTextNode(t)); key.append(item);
+    }
+    draw.append(key);
+  };
+  paint();
 
-  // Stance: how much the client weighs tradition against function.
-  const lab = el("label", "vx-stance");
-  lab.append(el("span", null, `Your stance: ${cap(v.stance_label)}`));
-  const sl = el("input"); Object.assign(sl, { type: "range", min: 0, max: 4, step: 1, value: Math.round(v.tradition_weight * 4) });
-  sl.className = "stance";
-  sl.setAttribute("aria-label", "How strictly to read Vastu, from modern to traditional");
-  sl.addEventListener("change", () => rescore(+sl.value / 4));
-  const ends = el("span", "vx-stance__ends"); ends.append(el("i", null, "Modern"), el("i", null, "Traditional"));
-  lab.append(sl, ends);
-  s.append(lab);
+  const read = el("div", "vx2__read");
+  const score = el("h2", "vx2__score");
+  score.append(el("span", "vx2__word", "Vastu"), el("b", null, String(Math.round(v.score))), el("small", null, "/100"));
+  read.append(score, el("p", "vx2__grade", `${v.grade}, read at a ${String(v.stance_label || "balanced").toLowerCase()} stance`));
+  read.append(el("p", "vx2__meta", `${v.rules_assessed} of ${v.rules_total} rules could be measured on this plan. `
+    + (v.violations ? `${v.violations} ${v.violations === 1 ? "is" : "are"} not met${v.serious_violations ? `, ${v.serious_violations} of them serious` : ""}.` : "Every one of them is met.")));
+  // Stance: how strictly the texts are read, against what the building does.
+  const stance = el("div", "vx2__stance");
+  const sid = "vx-stance-l";
+  stance.append(el("span", "vx2__label", "Read the texts"));
+  stance.firstChild.id = sid;
+  const seg = el("div", "vx2__seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-labelledby", sid);
+  const nowW = Math.round((v.tradition_weight ?? 0.5) * 4) / 4;
+  for (const [wgt, name] of VX_STANCES) {
+    const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio");
+    b.setAttribute("aria-checked", String(Math.abs(wgt - nowW) < 0.01));
+    b.addEventListener("click", () => { if (Math.abs(wgt - nowW) > 0.01) { seg.classList.add("is-busy"); rescore(wgt); } });
+    seg.append(b);
+  }
+  stance.append(seg, el("p", "vx2__hint", "Modern weighs each rule by what it does for light, air and structure; orthodox follows the texts as written."));
+  read.append(stance);
 
-  // ── what the last edit did ───────────────────────────────────────
+  // What the last edit did.
   const since = v.since_edit;
   if (since) {
-    const card = el("section", `vx-since${since.delta < 0 ? " is-down" : since.delta > 0 ? " is-up" : ""}`);
-    card.append(el("h3", "sec", "Since your edit"),
-      el("p", "vx-since__score", since.delta
-        ? `${Math.round(since.score_before)} → ${Math.round(since.score_after)} (${since.delta > 0 ? "+" : ""}${since.delta})`
-        : `Unchanged at ${Math.round(since.score_after)}`));
-    const word = (x) => (x === null || x === undefined ? "not measured" : x >= 0.95 ? "met" : x >= 0.6 ? "acceptable" : x >= 0.3 ? "weak" : "not met");
-    for (const c of (since.changes || []).slice(0, 6)) {
-      const row = el("div", `vx-change ${c.better ? "is-up" : "is-down"}`);
-      row.append(el("i", "vx-change__a", c.better ? "▲" : "▼"), el("span", "vx-change__t", c.title),
-        el("span", "vx-change__w", `${word(c.before)} → ${word(c.after)}`));
-      if (c.note) row.append(el("span", "vx-change__n", c.note));
-      card.append(row);
+    const box = el("section", "vx2__since");
+    box.append(el("h3", "vx2__h", since.delta
+      ? `Since your edit: ${Math.round(since.score_before)} to ${Math.round(since.score_after)}`
+      : `Since your edit: unchanged at ${Math.round(since.score_after)}`));
+    for (const c of (since.changes || []).slice(0, 5)) {
+      const row = el("p", `vx2__change ${c.better ? "is-up" : "is-down"}`);
+      row.append(el("b", null, c.better ? "Now met" : "No longer met"), document.createTextNode(` ${c.title}`));
+      box.append(row);
     }
-    if (!since.changes?.length) card.append(el("p", "vx-meta", "No rule changed its reading."));
-    s.append(card);
+    if (!since.changes?.length) box.append(el("p", "vx2__hint", "No rule changed its reading."));
+    read.append(box);
   }
 
-  // ── the mandala: every room in its square ────────────────────────
-  const gp = v.graph_placements || [];
-  if (gp.length) {
-    s.append(el("h3", "sec", "Rooms on the Vastu mandala"));
-    const grid = el("div", "vx-grid");
-    grid.setAttribute("role", "img");
-    grid.setAttribute("aria-label", "The plan read as the nine squares of the Vastu mandala, each room in its square");
-    for (const [z, name, element] of VX_ZONES) {
-      const cell = el("div", "vx-cell"); cell.dataset.z = z;
-      cell.append(el("span", "vx-cell__h", `${z === "C" ? "Centre" : z} · ${name}`), el("span", "vx-cell__e", element));
-      const chips = el("div", "vx-cell__rooms");
-      for (const p of gp.filter((x) => vxZone(x.direction) === z)) {
-        const chip = el("span", "vx-chip", p.room); chip.dataset.v = vxTone(p.verdict);
-        chip.title = `${p.room}: ${p.verdict}${p.better_directions?.length ? ` · better ${p.better_directions.map((b) => b.direction).join(", ")}` : ""}`;
-        chips.append(chip);
+  // The fixes worth most, in order.
+  const fixes = v.top_remedies || [];
+  if (fixes.length) {
+    read.append(el("h3", "vx2__h", "What to fix first"));
+    const ol = el("ol", "vx2__fixes");
+    for (const r of fixes.slice(0, 4)) {
+      const li = el("li");
+      const head = el("div", "vx2__fixhead");
+      head.append(el("span", "vx2__fixt", r.title), el("span", "vx2__gain", `+${r.points_recoverable.toFixed(1)}`));
+      li.append(head, el("p", "vx2__fixr", r.remedy || r.explanation));
+      li.append(el("p", "vx2__fixs", `Score after: ${Math.round(r.score_if_fixed)}${r.modern_validity >= 0.65 ? ". It also helps the building on its own merits." : ""}`));
+      ol.append(li);
+    }
+    read.append(ol);
+  }
+  top.append(draw, read);
+  s.append(top);
+
+  // ── room by room ─────────────────────────────────────────────────
+  if (reads.length) {
+    s.append(el("h3", "sec", "Room by room"));
+    const tbl = el("div", "vx2__rooms"); tbl.setAttribute("role", "table"); tbl.setAttribute("aria-label", "Each room's Vastu reading");
+    const hd = el("div", "vx2__row vx2__row--head"); hd.setAttribute("role", "row");
+    for (const t of ["Room", "Where it stands", "Reading", "Better in"]) { const c = el("span", null, t); c.setAttribute("role", "columnheader"); hd.append(c); }
+    tbl.append(hd);
+    const order = { prohibited: 0, discouraged: 1, neutral: 2, undetermined: 3, acceptable: 4, ideal: 5 };
+    const floorOf = Object.fromEntries(levels.flatMap((l) => l.rooms.map((r) => [r.id, l.index])));
+    for (const p of [...reads].sort((a, b) => (order[a.verdict] ?? 3) - (order[b.verdict] ?? 3) || a.score - b.score)) {
+      const row = el("div", "vx2__row"); row.setAttribute("role", "row"); row.id = `vx-room-${p.room_id}`; row.dataset.v = p.verdict;
+      const good = ["ideal", "acceptable", "undetermined"].includes(p.verdict);
+      for (const t of [p.room, `${p.direction}, ${p.quarter}`, VX_WORD[p.verdict] || p.verdict,
+        good ? "" : (p.better_directions || []).map((b) => b.direction).join(", ")]) {
+        const c = el("span", null, t); c.setAttribute("role", "cell"); row.append(c);
       }
-      cell.append(chips);
-      grid.append(cell);
+      // A house of more than one floor has a Corridor on each: say which.
+      if (levels.length > 1 && floorOf[p.room_id] != null) row.firstChild.append(el("small", "vx2__floor", floorName(floorOf[p.room_id])));
+      tbl.append(row);
     }
-    s.append(grid);
-    const key = el("p", "vx-key");
-    for (const [t, l] of [["good", "ideal or acceptable"], ["mid", "neutral"], ["bad", "discouraged"], ["none", "no reading"]]) {
-      const i = el("i", "vx-chip vx-chip--key"); i.dataset.v = t; key.append(i, el("span", null, l));
-    }
-    s.append(key);
+    s.append(tbl);
   }
 
   // ── by category ──────────────────────────────────────────────────
   const cats = (v.category_scores || []).filter((c) => c.rules_assessed > 0 && VX_CATS[c.category]);
   if (cats.length) {
     s.append(el("h3", "sec", "By category"));
-    const box = el("div", "vx-cats");
+    const box = el("div", "vx2__cats");
     for (const c of cats.sort((a, b) => b.weight - a.weight)) {
-      const row = el("div", "vx-cat");
       const pct = Math.round(c.score > 1 ? c.score : c.score * 100);
-      const bar = el("span", "vx-cat__bar"); const fill = el("i"); fill.style.width = `${pct}%`; fill.dataset.v = pct >= 75 ? "good" : pct >= 50 ? "mid" : "bad";
+      const row = el("div", "vx2__cat");
+      const bar = el("span", "vx2__bar"); const fill = el("i"); fill.style.setProperty("--f", (pct / 100).toFixed(3));
+      if (pct < 40) fill.dataset.v = "low";
       bar.append(fill);
-      row.append(el("span", "vx-cat__l", VX_CATS[c.category]), bar, el("span", "vx-cat__v", `${pct}`));
+      row.append(el("span", null, VX_CATS[c.category]), bar, el("b", null, String(pct)));
       box.append(row);
     }
     s.append(box);
   }
-
-  // ── the fixes worth most ─────────────────────────────────────────
-  if (v.top_remedies?.length) {
-    s.append(el("h3", "sec", "What fixing each thing is worth"));
-    for (const r of v.top_remedies) {
-      const line = el("div", "bar-line");
-      line.append(el("span", "bar-line__l", r.title));
-      const t = el("div", "bar-line__t"); const i = el("i");
-      i.style.background = r.modern_validity >= 0.65 ? HEX.indigo : HEX.chalk;
-      t.append(i); line.append(t, el("span", "bar-line__v", `+${r.points_recoverable.toFixed(1)} pts`));
-      s.append(line);
-      requestAnimationFrame(() => { i.style.transform = `scaleX(${Math.min(1, r.points_recoverable / 10)})`; });
-      const p = el("p", "find__r", r.explanation); p.style.cssText = "margin:2px 0 14px;padding-left:2px";
-      s.append(p);
-    }
-  }
-  if (v.reconciliation_note) s.append(el("p", "note-card", v.reconciliation_note));
+  if (v.reconciliation_note) s.append(el("p", "vx2__note", v.reconciliation_note));
 
   // ── for the builder: decided on the plot ─────────────────────────
   const site = (v.verdicts || []).filter((x) => x.category === "site");
   if (site.length) {
-    s.append(el("h3", "sec", "Site checklist for the builder"));
-    s.append(el("p", "lede", "Placed on the plot during construction, so they are not in the drawings or the score."));
+    s.append(el("h3", "sec", "For the builder, on the plot"));
+    s.append(el("p", "vx2__note", "Placed during construction, so they are in neither the drawings nor the score."));
     const ul = el("ul", "vx-check");
-    for (const x of site) {
-      const li = el("li");
-      li.append(el("b", null, x.title), el("span", null, x.remedy || ""));
-      ul.append(li);
-    }
+    for (const x of site) { const li = el("li"); li.append(el("b", null, x.title), el("span", null, x.remedy || "")); ul.append(li); }
     s.append(ul);
   }
 
@@ -1908,23 +1911,23 @@ function renderVastu() {
   const violated = (v.verdicts || []).filter((x) => x.assessable && x.compliance < 0.6);
   const met = (v.verdicts || []).filter((x) => x.assessable && x.compliance >= 0.6);
   const skipped = (v.verdicts || []).filter((x) => !x.assessable && x.category !== "site");
-  fold("Rules not satisfied", violated.length, (d) => { for (const x of violated) d.append(vastuRow(x, x.verdict === "prohibited" ? "major" : "moderate")); }, true);
-  fold("Rules satisfied", met.length, (d) => { for (const x of met) d.append(vastuRow(x, "info")); });
+  fold("Rules not met", violated.length, (d) => { for (const x of violated) d.append(vastuRow(x, x.verdict === "prohibited" ? "major" : "moderate")); }, true);
+  fold("Rules met", met.length, (d) => { for (const x of met) d.append(vastuRow(x, "info")); });
   fold("Not measured on this plan", skipped.length, (d) => {
-    d.append(el("p", "lede", "Left out of the score rather than guessed at."));
+    d.append(el("p", "vx2__note", "Left out of the score rather than guessed at."));
     for (const x of skipped) {
       const r = el("div", "find"); r.dataset.sev = "info";
       r.append(el("i", "find__s"), el("span", "find__t", x.title), el("span", "find__c", x.reason_not_assessable || `Superseded by ${x.defeated_by}`));
       d.append(r);
     }
   });
-  fold("How each room's reading was derived", gp.length, (d) => {
-    if (v.graph_note) d.append(el("p", "note-card", v.graph_note));
-    for (const p of gp) {
+  fold("How each room's reading was derived", reads.length, (d) => {
+    if (v.graph_note) d.append(el("p", "vx2__note", v.graph_note));
+    for (const p of reads) {
       const box = el("div", "deriv");
       box.dataset.v = p.verdict;
       const h = el("div", "deriv__h");
-      h.append(el("b", null, p.room), el("span", "deriv__dir", `${p.direction} · ${p.quarter}`),
+      h.append(el("b", null, p.room), el("span", "deriv__dir", `${p.direction}, ${p.quarter}`),
         el("span", "deriv__sc", p.verdict === "undetermined" ? "—" : p.score.toFixed(2)),
         el("span", "deriv__tag", p.derived ? "derived" : "cited"));
       box.append(h);
@@ -1937,7 +1940,7 @@ function renderVastu() {
       if (p.better_directions?.length) {
         box.append(el("p", "deriv__alt", "Better: " + p.better_directions.map((b) => `${b.direction} (${b.score.toFixed(2)})`).join(", ")));
       }
-      if (p.citations?.length) box.append(el("p", "deriv__cite", p.citations.join(" · ")));
+      if (p.citations?.length) box.append(el("p", "deriv__cite", p.citations.join("; ")));
       d.append(box);
     }
   });
@@ -2093,7 +2096,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p7");
+  const { Viewer3D } = await import("./viewer3d.js?v=p8");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2124,8 +2127,8 @@ async function renderInterior() {
     const sw = el("span", "inx__sw");
     for (const hex of Object.values(s.interior || {})) { const c = el("i"); c.style.background = hex; sw.append(c); }
     const nav = el("div", "inx__nav");
-    for (const [t, step] of [["‹", -1], ["›", 1]]) {
-      const b = el("button", "ghost-btn", t); b.type = "button";
+    for (const [t, step] of [["prev", -1], ["next", 1]]) {
+      const b = el("button", "ghost-btn ghost-btn--ico"); b.type = "button"; b.append(icon(t));
       b.setAttribute("aria-label", step < 0 ? "Previous style" : "Next style");
       b.addEventListener("click", async () => {
         pal.id = schemes[(i + step + schemes.length) % schemes.length].id;
@@ -2235,7 +2238,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p7");
+    const { Viewer3D } = await import("./viewer3d.js?v=p8");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2354,7 +2357,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p7");
+    const { Viewer3D } = await import("./viewer3d.js?v=p8");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2700,7 +2703,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     pal.saved = saved(d) ? pal.saved.filter((x) => x !== d.id) : [...pal.saved, d.id];
   };
   const BOOKMARK = "M6 3.5h12v17l-6-4.2-6 4.2z";
-  const icon = (path, cls) => {
+  const pathIcon = (path, cls) => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 24 24"); svg.setAttribute("aria-hidden", "true"); svg.classList.add(cls);
     const pa = document.createElementNS("http://www.w3.org/2000/svg", "path"); pa.setAttribute("d", path);
@@ -2731,7 +2734,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     keep.setAttribute("aria-pressed", String(saved(d)));
     keep.setAttribute("aria-label", saved(d) ? `Remove ${d.name} from your shortlist` : `Add ${d.name} to your shortlist`);
     keep.title = saved(d) ? "On your shortlist" : "Add to shortlist";
-    keep.append(icon(BOOKMARK, "lb-card__keepicon"));
+    keep.append(pathIcon(BOOKMARK, "lb-card__keepicon"));
     keep.addEventListener("click", (e) => {
       toggleSave(d); draw();
       // A keyboard toggle keeps the keyboard on the same bookmark across the redraw.
@@ -2871,7 +2874,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     refine.setAttribute("aria-expanded", String(!!pal.refineOpen)); refine.setAttribute("aria-controls", "lb-refine");
     refine.addEventListener("click", () => { pal.refineOpen = !pal.refineOpen; draw(); card.querySelector(".lb-bar .lb-tool")?.focus(); });
     const short = el("button", "lb-tool", `Shortlist ${pal.saved.length}`); short.type = "button";
-    short.prepend(icon(BOOKMARK, "lb-tool__icon"));
+    short.prepend(pathIcon(BOOKMARK, "lb-tool__icon"));
     short.setAttribute("aria-pressed", String(!!pal.shortOnly));
     short.title = pal.saved.length ? "Show only your shortlist" : "Bookmark designs to shortlist them";
     short.disabled = !pal.saved.length && !pal.shortOnly;
@@ -2914,7 +2917,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
         g.append(h, row);
         box.append(g);
       };
-      const roofIcon = (v) => () => { const i = icon(ROOF_ICON[v] || "", "lb-facet__icon"); return i; };
+      const roofIcon = (v) => () => { const i = pathIcon(ROOF_ICON[v] || "", "lb-facet__icon"); return i; };
       facet("roof", "Roof", ["flat", "slab", "mono", "butterfly", "hip", "gable", "vault", "sawtooth"].map((v) => [v, EX_NICE[v], roofIcon(v)]));
       facet("walls", "Walls", Object.keys(FINISH_OF).map((v) => [v, EX_NICE[v] || v, () => {
         const c = texSwatch(FINISH_OF[v][0], FINISH_OF[v][1], 22); c.className = "lb-facet__sw"; c.setAttribute("aria-hidden", "true"); return c; }]));
@@ -3135,8 +3138,8 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     const lab = el("span", "pal__toggle");
     lab.append(el("span", "pal__k", i === 0 ? "Recommended" : `${i + 1} / ${list.length}`), el("b", "pal__name", s.name), strip);
     const arrows = el("div", "pal__nav");
-    for (const [t, step, name] of [["‹", -1, "Previous palette"], ["›", 1, "Next palette"]]) {
-      const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", name);
+    for (const [t, step, name] of [["prev", -1, "Previous palette"], ["next", 1, "Next palette"]]) {
+      const bt = el("button", "ghost-btn ghost-btn--ico"); bt.type = "button"; bt.setAttribute("aria-label", name); bt.append(icon(t));
       bt.addEventListener("click", () => apply(list[(i + step + list.length) % list.length]));
       arrows.append(bt);
     }
@@ -3420,7 +3423,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       const head = el("div", "exw-edit__head");
       const name = el("div");
       name.append(el("b", null, info.label), el("span", null, info.group));
-      const x = el("button", "exw-edit__x", "×"); x.type = "button"; x.setAttribute("aria-label", "Close");
+      const x = el("button", "exw-edit__x"); x.type = "button"; x.setAttribute("aria-label", "Close"); x.append(icon("close"));
       x.addEventListener("click", closeEditor);
       head.append(name, x);
       const nowHex = paintOf(k) ? `#${paintOf(k)}` : (v.parts().get(k) || "#cccccc");
@@ -3639,7 +3642,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       wrap?.classList.toggle("is-min", !!pal.pageMin);
       if (pal.pageMin) {
         card.classList.add("is-rail");
-        const open = el("button", "ex-rail__open", "›"); open.type = "button";
+        const open = el("button", "ex-rail__open"); open.type = "button"; open.append(icon("next"));
         open.setAttribute("aria-label", "Show the design panel"); open.setAttribute("aria-expanded", "false");
         open.title = "Show the design panel";
         open.addEventListener("click", () => { pal.pageMin = false; draw(); card.querySelector(".ex-rail__min")?.focus(); });
@@ -3661,20 +3664,20 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     const badge = d && uniqBadge();
     if (badge) title.append(badge);
     const nav = el("div", "pal__nav");
-    for (const [t, step, name] of [["‹", -1, "Previous design"], ["›", 1, "Next design"]]) {
-      const bt = el("button", "ghost-btn", t); bt.type = "button"; bt.setAttribute("aria-label", name); bt.disabled = !d;
+    for (const [t, step, name] of [["prev", -1, "Previous design"], ["next", 1, "Next design"]]) {
+      const bt = el("button", "ghost-btn ghost-btn--ico"); bt.type = "button"; bt.setAttribute("aria-label", name); bt.disabled = !d; bt.append(icon(t));
       bt.addEventListener("click", () => choose(designs[(di + step + designs.length) % designs.length].id));
       nav.append(bt);
     }
     if (page) {
-      const mb = el("button", "ghost-btn ex-rail__min", "‹‹"); mb.type = "button";
+      const mb = el("button", "ghost-btn ghost-btn--ico ex-rail__min"); mb.type = "button"; mb.append(icon("collapse"));
       mb.setAttribute("aria-label", "Minimise the design panel"); mb.setAttribute("aria-expanded", "true");
       mb.title = "Minimise the design panel";
       mb.addEventListener("click", () => { pal.pageMin = true; draw(); card.querySelector(".ex-rail__open")?.focus(); });
       nav.append(mb);
     }
     if (!page) {
-      const mb = el("button", "ghost-btn", pal.min ? "+" : "–"); mb.type = "button";
+      const mb = el("button", "ghost-btn ghost-btn--ico"); mb.type = "button"; mb.append(icon(pal.min ? "plus" : "minus"));
       mb.setAttribute("aria-label", pal.min ? "Show exterior designs" : "Minimise exterior designs");
       mb.setAttribute("aria-expanded", String(!pal.min));
       mb.addEventListener("click", () => { pal.min = !pal.min; draw(); });
@@ -3869,7 +3872,7 @@ async function renderFindings() {
       row.append(el("b", "route__room", r.room));
       const chain = el("span", "route__path");
       r.path.forEach((step, i) => {
-        if (i) chain.append(el("i", "route__arrow", "›"));
+        if (i) chain.append(icon("next", "ico route__arrow"));
         chain.append(el("span", i === r.path.length - 1 ? "route__end" : "route__step", step));
       });
       row.append(chain);
@@ -4056,7 +4059,9 @@ function renderAudit() {
     const i = S.planIds.indexOf(r.candidate_id);
     const tr = el("tr");
     if (r.candidate_id === S.activeId) tr.style.background = "var(--earth-3)";
-    tr.append(el("td", null, `Scheme ${String.fromCharCode(65 + Math.max(0, i))}${r.candidate_id === S.winnerId ? " ✓" : ""}`),
+    const name = el("td", "audit__scheme", `Scheme ${String.fromCharCode(65 + Math.max(0, i))}`);
+    if (r.candidate_id === S.winnerId) { name.append(icon("check", "ico ico--sm")); name.title = "The chosen scheme"; }
+    tr.append(name,
       el("td", "n", r.score.toFixed(4)), el("td", "n", r.utility.toFixed(4)),
       el("td", "n", r.borda.toFixed(4)), el("td", "n", `${Math.round(r.agreement * 100)}%`));
     tb.append(tr);

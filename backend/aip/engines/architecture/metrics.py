@@ -17,6 +17,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from aip.agents.base import Evidence, EvidenceKind, Finding, Severity
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief
 from aip.domain.geometry import (
     Direction,
@@ -250,7 +251,7 @@ def daylight_analysis(plan: FloorPlan) -> MetricReport:
         detail=detail,
         summary=(
             f"Mean daylight score {score:.2f} across {len(per_room)} habitable rooms; "
-            f"{sum(1 for f in findings if f.severity.weight >= 0.75)} serious issue(s)."
+            f"{plural(sum(1 for f in findings if f.severity.weight >= 0.75), 'serious issue')}."
         ),
     )
 

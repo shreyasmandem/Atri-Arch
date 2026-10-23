@@ -38,6 +38,7 @@ from typing import Any
 import numpy as np
 from shapely.geometry import Point, Polygon
 
+from aip.core.words import plural
 from aip.domain.geometry import Vec2
 from aip.engines.architecture.importer import ImportError_, ParsedRoom
 from aip.engines.architecture.recover import label_rooms, rectify_polygons
@@ -397,7 +398,7 @@ def parse_image_local(data: bytes) -> tuple[list[ParsedRoom], list[str], dict[st
     outlines = [o for o in outlines if len(o) >= 3]
     if len(outlines) < 2:
         warnings.append(
-            f"Only {len(outlines)} enclosed room(s) were found in the image; the walls may have "
+            f"Only {plural(len(outlines), 'enclosed room')} {'was' if len(outlines) == 1 else 'were'} found in the image; the walls may have "
             f"gaps wider than a door, or the contrast may be too low."
         )
         return [], warnings, meta
@@ -438,7 +439,7 @@ def parse_image_local(data: bytes) -> tuple[list[ParsedRoom], list[str], dict[st
             ppm, how = measured, "from a dimension string and the dimension line beside it"
     if ppm is None and from_sizes:
         ppm, agree = _robust(from_sizes)
-        how = f"from the size string of {agree} room(s)"
+        how = f"from the size string of {plural(agree, 'room')}"
     if ppm is None:
         ppm = _ppm_from_dimension_text(items, x1 - x0, y1 - y0)
         if ppm:

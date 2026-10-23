@@ -9,7 +9,7 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r36">
+<link rel="stylesheet" href="rabbit.css?v=r43">
 <link rel="icon" href="logo_emblem.png" type="image/png">
 </head>
 <body data-phase="compose" data-mode="brief">
@@ -73,7 +73,7 @@
 
   <!-- The specification sheet: one click away, for anyone who prefers fields -->
   <div class="compose__sheet" id="sheet">
-    <button type="button" class="sheet__close" id="sheet-close" aria-label="Back to the conversation">×</button>
+    <button type="button" class="sheet__close" id="sheet-close" aria-label="Back to the conversation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     <div class="modes" id="mode-switch" role="tablist" aria-label="How to begin">
       <button type="button" class="mode-tab" role="tab" data-mode="brief" aria-selected="true">Design from a brief</button>
       <button type="button" class="mode-tab" role="tab" data-mode="upload" aria-selected="false">Review a plan I have</button>
@@ -402,9 +402,9 @@
         <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Sheets"></div>
         <div class="pane__tools">
           <button type="button" class="btn btn--cream edit-open" id="edit-open" aria-expanded="false" aria-controls="editdrawer">Edit design</button>
-          <button type="button" class="btn btn--quiet zoom-step" id="zoom-out" aria-label="Zoom out">−</button>
+          <button type="button" class="btn btn--quiet zoom-step" id="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
           <button type="button" class="btn btn--quiet" id="zoom-val" title="Fit to frame">100%</button>
-          <button type="button" class="btn btn--quiet zoom-step" id="zoom-in" aria-label="Zoom in">+</button>
+          <button type="button" class="btn btn--quiet zoom-step" id="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
           <button type="button" class="btn btn--quiet" id="dl-svg">SVG</button>
           <button type="button" class="btn btn--quiet" id="dl-dxf" title="Editable CAD: AutoCAD, BricsCAD, LibreCAD or QCAD">DXF</button>
         </div>
@@ -412,27 +412,11 @@
       <div class="plate" id="plate"></div>
       <p class="plate__caption" id="plate-caption"></p>
       <div class="editdrawer" id="editdrawer" role="dialog" aria-label="Edit this design" hidden>
-        <button type="button" class="editdrawer__x" id="editdrawer-x" aria-label="Close the editor">×</button>
+        <button type="button" class="editdrawer__x" id="editdrawer-x" aria-label="Close the editor"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <div id="edit-slot"></div>
       </div>
     </div>
 
-    <div class="pane" data-view="mandala" hidden>
-      <div class="mandala-review">
-        <div class="mandala-shell">
-          <svg class="mandala" id="review-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
-          <span class="rose-l rose-l--n">N</span><span class="rose-l rose-l--e">E</span>
-          <span class="rose-l rose-l--s">S</span><span class="rose-l rose-l--w">W</span>
-        </div>
-        <div class="mandala-side">
-          <h2 class="pane-h">The scheme on the mandala</h2>
-          <p class="lede">Each room lights the padas it occupies. The centre nine are scored on their own, because the engine requires them kept open.</p>
-          <p class="brahma" id="brahma-note"></p>
-          <div id="quarter-legend" class="legend"></div>
-          <div id="room-sectors"></div>
-        </div>
-      </div>
-    </div>
 
     <div class="pane" data-view="air" hidden></div>
     <div class="pane" data-view="vastu" hidden></div>
@@ -485,6 +469,6 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="config.js"></script>
-<script src="studio.js?v=r43" type="module"></script>
+<script src="studio.js?v=r52" type="module"></script>
 </body>
 </html>

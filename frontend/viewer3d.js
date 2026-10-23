@@ -9,6 +9,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { dress, skyTexture } from "./materials.js";
+import { iconHTML } from "./icons.js?v=i1";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // A neutral "photo studio" environment, generated in code so nothing extra
@@ -449,7 +450,8 @@ export class Viewer3D {
     }
 
     // Key rooms on this floor: a ring in the verdict colour, a chip, a move.
-    const COLS = { ideal: 0x6f9a55, fair: 0xc9a13e, avoid: 0xc4553f };
+    // The 2D mandala's language: cream where a room fits, sand where it is out of place, brick only where it is forbidden.
+    const COLS = { ideal: 0xede6dc, fair: 0xc9b497, avoid: 0xc4553f };
     for (const r of data.rooms.filter((x) => x.level === lv.index)) {
       const pts = r.polygon.map(([x, py]) => new THREE.Vector2(x, py));
       const outer = new THREE.Shape(pts);
@@ -466,7 +468,7 @@ export class Viewer3D {
       ring.position.y = y + 0.02;
       g.add(ring);
       const anchor = new THREE.Object3D(); anchor.position.copy(V(r.centre[0], r.centre[1], y + 0.1)); g.add(anchor);
-      const mark = r.verdict === "ideal" ? "✓" : r.verdict === "avoid" ? "✕" : "~";
+      const mark = iconHTML(r.verdict === "ideal" ? "check" : r.verdict === "avoid" ? "close" : "dash", "ico ico--sm");
       const move = r.target ? (r.swap ? `swap with ${r.swap}` : `better in the ${r.target}`) : "";
       const el = tag(`v3-chip v3-chip--${r.verdict}`, `<b>${mark} ${r.name}</b><span>${r.zone}${move ? ` · ${move}` : ""}</span>`, anchor);
       el.title = `${r.rule}\nIdeal: ${r.ideal.join(", ")}${r.avoid.length ? `\nAvoid: ${r.avoid.join(", ")}` : ""}\n${r.why || ""}${r.remedy ? `\nIf it stays: ${r.remedy}` : ""}`;

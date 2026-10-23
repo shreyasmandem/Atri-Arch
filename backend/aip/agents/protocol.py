@@ -44,6 +44,7 @@ from enum import Enum
 from typing import Any
 
 from aip.core.logging import get_logger, log_event
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief
 from aip.domain.plan import FloorPlan, RoomType
 
@@ -235,7 +236,7 @@ def _c_habitable_daylight(plan: FloorPlan, brief: ClientBrief):
     report = daylight_analysis(plan)
     dark = [f for f in report.findings if f.code in {"DAY.NO_GLAZING", "DAY.UNDER_GLAZED"}]
     return (not dark, report.score,
-            f"{len(dark)} room(s) below the statutory glazing ratio" if dark
+            f"{plural(len(dark), 'room')} below the statutory glazing ratio" if dark
             else "every habitable room is adequately glazed")
 
 
@@ -395,7 +396,7 @@ class FloorplanArchitect(Worker):
         proposals = [Mutation(
             worker=self.name,
             constraint_id=",".join(r.id for r in mine),
-            description=f"apply {len(findings)} targeted geometric repair(s)",
+            description=f"apply {plural(len(findings), 'targeted geometric repair')}",
             apply=mutate,
         )]
 

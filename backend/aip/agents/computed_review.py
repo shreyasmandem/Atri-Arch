@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 
+from aip.core.words import plural
 from aip.domain.plan import FloorPlan, Room, RoomType
 
 T = RoomType
@@ -166,7 +167,7 @@ def livability(plan: FloorPlan, brief) -> tuple[float, str, list[str]]:
             ld_total += 1
             ld += any(_touch(a, d, 1.5) for a in liv for d in din)
     if lit < lit_total:
-        concerns.append(f"{lit_total - lit} habitable room(s) without a window.")
+        concerns.append(f"{plural(lit_total - lit, 'habitable room')} without a window.")
     if kd < kd_total:
         concerns.append("The kitchen does not meet the dining room.")
     score = (0.25 * _frac(lit, lit_total) + 0.3 * _frac(legal, routes) + 0.2 * _frac(baths_ok, bed_total)
@@ -201,7 +202,7 @@ def coherence(plan: FloorPlan, brief) -> tuple[float, str, list[str]]:
                 poly(r).intersection(poly(b)).area > 0.3 * r.area for b in lo.rooms if b.type in {T.KITCHEN, T.DINING, T.PUJA})]
             w_scores.append(1.0 - len(bad) / max(1, sum(1 for r in hi.rooms if r.type in WET)))
             if bad:
-                concerns.append(f"{len(bad)} bathroom(s) on level {hi.index} over the kitchen, dining or shrine.")
+                concerns.append(f"{plural(len(bad), 'bathroom')} on level {hi.index} over the kitchen, dining or shrine.")
             lines = unary_union([LineString([(w.start.x, w.start.y), (w.end.x, w.end.y)]).buffer(0.2) for w in lo.walls])
             total = sum(w.length for w in hi.walls) or 1.0
             borne = sum(LineString([(w.start.x, w.start.y), (w.end.x, w.end.y)]).intersection(lines).length for w in hi.walls)

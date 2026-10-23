@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from aip.agents.base import Evidence, EvidenceKind, Finding, Severity
 from aip.core.logging import get_logger, log_event
+from aip.core.words import plural
 from aip.domain.geometry import Direction, Vec2, direction_of, point_in_polygon
 from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, WallKind
 from aip.engines.vastu.knowledge import (
@@ -951,16 +952,27 @@ class VastuEngine:
             return "No rules were re-weighted at this stance."
 
         names = ", ".join(f"'{e.title}'" for e in suppressed[:3])
-        return (
-            f"At a '{stance}' stance, {len(reduced)} rule(s) were down-weighted and "
-            f"{len(suppressed)} reduced to near-zero influence because they have no "
+        cuts = []
+        if reduced:
+            cuts.append(f"{plural(len(reduced), 'rule')} {'was' if len(reduced) == 1 else 'were'} down-weighted")
+        if suppressed:
+            cuts.append(f"{plural(len(suppressed), 'rule')} {'was' if len(suppressed) == 1 else 'were'} reduced to near-zero influence")
+        kept = sum(1 for e in report.reconciliation if e.modern_validity >= 0.7)
+        note = (
+            f"At a {stance} stance, {' and '.join(cuts)}, because "
+            f"{'it has' if len(reduced) + len(suppressed) == 1 else 'they have'} no "
             f"established functional mechanism"
             + (f" - notably {names}" if names else "")
-            + f". The {sum(1 for e in report.reconciliation if e.modern_validity >= 0.7)} "
-            f"rules with a demonstrable climatic basis kept their full weight, which "
-            f"is why this score still reflects real building performance rather than "
-            f"doctrine alone."
+            + "."
         )
+        if kept:
+            note += (
+                f" {'The one rule' if kept == 1 else f'The {kept} rules'} with a demonstrable "
+                f"climatic basis kept {'its' if kept == 1 else 'their'} full weight, which "
+                f"is why this score still reflects real building performance rather than "
+                f"doctrine alone."
+            )
+        return note
 
     def _counterfactuals(self, report: VastuReport, weight_total: float) -> list[dict[str, Any]]:
         """Rank remedies by the score they would recover.
@@ -1093,20 +1105,20 @@ class VastuEngine:
         disagreements = sum(1 for p in placements if p.agrees_with_text is False)
         scored = len(placements) - undetermined
         report.graph_note = (
-            f"The knowledge graph scored {scored} room placement(s), "
+            f"The knowledge graph scored {plural(scored, 'room placement')}, "
             f"{derived_only} of which no rule in the corpus addresses at all. "
             f"Each carries the derivation chain that produced it, so the score is "
             f"reproducible rather than asserted."
         )
         if undetermined:
             report.graph_note += (
-                f" {undetermined} further room(s) are recorded as undetermined - the "
-                f"graph holds no path linking them to their sector - and are left out "
-                f"of the score rather than counted as average."
+                f" {plural(undetermined, 'further room')} {'is' if undetermined == 1 else 'are'} recorded as undetermined - the "
+                f"graph holds no path linking {'it to its' if undetermined == 1 else 'them to their'} sector - "
+                f"and {'is' if undetermined == 1 else 'are'} left out of the score rather than counted as average."
             )
         if disagreements:
             report.graph_note += (
-                f" {disagreements} derivation(s) disagree with a cited text; the text "
+                f" {plural(disagreements, 'derivation')} {'disagrees' if disagreements == 1 else 'disagree'} with a cited text; the text "
                 f"governs the score and the disagreement is shown rather than hidden."
             )
 
@@ -1121,7 +1133,7 @@ class VastuEngine:
         if report.violations:
             worst = report.violated[0] if report.violated else None
             parts.append(
-                f"{report.violations} rule(s) are not satisfied"
+                f"{plural(report.violations, 'rule')} {'is' if report.violations == 1 else 'are'} not satisfied"
                 + (f", the most costly being '{worst.title}'." if worst else ".")
             )
         else:
@@ -1129,14 +1141,14 @@ class VastuEngine:
 
         if report.conflicts:
             parts.append(
-                f"{len(report.conflicts)} genuine conflict(s) between rules were "
+                f"{plural(len(report.conflicts), 'genuine conflict')} between rules {'was' if len(report.conflicts) == 1 else 'were'} "
                 f"detected and resolved explicitly rather than ignored."
             )
         if report.graph_placements:
             derived = sum(1 for p in report.graph_placements if p.derived)
             parts.append(
                 f"Separately, the knowledge graph scored every room's placement "
-                f"({report.graph_score:.0f}/100), deriving verdicts for {derived} room(s) "
+                f"({report.graph_score:.0f}/100), deriving verdicts for {plural(derived, 'room')} "
                 f"that no classical rule enumerates."
             )
         climatic = [
