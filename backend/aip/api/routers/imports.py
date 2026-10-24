@@ -148,11 +148,14 @@ async def review_stream(
     budget: float = 0.0,
     include_generative_critics: bool = True,
     keep: bool = False,
+    finish_tier: str = "",
+    region: str = "",
 ) -> StreamingResponse:
     """Run the committee, negotiation and rationale on an uploaded plan.
 
     `keep` is for a plan the client edited by hand: it is scored as drawn and
     neither refined nor renegotiated, so their edits are never undone.
+    `finish_tier` and `region` price it as the plan it was edited from was priced.
 
     The same events the design stream emits, so the studio shows the same
     critics sitting on the same bench - only the generate stage reports that
@@ -169,6 +172,11 @@ async def review_stream(
         raise HTTPException(status_code=422, detail=f"Unknown Vastu stance {vastu!r}.") from exc
 
     brief = _brief_for(plan, vastu=stance, budget=budget, name=plan.name)
+    # An edited plan is priced as its parent was, not at the default specification.
+    if finish_tier:
+        brief.metadata["finish_tier"] = finish_tier
+    if region:
+        brief.metadata["region"] = region
     project = Project(
         firm_id=principal.firm.id, name=plan.name, source="upload",
         brief=json.loads(brief.model_dump_json()),

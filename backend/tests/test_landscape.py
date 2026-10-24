@@ -134,3 +134,67 @@ def test_the_pool_goes_where_it_is_asked(pool_plan):
     assert applied == ["Pool removed"] and pool_rect(gone) is None
     _same, applied, refused = apply_edits(pool_plan, [{"op": "pool", "place": "roof"}])
     assert not applied and refused
+
+
+def test_pool_options_say_what_fits_where(pool_plan):
+    """Customise offers only the pools that fit: each kind with the places it fits."""
+    from aip.engines.experience.landscape import POOL_PLACES, POOLS, pool_options
+
+    opts = pool_options(pool_plan)
+    assert set(opts) == set(POOLS)
+    assert all(set(v) <= set(POOL_PLACES) for v in opts.values())
+    assert opts["family"]                                # the brief made room for it
+    # What the options promise, a placement keeps.
+    from aip.engines.architecture.editor import apply_edits
+    for place in opts["family"]:
+        new, applied, refused = apply_edits(pool_plan, [{"op": "pool", "kind": "family", "place": place}])
+        assert applied and not refused, (place, refused)
+
+
+def test_a_tight_plot_fits_no_pool_and_the_edit_says_so():
+    from aip.engines.architecture.editor import apply_edits
+    from aip.engines.experience.landscape import pool_options
+
+    brief = SimpleBriefRequest(plot_width=12.2, plot_depth=18.3, levels=2, bedrooms=3).to_brief()
+    plan = LayoutGenerator(brief, GeneratorConfig(population=16, generations=8, seed=3)).generate(count=1)[0]
+    if not any(pool_options(plan).values()):
+        _new, applied, refused = apply_edits(plan, [{"op": "pool", "kind": "plunge"}])
+        assert not applied and "does not fit" in refused[0]
+
+
+def test_a_smaller_pool_is_offered_not_swapped_in(pool_plan):
+    """Asking for a lap pool where only a smaller one fits is refused with the
+    one that would, rather than quietly building the smaller one."""
+    from aip.engines.architecture.editor import apply_edits
+    from aip.engines.experience.landscape import pool_options
+
+    opts = pool_options(pool_plan)
+    if not opts["lap"] and opts["family"]:
+        _new, applied, refused = apply_edits(pool_plan, [{"op": "pool", "kind": "lap"}])
+        assert not applied and "family pool would" in refused[0]
+
+
+def test_the_pool_deck_keeps_off_the_drive(pool_plan):
+    from aip.engines.experience.landscape import DRIVE_HALF, POOL_DECK, _footprint, _gate, drive_line
+    from shapely.geometry import Polygon
+
+    rect, _kind = pool_rect(pool_plan)
+    plot = Polygon([(p.x, p.y) for p in pool_plan.site.boundary])
+    drive = drive_line(_footprint(pool_plan), _gate(pool_plan, plot)).buffer(DRIVE_HALF)
+    assert not rect.buffer(POOL_DECK).intersects(drive)
+
+
+def test_the_pool_is_sunk_below_its_coping(pool_plan):
+    """The water sits below the coping round it, so it reads as a pool, not a sheet on the lawn."""
+    from aip.engines.experience.arch3d import build_scene
+
+    from shapely.geometry import Point
+
+    scene = build_scene(pool_plan, include_furniture=False)
+    rect, _kind = pool_rect(pool_plan)
+    # Meshes are merged per node and material; take the site's vertices over the pool itself.
+    def top(part: str, area) -> float:
+        ys = [float(y) for k, g in scene.geometry.items() if k.startswith("site__") and part in k
+              for x, y, z in g.vertices if area.contains(Point(x, -z))]
+        return max(ys)
+    assert top("pool_water", rect.buffer(0.01)) < top("__sill", rect.buffer(0.31)) - 0.1   # a hand's width below the coping

@@ -416,6 +416,20 @@ async def fit_exterior(
     return {"design": fitted.to_dict(), "notes": notes}
 
 
+@router.get("/{plan_id}/pools")
+async def get_pools(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Which pools fit round this house, and where: each kind with the places
+    it fits (empty when it fits nowhere), and the pool the plan has now."""
+    from aip.engines.experience.landscape import pool_options, pool_placement
+
+    plan = _load(plan_id, principal)
+    placed = pool_placement(plan)
+    return {
+        "options": pool_options(plan),
+        "current": {"kind": placed[1], "place": placed[2]} if placed else None,
+    }
+
+
 @router.get("/{plan_id}/palettes")
 async def get_palettes(
     plan_id: str,

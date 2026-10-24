@@ -204,13 +204,17 @@ export function mountEditor(after, ctx) {
         for (const h of CEILINGS) {
           const c = el("button", null, `${h.toFixed(1)}`); c.type = "button"; c.setAttribute("role", "radio");
           c.setAttribute("aria-checked", String(Math.abs(h - r.ceiling) < 0.01));
-          c.title = `${h.toFixed(1)} m ceiling`;
+          // A room with a floor over it can only go as high as the floor-to-floor allows.
+          c.disabled = r.ceiling_max != null && h > r.ceiling_max + 1e-6;
+          c.title = c.disabled ? `Too high: the floor above leaves at most ${r.ceiling_max.toFixed(2)} m` : `${h.toFixed(1)} m ceiling`;
           c.addEventListener("click", () => Math.abs(h - r.ceiling) > 0.01 && send([{ op: "ceiling", room: sel, height: h }], `Setting the ceiling to ${h} m…`));
           ceil.append(c);
         }
         const ch = el("h4", "ed__sub", "Ceiling height");
         ch.append(el("span", "ed__unit", " in metres"));
         body.append(ch, ceil);
+        if (r.ceiling_max != null && r.ceiling_max < CEILINGS[CEILINGS.length - 1])
+          body.append(el("p", "ed__note", `A floor sits over this room, so its ceiling can go up to ${r.ceiling_max.toFixed(2)} m.`));
 
         // Swap: click the other room on the plan, or pick it here.
         const peers = movable.filter((x) => x.level === r.level && x.id !== r.id);

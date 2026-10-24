@@ -320,10 +320,9 @@ def apply_edits(plan: FloorPlan, ops: list[dict[str, Any]]) -> tuple[FloorPlan, 
                     if lvl is None:
                         raise EditError("That floor does not exist.")
                     targets = [r for r in lvl.rooms if not r.type.is_outdoor]
-                top = max(lv.index for lv in new.levels)
                 for r in targets:
                     lvl_of = next(lv for lv in new.levels if r in lv.rooms)
-                    room_cap = CEILING_RANGE[1] if lvl_of.index == top else lvl_of.floor_to_floor - 0.15
+                    room_cap = _ceiling_cap(new, lvl_of)
                     if h > room_cap + 1e-6:
                         raise EditError(
                             f"The {_label(r)} has another floor over it, so its ceiling can be at most "
@@ -352,11 +351,18 @@ def apply_edits(plan: FloorPlan, ops: list[dict[str, Any]]) -> tuple[FloorPlan, 
                             f"A {POOL_NAMES[new.site.pool]} does not fit: the house leaves too little open ground "
                             "round it. A smaller pool may fit, or ask for more lawn in the brief.")
                     _rect, got_kind, got_place = placed
+                    if got_kind != new.site.pool:
+                        # A smaller pool than the one picked is a different choice: offer it, do not make it.
+                        raise EditError(
+                            f"A {POOL_NAMES[new.site.pool]} does not fit round this house; "
+                            f"a {POOL_NAMES[got_kind]} would.")
                     if "place" in op and got_place != want_place:
                         # Say so rather than quietly putting it somewhere else.
                         raise EditError(
                             f"There is no room {POOL_PLACES[want_place][0].lower()}{POOL_PLACES[want_place][1:].split(',')[0]} "
                             f"for a {POOL_NAMES[got_kind]}; the open ground there is too narrow.")
+                    # Where it went is where the plan says it is, so the controls show the truth.
+                    new.site.pool_place = "" if got_place == "rear" else got_place
                     msg = f"{POOL_NAMES[got_kind].capitalize()} {POOL_PLACES[got_place][0].lower()}{POOL_PLACES[got_place][1:]}"
             else:
                 raise EditError(f"Unknown edit {kind!r}.")
@@ -371,6 +377,10 @@ def apply_edits(plan: FloorPlan, ops: list[dict[str, Any]]) -> tuple[FloorPlan, 
 
     if geometry_changed:
         env = bounding_box([p for r in rooms.values() for p in r.polygon])
+        # A room stepped into the setback leaves the house no longer a rectangle: a wall
+        # with a room on one side only is an outside wall (with its windows), as when
+        # the scheme was drawn, not a partition because it falls short of the bounding box.
+        gen._open_outline = True
         for lv in new.levels:
             lv.walls = gen._build_walls(lv.rooms, env, lv.index)
             lv.staircases = gen._build_stairs(lv.rooms, lv.index)
@@ -381,16 +391,24 @@ def apply_edits(plan: FloorPlan, ops: list[dict[str, Any]]) -> tuple[FloorPlan, 
     return new, applied, refused
 
 
+def _ceiling_cap(plan: FloorPlan, level) -> float:
+    """How high a ceiling on this floor can go: the top floor is open to the
+    roof; any other has a floor over it, so the floor-to-floor less the slab."""
+    top = max(lv.index for lv in plan.levels)
+    return CEILING_RANGE[1] if level.index == top else level.floor_to_floor - 0.15
+
+
 def describe_rooms(plan: FloorPlan) -> list[dict[str, Any]]:
     """What the editor lets a client pick from, floor by floor."""
     out = []
     for lv in plan.levels:
+        cap = round(_ceiling_cap(plan, lv), 2)
         for r in lv.rooms:
             b = r.bbox
             out.append({
                 "id": r.id, "name": r.display_name(), "type": r.type.value, "level": lv.index,
                 "width": round(b.width, 2), "depth": round(b.height, 2), "area": round(r.area, 1),
-                "ceiling": round(r.ceiling_height, 2), "fixed": r.type in FROZEN,
+                "ceiling": round(r.ceiling_height, 2), "ceiling_max": cap, "fixed": r.type in FROZEN,
             })
     return out
 

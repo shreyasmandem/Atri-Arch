@@ -100,3 +100,42 @@ def test_a_ceiling_under_another_floor_is_limited(plan):
 def test_unknown_edits_and_ids_are_refused_not_raised(plan):
     _, applied, refused = apply_edits(plan, [{"op": "explode", "room": "x"}, {"op": "resize", "room": "nope", "width": 1}])
     assert not applied and len(refused) == 2
+
+
+def test_the_editor_is_told_each_rooms_ceiling_limit(plan):
+    """Heights the edit would refuse are known up front, so the editor can grey them out."""
+    ground = _by(plan, "Living")
+    top = next(r for r in describe_rooms(plan) if r["level"] == 1)
+    assert ground["ceiling_max"] < 3.3 and top["ceiling_max"] >= 4.2
+    _, applied, refused = apply_edits(plan, [{"op": "ceiling", "room": ground["id"], "height": ground["ceiling_max"]}])
+    assert applied and not refused
+
+
+def test_stepping_into_the_setback_keeps_every_other_rooms_windows(plan):
+    """An outside wall stepped out leaves the house no longer a rectangle; the
+    rooms beside it keep their outside walls and windows."""
+    from aip.domain.plan import OpeningKind, WallKind
+
+    def windows(p):
+        out = {}
+        for lv in p.levels:
+            for w in lv.walls:
+                for o in w.openings:
+                    if o.kind is OpeningKind.WINDOW:
+                        for rid in w.rooms:
+                            out[rid] = out.get(rid, 0) + 1
+        return out
+
+    before = windows(plan)
+    for r in describe_rooms(plan):
+        if r["fixed"] or r["level"] != 0:
+            continue
+        new, applied, refused = apply_edits(plan, [{"op": "resize", "room": r["id"], "width": 0.3}])
+        if applied and "into the setback" in applied[0]:
+            after = windows(new)
+            lost = [rid for rid, n in before.items() if n and not after.get(rid) and rid != r["id"]]
+            assert not lost, f"widening the {r['name']} cost {lost} their windows"
+            ext = [w for w in new.level_at(0).walls if w.kind is WallKind.EXTERIOR]
+            assert len(ext) >= len([w for w in plan.level_at(0).walls if w.kind is WallKind.EXTERIOR])
+            return
+    pytest.skip("no room on this plan steps into its setback")

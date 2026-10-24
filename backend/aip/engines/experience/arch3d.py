@@ -165,7 +165,8 @@ class Palette:
             "car": Material("car_paint", (0.62, 0.64, 0.66), 0.3, 0.6),
             "car_glass": Material("car_glass", (0.08, 0.09, 0.10), 0.1, 0.3),
             "tyre": Material("tyre", (0.06, 0.06, 0.06), 0.9),
-            "lawn": Material("lawn", (0.33, 0.47, 0.24), 1.0),
+            # A deep grass green: the sun on open ground lifts it a long way.
+            "lawn": Material("lawn", (0.21, 0.36, 0.14), 1.0),
             "paving": Material("paving", (0.70, 0.67, 0.62), 0.9),
             "compound": Material("compound_wall", (0.86, 0.84, 0.80), 0.95),
             "trunk": Material("tree_trunk", (0.33, 0.24, 0.17), 0.95),
@@ -1012,11 +1013,12 @@ def _yard(b: Builder, kind: str, c: Vec2, r: float) -> None:
         b.box("site", "clad", (c.x, 0.9, -c.y), (2.2, 1.8, 0.3))
         b.box("site", "pool_water", (c.x, 0.95, -(c.y - 0.17)), (1.6, 1.4, 0.02))
         b.slab("site", "sill", [Vec2(c.x - 1.15, c.y - 0.2), Vec2(c.x + 1.15, c.y - 0.2), Vec2(c.x + 1.15, c.y - 0.9), Vec2(c.x - 1.15, c.y - 0.9)], 0.0, 0.25)
-        b.slab("site", "pool_water", [Vec2(c.x - 1.0, c.y - 0.3), Vec2(c.x + 1.0, c.y - 0.3), Vec2(c.x + 1.0, c.y - 0.8), Vec2(c.x - 1.0, c.y - 0.8)], 0.25, 0.27)
+        b.slab("site", "pool_water", [Vec2(c.x - 1.0, c.y - 0.3), Vec2(c.x + 1.0, c.y - 0.3), Vec2(c.x + 1.0, c.y - 0.8), Vec2(c.x - 1.0, c.y - 0.8)], 0.253, 0.27)
     elif kind == "koipond":
         # A round pond in a ring of boulders, stepping stones across it.
-        b.slab("site", "pool_tile", ring(r * 0.85, 20), -0.02, 0.0)
-        b.slab("site", "pool_water", ring(r * 0.85, 20), 0.0, 0.02)
+        # A dark tiled bed and the water over it, each clear of the other and of the lawn.
+        b.slab("site", "pool_tile", ring(r * 0.85, 20), 0.004, 0.03)
+        b.slab("site", "pool_water", ring(r * 0.84, 20), 0.033, 0.07)
         for p in ring(r * 0.92, 12):
             b.blob("site", "boulder", (p.x, 0.05, -p.y), 0.22, 0.6)
         for k in (-0.5, 0.0, 0.5):
@@ -1049,24 +1051,41 @@ def _yard(b: Builder, kind: str, c: Vec2, r: float) -> None:
 
 
 def _pool(b: Builder, rect) -> None:
-    """A sunk pool: tiled tank, water just below the coping, a stone coping
-    and a deck round it with two loungers."""
-    pts = [Vec2(x, y) for x, y in list(rect.exterior.coords)[:-1]]
-    deck = rect.buffer(0.9, join_style=2)
-    b.slab("site", "paving", [Vec2(x, y) for x, y in list(deck.exterior.coords)[:-1]], 0.0, 0.04)
-    rim = rect.buffer(0.3, join_style=2)
-    b.slab("site", "sill", [Vec2(x, y) for x, y in list(rim.exterior.coords)[:-1]], 0.04, 0.09)
-    b.slab("site", "pool_tile", pts, 0.09, 0.095)
-    b.slab("site", "pool_water", pts, 0.095, 0.1)
+    """A pool set into a stone deck a step above the lawn: the tank tiled,
+    the water a hand's width below a stone coping, two loungers on the deck."""
+    from aip.engines.experience.landscape import POOL_DECK
+
+    DECK, WATER, COPE = 0.30, 0.20, 0.30       # deck top, water level, coping width
     x0, y0, x1, y1 = rect.bounds
+    d = POOL_DECK
+
+    def frame(mat: str, out: float, z0: float, z1: float, inset: float = 0.0) -> None:
+        # Four boxes round the tank, so the tank itself stays open.
+        a0, b0, a1, b1 = x0 + inset, y0 + inset, x1 - inset, y1 - inset
+        for (u0, v0, u1, v1) in ((a0 - out, b0 - out, a1 + out, b0), (a0 - out, b1, a1 + out, b1 + out),
+                                 (a0 - out, b0, a0, b1), (a1, b0, a1 + out, b1)):
+            if u1 - u0 > 0.01 and v1 - v0 > 0.01:
+                b.box("site", mat, ((u0 + u1) / 2, (z0 + z1) / 2, -(v0 + v1) / 2), (u1 - u0, z1 - z0, v1 - v0))
+
+    frame("paving", d, 0.0, DECK)                       # the deck
+    frame("sill", COPE, DECK - 0.03, DECK + 0.05)       # the coping, proud of the deck
+    frame("pool_tile", 0.06, 0.0, DECK - 0.03, inset=0.06)   # the tank's tiled walls
+    b.box("site", "pool_tile", ((x0 + x1) / 2, 0.01, -(y0 + y1) / 2), (x1 - x0, 0.02, y1 - y0))
+    # The water clear of the tiles by a few millimetres, so no face is shared.
+    b.box("site", "pool_water", ((x0 + x1) / 2, (0.026 + WATER) / 2, -(y0 + y1) / 2),
+          (x1 - x0 - 0.13, WATER - 0.026, y1 - y0 - 0.13))
+    # Two loungers on the deck, along the long side, clear of the coping.
     along_x = (x1 - x0) >= (y1 - y0)
-    for k in (0.3, 0.6):
+    mid = (COPE + d) / 2
+    for k in (0.3, 0.62):
         if along_x:
-            p = Vec2(x0 + (x1 - x0) * k, y1 + 0.55)
-            b.box("site", "linen", (p.x, 0.22, -p.y), (0.65, 0.08, 1.7))
+            p = Vec2(x0 + (x1 - x0) * k, y1 + mid)
+            size, base = (0.55, 0.07, 1.75), (0.45, 0.2, 1.5)
         else:
-            p = Vec2(x1 + 0.55, y0 + (y1 - y0) * k)
-            b.box("site", "linen", (p.x, 0.22, -p.y), (1.7, 0.08, 0.65))
+            p = Vec2(x1 + mid, y0 + (y1 - y0) * k)
+            size, base = (1.75, 0.07, 0.55), (1.5, 0.2, 0.45)
+        b.box("site", "timber", (p.x, DECK + 0.1, -p.y), base)
+        b.box("site", "linen", (p.x, DECK + 0.235, -p.y), size)
 
 
 def _boundary(b: Builder, kind: str, a: Vec2, c: Vec2, mid: Vec2, length: float, yaw: float) -> None:
@@ -1187,8 +1206,9 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
     # Drive from the gate to the building.
     drive = None
     if gate_c is not None and footprint is not None:
-        near = footprint.exterior.interpolate(footprint.exterior.project(Point(gate_c.x, gate_c.y)))
-        drive = LineString([(gate_c.x, gate_c.y), (near.x, near.y)]).buffer(1.6, cap_style=2)
+        from aip.engines.experience.landscape import DRIVE_HALF, drive_line
+
+        drive = drive_line(footprint, gate_c).buffer(DRIVE_HALF, cap_style=2)
         drive = drive.intersection(plot).difference(footprint.buffer(0.15))
         for g in getattr(drive, "geoms", [drive]):
             if g.geom_type == "Polygon" and g.area > 0.5:

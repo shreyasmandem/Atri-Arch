@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { atelier, person, avatar } from "./atelier.js?v=s2";
-import { mountEditor } from "./editor.js?v=e3";
+import { mountEditor } from "./editor.js?v=e4";
 import { icon } from "./icons.js?v=i1";
 import { autoSetbacks } from "./setbacks.js";
 
@@ -1142,7 +1142,8 @@ async function adoptEdited(newId) {
     [plan, vastu, cost] = await Promise.all([
       jf(`${API}/plans/${newId}`),
       jf(`${API}/plans/vastu`, { plan_id: newId, tradition_weight: S.plans[oldId]?.vastu?.tradition_weight ?? 0.5, compare_to: oldId }),
-      jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0 }),
+      // Priced at the specification and region the plan before it was, so an edit moves the estimate only by what it changed.
+    jf(`${API}/plans/cost`, { plan_id: newId, budget: S.briefSent?.budget || 0, ...pricedAs(S.plans[oldId]?.cost) }),
     ]);
   } catch (err) {
     toast(`The edit was made but could not be loaded (${err.message}). The plan on screen is unchanged.`);
@@ -1150,7 +1151,8 @@ async function adoptEdited(newId) {
   }
   if (S.activeId !== oldId) return;                    // the client moved to another scheme meanwhile
   (S.editHistory ||= []).push(snap);
-  S.plans[newId] = { plan, vastu, cost, parent: oldId };
+  // The row the edited plan replaces: its rank among the schemes stands until the committee ranks them again.
+  S.plans[newId] = { plan, vastu, cost, parent: oldId, parentRow: rankingRow() };
   rememberPlan(plan);
   // Say what the edit did to the Vastu, right away.
   const since = vastu?.since_edit;
@@ -1179,9 +1181,12 @@ async function adoptEdited(newId) {
   rescoreEdited(newId);
 }
 
+// The specification and region an estimate was priced at, to price an edit the same way.
+const pricedAs = (c) => Object.fromEntries([["finish_tier", c?.finish_tier], ["region", c?.region]].filter(([, x]) => x));
+
 async function rescoreEdited(id) {
   const q = new URLSearchParams({ vastu: S.briefSent?.vastu || "balanced", budget: String(S.briefSent?.budget || 0),
-    include_generative_critics: "true", keep: "true" });
+    include_generative_critics: "true", keep: "true", ...pricedAs(S.plans[id]?.cost) });
   try {
     const res = await fetch(`${API}/plans/${id}/review/stream?${q}`, { method: "POST" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1197,8 +1202,14 @@ async function rescoreEdited(id) {
         if (S.activeId !== id) return;                       // the client moved on
         const row = (d.consensus?.ranking || []).find((r) => r.candidate_id === d.selected_candidate_id) || d.consensus?.ranking?.[0];
         if (row) {
+          // Reviewed alone, a plan tops its own vote; scored that way an edit would look far
+          // better than it is. Its parent's standing among the schemes carries over, and the
+          // committee's new measure of it moves the score (consensus.BORDA_WEIGHT = 0.42).
+          const base = S.plans[id]?.parentRow;
+          const fair = base && typeof base.borda === "number" && typeof row.utility === "number"
+            ? { borda: base.borda, score: Math.round((0.42 * base.borda + 0.58 * row.utility) * 1e4) / 1e4 } : {};
           S.consensus ||= { ranking: [], disqualified: [] };
-          S.consensus.ranking = [{ ...row, candidate_id: id }, ...(S.consensus.ranking || []).filter((r) => r.candidate_id !== id)];
+          S.consensus.ranking = [{ ...row, ...fair, candidate_id: id }, ...(S.consensus.ranking || []).filter((r) => r.candidate_id !== id)];
           S.consensus.winner_id = S.winnerId === id ? id : S.consensus.winner_id;
         }
         S.plans[id] = { plan: d.plan?.id ? d.plan : S.plans[id].plan, vastu: d.vastu || S.plans[id].vastu, cost: d.cost || S.plans[id].cost };
@@ -1809,7 +1820,13 @@ function renderVastu() {
   for (const [wgt, name] of VX_STANCES) {
     const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio");
     b.setAttribute("aria-checked", String(Math.abs(wgt - nowW) < 0.01));
-    b.addEventListener("click", () => { if (Math.abs(wgt - nowW) > 0.01) { seg.classList.add("is-busy"); rescore(wgt); } });
+    b.addEventListener("click", () => {
+      if (Math.abs(wgt - nowW) < 0.01) return;
+      // The pill moves at once; the reading follows when the server answers.
+      seg.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+      seg.setAttribute("aria-busy", "true");
+      rescore(wgt);
+    });
     seg.append(b);
   }
   stance.append(seg, el("p", "vx2__hint", "Modern weighs each rule by what it does for light, air and structure; orthodox follows the texts as written."));
@@ -1969,15 +1986,29 @@ function vastuRow(x, sev) {
 }
 
 async function rescore(w) {
+  const n = (S.vxSeq = (S.vxSeq || 0) + 1), id = S.activeId;
   try {
     const r = await fetch(`${API}/plans/vastu`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan_id: S.activeId, tradition_weight: w, ...(cur().parent ? { compare_to: cur().parent } : {}) }),
+      body: JSON.stringify({ plan_id: id, tradition_weight: w, ...(cur().parent ? { compare_to: cur().parent } : {}) }),
     });
     if (!r.ok) throw new Error(String(r.status));
-    S.plans[S.activeId].vastu = await r.json();
-    renderVastu(); renderVerdict();
-  } catch (err) { toast(`Could not re-score at that stance: ${err.message}`); }
+    const v = await r.json();
+    if (n !== S.vxSeq || id !== S.activeId) return;     // a later stance, or another scheme, came first
+    S.plans[id].vastu = v;
+  } catch (err) {
+    if (n !== S.vxSeq) return;
+    toast(`Could not re-score at that stance: ${err.message}`);
+  }
+  // Redrawn where the reader was: the same scroll, the stance still in hand.
+  if (S.view === "vastu") {
+    const top = pane("vastu")?.querySelector(".pane__scroll")?.scrollTop || 0;
+    renderVastu();
+    const sc = pane("vastu").querySelector(".pane__scroll");
+    if (sc) sc.scrollTop = top;
+    pane("vastu").querySelector('.vx2__seg [aria-checked="true"]')?.focus({ preventScroll: true });
+  }
+  renderVerdict();
 }
 
 /* ── cost ──────────────────────────────────────────────────────────── */
@@ -2456,6 +2487,10 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
   let list = [];
   let designs = [];
   let grammar = null;
+  // Which pools fit round this house, and where: the Customise sheet offers only those.
+  let pools = null, poolNow = null;
+  fetch(`${API}/plans/${id}/pools`).then((r) => (r.ok ? r.json() : null))
+    .then((x) => { pools = x?.options || null; poolNow = x?.current || null; }).catch(() => {});
   let loading = false, batch = 0, seq = 0, live = 0, timer = 0, lastTab = null, lastGroup = null;
   // What the client said about the look, sent with every batch so each one
   // follows the brief as well as the style; and what the server heard in it.
@@ -3284,8 +3319,9 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
         : (grammar[key] || []).map((v) => [v, EX_NICE[v] || v]));
     // An option left out of the id is its first value.
     const value = (key) => {
-      if (key === "pool") return site.pool || "none";
-      if (key === "poolPlace") return site.pool_place || "rear";
+      // The pool as built: a brief's pool too big for the plot is placed smaller.
+      if (key === "pool") return poolNow?.kind || (pools ? "none" : site.pool || "none");
+      if (key === "poolPlace") return poolNow?.place || site.pool_place || "rear";
       return now[key] === undefined || now[key] === "" ? choices(key)[0][0] : now[key];
     };
     const label = (key) => (choices(key).find(([v]) => v === value(key)) || [, ""])[1];
@@ -3316,6 +3352,8 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       solar: (v) => v === "on" && !flatRoof && "Needs a flat or slab roof.",
       parapet: (v) => v !== "plain" && now.roof !== "flat" && "Needs a flat roof.",
       deck: (v) => v !== "none" && now.roof !== "flat" && "Needs a flat roof.",
+      pool: (v) => v !== "none" && pools && !(pools[v] || []).length && "Too big for the open ground round this house.",
+      poolPlace: (v) => pools && value("pool") !== "none" && !(pools[value("pool")] || []).includes(v) && "No room for this pool there.",
     };
     const pick = (key, v, row) => {
       if (key === "pool") return editPool({ kind: v }, row);
@@ -3326,7 +3364,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       const store = ROWS[key].opts && key !== "planters" && v === first ? "" : v;
       edit(di, { [key]: store });
     };
-    const shows = (key) => (key !== "garage" || hasGarage) && (key !== "poolPlace" || (site.pool && site.pool !== "none"));
+    const shows = (key) => (key !== "garage" || hasGarage) && (key !== "poolPlace" || value("pool") !== "none");
     const sheet = el("div", "sp");
     for (const [title, keys] of GROUPS) {
       const rows = keys.filter(shows);
@@ -3456,6 +3494,8 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
         foot.append(reset);
       }
       editor.append(head, now, grid, foot);
+      // The colours run in one row: bring the part's own into view.
+      grid.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "center" });
     };
     const closeEditor = () => { editing = null; editor.hidden = true; light(null); };
     // The tags: one per part, at the middle of its largest piece, kept clear of each other.

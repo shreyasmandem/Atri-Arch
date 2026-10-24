@@ -63,92 +63,152 @@ def pool_rect(plan: FloorPlan):
     return None if placed is None else placed[:2]
 
 
+def drive_line(footprint, gate):
+    """The drive's centre line: from the gate to the nearest point of the
+    house. The 3D model paves it and the garden keeps clear of it."""
+    from shapely.geometry import LineString, Point
+
+    g = Point(gate.x, gate.y)
+    edge = footprint.exterior if hasattr(footprint, "exterior") else footprint.convex_hull.exterior
+    near = edge.interpolate(edge.project(g))
+    return LineString([(g.x, g.y), (near.x, near.y)])
+
+
+#: The drive's half width as paved (see `arch3d._site`).
+DRIVE_HALF = 1.6
+#: The deck round a pool and the coping inside it.
+POOL_DECK = 0.9
+
+
+def _gate(plan: FloorPlan, plot):
+    from shapely.geometry import Point
+
+    road = road_vector(plan)
+    if road is None:
+        return None
+    minx, miny, maxx, maxy = plot.bounds
+    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+    return Point(cx + road.x * (maxx - minx) / 2, cy + road.y * (maxy - miny) / 2)
+
+
+class _PoolSite:
+    """The open ground a pool can take on this plot, and the house's frame
+    (its back, across it, the north-east) for scoring where it sits."""
+
+    def __init__(self, plan: FloorPlan):
+        from shapely.geometry import Polygon
+        from shapely.prepared import prep
+
+        self.ok = False
+        if not plan.site.boundary:
+            return
+        plot = Polygon([(p.x, p.y) for p in plan.site.boundary]).buffer(0)
+        # Room for the deck round it and a step to the boundary wall.
+        free = plot.buffer(-(POOL_DECK + 0.5))
+        foot = _footprint(plan)
+        if foot is not None:
+            # A path between the house (its plinth and the steps down from its doors) and the deck.
+            free = free.difference(foot.buffer(POOL_DECK + 0.9))
+        # Keep the gate and the drive to the house clear, deck and all.
+        road = road_vector(plan)
+        self.gate = _gate(plan, plot)
+        if self.gate is not None:
+            free = free.difference(self.gate.buffer(3.0))
+            if foot is not None:
+                free = free.difference(drive_line(foot, self.gate).buffer(DRIVE_HALF + POOL_DECK + 0.2))
+        if free.is_empty:
+            return
+        self.ok = True
+        self.fit = prep(free)
+        self.bounds = free.bounds
+        self.hc = foot.centroid if foot is not None else plot.centroid
+        self.back = Vec2(-road.x, -road.y) if road is not None else Vec2(0.0, -1.0)
+        self.across = Vec2(-self.back.y, self.back.x)
+        pts = list(foot.exterior.coords) if foot is not None and hasattr(foot, "exterior") else \
+            [c for g in getattr(foot, "geoms", []) for c in g.exterior.coords] or [(self.hc.x, self.hc.y)]
+        hx, hy = self.hc.x, self.hc.y
+        self.rear = max((x - hx) * self.back.x + (y - hy) * self.back.y for x, y in pts)
+        self.half = max(abs((x - hx) * self.across.x + (y - hy) * self.across.y) for x, y in pts)
+        theta = math.radians(45.0 - plan.site.north_angle)
+        self.ne = Vec2(math.sin(theta), math.cos(theta))
+        self._cands: dict[str, list] = {}
+
+    def candidates(self, kind: str) -> list:
+        """Every pool of this kind that fits, on a 25 cm grid, both ways round."""
+        if kind not in self._cands:
+            from shapely.geometry import box
+
+            w, l = POOLS[kind]
+            x0, y0, x1, y1 = self.bounds
+            out = []
+            for (a, b) in ((w, l), (l, w)):
+                for i in range(max(0, int((x1 - x0 - a) / 0.25) + 1)):
+                    for j in range(max(0, int((y1 - y0 - b) / 0.25) + 1)):
+                        cand = box(x0 + i * 0.25, y0 + j * 0.25, x0 + i * 0.25 + a, y0 + j * 0.25 + b)
+                        if self.fit.contains(cand):
+                            out.append((cand, a >= b))
+            self._cands[kind] = out
+        return self._cands[kind]
+
+    def score(self, place: str, cand, wide: bool) -> float | None:
+        c = cand.centroid
+        vx, vy = c.x - self.hc.x, c.y - self.hc.y
+        back, across = self.back, self.across
+        along, side = vx * back.x + vy * back.y, vx * across.x + vy * across.y
+        long_axis = Vec2(1.0, 0.0) if wide else Vec2(0.0, 1.0)
+        short = min(cand.bounds[2] - cand.bounds[0], cand.bounds[3] - cand.bounds[1])
+        if place == "rear":
+            if along < self.rear * 0.5:
+                return None
+            # Centred on the house, its long side parallel to the back wall, a terrace's depth out.
+            parallel = abs(long_axis.x * across.x + long_axis.y * across.y)
+            return -abs(side) - 0.6 * abs(along - (self.rear + 1.2 + 2.0 + short / 2)) + 2.5 * parallel
+        if place == "side":
+            # Beside the house means level with it, in a side yard, not behind it.
+            if abs(side) < self.half * 0.7 or abs(along) > self.rear * 0.75:
+                return None
+            parallel = abs(long_axis.x * back.x + long_axis.y * back.y)
+            return -0.8 * abs(along) - 0.3 * abs(abs(side) - self.half - 1.2 - short / 2) + 2.5 * parallel
+        if place == "northeast":
+            d = math.hypot(vx, vy) or 1.0
+            return 10.0 * (vx * self.ne.x + vy * self.ne.y) / d + 0.05 * d
+        # The far corner: as far from the road as it goes.
+        return c.distance(self.gate) if self.gate is not None else math.hypot(vx, vy)
+
+    def best(self, kind: str, place: str):
+        scored = [(sc, cand) for cand, wide in self.candidates(kind) if (sc := self.score(place, cand, wide)) is not None]
+        return max(scored, key=lambda t: t[0])[1] if scored else None
+
+
 def pool_placement(plan: FloorPlan):
     """Where the pool goes and how it got there: (shapely box, kind used,
     place used), or None. It goes where the site's `pool_place` asks, lined
     up with the house; if that will not take the pool asked for, the next
     place that will, before a smaller pool."""
-    from shapely.geometry import LineString, Point, Polygon, box
-    from shapely.prepared import prep
-
     kind = plan.site.pool
-    if kind not in POOLS or not plan.site.boundary:
+    if kind not in POOLS:
         return None
-    plot = Polygon([(p.x, p.y) for p in plan.site.boundary]).buffer(0)
-    # Room for the deck round it (0.9 m) and a step to the boundary wall.
-    free = plot.buffer(-1.4)
-    foot = _footprint(plan)
-    if foot is not None:
-        free = free.difference(foot.buffer(1.2))
-    # Keep the gate and the drive to the house clear.
-    road = road_vector(plan)
-    gate = None
-    if road is not None:
-        minx, miny, maxx, maxy = plot.bounds
-        cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
-        gate = Point(cx + road.x * (maxx - minx) / 2, cy + road.y * (maxy - miny) / 2)
-        free = free.difference(gate.buffer(3.0))
-        if foot is not None:
-            free = free.difference(LineString([(gate.x, gate.y), (foot.centroid.x, foot.centroid.y)]).buffer(2.0))
-    if free.is_empty:
+    site = _PoolSite(plan)
+    if not site.ok:
         return None
-    fit = prep(free)
-    x0, y0, x1, y1 = free.bounds
-
-    # The house's frame: its centre, the way to its back garden, and across it.
-    hc = foot.centroid if foot is not None else plot.centroid
-    back = Vec2(-road.x, -road.y) if road is not None else Vec2(0.0, -1.0)
-    across = Vec2(-back.y, back.x)
-    pts = list(foot.exterior.coords) if foot is not None and hasattr(foot, "exterior") else \
-        [c for g in getattr(foot, "geoms", []) for c in g.exterior.coords] or [(hc.x, hc.y)]
-    rear = max((x - hc.x) * back.x + (y - hc.y) * back.y for x, y in pts)
-    half = max(abs((x - hc.x) * across.x + (y - hc.y) * across.y) for x, y in pts)
-    theta = math.radians(45.0 - plan.site.north_angle)
-    ne = Vec2(math.sin(theta), math.cos(theta))
-
-    def score(place: str, cand, wide: bool) -> float | None:
-        c = cand.centroid
-        vx, vy = c.x - hc.x, c.y - hc.y
-        along, side = vx * back.x + vy * back.y, vx * across.x + vy * across.y
-        long_axis = Vec2(1.0, 0.0) if wide else Vec2(0.0, 1.0)
-        short = min(cand.bounds[2] - cand.bounds[0], cand.bounds[3] - cand.bounds[1])
-        if place == "rear":
-            if along < rear * 0.5:
-                return None
-            # Centred on the house, its long side parallel to the back wall, a terrace's depth out.
-            parallel = abs(long_axis.x * across.x + long_axis.y * across.y)
-            return -abs(side) - 0.6 * abs(along - (rear + 1.2 + 2.0 + short / 2)) + 2.5 * parallel
-        if place == "side":
-            # Beside the house means level with it, in a side yard, not behind it.
-            if abs(side) < half * 0.7 or abs(along) > rear * 0.75:
-                return None
-            # Alongside the house, running with it, level with its middle.
-            parallel = abs(long_axis.x * back.x + long_axis.y * back.y)
-            return -0.8 * abs(along) - 0.3 * abs(abs(side) - half - 1.2 - short / 2) + 2.5 * parallel
-        if place == "northeast":
-            d = math.hypot(vx, vy) or 1.0
-            return 10.0 * (vx * ne.x + vy * ne.y) / d + 0.05 * d
-        # The far corner: as far from the road as it goes.
-        return c.distance(gate) if gate is not None else math.hypot(vx, vy)
-
     asked = plan.site.pool_place if plan.site.pool_place in POOL_PLACES else "rear"
     places = [asked] + [p for p in POOL_PLACES if p != asked]
     order = list(POOLS)
     for k in order[order.index(kind):]:
-        w, l = POOLS[k]
-        cands = []
-        for (a, b) in ((w, l), (l, w)):
-            steps_x, steps_y = int((x1 - x0 - a) / 0.25) + 1, int((y1 - y0 - b) / 0.25) + 1
-            for i in range(max(0, steps_x)):
-                for j in range(max(0, steps_y)):
-                    cand = box(x0 + i * 0.25, y0 + j * 0.25, x0 + i * 0.25 + a, y0 + j * 0.25 + b)
-                    if fit.contains(cand):
-                        cands.append((cand, a >= b))
         for place in places:
-            scored = [(sc, cand) for cand, wide in cands if (sc := score(place, cand, wide)) is not None]
-            if scored:
-                return max(scored, key=lambda t: t[0])[1], k, place
+            got = site.best(k, place)
+            if got is not None:
+                return got, k, place
     return None
+
+
+def pool_options(plan: FloorPlan) -> dict[str, list[str]]:
+    """For each kind of pool, the places on this plot it fits; an empty list
+    when the open ground round the house will not take it anywhere."""
+    site = _PoolSite(plan)
+    if not site.ok:
+        return {k: [] for k in POOLS}
+    return {k: [p for p in POOL_PLACES if site.best(k, p) is not None] for k in POOLS}
 
 
 #: Garden features: where each traditionally sits (compass bearing from the
@@ -167,7 +227,7 @@ def yard_spot(plan: FloorPlan, kind: str):
     """Where the garden feature goes: (centre Vec2, radius) in the open garden,
     as near its traditional quarter as the plot allows, clear of the house,
     the drive, the gate and the pool; None when nothing fits."""
-    from shapely.geometry import LineString, Point, Polygon
+    from shapely.geometry import Point, Polygon
     from shapely.prepared import prep
 
     if kind not in YARD_FEATURES or not plan.site.boundary:
@@ -178,14 +238,11 @@ def yard_spot(plan: FloorPlan, kind: str):
     foot = _footprint(plan)
     if foot is not None:
         free = free.difference(foot.buffer(0.8))
-    road = road_vector(plan)
-    if road is not None:
-        minx, miny, maxx, maxy = plot.bounds
-        cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
-        gate = Point(cx + road.x * (maxx - minx) / 2, cy + road.y * (maxy - miny) / 2)
+    gate = _gate(plan, plot)
+    if gate is not None:
         free = free.difference(gate.buffer(2.6))
         if foot is not None:
-            free = free.difference(LineString([(gate.x, gate.y), (foot.centroid.x, foot.centroid.y)]).buffer(1.8))
+            free = free.difference(drive_line(foot, gate).buffer(DRIVE_HALF + 0.2))
     pool = pool_rect(plan)
     if pool is not None:
         free = free.difference(pool[0].buffer(1.3))
