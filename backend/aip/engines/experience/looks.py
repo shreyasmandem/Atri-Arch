@@ -4,9 +4,10 @@ Each look is a whole house designed together - roof, walls, screen,
 signature element, colours, site and garden - after a house type people
 travel to see: a Goan villa, a Chettinad mansion, a Kerala nalukettu, a
 Mumbai Art Deco block, a Bawa tropical house, a Laurie Baker brick house,
-a Chandigarh modernist box. They are offered as they are, adapted to the plan
-(`Exterior.fitted`), and in colour variations, so each look gives several
-designs. Sources are listed in docs/VASTU_AND_DESIGN_GUIDELINES.md, Part 4.
+a Chandigarh modernist box, a glass box, a corten courtyard house. They are
+offered as they are, adapted to the plan (`Exterior.fitted`), and in colour
+variations, so each look gives several designs. Sources are listed in
+docs/VASTU_AND_DESIGN_GUIDELINES.md, Part 4.
 """
 
 from __future__ import annotations
@@ -100,18 +101,63 @@ LOOKS: dict[str, tuple[str, str, dict[str, Any], tuple[str, ...]]] = {
                      dict(roof="gable", base="timber", upper="timber", screen="none", windows="punched", accent="charcoal",
                           feature="cornerglass", shade="none", paving="gravel", yard="sitout"),
                      ("nordic", "grey_oak", "white_black")),
+    # Glass, steel and the lawn: houses that look nothing like the rest of the street.
+    "glass_box_villa": ("Glass Box Villa", "A glass upper storey cantilevered over a stone plinth, a glass parapet and a lounge deck on the lawn.",
+                        dict(roof="flat", base="stone", upper="glass", screen="none", windows="band", accent="charcoal",
+                             feature="cantilever", parapet="glass", railing="glass", canopy="glass", lights="strips",
+                             paving="concrete", garden="standard", yard="lounge"),
+                        ("white_black", "slate_modern", "basalt_brass")),
+    "floating_glass_house": ("Floating Glass House", "After modernism's great glass houses: glass on every side under one thin roof plate, set in a lush lawn.",
+                             dict(roof="slab", base="glass", upper="glass", screen="none", windows="band", accent="white",
+                                  shade="none", railing="glass", lights="strips", paving="gravel", garden="lush", yard="fountain"),
+                             ("seaside_white", "nordic", "white_black")),
+    "black_glass_modern": ("Black Glass Modern", "Stacked black slate below a dark glass storey, slim fins on the street face and a fountain in the court.",
+                           dict(roof="flat", base="slate", upper="glass", screen="fins", windows="band", accent="graphite",
+                                feature="rooftopframe", parapet="glass", lights="strips", boundary="grille", paving="stone",
+                                yard="fountain"),
+                           ("white_black", "charcoal_brass", "basalt_brass")),
+    "corten_courtyard": ("Corten Courtyard House", "Weathering steel over board-marked concrete: a rust-red storey, a perforated screen and a fire pit on the lawn.",
+                         dict(roof="flat", base="concrete", upper="corten", screen="perforated", windows="band", accent="copper",
+                              feature="featurewall", panel="corten", parapet="plain", lights="washers", paving="concrete",
+                              yard="firepit"),
+                         ("concrete_raw", "warm_minimal", "clay_copper")),
+    "corten_glass_cube": ("Corten and Glass Cube", "A corten ground floor under a floating glass box: two materials, nothing applied, and a deck on the grass.",
+                          dict(roof="slab", base="corten", upper="glass", screen="none", windows="band", accent="copper",
+                               feature="floatbox", lights="strips", paving="gravel", yard="lounge"),
+                          ("concrete_raw", "greige", "warm_minimal")),
+    "mediterranean_villa": ("Mediterranean Villa", "Whitewashed walls under a terracotta roof, an arcade on the ground floor, a gravel court and beds of flowers.",
+                            dict(roof="hip", base="plaster", upper="plaster", screen="none", windows="punched", accent="navy",
+                                 feature="arcade", shade="slim", canopy="pergola", railing="metal", garden="lush",
+                                 paving="gravel", gate="timber", boundary="plaster", yard="flowerbeds"),
+                            ("lime_teak", "lemon_white", "goa_villa")),
+    "industrial_loft": ("Industrial Brick Loft", "Warehouse brick under a black steel storey, a sawtooth roof of north lights and a fire pit for the evenings.",
+                        dict(roof="sawtooth", base="brick", upper="metal", screen="none", windows="band", accent="charcoal",
+                             shade="box", paving="concrete", boundary="brick", lights="washers", yard="firepit"),
+                        ("charcoal_brass", "clay_copper", "basalt_brass")),
 }
+
+
+#: The order the catalogue opens in: the new and the classic interleaved, so
+#: the first page already runs from a glass box to a Chettinad mansion.
+ORDER = ("glass_box_villa", "goan_villa", "corten_courtyard", "kerala_nalukettu", "black_glass_modern",
+         "mediterranean_villa", "chettinad_mansion", "floating_glass_house", "bawa_tropical", "industrial_loft",
+         "rajput_haveli", "corten_glass_cube", "mumbai_deco", "japandi_courtyard", "baker_brick")
 
 
 def look_designs(plan: FloorPlan, variations: int = 3) -> list[dict[str, Any]]:
     """Every signature home, fitted to this plan, in up to `variations`
-    colourways each: (the first is the look's own)."""
+    colourways each: every house in its own colours first, then the
+    colourways, so a page of them is a page of different houses."""
     one_floor = len(plan.levels) <= 1
+    order = [k for k in ORDER if k in LOOKS] + [k for k in LOOKS if k not in ORDER]
     out: list[dict[str, Any]] = []
-    for look_id, (name, inspired, spec, schemes) in LOOKS.items():
-        base = Exterior(**spec)
-        for k, scheme in enumerate(schemes[:variations]):
-            ex, _notes = replace(base, **_tints(scheme)).fitted(one_floor)
+    for k in range(variations):
+        for look_id in order:
+            name, inspired, spec, schemes = LOOKS[look_id]
+            if k >= len(schemes):
+                continue
+            scheme = schemes[k]
+            ex, _notes = replace(Exterior(**spec), **_tints(scheme)).fitted(one_floor)
             d = ex.to_dict()
             d["name"] = name if k == 0 else f"{name} · {_SCHEMES[scheme]['name']}"
             d["story"] = f"{inspired} {d['story']}"

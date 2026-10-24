@@ -56,7 +56,7 @@ async function build(viewer) {
 export async function mountHero(host, caption) {
   if (!host) return;
   let Viewer3D;
-  try { ({ Viewer3D } = await import("./viewer3d.js?v=p7")); } catch { return; }
+  try { ({ Viewer3D } = await import("./viewer3d.js?v=p9")); } catch { return; }
   const viewer = new Viewer3D(host);
   viewer.controls.autoRotateSpeed = 0.35;
   viewer.controls.enableZoom = false;

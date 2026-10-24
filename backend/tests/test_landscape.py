@@ -198,3 +198,31 @@ def test_the_pool_is_sunk_below_its_coping(pool_plan):
               for x, y, z in g.vertices if area.contains(Point(x, -z))]
         return max(ys)
     assert top("pool_water", rect.buffer(0.01)) < top("__sill", rect.buffer(0.31)) - 0.1   # a hand's width below the coping
+
+
+def test_glass_and_corten_homes_build_in_their_own_materials(pool_plan):
+    """The new signature homes build, glass walls in glass with a mullion frame, corten in weathering steel."""
+    from aip.engines.experience.arch3d import build_scene
+    from aip.engines.experience.looks import LOOKS, look_designs
+
+    designs = {d["look"]: d for d in look_designs(pool_plan, variations=1)}
+    for look in ("glass_box_villa", "floating_glass_house", "black_glass_modern", "corten_courtyard",
+                 "corten_glass_cube", "mediterranean_villa", "industrial_loft"):
+        assert look in LOOKS and look in designs
+        names = {g.visual.material.name for g in build_scene(pool_plan, include_furniture=False,
+                                                             design_id=designs[look]["id"]).geometry.values()}
+        if "glass" in look:
+            assert "curtain_glass" in names
+        if "corten" in look:
+            assert "corten_steel" in names
+
+
+def test_a_lawn_gets_lamps_and_a_path(pool_plan):
+    """A garden is dressed: lamps light the drive and stones lead to its feature; a bare site is not."""
+    from aip.engines.experience.arch3d import build_scene
+    from aip.engines.experience.exteriors import Exterior
+
+    lit = build_scene(pool_plan, include_furniture=False, design_id=Exterior(yard="fountain", garden="standard").id)
+    bare = build_scene(pool_plan, include_furniture=False, design_id=Exterior(yard="fountain", garden="none").id)
+    lamps = lambda sc: sum(len(g.faces) for k, g in sc.geometry.items() if k.startswith("site__") and k.endswith("__light"))  # noqa: E731
+    assert lamps(lit) > 0 and lamps(bare) == 0

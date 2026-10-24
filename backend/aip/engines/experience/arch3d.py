@@ -208,6 +208,15 @@ class Palette:
             "ex_terracotta": Material("terracotta_tile", (0.69, 0.38, 0.26), 0.85),
             "ex_acp": Material("acp_panel", (0.56, 0.57, 0.58), 0.35, 0.5),
             "ex_slate": Material("slate_stack", (0.31, 0.32, 0.33), 0.8),
+            # A glass curtain wall: dark, smooth and a little reflective, opaque so no room shows through raw.
+            "ex_curtain": Material("curtain_glass", (0.19, 0.25, 0.30), 0.07, 0.35),
+            "ex_corten": Material("corten_steel", (0.47, 0.23, 0.11), 0.8, 0.3),
+            # The garden's colour and its fire.
+            "flower_pink": Material("flower_pink", (0.86, 0.36, 0.52), 0.9),
+            "flower_yellow": Material("flower_yellow", (0.95, 0.77, 0.22), 0.9),
+            "flower_white": Material("flower_white", (0.95, 0.94, 0.90), 0.9),
+            "soil": Material("garden_soil", (0.30, 0.21, 0.14), 1.0),
+            "fire": Material("fire_glow", (1.0, 0.52, 0.16), 0.6, 0.0, 1.0, (1.0, 0.42, 0.08)),
             "ex_panel": Material("panel_stone_cladding", ext["clad"], 0.85),
             # Warm facade lighting: a lamp, so it glows in the night view.
             "facade_light": Material("facade_light", (0.95, 0.93, 0.88), 0.4, 0.0, 1.0, (1.0, 0.8, 0.52)),
@@ -1040,6 +1049,59 @@ def _yard(b: Builder, kind: str, c: Vec2, r: float) -> None:
         for k, p in enumerate(ring(r * 0.55, 5)):
             b.blob("site", "boulder", (p.x, 0.12, -p.y), 0.22 + 0.08 * (k % 3), 0.65)
         b.blob("site", "leaf", (c.x, 0.2, -c.y), 0.3, 0.7)
+    elif kind == "fountain":
+        # A tiered stone fountain in a round basin: a coping of stone blocks, water inside, a bowl on a stem.
+        R = r * 0.85
+        b.slab("site", "pool_tile", ring(R - 0.08, 20), 0.004, 0.06)
+        b.slab("site", "pool_water", ring(R - 0.1, 20), 0.063, 0.3)
+        n = 16
+        for i in range(n):
+            a = 2 * math.pi * i / n
+            q = Vec2(c.x + R * math.cos(a), c.y + R * math.sin(a))
+            b.box("site", "sill", (q.x, 0.2, -q.y), (2 * math.pi * R / n + 0.04, 0.4, 0.2), a + math.pi / 2)
+        b.cylinder("site", "sill", (c.x, 0.0, -c.y), 0.16, 1.05, 12)
+        b.cylinder("site", "sill", (c.x, 1.0, -c.y), 0.5, 0.14, 16)
+        b.cylinder("site", "pool_water", (c.x, 1.12, -c.y), 0.44, 0.035, 16)
+        b.cylinder("site", "sill", (c.x, 1.14, -c.y), 0.07, 0.35, 8)
+        b.cylinder("site", "pool_water", (c.x, 1.48, -c.y), 0.035, 0.18, 6)
+    elif kind == "firepit":
+        # A ring of stone round the embers on a paved circle, four timber chairs drawn up to it.
+        b.slab("site", "paving", ring(r * 0.95, 16), 0.0, 0.05)
+        for i in range(10):
+            a = 2 * math.pi * i / 10
+            q = Vec2(c.x + 0.55 * math.cos(a), c.y + 0.55 * math.sin(a))
+            b.box("site", "clad", (q.x, 0.2, -q.y), (0.38, 0.32, 0.2), a + math.pi / 2)
+        b.blob("site", "fire", (c.x, 0.22, -c.y), 0.26, 0.55)
+        for i in range(4):
+            a = math.pi / 4 + i * math.pi / 2
+            q = Vec2(c.x + 1.3 * math.cos(a), c.y + 1.3 * math.sin(a))
+            bk = Vec2(c.x + 1.58 * math.cos(a), c.y + 1.58 * math.sin(a))
+            b.box("site", "timber", (q.x, 0.38, -q.y), (0.62, 0.07, 0.6), a + math.pi / 2)
+            b.box("site", "timber", (q.x, 0.19, -q.y), (0.5, 0.36, 0.45), a + math.pi / 2)
+            b.box("site", "timber", (bk.x, 0.68, -bk.y), (0.62, 0.6, 0.07), a + math.pi / 2)
+    elif kind == "lounge":
+        # A raised timber deck on the lawn: two loungers, a side table and a square parasol.
+        b.box("site", "timber", (c.x, 0.08, -c.y), (3.2, 0.16, 2.3), 0.0)
+        for s in (-1, 1):
+            p = Vec2(c.x + s * 0.75, c.y - 0.15)
+            b.box("site", "timber", (p.x, 0.28, -p.y), (0.6, 0.22, 1.7))
+            b.box("site", "linen", (p.x, 0.43, -p.y), (0.58, 0.08, 1.65))
+        b.box("site", "timber", (c.x, 0.4, -(c.y - 0.6)), (0.45, 0.45, 0.45))
+        b.cylinder("site", "rail_metal", (c.x, 0.16, -(c.y + 0.7)), 0.03, 2.2, 6)
+        b.box("site", "linen", (c.x, 2.36, -(c.y + 0.7)), (2.4, 0.06, 2.4))
+    elif kind == "flowerbeds":
+        # Three round beds of mixed flowers in dark soil, each with a little green at its heart.
+        cols = ("flower_pink", "flower_yellow", "flower_white")
+        for k in range(3):
+            a = 2 * math.pi * k / 3 + 0.4
+            q = Vec2(c.x + r * 0.5 * math.cos(a), c.y + r * 0.5 * math.sin(a))
+            bed = [Vec2(q.x + 0.62 * math.cos(2 * math.pi * i / 14), q.y + 0.62 * math.sin(2 * math.pi * i / 14)) for i in range(14)]
+            b.slab("site", "soil", bed, 0.0, 0.07)
+            b.blob("site", "leaf2", (q.x, 0.2, -q.y), 0.26, 0.7)
+            for i in range(7):
+                t = 2 * math.pi * i / 7 + k
+                f = Vec2(q.x + 0.38 * math.cos(t), q.y + 0.38 * math.sin(t))
+                b.blob("site", cols[(i + k) % 3], (f.x, 0.17, -f.y), 0.12, 0.8)
     elif kind == "sitout":
         # A stone pad under a shade tree with two benches.
         b.slab("site", "paving", ring(r * 0.9, 12), 0.0, 0.05)
@@ -1048,6 +1110,47 @@ def _yard(b: Builder, kind: str, c: Vec2, r: float) -> None:
             b.box("site", "plinth", (c.x + s * 0.9, 0.2, -c.y), (0.35, 0.4, 1.1))
         b.cylinder("site", "trunk", (c.x, 0.0, -(c.y + r * 0.6)), 0.12, 2.4, 8)
         b.blob("site", "leaf", (c.x, 3.0, -(c.y + r * 0.6)), 1.3, 0.85)
+
+
+def _lawn_life(b: Builder, plot, footprint, gate_c: Vec2, pool, yard) -> None:
+    """What makes a lawn a garden: low lamps lining the drive (they glow at
+    night), and a stepping-stone path from the drive across the grass to the
+    garden's feature - each kept off the house, the pool and the plot's edge."""
+    from shapely.geometry import LineString, Point
+
+    from aip.engines.experience.landscape import DRIVE_HALF, drive_line
+
+    keep_off = footprint.buffer(0.5)
+    if pool is not None:
+        keep_off = keep_off.union(pool.buffer(1.0))
+    inside = plot.buffer(-0.45)
+    line = drive_line(footprint, gate_c)
+    # Lamps about every 2.4 m down both sides of the drive, spaced evenly over however long it is.
+    n = max(1, int(line.length / 2.4))
+    d = Vec2(line.coords[-1][0] - line.coords[0][0], line.coords[-1][1] - line.coords[0][1]).normalised()
+    side = Vec2(-d.y, d.x)
+    for i in range(n):
+        q = line.interpolate((i + 0.5) * line.length / n)
+        for s_ in (-1, 1):
+            p = Vec2(q.x + side.x * s_ * (DRIVE_HALF + 0.35), q.y + side.y * s_ * (DRIVE_HALF + 0.35))
+            if not inside.contains(Point(p.x, p.y)) or keep_off.contains(Point(p.x, p.y)):
+                continue
+            b.cylinder("site", "rail_metal", (p.x, 0.0, -p.y), 0.05, 0.62, 8)
+            b.box("site", "light", (p.x, 0.68, -p.y), (0.13, 0.12, 0.13))
+    # Stepping stones from the drive to the feature, if there is one to walk to.
+    if yard is None:
+        return
+    c, r = yard
+    drive = line.buffer(DRIVE_HALF)
+    start = drive.exterior.interpolate(drive.exterior.project(Point(c.x, c.y)))
+    path = LineString([(start.x, start.y), (c.x, c.y)])
+    stop = path.length - r - 0.2
+    k = 0.45
+    while k < stop:
+        q = path.interpolate(k)
+        if inside.contains(q) and not keep_off.contains(q) and not drive.contains(q):
+            b.cylinder("site", "paving", (q.x, 0.0, -q.y), 0.26, 0.05, 10)
+        k += 0.72
 
 
 def _pool(b: Builder, rect) -> None:
@@ -1227,6 +1330,10 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
     yard = yard_spot(plan, getattr(b.p, "yard", "")) if getattr(b.p, "yard", "") else None
     if yard is not None:
         _yard(b, b.p.yard, yard[0], yard[1])
+
+    # A lawn is lived on: lamps along the drive, and stones across the grass to the garden's feature.
+    if getattr(b.p, "garden", "") != "none" and footprint is not None and gate_c is not None:
+        _lawn_life(b, plot, footprint, gate_c, pool[0] if pool is not None else None, yard)
 
     # A lush garden plants the inside of the boundary too, which a tight
     # city plot has room for even when its setbacks take no tree.

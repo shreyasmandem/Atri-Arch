@@ -181,6 +181,23 @@ const PATTERNS = {
       return 0.36 + hash(row, c) * 0.3 + (n(u, v) - 0.5) * 0.1;
     };
   } },
+  // A glass curtain wall: the sky's gradient in each pane, faint reflections, and the mullion grid between.
+  curtain: { size: 1.25, fn: () => {
+    const n = noise(21, 6);
+    return (u, v) => {
+      const fu = u % 1, fv = (v * 0.4) % 1;
+      if (fu < 0.035 || fu > 0.965) return 0.22;
+      return 0.62 + (1 - fv) * 0.28 + (n(u, v) - 0.5) * 0.12 + (((u + v) * 3) % 1 < 0.08 ? 0.12 : 0);
+    };
+  } },
+  // Weathering steel: rust mottled over large plates, streaked where rain runs down.
+  corten: { size: 2.0, fn: () => {
+    const n = noise(31, 6), f = noise(32, 48), r = noise(33, 160);
+    return (u, v) => {
+      const seam = (u * 2) % 1 < 0.012 || (v * 1.2) % 1 < 0.012 ? -0.18 : 0;
+      return 0.52 + (n(u, v) - 0.5) * 0.36 + (f(u, v * 0.2) - 0.5) * 0.18 + (r(u, v) - 0.5) * 0.1 + seam;
+    };
+  } },
   // Lawn: patchy, with a fine blade grain.
   lawn: { size: 3.0, fn: () => {
     const n = noise(16, 8), f = noise(17, 120), g = noise(18, 400);
@@ -192,6 +209,8 @@ const PATTERNS = {
 const RULES = [
   [/terracotta_tile/, "tiles", 0.9],
   [/acp_panel/, "acpanel", 0.7],
+  [/curtain_glass/, "curtain", 0.55],
+  [/corten/, "corten", 0.9],
   [/slate_stack/, "slate", 0.95],
   [/brick/, "brick", 0.95],
   [/stone_cladding|compound_stone|plinth_stone/, "stone", 0.85],

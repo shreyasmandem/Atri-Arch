@@ -358,7 +358,7 @@ async function initHome() {
   $("sheet-close")?.addEventListener("click", () => { delete document.body.dataset.manual; });
   const { mountHome } = await import("./home.js");
   // The live hero, the airflow tile and the committee: the page's own proof.
-  import("./home-hero.js").then(({ mountHero, mountAirShowcase }) => {
+  import("./home-hero.js?v=h2").then(({ mountHero, mountAirShowcase }) => {
     mountHero($("hero3d"), $("hero-cap"));
     const air = $("show-air");
     if (air) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { mountAirShowcase(air); o.disconnect(); } }).observe(air);
@@ -1361,6 +1361,11 @@ function showView(v, { fromHistory = false } = {}) {
   const g = groupOf(v);
   (S.lastIn ||= {})[g] = v;
   document.querySelectorAll(".view-tab").forEach((t) => t.classList.toggle("is-on", t.dataset.view === g));
+  // On a narrow screen the tabs scroll sideways: keep the one you are on in sight.
+  const on = document.querySelector(".view-tab.is-on"), strip = on?.parentElement;
+  if (on && strip && strip.scrollWidth > strip.clientWidth)
+    strip.scrollTo({ left: on.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft
+      - (strip.clientWidth - on.offsetWidth) / 2, behavior: reducedMotion() ? "auto" : "smooth" });
   document.querySelectorAll(".pane").forEach((p) => { p.hidden = p.dataset.view !== v; });
   const sub = $("subnav");
   sub.hidden = !VIEW_GROUPS[g];
@@ -1577,7 +1582,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p8");
+    const { Viewer3D } = await import("./viewer3d.js?v=p9");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -1679,7 +1684,10 @@ const VX_CATS = { zone_placement: "Room zones", entrance: "Entrance", brahmastha
   mass_distribution: "Mass and open space", proportion: "Shape", openings: "Openings", slope: "Slope",
   circulation: "Stairs", sleeping: "Sleeping", relations: "Rooms and neighbours" };
 // The stance, as five named readings from modern to orthodox.
-const VX_STANCES = [[0, "Modern"], [0.25, "Advisory"], [0.5, "Balanced"], [0.75, "Strict"], [1, "Orthodox"]];
+// The same five stances, at the same weights, as the brief's Vastu question (domain/brief.py).
+const VX_STANCES = [[0, "Modern", "ignore"], [0.25, "Advisory", "advisory"], [0.5, "Balanced", "balanced"],
+  [0.8, "Strict", "strict"], [1, "Orthodox", "orthodox"]];
+const vxStanceAt = (w) => VX_STANCES.reduce((a, s) => (Math.abs(s[0] - w) < Math.abs(a[0] - w) ? s : a));
 const VX_WORD = { ideal: "Ideal here", acceptable: "Acceptable here", neutral: "Neutral here", discouraged: "Discouraged here",
   prohibited: "Forbidden here", undetermined: "No reading" };
 const vxName = (z) => VX_ZONES.find(([k]) => k === z)?.[1] || z;
@@ -1810,18 +1818,27 @@ function renderVastu() {
   read.append(score, el("p", "vx2__grade", `${v.grade}, read at a ${String(v.stance_label || "balanced").toLowerCase()} stance`));
   read.append(el("p", "vx2__meta", `${v.rules_assessed} of ${v.rules_total} rules could be measured on this plan. `
     + (v.violations ? `${v.violations} ${v.violations === 1 ? "is" : "are"} not met${v.serious_violations ? `, ${v.serious_violations} of them serious` : ""}.` : "Every one of them is met.")));
-  // Stance: how strictly the texts are read, against what the building does.
+  // Stance: the plan was laid out for the brief's reading; this re-reads the same plan
+  // at another, without changing it, and offers to redesign at that one.
   const stance = el("div", "vx2__stance");
   const sid = "vx-stance-l";
-  stance.append(el("span", "vx2__label", "Read the texts"));
-  stance.firstChild.id = sid;
+  const [nowW, nowName, nowKey] = vxStanceAt(v.tradition_weight ?? 0.5);
+  const briefKey = S.briefSent?.vastu || "balanced";
+  const [, briefName] = VX_STANCES.find((x) => x[2] === briefKey) || VX_STANCES[2];
+  const lab = el("span", "vx2__label", "What if the texts were read differently?"); lab.id = sid;
+  stance.append(lab, el("p", "vx2__hint", S.imported
+    ? `Your drawing is read here at a ${briefName.toLowerCase()} stance. Pick another to see how the same plan scores.`
+    : `This plan was laid out for a ${briefName.toLowerCase()} reading, as your brief asked. Pick another to see how the same plan would score; the plan itself does not change.`));
   const seg = el("div", "vx2__seg"); seg.setAttribute("role", "radiogroup"); seg.setAttribute("aria-labelledby", sid);
-  const nowW = Math.round((v.tradition_weight ?? 0.5) * 4) / 4;
-  for (const [wgt, name] of VX_STANCES) {
+  for (const [wgt, name, key] of VX_STANCES) {
     const b = el("button", null, name); b.type = "button"; b.setAttribute("role", "radio");
-    b.setAttribute("aria-checked", String(Math.abs(wgt - nowW) < 0.01));
+    b.setAttribute("aria-checked", String(key === nowKey));
+    if (key === briefKey) {
+      b.dataset.brief = "1"; b.title = "The stance your brief asked for";
+      b.append(el("span", "sr-only", " (your brief)"));
+    }
     b.addEventListener("click", () => {
-      if (Math.abs(wgt - nowW) < 0.01) return;
+      if (key === nowKey) return;
       // The pill moves at once; the reading follows when the server answers.
       seg.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
       seg.setAttribute("aria-busy", "true");
@@ -1829,7 +1846,25 @@ function renderVastu() {
     });
     seg.append(b);
   }
-  stance.append(seg, el("p", "vx2__hint", "Modern weighs each rule by what it does for light, air and structure; orthodox follows the texts as written."));
+  const marks = el("div", "vx2__marks"); marks.setAttribute("aria-hidden", "true");
+  for (const [, , key] of VX_STANCES) marks.append(el("span", null, key === briefKey ? "Your brief" : ""));
+  stance.append(seg, marks);
+  stance.append(el("p", "vx2__hint", "Modern weighs each rule by what it does for light, air and structure; orthodox follows the texts as written."));
+  // Read at another stance than the brief's: the layout can be redrawn for it.
+  if (nowKey !== briefKey && !S.imported && S.briefSent) {
+    const re = el("div", "vx2__redo");
+    re.append(el("p", null, `Scored at ${nowName.toLowerCase()}, this is still the plan laid out for ${briefName.toLowerCase()}. Redesigning starts a fresh run from your brief with only the Vastu stance changed, and replaces this design and its edits.`));
+    const go = el("button", "btn btn--line", `Redesign for a ${nowName.toLowerCase()} reading`); go.type = "button";
+    go.addEventListener("click", () => {
+      // The brief form follows, so New brief shows the stance this design was made for.
+      const idx = VX_STANCES.findIndex((x) => x[2] === nowKey);
+      const r = document.querySelector(`input[name="vastu_slider"][value="${idx}"]`);
+      if (r) { r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true })); }
+      onSubmit(null, { ...S.briefSent, vastu: nowKey });
+    });
+    re.append(go);
+    stance.append(re);
+  }
   read.append(stance);
 
   // What the last edit did.
@@ -2127,7 +2162,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p8");
+  const { Viewer3D } = await import("./viewer3d.js?v=p9");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2269,7 +2304,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p8");
+    const { Viewer3D } = await import("./viewer3d.js?v=p9");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2366,7 +2401,7 @@ async function renderExterior() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   // The four elevations of what the model shows, drawn without the site.
-  const { elevations } = await import("./thumbs.js?v=p2");
+  const { elevations } = await import("./thumbs.js?v=p3");
   let drawn = "";
   const drawElevations = async () => {
     const url = modelUrl();
@@ -2388,7 +2423,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p8");
+    const { Viewer3D } = await import("./viewer3d.js?v=p9");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2416,7 +2451,7 @@ const EX_NICE = { flat: "Flat parapet", slab: "Cantilever slab", mono: "Mono-pit
   fins: "Fins", louvres: "Louvres", frame: "Box frame", jaali: "Jaali", perforated: "Perforated", punched: "Punched", band: "Glazing band",
   jharokha: "Jharokha", colonnade: "Colonnade", chhatri: "Chhatri", cornice: "Cornice", breeze: "Breeze-block", greenwall: "Green wall", balcony: "Balcony",
   hedge: "Hedge", grille: "Grille", glass: "Glass", solid: "Solid wall", terracotta: "Terracotta tile", acp: "ACP panel",
-  slate: "Stacked slate", vault: "Barrel vault", sawtooth: "Sawtooth", slats: "Timber slats", bamboo: "Bamboo",
+  slate: "Stacked slate", corten: "Corten steel", vault: "Barrel vault", sawtooth: "Sawtooth", slats: "Timber slats", bamboo: "Bamboo",
   arcade: "Arcade", portico: "Portico", bay: "Bay window", floatbox: "Floating box", featurewall: "Monolith wall",
   thinnai: "Thinnai", bangla: "Bangla pavilion", pergolaframe: "Pergola frame", cornerglass: "Glass corner",
   brickcurtain: "Brick curtain", wavescreen: "Wave screen", moongate: "Moon gate", cantilever: "Cantilever room",
@@ -2473,7 +2508,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p2"), import("./materials.js")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p3"), import("./materials.js?v=m2")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };
@@ -2664,7 +2699,8 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
   // pins samples beside a facade), its colourways, and a way to keep it.
   const FINISH_OF = { plaster: ["plaster", "#e9e2d4"], stone: ["stone", "#9a8a76"], brick: ["brick", "#9a5238"],
     concrete: ["concrete", "#a9a7a1"], timber: ["timber", "#8a5a34"], metal: ["seam", "#3a3b3d"],
-    terracotta: ["tiles", "#b0613f"], acp: ["acpanel", "#8f9296"], slate: ["slate", "#56585b"] };
+    terracotta: ["tiles", "#b0613f"], acp: ["acpanel", "#8f9296"], slate: ["slate", "#56585b"],
+    glass: ["curtain", "#33424c"], corten: ["corten", "#7a3d1f"] };
   const ROOF_FINISH = { flat: ["plaster", "Terrace"], slab: ["concrete", "Concrete slab"], hip: ["tile", "Clay tiles"],
     gable: ["tile", "Clay tiles"], mono: ["seam", "Standing seam"], butterfly: ["seam", "Standing seam"],
     vault: ["seam", "Curved sheet"], sawtooth: ["seam", "Standing seam"] };
@@ -2820,7 +2856,8 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       ["Signature element", (p) => EX_NICE[p.feature || "none"]], ["Windows", (p) => EX_NICE[p.windows] || p.windows],
       ["Boundary", (p) => EX_NICE[p.boundary || "plaster"] || p.boundary], ["Gate", (p) => ({ none: "Open", sliding: "Steel sliding", timber: "Timber" })[p.gate || "none"]],
       ["Garden feature", (p) => ({ tulsi: "Tulsi platform", jhoola: "Jhoola swing", waterwall: "Water wall", koipond: "Koi pond",
-        gazebo: "Gazebo", rockgarden: "Rock garden", sitout: "Garden sit-out" })[p.yard] || "None"]];
+        gazebo: "Gazebo", rockgarden: "Rock garden", sitout: "Garden sit-out", fountain: "Fountain", firepit: "Fire pit",
+        lounge: "Lounge deck", flowerbeds: "Flower beds" })[p.yard] || "None"]];
     for (const d of list) {
       const col = el("section", "lb-cmp__col");
       const ph = el("div", "lb-cmp__photo is-loading");
@@ -3242,9 +3279,9 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     vault: "M5 20v-8h14v8M3 12c0-6.5 18-6.5 18 0", sawtooth: "M5 20v-8h14v8M3 12l6-4v4l6-4v4l6-4v4" };
   const FINISH = { plaster: ["plaster", "#e9e2d4"], stone: ["stone", "#9a8a76"], brick: ["brick", "#9a5238"], concrete: ["concrete", "#a9a7a1"],
     timber: ["timber", "#8a5a34"], metal: ["seam", "#3a3b3d"], terracotta: ["tiles", "#b0613f"], acp: ["acpanel", "#8f9296"],
-    slate: ["slate", "#56585b"] };
+    slate: ["slate", "#56585b"], glass: ["curtain", "#33424c"], corten: ["corten", "#7a3d1f"] };
   const PANEL = { none: ["plaster", "#e9e2d4"], stone: FINISH.stone, timber: FINISH.timber, slate: FINISH.slate,
-    terracotta: FINISH.terracotta, acp: FINISH.acp, brick: FINISH.brick };
+    terracotta: FINISH.terracotta, acp: FINISH.acp, brick: FINISH.brick, corten: FINISH.corten };
   const DRIVE = { stone: ["paving", "#a29a8c"], concrete: ["concrete", "#a9a7a1"], gravel: ["gravel", "#b7aa94"], grass: ["grass", "#6f8a4f"] };
   // Every choice the customise tab offers, grouped the way a client thinks
   // about a house: the top, the walls, the openings, the way in, the plot.
@@ -3264,12 +3301,13 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
     garden: ["Garden", [["standard", "Standard"], ["lush", "Lush"], ["minimal", "Minimal"], ["none", "Paved"]]],
     planters: ["Planters", [[false, "None"], [true, "Along the front"]]],
     panel: ["Feature panel", [["none", "None"], ["stone", "Stone"], ["timber", "Wood-look"], ["slate", "Slate"],
-      ["terracotta", "Terracotta"], ["acp", "ACP"], ["brick", "Brick"]]],
+      ["terracotta", "Terracotta"], ["acp", "ACP"], ["brick", "Brick"], ["corten", "Corten"]]],
     parapet: ["Parapet", [["plain", "Plain"], ["glass", "Glass strip"], ["grooved", "Grooved"], ["screen", "CNC screen"], ["stepped", "Stepped"]]],
     deck: ["Roof terrace", [["none", "Open"], ["pergola", "Pergola"], ["garden", "Roof garden"]]],
     lights: ["Facade lighting", [["none", "None"], ["washers", "Wall washers"], ["strips", "LED strips"]]],
     yard: ["Garden feature", [["none", "None"], ["tulsi", "Tulsi platform"], ["jhoola", "Jhoola swing"], ["waterwall", "Water wall"],
-      ["koipond", "Koi pond"], ["gazebo", "Gazebo"], ["rockgarden", "Rock garden"], ["sitout", "Sit-out"]]],
+      ["koipond", "Koi pond"], ["gazebo", "Gazebo"], ["rockgarden", "Rock garden"], ["sitout", "Sit-out"],
+      ["fountain", "Fountain"], ["firepit", "Fire pit"], ["lounge", "Lounge deck"], ["flowerbeds", "Flower beds"]]],
     accent: ["Accent", null],
   };
   // The specification: every element of the outside as one row - its name,

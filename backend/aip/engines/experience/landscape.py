@@ -218,9 +218,12 @@ def pool_options(plan: FloorPlan) -> dict[str, list[str]]:
 YARD_FEATURES: dict[str, tuple[float, float]] = {
     "tulsi": (45.0, 0.9), "waterwall": (45.0, 1.4), "koipond": (20.0, 1.8), "jhoola": (315.0, 1.6),
     "gazebo": (225.0, 2.0), "rockgarden": (240.0, 1.6), "sitout": (0.0, 1.5),
+    # Water to the north-east, fire in Agneya (the south-east), flowers where the morning sun is, a deck to the west.
+    "fountain": (30.0, 1.5), "firepit": (135.0, 1.7), "flowerbeds": (90.0, 1.5), "lounge": (270.0, 1.9),
 }
 YARD_NAMES = {"tulsi": "tulsi platform", "waterwall": "water wall", "koipond": "koi pond", "jhoola": "jhoola swing",
-              "gazebo": "gazebo", "rockgarden": "rock garden", "sitout": "garden sit-out"}
+              "gazebo": "gazebo", "rockgarden": "rock garden", "sitout": "garden sit-out",
+              "fountain": "fountain", "firepit": "fire pit", "flowerbeds": "flower beds", "lounge": "lounge deck"}
 
 
 def yard_spot(plan: FloorPlan, kind: str):
