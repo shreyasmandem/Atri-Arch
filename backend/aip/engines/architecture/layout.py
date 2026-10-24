@@ -1592,8 +1592,10 @@ def _weight(plan: FloorPlan) -> float:
 def _severity(problems: list[str]) -> float:
     """How bad a list of guardrail findings is: a room too big is a lesser fault
     than a room that cannot be used, a bedroom entered through another, or a
-    kitchen that does not meet the dining room."""
-    return sum(1.0 if ("over the" in p or "passages take" in p) else 3.0 for p in problems)
+    kitchen that does not meet the dining room. A room too big reads "is N m²,
+    over the M m²"; a toilet "over the Kitchen" is a leak over the stove and a
+    Vastu fault, and weighs as the serious kind."""
+    return sum(1.0 if ("m², over the" in p or "passages take" in p) else 3.0 for p in problems)
 
 
 def _loose_touch(a: BoundingBox, b: BoundingBox, tol: float = 0.02, need: float = 0.3) -> bool:
@@ -4508,14 +4510,19 @@ class LayoutGenerator:
                 # Only a fraction of a window actually opens, so the ventilation
                 # requirement has to be divided by that fraction before sizing.
                 # Skipping that division is the classic under-glazing error.
-                kind = OpeningKind.VENTILATOR if room.type.is_wet else OpeningKind.WINDOW
+                # A kitchen is wet for its plumbing, but it is a room people work
+                # in for hours over a hot stove: it gets a real window over the
+                # counter, sized to the ventilation rule, not a bathroom's vent.
+                kitchen = room.type is RoomType.KITCHEN
+                wet_vent = room.type.is_wet and not kitchen
+                kind = OpeningKind.VENTILATOR if wet_vent else OpeningKind.WINDOW
                 openable_fraction = OPENABLE_FRACTION.get(kind, 0.7)
                 required = max(room.area * 0.11, (room.area / 6) / openable_fraction)
-                if room.type.is_habitable:
+                if room.type.is_habitable or kitchen:
                     # The code is a floor, not a design: rooms are glazed to about
                     # a sixth of their floor, as a practice would draw them.
                     required = max(required, room.area * 0.17)
-                if room.type.is_wet:
+                if wet_vent:
                     required = min(required, 1.4)
 
                 ranked = sorted(
@@ -4531,14 +4538,24 @@ class LayoutGenerator:
                 if not chosen:
                     continue
 
-                share = required / len(chosen)
+                # The glass is shared by how well each face is lit: the cooler,
+                # better face takes more of it, the hot one less.
+                faces = [_wall_direction(plan, w) for w in chosen]
+                weights = [max(0.15, quality.get(d, 0.5)) for d in faces]
                 # Every outside window is built with a 0.55 m chajja over it
                 # (see the 3D builder): about half the opening is shaded.
                 room.metadata["shading_factor"] = max(float(room.metadata.get("shading_factor", 0.0)), 0.5)
-                for wall in chosen:
+                for wall, face, weight in zip(chosen, faces, weights):
+                    share = required * weight / sum(weights)
                     usable_length = max(0.6, wall.length - 0.6)
-                    height = 0.75 if room.type.is_wet else 1.5
+                    height = 0.75 if wet_vent else 1.2 if kitchen else 1.5
                     width = min(usable_length, max(0.6, share / height))
+                    # Low western sun gets under a chajja; a west window in a room
+                    # people live in also gets vertical fins (drawn in 3D), which
+                    # shade it about three-quarters.
+                    fins = room.type.is_habitable and face in HOT_FACES
+                    if fins:
+                        room.metadata["shading_factor"] = max(float(room.metadata["shading_factor"]), 0.75)
                     wall.openings.append(
                         Opening(
                             kind=kind,
@@ -4546,7 +4563,8 @@ class LayoutGenerator:
                             position=0.5,
                             width=round(width, 3),
                             height=height,
-                            sill_height=1.8 if room.type.is_wet else 0.9,
+                            sill_height=1.8 if wet_vent else 1.05 if kitchen else 0.9,
+                            notes="fins" if fins else "",
                         )
                     )
 
@@ -5148,6 +5166,10 @@ def _wall_direction(plan: FloorPlan, wall: Wall) -> Direction:
     normal = wall.outward_normal(plan.centre)
     bearing = math.degrees(math.atan2(normal.x, normal.y)) + plan.site.north_angle
     return bearing_to_direction(bearing)
+
+
+#: Faces the low afternoon sun reaches under a chajja: their windows also get fins.
+HOT_FACES = {Direction.W, Direction.WSW, Direction.WNW, Direction.SW}
 
 
 def _pick_cross_ventilating(plan: FloorPlan, walls: list[Wall]) -> list[Wall]:

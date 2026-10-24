@@ -106,7 +106,8 @@ def daylight_analysis(plan: FloorPlan) -> MetricReport:
                 weighted_quality += area * q
                 orientations[direction.value] = orientations.get(direction.value, 0.0) + area
                 shading = float(room.metadata.get("shading_factor", 0.0))
-                overheat = max(overheat, overheating_risk(direction, lat, shading) * min(1.0, area / 2.0))
+                fins = "fins" in (opening.notes or "")
+                overheat = max(overheat, overheating_risk(direction, lat, shading, fins) * min(1.0, area / 2.0))
 
         df = average_daylight_factor(glazed, room.area)
         orientation_score = (weighted_quality / glazed) if glazed > 0 else 0.0

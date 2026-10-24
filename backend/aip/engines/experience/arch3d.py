@@ -730,6 +730,13 @@ def _window(b: Builder, node: str, o: Opening, mid: Vec2, yaw: float, base: floa
             depth = 0.9 if shade == "deep" else CHAJJA_DEPTH
             hx, hz = cx + out.x * (t / 2 + depth / 2), cz - out.y * (t / 2 + depth / 2)
             b.box(node, "slab", (hx, base + head + 0.12, hz), (w + (0.6 if shade == "deep" else 0.3), 0.1 if shade == "deep" else 0.075, depth), yaw)
+        if "fins" in (o.notes or "") and shade != "box":
+            # A west window's vertical fins: the low afternoon sun a chajja lets under.
+            d = 0.45
+            for u in (-w / 2 - 0.1, w / 2 + 0.1):
+                x, z = off(u)
+                b.box(node, "slab", (x + out.x * (t / 2 + d / 2), y0 + h / 2 + 0.05, z - out.y * (t / 2 + d / 2)),
+                      (0.08, h + 0.3, d), yaw)
 
 
 def _door(b: Builder, node: str, o: Opening, mid: Vec2, yaw: float, base: float, head: float,
