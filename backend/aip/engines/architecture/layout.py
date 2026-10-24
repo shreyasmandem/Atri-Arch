@@ -75,6 +75,7 @@ from aip.engines.architecture.feasibility import (
     allowed_bathrooms,
     bedrooms_in,
     comfortable_area,
+    luxury_max,
     max_levels,
     minimum_area,
     storey_word,
@@ -1631,6 +1632,10 @@ def _touch_matrix(rects: list[BoundingBox]) -> list[list[bool]]:
 class LayoutGenerator:
     """Produces buildable, optimised floorplans from a client brief."""
 
+    #: Rooms past their comfortable size on a large plot (see `_grow_programme`);
+    #: a class default, so per-floor workers made without __init__ have it too.
+    _cap_boost = 1.0
+
     def __init__(self, brief: ClientBrief, config: GeneratorConfig | None = None) -> None:
         from aip.engines.architecture.programme import apply_defaults
 
@@ -1656,6 +1661,9 @@ class LayoutGenerator:
         # Set by the gate when the plot is generous enough to grow the house:
         # the footprint to draw, and how much the stair and the passage scale.
         self._footprint_area: float | None = None
+        # How far past their comfortable size rooms may grow (toward the luxury
+        # ceiling) when a large plot would otherwise be left mostly lawn.
+        self._cap_boost = 1.0
         self._stair_scale = 1.0
         self._compact_stair = False
         self._passage_scale = 1.0
@@ -1799,6 +1807,18 @@ class LayoutGenerator:
                 tuned = self._vastu_tune(plan, fitness_fn, exact, tune_until)
                 if tuned is not None:
                     scored[i] = tuned
+
+        # On a plot the house is meant to grow into (see `_grow_programme`), a
+        # scheme left at its comfortable size leaves the lawn the client did not
+        # ask for, so it ranks below the schemes that use the plot.
+        if self._cap_boost > 1.0 and self._footprint_area:
+            plate = 0.85 * self._footprint_area
+
+            def unfilled(plan: FloorPlan) -> float:
+                ground = plan.level_at(0) if plan.levels else None
+                return max(0.0, 1.0 - (sum(r.area for r in ground.rooms) if ground else 0.0) / plate)
+
+            scored = [(exact - 0.08 * unfilled(plan), breakdown, plan) for exact, breakdown, plan in scored]
 
         clean = [item for item in scored if not item[2].metadata["guardrail"]]
         flawed = [item for item in scored if item[2].metadata["guardrail"]]
@@ -2601,16 +2621,22 @@ class LayoutGenerator:
     # ----------------------------------------------------- feasibility gate --
 
     def _cap(self, room_type: RoomType) -> float | None:
-        """The most a room of this kind is drawn in a house this size."""
-        return comfort_cap(room_type, self._bedrooms)
+        """The most a room of this kind is drawn in a house this size: its
+        comfortable size, raised toward the luxury ceiling on a large plot."""
+        cap = comfort_cap(room_type, self._bedrooms)
+        if cap is None or self._cap_boost <= 1.0:
+            return cap
+        ceiling = luxury_max(room_type)
+        return min(cap * self._cap_boost, ceiling) if ceiling is not None else cap * self._cap_boost
 
     def _cap_for(self, req: RoomRequirement) -> float | None:
-        """The cap for one room: its kind's, and never past 1.6 x what was asked."""
+        """The cap for one room: its kind's, and never past 1.6 x what was asked
+        (more on a large plot the house is growing into)."""
         cap = self._cap(req.type)
         if cap is None:
             return None
         asked = req.asked_area or req.target_area
-        return min(cap, 1.6 * asked) if req.notes != FILL_NOTE else cap
+        return min(cap, 1.6 * self._cap_boost * asked) if req.notes != FILL_NOTE else cap
 
     def _site_box(self) -> BoundingBox | None:
         """The plot after setbacks, before coverage; None when there is no boundary."""
@@ -2924,6 +2950,27 @@ class LayoutGenerator:
         footprint = self._design_footprint(levels)
         if footprint is None or max(cur.target) * 1.08 >= 0.97 * footprint:
             return cur
+        # How much of the plot the brief leaves open: the lawn asked for, and the
+        # drive and paths (as `SimpleBriefRequest._coverage` allows for them). A
+        # house far smaller than that leaves a lawn the client never asked for -
+        # 72% of a 55 x 85 ft plot when they asked to keep 25% - so on a plot past
+        # town size it grows into the rest, up to what the byelaw allows: rooms
+        # past their comfortable size toward the luxury ceiling, then the rooms a
+        # house that size holds.
+        plot_area = self.brief.site.plot_area or 0.0
+        lawn = float(getattr(self.brief.site, "garden_share", 0.0) or 0.0)
+        want = min(footprint, plot_area * (1.0 - lawn - 0.08)) if plot_area else footprint
+        # A pool asked for keeps its ground: the water, its deck and the path to the house.
+        from aip.engines.experience.landscape import POOL_DECK, POOLS
+
+        if self.brief.site.pool in POOLS:
+            pw, pl = POOLS[self.brief.site.pool]
+            margin = 2 * (POOL_DECK + 0.9)
+            want = max(0.0, want - (pw + margin) * (pl + margin))
+        left_open = 1.0 - max(cur.target) * 1.08 / plot_area if plot_area else 0.0
+        too_much_lawn = plot_area >= 300.0 and left_open > lawn + 0.08 + 0.15
+        if too_much_lawn:
+            self._cap_boost = max(1.0, min(2.2, want / (max(cur.target) * 1.08)))
         original = {id(r): r.target_area for r in base}
         fixed: set[int] = set()            # rooms added below keep the size they were added at
         goal = footprint / 1.08
@@ -2940,7 +2987,7 @@ class LayoutGenerator:
                     continue
                 cap_area = self._cap(r.type)
                 if cap_area is not None:
-                    cap_area = min(cap_area, 1.5 * original[id(r)])
+                    cap_area = min(cap_area, 1.5 * self._cap_boost * original[id(r)])
                 scaled = original[id(r)] * f
                 if cap_area is not None and r.type is not RoomType.STAIRCASE:
                     scaled = min(scaled, CAP_HEADROOM * cap_area)
@@ -2998,9 +3045,10 @@ class LayoutGenerator:
         factor, grown, filled = solve()
         grown = rebalance(grown)
         added: list[str] = []
-        # Rooms the client did not ask for are added only if they said the
-        # studio may (auto_extras); otherwise the rest of the plot is garden.
-        auto = bool((self.brief.metadata or {}).get("auto_extras", False))
+        # Rooms the client did not ask for are added if they said the studio may
+        # (auto_extras), or when the house would otherwise leave far more lawn
+        # than they asked to keep; otherwise the rest of the plot is garden.
+        auto = bool((self.brief.metadata or {}).get("auto_extras", False)) or too_much_lawn
         pending = list(EXTRA_ROOMS) if auto else []
         # Elders go first to a bedroom on the ground floor: stairs are the thing
         # an older household avoids, and a guest suite is the room that serves.
@@ -3009,7 +3057,8 @@ class LayoutGenerator:
         # Where each addition belongs: the living and sleeping extras downstairs,
         # where a household uses them every day; the study and the theatre above.
         home_level = {RoomType.STUDY: 1, RoomType.HOME_THEATRE: 1}
-        while not filled and max(grown.target) * 1.08 < FILL_TARGET * footprint and pending:
+        fill_to = 0.92 * want if too_much_lawn else FILL_TARGET * footprint
+        while not filled and max(grown.target) * 1.08 < fill_to and pending:
             kind, area, label, why = pending.pop(0)
             if any(r.type is kind for r in base):
                 continue
@@ -3038,7 +3087,7 @@ class LayoutGenerator:
         # verandah that wraps the front and the courtyard at the heart of the
         # plan. Both are open to the sky, so neither adds to the built-up area.
         coverage = self._footprint_cap() or footprint
-        goal_fill = min(0.95 * coverage, 0.97 * footprint)
+        goal_fill = min(0.95 * coverage, 0.97 * footprint, 0.97 * want)
         # Both are ground-floor rooms, so it is the ground floor's shortfall they
         # make up; the floors above fill with terrace.
         gap = goal_fill / 1.08 - grown.target[0]

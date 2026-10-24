@@ -226,3 +226,26 @@ def test_a_lawn_gets_lamps_and_a_path(pool_plan):
     bare = build_scene(pool_plan, include_furniture=False, design_id=Exterior(yard="fountain", garden="none").id)
     lamps = lambda sc: sum(len(g.faces) for k, g in sc.geometry.items() if k.startswith("site__") and k.endswith("__light"))  # noqa: E731
     assert lamps(lit) > 0 and lamps(bare) == 0
+
+
+def test_a_large_plot_is_not_left_mostly_lawn():
+    """A house on a 55 x 85 ft plot that asked to keep a quarter as lawn used
+    to cover under a third of it; it now grows toward what the byelaw allows.
+    A town plot the programme already fills is left as it was."""
+    from shapely.geometry import Polygon
+
+    from aip.engines.experience.landscape import _footprint
+
+    def share(w: float, d: float, lawn: float) -> float:
+        req = SimpleBriefRequest(plot_width=w, plot_depth=d, levels=2, bedrooms=3, bathrooms=3,
+                                 road_direction="N", **({"lawn_share": lawn} if lawn else {}))
+        gen = LayoutGenerator(req.to_brief(), GeneratorConfig(seed=3))
+        plan = gen.generate(count=1)[0]
+        plot = Polygon([(p.x, p.y) for p in plan.site.boundary])
+        return _footprint(plan).area / plot.area
+
+    big = share(16.76, 25.91, 0.25)
+    assert big >= 0.40, f"the house covers only {big:.0%} of a plot meant to keep 25% as lawn"
+    assert big <= 0.62                                  # and never past the byelaw's coverage
+    town = share(12.19, 18.29, 0.0)
+    assert 0.40 <= town <= 0.60
