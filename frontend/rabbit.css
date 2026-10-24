@@ -251,15 +251,6 @@ body[data-phase="review"] .review { display: grid; }
 .pf-north text { fill: var(--cream-2); font-family: var(--ui); font-size: 11px; font-weight: 600; text-anchor: middle; }
 
 .compose__sheet { padding: calc(var(--bar-h) + clamp(32px, 7vh, 88px)) var(--gut) 0; min-width: 0; }
-.modes { display: flex; gap: 28px; margin-bottom: 8px; border-bottom: 1px solid var(--rule); }
-.mode-tab {
-  position: relative; padding: 0 0 16px; border: 0; background: none; cursor: pointer;
-  font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-3);
-  transition: color 0.3s;
-}
-.mode-tab::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: var(--cream); transform: scaleX(0); transform-origin: left; transition: transform 0.5s var(--ease); }
-.mode-tab:hover, .mode-tab[aria-selected="true"] { color: var(--cream); }
-.mode-tab[aria-selected="true"]::after { transform: scaleX(1); }
 
 .spec { max-width: 640px; }
 .spec__group { padding-top: clamp(40px, 6vh, 64px); }
@@ -1525,11 +1516,34 @@ input[type="range"].stance::-moz-range-thumb { width: 16px; height: 16px; border
 @keyframes msg-in { from { opacity: 0; transform: translateY(8px); } }
 @keyframes dot { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 
-/* The sheet, as a drawer over the page */
-.compose__sheet { position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; width: min(620px, 100%); overflow-y: auto; background: var(--ink); border-left: 1px solid var(--rule-2); box-shadow: -40px 0 80px rgba(0, 0, 0, 0.5); transform: translateX(104%); transition: transform .5s var(--ease); padding-top: calc(var(--bar-h) + 24px); }
-body[data-manual="1"] .compose__sheet { transform: none; }
-.sheet__close { position: absolute; top: calc(var(--bar-h) + 10px); right: var(--gut); width: 34px; height: 34px; border: 1px solid var(--rule-2); border-radius: 50%; background: none; color: var(--cream-2); display: grid; place-items: center; cursor: pointer; }
-.sheet__close:hover { color: var(--cream); }
+/* The three ways in, side by side above whichever one is open. */
+.way { min-width: 0; display: flex; flex-direction: column; padding: calc(var(--bar-h) + clamp(20px, 4vh, 44px)) var(--gut) 0; }
+.way__tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--rule-2); border-radius: 18px; }
+.way__tab { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "i t" "i d"; align-items: center; column-gap: 10px; row-gap: 2px;
+  padding: 12px 14px; border: 0; border-radius: 14px; background: none; color: var(--cream-2); text-align: left; cursor: pointer;
+  transition: background .25s var(--ease), color .25s var(--ease); }
+.way__tab .ico { grid-area: i; width: 22px; height: 22px; }
+.way__t { grid-area: t; font: 500 15px/1.2 var(--ui); }
+.way__d { grid-area: d; font-size: 12.5px; line-height: 1.3; color: var(--cream-3); }
+.way__tab:hover { background: rgba(var(--c-rgb), 0.05); color: var(--cream); }
+.way__tab[aria-selected="true"] { background: var(--cream); color: var(--ink); }
+.way__tab[aria-selected="true"] .way__t { font-weight: 650; }
+.way__tab[aria-selected="true"] .way__d { color: rgba(11, 10, 9, 0.62); }
+.way__tab:focus-visible { outline: 2px solid var(--cream); outline-offset: 2px; }
+/* The open way sits right under the tabs, in the page, not in a drawer. */
+.way > .compose__sheet { padding: 22px 0 0; }
+.way > .chat { height: calc(100svh - var(--bar-h) - 120px); padding: 18px 0 22px; }
+body:not([data-entry="describe"]) .way > .chat { display: none; }
+body[data-entry="describe"] .way > .compose__sheet { display: none; }
+/* The tabs say how to switch; the chat need not repeat it. */
+.way .brief-strip .link-btn { display: none; }
+@media (max-width: 720px) {
+  .way__tabs { border-radius: 16px; }
+  .way__tab { grid-template-columns: minmax(0, 1fr); grid-template-areas: "i" "t" "d"; justify-items: start; padding: 10px; row-gap: 4px; }
+  .way__t { font-size: 13.5px; }
+  .way__d { display: none; }
+  .way > .chat { height: auto; min-height: 70svh; }
+}
 
 /* How it works */
 .explain { grid-column: 1 / -1; padding: clamp(48px, 9vh, 110px) var(--gut) 80px; border-top: 1px solid var(--rule); }
@@ -1850,9 +1864,6 @@ body[data-manual="1"] .compose__sheet { transform: none; }
   .bar__end .btn { min-height: 40px; padding: 0 14px; }
   .bar__end .bar__back { width: 44px; padding: 0; gap: 0; }
 
-  /* the form sheet: the mode tabs stop short of the close button */
-  .sheet__close { width: 40px; height: 40px; }
-  .modes { margin-right: 52px; }
   /* ledgers: tighter, and they scroll sideways rather than being cut off */
   table.led { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; font-size: 12px; }
   table.led th { letter-spacing: 0.06em; padding-right: 10px; }
@@ -1969,3 +1980,8 @@ body[data-manual="1"] .compose__sheet { transform: none; }
 
 /* Said to screen readers, not shown. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* Downloads say they are downloads: an arrow into a tray before the format. */
+.dl-btn { display: inline-flex; align-items: center; gap: 6px; }
+.dl-btn svg { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.btn.dl-btn:hover svg { transform: translateY(1px); }

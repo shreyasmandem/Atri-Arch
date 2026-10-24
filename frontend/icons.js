@@ -9,6 +9,7 @@ const PATHS = {
   next: "M9.5 6l6 6-6 6",
   collapse: "M12 6l-6 6 6 6M18.5 6l-6 6 6 6",
   dash: "M7 12h10",
+  download: "M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14",
 };
 
 export function icon(name, cls = "ico") {

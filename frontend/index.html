@@ -9,7 +9,7 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r48">
+<link rel="stylesheet" href="rabbit.css?v=r50">
 <link rel="icon" href="logo_emblem.png" type="image/png">
 </head>
 <body data-phase="compose" data-mode="brief">
@@ -68,16 +68,28 @@
     </figure>
   </div>
 
-  <!-- The conversation: the default way in -->
-  <div class="chat" id="chat" aria-label="Describe your home"></div>
-
-  <!-- The specification sheet: one click away, for anyone who prefers fields -->
-  <div class="compose__sheet" id="sheet">
-    <button type="button" class="sheet__close" id="sheet-close" aria-label="Back to the conversation"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-    <div class="modes" id="mode-switch" role="tablist" aria-label="How to begin">
-      <button type="button" class="mode-tab" role="tab" data-mode="brief" aria-selected="true">Design from a brief</button>
-      <button type="button" class="mode-tab" role="tab" data-mode="upload" aria-selected="false">Review a plan I have</button>
+  <!-- Three ways in, all in sight: the form first, then words, then a drawing. -->
+  <div class="way" id="way">
+    <div class="way__tabs" role="tablist" aria-label="How do you want to start?">
+      <button type="button" class="way__tab" role="tab" id="tab-form" data-entry="form" aria-controls="sheet" aria-selected="true">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8.5 8.5h7M8.5 12h7M8.5 15.5h4"/></svg>
+        <span class="way__t">Fill in a form</span><span class="way__d">Plot, rooms and budget</span>
+      </button>
+      <button type="button" class="way__tab" role="tab" id="tab-describe" data-entry="describe" aria-controls="chat" aria-selected="false" tabindex="-1">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4zM8 9.5h8M8 12.5h5"/></svg>
+        <span class="way__t">Describe it</span><span class="way__d">Type it in your own words</span>
+      </button>
+      <button type="button" class="way__tab" role="tab" id="tab-upload" data-entry="upload" aria-controls="sheet" aria-selected="false" tabindex="-1">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v5h14v-5"/></svg>
+        <span class="way__t">Upload a plan</span><span class="way__d">DXF, SVG or a photo</span>
+      </button>
     </div>
+
+  <!-- Describe it: the conversation -->
+  <div class="chat" id="chat" role="tabpanel" aria-labelledby="tab-describe"></div>
+
+  <!-- Fill in a form, or upload a plan: the specification sheet -->
+  <div class="compose__sheet" id="sheet" role="tabpanel" aria-labelledby="tab-form">
 
     <!-- The brief, as a specification sheet -->
     <form id="brief" class="spec" novalidate>
@@ -346,6 +358,7 @@
       </div>
     </form>
   </div>
+  </div>
 
   <div class="explain" aria-label="How it works">
     <h2 class="explain__h">From a sentence to a set of drawings, in about a minute</h2>
@@ -405,8 +418,8 @@
           <button type="button" class="btn btn--quiet zoom-step" id="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
           <button type="button" class="btn btn--quiet" id="zoom-val" title="Fit to frame">100%</button>
           <button type="button" class="btn btn--quiet zoom-step" id="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-          <button type="button" class="btn btn--quiet" id="dl-svg">SVG</button>
-          <button type="button" class="btn btn--quiet" id="dl-dxf" title="Editable CAD: AutoCAD, BricsCAD, LibreCAD or QCAD">DXF</button>
+          <button type="button" class="btn btn--quiet dl-btn" id="dl-svg" aria-label="Download this sheet as SVG" title="Download this sheet as SVG"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>SVG</button>
+          <button type="button" class="btn btn--quiet dl-btn" id="dl-dxf" aria-label="Download as DXF, editable in AutoCAD, BricsCAD, LibreCAD or QCAD" title="Download as DXF: editable CAD (AutoCAD, BricsCAD, LibreCAD, QCAD)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>DXF</button>
         </div>
       </div>
       <div class="plate" id="plate"></div>
@@ -469,6 +482,6 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="config.js"></script>
-<script src="studio.js?v=r60" type="module"></script>
+<script src="studio.js?v=r62" type="module"></script>
 </body>
 </html>

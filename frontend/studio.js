@@ -8,8 +8,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import { atelier, person, avatar } from "./atelier.js?v=s2";
-import { mountEditor } from "./editor.js?v=e4";
-import { icon } from "./icons.js?v=i1";
+import { mountEditor } from "./editor.js?v=e5";
+import { icon } from "./icons.js?v=i2";
 import { autoSetbacks } from "./setbacks.js";
 
 const API = (() => {
@@ -347,18 +347,51 @@ function setField(name, value) {
 }
 
 function openManual(mode) {
-  setMode(mode);
-  document.body.dataset.manual = "1";
-  $("sheet-close")?.focus();
+  setEntry(mode === "upload" ? "upload" : "form", { focus: true });
+}
+
+// The three ways in, all in sight at the top of the brief: the form (first,
+// and where the studio opens), the conversation, and a drawing to review.
+function setEntry(entry, { focus = false } = {}) {
+  const e = ["form", "describe", "upload"].includes(entry) ? entry : "form";
+  document.body.dataset.entry = e;
+  if (e !== "describe") setMode(e === "upload" ? "upload" : "brief");
+  document.querySelectorAll(".way__tab").forEach((t) => {
+    const on = t.dataset.entry === e;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+  });
+  $("sheet")?.setAttribute("aria-labelledby", e === "upload" ? "tab-upload" : "tab-form");
+  if (focus) {
+    const first = e === "describe" ? document.querySelector(".composer__in")
+      : e === "upload" ? $("inp-file") : $("inp-plot-width");
+    setTimeout(() => first?.focus({ preventScroll: true }), 60);
+  }
+}
+
+function initEntry() {
+  const tabs = [...document.querySelectorAll(".way__tab")];
+  tabs.forEach((t, i) => {
+    t.addEventListener("click", () => setEntry(t.dataset.entry, { focus: true }));
+    // Arrow keys move along the tabs, Home and End to either end, as a tablist should.
+    t.addEventListener("keydown", (ev) => {
+      const k = { ArrowRight: 1, ArrowLeft: -1, Home: -99, End: 99 }[ev.key];
+      if (k === undefined) return;
+      ev.preventDefault();
+      const j = k === -99 ? 0 : k === 99 ? tabs.length - 1 : (i + k + tabs.length) % tabs.length;
+      setEntry(tabs[j].dataset.entry);
+      tabs[j].focus();
+    });
+  });
+  setEntry("form");
 }
 
 async function initHome() {
   const host = $("chat");
   if (!host) return;
-  $("sheet-close")?.addEventListener("click", () => { delete document.body.dataset.manual; });
   const { mountHome } = await import("./home.js");
   // The live hero, the airflow tile and the committee: the page's own proof.
-  import("./home-hero.js?v=h2").then(({ mountHero, mountAirShowcase }) => {
+  import("./home-hero.js?v=h3").then(({ mountHero, mountAirShowcase }) => {
     mountHero($("hero3d"), $("hero-cap"));
     const air = $("show-air");
     if (air) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { mountAirShowcase(air); o.disconnect(); } }).observe(air);
@@ -375,7 +408,7 @@ async function initHome() {
   }
   $("cta-go")?.addEventListener("click", () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
-    setTimeout(() => document.querySelector(".composer__in")?.focus(), 500);
+    setEntry(document.body.dataset.entry || "form", { focus: true });
   });
   mountHome({
     host, api: API, setField, openManual,
@@ -385,7 +418,7 @@ async function initHome() {
       const dt = new DataTransfer(); dt.items.add(f);
       inp.files = dt.files;
       inp.dispatchEvent(new Event("change", { bubbles: true }));
-      setMode("upload");
+      setEntry("upload");
       $("upload").requestSubmit();
     },
     start: (request, brief, words = "") => {
@@ -410,8 +443,7 @@ async function initHome() {
 
   $("brief").addEventListener("submit", onSubmit);
   $("upload")?.addEventListener("submit", onUpload);
-  document.querySelectorAll(".mode-tab").forEach((t) =>
-    t.addEventListener("click", () => setMode(t.dataset.mode)));
+  initEntry();
   initDropzone();
   initHome();
   $("home").addEventListener("click", () => { if (S.phase === "review") phase("compose"); });
@@ -421,7 +453,7 @@ async function initHome() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || S.phase !== "review") return;
     if (e.target.closest?.("input, select, textarea")) return;
-    const open = !$("why").hidden || document.body.dataset.manual || ($("editdrawer") && !$("editdrawer").hidden);
+    const open = !$("why").hidden || ($("editdrawer") && !$("editdrawer").hidden);
     if (!open) goBack();
   }, { capture: true });
   $("see-why")?.addEventListener("click", openWhy);
@@ -651,8 +683,6 @@ async function onSubmit(e, preset = null) {
 
 function setMode(mode) {
   S.mode = mode === "upload" ? "upload" : "brief";
-  document.querySelectorAll(".mode-tab").forEach((t) =>
-    t.setAttribute("aria-selected", String(t.dataset.mode === S.mode)));
   $("brief").hidden = S.mode !== "brief";
   $("upload").hidden = S.mode !== "upload";
   document.body.dataset.mode = S.mode;
@@ -770,7 +800,7 @@ async function onUpload(e) {
     atelier.stop();
     if (upBtn) { upBtn.classList.remove("is-loading"); upBtn.disabled = false; }
     phase("compose");
-    setMode("upload");
+    setEntry("upload");
     renderImportReport(null, null, err.message);
     toast("The plan could not be read.");
     return;
@@ -1005,7 +1035,9 @@ function buildSchemeTabs() {
     // reads as a rendering fault; saying so is the honest signal.
     if (row) {
       b.append(el("b", null, row.score.toFixed(2)));
-      b.title = id === S.candidateId ? "Selected by the committee" : "On the trade-off frontier";
+      // The number is the committee's score out of 1: say so where it is read.
+      b.title = `Committee score ${row.score.toFixed(2)} out of 1 · `
+        + (id === S.candidateId ? "selected by the committee" : "on the trade-off frontier");
     } else if (dq.has(id)) {
       b.dataset.dq = "1";
       b.append(el("b", null, "DQ"));
@@ -1582,7 +1614,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p9");
+    const { Viewer3D } = await import("./viewer3d.js?v=p10");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2162,7 +2194,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p9");
+  const { Viewer3D } = await import("./viewer3d.js?v=p10");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2283,8 +2315,11 @@ async function renderModel() {
   const exterior = el("button", "ghost-btn", "Exterior design"); exterior.type = "button";
   exterior.addEventListener("click", () => showView("exterior"));
   tools.append(exterior, play);
-  for (const [label, href] of [[".glb", `${API}/plans/${S.activeId}/model.glb`], [".obj", `${API}/plans/${S.activeId}/model.obj`]]) {
-    const a = el("a", "ghost-btn", label); a.href = href; a.download = ""; a.title = `Download the model as ${label}`;
+  for (const [label, href, what] of [["GLB", `${API}/plans/${S.activeId}/model.glb`, "for the web, Blender or SketchUp"],
+    ["OBJ", `${API}/plans/${S.activeId}/model.obj`, "for most 3D software"]]) {
+    const a = el("a", "ghost-btn dl-btn"); a.href = href; a.download = "";
+    a.append(icon("download"), document.createTextNode(label));
+    a.title = `Download the 3D model as ${label}, ${what}`; a.setAttribute("aria-label", a.title);
     tools.append(a);
   }
   bar.append(tools);
@@ -2304,7 +2339,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p9");
+    const { Viewer3D } = await import("./viewer3d.js?v=p10");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2401,7 +2436,7 @@ async function renderExterior() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   // The four elevations of what the model shows, drawn without the site.
-  const { elevations } = await import("./thumbs.js?v=p3");
+  const { elevations } = await import("./thumbs.js?v=p4");
   let drawn = "";
   const drawElevations = async () => {
     const url = modelUrl();
@@ -2423,7 +2458,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p9");
+    const { Viewer3D } = await import("./viewer3d.js?v=p10");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2508,7 +2543,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p3"), import("./materials.js?v=m2")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m2")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };
