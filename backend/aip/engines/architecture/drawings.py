@@ -795,8 +795,14 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
                 opacity=0.9 if not room.type.is_outdoor else 0.6,
             )
 
-    # The pool the client asked for, and how much of the plot stays open.
-    from aip.engines.experience.landscape import POOL_NAMES, pool_rect
+    # The lawn as asked and the paved terrace round the house (landscape.ground_cover).
+    from aip.engines.experience.landscape import POOL_NAMES, ground_cover, pool_rect, simple_parts
+
+    cover = ground_cover(plan)
+    for g in simple_parts(cover["lawn"]):
+        canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#cfe0c4", opacity=0.9)
+    for g in simple_parts(cover["paved"]):
+        canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#e4ded3", stroke="#c9c1b3", width=0.5)
 
     pool = pool_rect(plan)
     if pool is not None:
@@ -818,8 +824,9 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
         Vec2(extent.min_x + 0.4, extent.max_y - 0.8),
         f"Plot {site.plot_area:.0f} m²   |   Footprint {plan.footprint_area:.0f} m²   "
         f"|   Coverage {plan.footprint_area / site.plot_area:.0%}   |   FAR {plan.achieved_far:.2f}"
-        f"   |   Open ground {site.plot_area - plan.footprint_area:.0f} m²"
-        + (f" (asked: {site.garden_share:.0%} lawn)" if site.garden_share else "")
+        f"   |   Lawn {cover['shares'].get('lawn', 0) * site.plot_area:.0f} m² ({cover['shares'].get('lawn', 0):.0%}"
+        + (f", as asked)" if site.garden_share else ")")
+        + (f"   |   Terrace and walks {cover['shares']['paved']:.0%}" if cover["shares"].get("paved") else "")
         + ("" if not site.pool else f"   |   {POOL_NAMES[pool[1]].capitalize()}" if pool is not None
            else "   |   The pool asked for does not fit this plot"),
         size=9, fill=style.text_muted, anchor="start",

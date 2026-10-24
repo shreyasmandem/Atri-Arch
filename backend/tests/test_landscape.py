@@ -51,7 +51,7 @@ def test_the_pool_is_built_and_drawn(pool_plan):
     names = {g.visual.material.name for g in build_scene(pool_plan, include_furniture=False).geometry.values()}
     assert "pool_water" in names
     svg = site_plan_svg(pool_plan)
-    assert "POOL" in svg and "Open ground" in svg
+    assert "POOL" in svg and "Lawn " in svg
 
 
 def test_a_pool_that_cannot_fit_is_said_so():
@@ -249,3 +249,32 @@ def test_a_large_plot_is_not_left_mostly_lawn():
     assert big <= 0.62                                  # and never past the byelaw's coverage
     town = share(12.19, 18.29, 0.0)
     assert 0.40 <= town <= 0.60
+
+
+@pytest.mark.parametrize("w,d,lawn", [(16.76, 25.91, 0.25), (12.19, 18.29, 0.25), (20.0, 30.0, 0.4)])
+def test_the_lawn_is_the_share_the_client_asked_for(w, d, lawn):
+    """Asked to keep 25% as lawn, the plot shows 25% as lawn - the open ground
+    past that is a paved terrace round the house - in the model and the site plan."""
+    from aip.engines.architecture.drawings import site_plan_svg
+    from aip.engines.experience.arch3d import build_scene
+    from aip.engines.experience.landscape import ground_cover, simple_parts
+
+    req = SimpleBriefRequest(plot_width=w, plot_depth=d, levels=2, bedrooms=3, bathrooms=3, road_direction="N", lawn_share=lawn)
+    plan = LayoutGenerator(req.to_brief(), GeneratorConfig(population=16, generations=8, seed=3)).generate(count=1)[0]
+    cover = ground_cover(plan)
+    assert cover["shares"]["lawn"] == pytest.approx(lawn, abs=0.02)
+    parts = simple_parts(cover["paved"])
+    assert all(not p.interiors for p in parts)
+    assert sum(p.area for p in parts) == pytest.approx(cover["paved"].area, rel=0.01)
+    names = {g.visual.material.name for g in build_scene(plan, include_furniture=False).geometry.values()}
+    assert "terrace_paving" in names
+    assert f"({cover['shares']['lawn']:.0%}, as asked)" in site_plan_svg(plan)
+
+
+def test_with_no_lawn_asked_all_open_ground_is_lawn():
+    from aip.engines.experience.landscape import ground_cover
+
+    req = SimpleBriefRequest(plot_width=12.19, plot_depth=18.29, levels=2, bedrooms=3, road_direction="N")
+    plan = LayoutGenerator(req.to_brief(), GeneratorConfig(population=16, generations=8, seed=3)).generate(count=1)[0]
+    cover = ground_cover(plan)
+    assert cover["paved"].is_empty and cover["shares"]["lawn"] > 0.3

@@ -216,6 +216,8 @@ class Palette:
             "flower_yellow": Material("flower_yellow", (0.95, 0.77, 0.22), 0.9),
             "flower_white": Material("flower_white", (0.95, 0.94, 0.90), 0.9),
             "soil": Material("garden_soil", (0.30, 0.21, 0.14), 1.0),
+            # The terrace and walks round the house where the brief keeps less lawn.
+            "terrace": Material("terrace_paving", (0.74, 0.71, 0.66), 0.9),
             "fire": Material("fire_glow", (1.0, 0.52, 0.16), 0.6, 0.0, 1.0, (1.0, 0.42, 0.08)),
             "ex_panel": Material("panel_stone_cladding", ext["clad"], 0.85),
             # Warm facade lighting: a lamp, so it glows in the night view.
@@ -1324,6 +1326,15 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
             if g.geom_type == "Polygon" and g.area > 0.5:
                 b.slab("site", "paving", [Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], 0.0, 0.03)
 
+    # The lawn the client asked for, exactly: the rest of the open ground is a
+    # paved terrace and walks round the house (see landscape.ground_cover).
+    from aip.engines.experience.landscape import ground_cover, simple_parts
+
+    cover = ground_cover(plan)
+    for g in simple_parts(cover["paved"]):
+        b.slab("site", "terrace", [Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], 0.0, 0.025)
+    lawn_only = cover["lawn"] if not cover["paved"].is_empty else None
+
     # The pool the client asked for, in the open garden away from the road.
     from aip.engines.experience.landscape import pool_rect
 
@@ -1357,7 +1368,7 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
             k = int(ring_.length / 1.1)
             for i in range(k):
                 q = ring_.interpolate(i / k, normalized=True)
-                if keep_off.contains(q):
+                if keep_off.contains(q) or (lawn_only is not None and not lawn_only.contains(q)):
                     continue
                 b.blob("site", "leaf" if i % 3 else "leaf2", (q.x, 0.45, -q.y), 0.48, 0.85)
 
@@ -1371,6 +1382,8 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
         free = free.difference(pool[0].buffer(2.6))       # no canopy over the water
     if yard is not None:
         free = free.difference(Point(yard[0].x, yard[0].y).buffer(yard[1] + 1.0))
+    if lawn_only is not None:
+        free = free.intersection(lawn_only.buffer(-0.6))   # trees grow in the lawn, not through the terrace
     if free.is_empty:
         return
     rng = random.Random(int(hashlib.md5(plan.id.encode()).hexdigest()[:8], 16))

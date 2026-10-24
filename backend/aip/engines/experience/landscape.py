@@ -272,3 +272,73 @@ def yard_spot(plan: FloorPlan, kind: str):
         if best is not None:
             return best, r
     return None
+
+
+def ground_cover(plan: FloorPlan) -> dict:
+    """The plot's ground laid out as the client asked: what is house, drive,
+    pool, lawn and paving, with each share of the plot.
+
+    Open ground is the plot less the house (its plinth), the drive and the pool
+    with its deck. When the client set a lawn share and there is more open
+    ground than that, the lawn is exactly what they asked for: the rest becomes
+    a paved terrace and walks round the house and along the drive - grown out
+    from them evenly, the way a garden is laid - and the lawn is what remains
+    towards the boundary. With no lawn asked for, all the open ground is lawn.
+    """
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+
+    empty = Polygon()
+    out = {"lawn": empty, "paved": empty, "shares": {}}
+    if not plan.site.boundary:
+        return out
+    plot = Polygon([(p.x, p.y) for p in plan.site.boundary]).buffer(0)
+    foot = _footprint(plan)
+    house = foot.buffer(0.15, join_style=2) if foot is not None else empty
+    gate = _gate(plan, plot)
+    drive = (drive_line(foot, gate).buffer(DRIVE_HALF, cap_style=2).intersection(plot).difference(house)
+             if foot is not None and gate is not None else empty)
+    placed = pool_rect(plan)
+    pool = placed[0].buffer(POOL_DECK, join_style=2).intersection(plot) if placed is not None else empty
+    open_ = plot.difference(unary_union([house, drive, pool]))
+    lawn, paved = open_, empty
+    want = float(plan.site.garden_share or 0.0) * plot.area
+    if want > 0 and open_.area > want + 1.0:
+        # Grow the apron round the house and the drive until the lawn left is what was asked.
+        core = unary_union([house, drive])
+        lo, hi = 0.0, max(plot.bounds[2] - plot.bounds[0], plot.bounds[3] - plot.bounds[1])
+        for _ in range(28):
+            mid = (lo + hi) / 2
+            if open_.difference(core.buffer(mid, join_style=2)).area > want:
+                lo = mid
+            else:
+                hi = mid
+        lawn = open_.difference(core.buffer(lo, join_style=2))
+        paved = open_.difference(lawn)
+    a = plot.area or 1.0
+    out.update(lawn=lawn, paved=paved, drive=drive, pool=pool, house=house, plot=plot)
+    out["shares"] = {"house": house.intersection(plot).area / a, "drive": drive.area / a, "pool": pool.area / a,
+                     "lawn": lawn.area / a, "paved": paved.area / a, "asked_lawn": want / a}
+    return out
+
+
+def simple_parts(geom) -> list:
+    """A shape as polygons without holes (a paved ring round a house has one),
+    for builders and drawings that take only an outline: each hole is cut through."""
+    from shapely.geometry import LineString
+    from shapely.ops import split
+
+    todo = [g for g in getattr(geom, "geoms", [geom]) if g.geom_type == "Polygon" and not g.is_empty]
+    done = []
+    while todo:
+        g = todo.pop()
+        if g.area < 0.05:
+            continue
+        if not g.interiors:
+            done.append(g)
+            continue
+        cx = g.interiors[0].centroid.x
+        y0, y1 = g.bounds[1] - 1, g.bounds[3] + 1
+        parts = split(g, LineString([(cx, y0), (cx, y1)]))
+        todo.extend(p for p in parts.geoms if p.geom_type == "Polygon")
+    return done
