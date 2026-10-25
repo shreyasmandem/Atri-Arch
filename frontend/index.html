@@ -9,7 +9,7 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r54">
+<link rel="stylesheet" href="rabbit.css?v=r55">
 <link rel="icon" href="logo_emblem.png" type="image/png">
 </head>
 <body data-phase="compose" data-mode="brief">
@@ -52,6 +52,8 @@
 <!-- ═══ BRIEF ═══ -->
 <section class="compose" id="compose" aria-label="The brief">
 
+  <!-- The hero and the form side by side: the hero holds still while the form scrolls past. -->
+  <div class="compose__pair">
   <div class="compose__title">
     <div class="hero3d" id="hero3d" aria-hidden="true"></div>
     <p class="hero3d__cap"><i></i><b id="hero-cap"></b></p>
@@ -357,6 +359,7 @@
         </button>
       </div>
     </form>
+  </div>
   </div>
   </div>
 

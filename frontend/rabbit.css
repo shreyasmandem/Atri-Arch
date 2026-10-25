@@ -1583,7 +1583,7 @@ body[data-entry="describe"] .way > .compose__sheet { display: none; }
 @media (prefers-reduced-motion: reduce) { .viz em, .msg, .dots i { animation: none !important; opacity: 1; } }
 
 /* The first screen holds the conversation and the live plot; the page scrolls on to how it works. */
-.compose > .compose__title { position: relative; }
+.compose__pair { grid-column: 1 / -1; display: grid; grid-template-columns: inherit; min-width: 0; }
 
 /* ═══ HOME v2: a conversation that reads like a product ═════════════════ */
 .bar .engine { display: none; }
@@ -1659,7 +1659,9 @@ body[data-entry="describe"] .way > .compose__sheet { display: none; }
 .fact { border-radius: 3px; }
 
 /* ═══ HOMEPAGE: hero, showcase, committee ════════════════════════════════ */
-.compose > .compose__title { position: relative; isolation: isolate; overflow: hidden; }
+.compose__pair > .compose__title { position: relative; isolation: isolate; overflow: hidden; }
+/* Side by side, the hero holds its place while the form scrolls past it. */
+@media (min-width: 981px) { .compose__pair > .compose__title { position: sticky; top: 0; align-self: start; } }
 .hero3d { position: absolute; inset: 0; z-index: -1; }
 .hero3d canvas { width: 100% !important; height: 100% !important; display: block; }
 .hero3d::after { content: ""; position: absolute; inset: 0; pointer-events: none;
@@ -1711,7 +1713,7 @@ body[data-entry="describe"] .way > .compose__sheet { display: none; }
 
 @media (max-width: 1100px) { .show__grid { grid-template-columns: 1fr 1fr; } .tile--facts { grid-column: 1 / -1; min-height: 0; } }
 @media (max-width: 900px) {
-  .compose > .compose__title { min-height: 80svh; }
+  .compose__pair > .compose__title { min-height: 80svh; }
   .show__head { grid-template-columns: 1fr; }
   .show__grid { grid-template-columns: 1fr; }
   .compose__title .plotfig { display: none; }
@@ -1832,7 +1834,7 @@ body[data-entry="describe"] .way > .compose__sheet { display: none; }
   body { overflow-x: hidden; }
 
   /* the brief */
-  .compose > .compose__title { height: 64svh; min-height: 0; padding-bottom: 20px; }
+  .compose__pair > .compose__title { height: 64svh; min-height: 0; padding-bottom: 20px; }
   .headline__hard { font-size: clamp(34px, 11vw, 48px); }
   .headline__soft { font-size: clamp(20px, 6vw, 26px); }
   .headline__hard--sm { font-size: clamp(16px, 5vw, 20px); }
