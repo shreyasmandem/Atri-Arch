@@ -205,7 +205,7 @@ function renderBrief() {
     : "No lawn asked for: the plot's own setbacks stay open");
   setText("stance-note", stance[2]);
   setText("sum-line", `${unit === "ft" ? `${Math.round(rw * rd)} sq ft` : `${Math.round(w * d)} m²`} plot · ${beds} bed · ${budget ? `₹${lakh(budget)}` : "no set budget"} · Vastu ${stance[0].toLowerCase()}`);
-  drawPlot({ w, d, rw, rd, unit, road, levels,
+  drawPlot({ w, d, rw, rd, unit, road, levels, lawn,
     ...(() => { const sb = autoSetbacks(w * d, +v("setback_front") || null, +v("setback_rear") || null, +v("setback_side") || null, Math.min(w, d));
       return { front: sb[0], rear: sb[1], side: sb[2] }; })() });
 }
@@ -213,7 +213,7 @@ function renderBrief() {
 // The plot to scale: boundary, setback envelope, the road on its side, the
 // floors stacked behind, dimensions and a north point. Geometry is set with
 // CSS-transitionable attributes so a change of input redraws smoothly.
-function drawPlot({ w, d, rw = w, rd = d, unit = "m", road, levels, front, rear, side }) {
+function drawPlot({ w, d, rw = w, rd = d, unit = "m", road, levels, front, rear, side, lawn = 0 }) {
   const svg = $("plot-svg");
   if (!svg) return;
   const VW = 420, VH = 340, M = 56;
@@ -235,6 +235,8 @@ function drawPlot({ w, d, rw = w, rd = d, unit = "m", road, levels, front, rear,
     svg.innerHTML = `
       <g class="pf-floors"></g>
       <rect class="pf-plot" />
+      <rect class="pf-lawn" />
+      <text class="pf-t pf-t--lawn"></text>
       <rect class="pf-env" />
       <g class="pf-road"></g>
       <g class="pf-dims">
@@ -290,6 +292,23 @@ function drawPlot({ w, d, rw = w, rd = d, unit = "m", road, levels, front, rear,
   const td = svg.querySelector('.pf-t[data-d="d"]');
   set(td, { x: dimX + 6, y: y0 + pd / 2, transform: `rotate(-90 ${(dimX + 6).toFixed(1)} ${(y0 + pd / 2).toFixed(1)})` });
   td.textContent = `${fmtM(rd)} ${unit}`;
+
+  // The lawn asked for, at its true share of the plot: a band across the back,
+  // away from the road, the way the studio lays the garden out (ground_cover).
+  const lw = svg.querySelector(".pf-lawn"), lt = svg.querySelector(".pf-t--lawn");
+  const back = road.includes("N") ? "b" : road.includes("S") ? "t" : road.includes("E") ? "l" : "r";
+  const across = back === "t" || back === "b";
+  const depth = (across ? pd : pw) * Math.min(1, Math.max(0, lawn));
+  const r = {
+    t: [x0, y0, pw, depth], b: [x0, y0 + pd - depth, pw, depth],
+    l: [x0, y0, depth, pd], r: [x0 + pw - depth, y0, depth, pd],
+  }[back];
+  set(lw, { x: r[0], y: r[1], width: r[2], height: r[3], opacity: lawn > 0 ? 1 : 0 });
+  set(lt, { x: r[0] + r[2] / 2, y: r[1] + r[3] / 2 + 4, opacity: lawn > 0 && Math.min(r[2], r[3]) > 14 ? 1 : 0 });
+  lt.textContent = `LAWN ${Math.round(lawn * 100)}%`;
+  setText("plot-cap", lawn
+    ? `Plot to scale, with ${Math.round(lawn * 100)}% kept as lawn at the back; the house and its paving take the rest.`
+    : "Plot, setbacks and road, drawn to scale from the brief.");
 }
 
 function initBrief() {
@@ -391,7 +410,7 @@ async function initHome() {
   if (!host) return;
   const { mountHome } = await import("./home.js");
   // The live hero, the airflow tile and the committee: the page's own proof.
-  import("./home-hero.js?v=h3").then(({ mountHero, mountAirShowcase }) => {
+  import("./home-hero.js?v=h4").then(({ mountHero, mountAirShowcase }) => {
     mountHero($("hero3d"), $("hero-cap"));
     const air = $("show-air");
     if (air) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { mountAirShowcase(air); o.disconnect(); } }).observe(air);

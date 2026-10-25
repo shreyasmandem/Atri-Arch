@@ -55,6 +55,9 @@ async function build(viewer) {
 
 export async function mountHero(host, caption) {
   if (!host) return;
+  // The showcase plays beside the conversation only; on the form the picture is
+  // the client's own plot, so it is not loaded until it can be seen.
+  while (document.body.dataset.entry && document.body.dataset.entry !== "describe") await wait(600);
   let Viewer3D;
   try { ({ Viewer3D } = await import("./viewer3d.js?v=p10")); } catch { return; }
   const viewer = new Viewer3D(host);
@@ -75,7 +78,8 @@ export async function mountHero(host, caption) {
   // Keep building: every few seconds the same plan in its next facade.
   for (;;) {
     await wait(6500);
-    if (!document.body.contains(host) || document.body.dataset.phase !== "compose") { await wait(3000); continue; }
+    if (!document.body.contains(host) || document.body.dataset.phase !== "compose"
+        || (document.body.dataset.entry && document.body.dataset.entry !== "describe")) { await wait(3000); continue; }
     k++;
     await show(false);
   }
