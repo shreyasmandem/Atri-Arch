@@ -1673,18 +1673,6 @@ body[data-entry="describe"] .way > .compose__sheet { display: none; }
 .compose__title .plotfig { position: absolute; right: var(--gut); bottom: 18px; z-index: 2; width: 210px; padding: 12px; background: rgba(11, 10, 9, 0.78); border: 1px solid var(--rule-2); backdrop-filter: blur(6px); }
 .compose__title .plotfig svg { min-height: 0; height: 170px; max-height: none; }
 .compose__title .plotfig figcaption { font-size: 10px; letter-spacing: .06em; }
-/* On the form, the picture is the client's own plot, not a showcase house: the
-   canned models stay for the conversation, where there are no inputs to contradict. */
-body:not([data-entry="describe"]) .compose__title .hero3d,
-body:not([data-entry="describe"]) .compose__title .hero3d__cap { display: none; }
-body:not([data-entry="describe"]) .compose__title .plotfig { position: static; width: auto; padding: 0; background: none; border: 0; backdrop-filter: none; }
-body:not([data-entry="describe"]) .compose__title .plotfig svg { height: 100%; min-height: 260px; max-height: 58vh; }
-body:not([data-entry="describe"]) .compose__title .plotfig figcaption { display: block; font-size: 12.5px; letter-spacing: 0; }
-@media (max-width: 900px) {
-  body:not([data-entry="describe"]) .compose > .compose__title { height: auto; min-height: 0; }
-  body:not([data-entry="describe"]) .compose__title .plotfig { display: grid; margin-top: 20px; }
-  body:not([data-entry="describe"]) .compose__title .plotfig svg { min-height: 220px; max-height: 46svh; }
-}
 
 .explain { display: grid; gap: clamp(72px, 12vh, 140px); }
 .explain__h { margin-bottom: 24px; }

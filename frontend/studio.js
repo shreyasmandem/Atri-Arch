@@ -410,7 +410,7 @@ async function initHome() {
   if (!host) return;
   const { mountHome } = await import("./home.js");
   // The live hero, the airflow tile and the committee: the page's own proof.
-  import("./home-hero.js?v=h4").then(({ mountHero, mountAirShowcase }) => {
+  import("./home-hero.js?v=h5").then(({ mountHero, mountAirShowcase }) => {
     mountHero($("hero3d"), $("hero-cap"));
     const air = $("show-air");
     if (air) new IntersectionObserver((es, o) => { if (es[0].isIntersecting) { mountAirShowcase(air); o.disconnect(); } }).observe(air);
