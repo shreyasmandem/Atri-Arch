@@ -189,12 +189,14 @@ def average_daylight_factor(
     return round(df, 3)
 
 
-def overheating_risk(direction: Direction, latitude: float, shading_factor: float = 0.0) -> float:
+def overheating_risk(direction: Direction, latitude: float, shading_factor: float = 0.0,
+                     fins: bool = False) -> float:
     """Risk in [0, 1] that a glazed opening on this orientation overheats.
 
     `shading_factor` is the fraction of the opening protected by an overhang,
     fin, chajja or verandah. West glazing is penalised hardest because low-angle
-    afternoon sun is the case a horizontal overhang cannot fix.
+    afternoon sun is the case a horizontal overhang cannot fix; vertical `fins`
+    beside the opening are what does, so they keep most of their effect there.
     """
     exposure = annual_orientation_exposure(latitude, 78.0)
     raw = exposure.get(direction, 0.5)
@@ -208,7 +210,7 @@ def overheating_risk(direction: Direction, latitude: float, shading_factor: floa
             Direction.NW: 0.18, Direction.SW: 0.12,
         }.get(direction, 0.0)
     # A horizontal overhang is far more effective against high-angle sun.
-    effective_shading = shading_factor * (0.4 if west_penalty > 0.15 else 0.95)
+    effective_shading = shading_factor * (0.95 if not west_penalty > 0.15 else 0.8 if fins else 0.4)
     return round(max(0.0, min(1.0, (raw + west_penalty) * (1 - effective_shading))), 4)
 
 

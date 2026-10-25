@@ -9,7 +9,8 @@
 <link rel="preload" href="fonts/Archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/Geist-latin.woff2" as="font" type="font/woff2" crossorigin>
 <script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}</script>
-<link rel="stylesheet" href="rabbit.css?v=r1">
+<link rel="stylesheet" href="rabbit.css?v=r55">
+<link rel="icon" href="logo_emblem.png" type="image/png">
 </head>
 <body data-phase="compose" data-mode="brief">
 
@@ -19,8 +20,8 @@
 <!-- ═══ HEADER ═══ -->
 <header class="bar">
   <button type="button" class="wordmark" id="home" aria-label="Atri Arch, back to the brief">
-    <img src="logo_emblem.png" alt="" width="28" height="28">
-    <span>Atri Arch</span>
+    <img src="logo_emblem.png" alt="" width="29" height="30">
+    <span>Atri<b>Arch</b></span>
   </button>
 
   <div class="bar__mid">
@@ -29,7 +30,9 @@
 
   <nav class="views" id="views" aria-label="Views">
     <button type="button" class="view-tab is-on" data-view="drawings">Drawings</button>
+    <button type="button" class="view-tab" data-view="exterior">Exterior</button>
     <button type="button" class="view-tab" data-view="model">3D</button>
+    <button type="button" class="view-tab" data-view="air">Air</button>
     <button type="button" class="view-tab" data-view="vastu">Vastu</button>
     <button type="button" class="view-tab" data-view="cost">Cost</button>
     <button type="button" class="view-tab" data-view="interior">Interior</button>
@@ -38,6 +41,8 @@
 
   <div class="bar__end">
     <p class="engine" aria-live="polite"><i id="engine-dot" data-tone="running"></i><span id="engine-note">Connecting</span></p>
+    <button type="button" class="btn btn--line bar__back" id="back" hidden>Back</button>
+    <button type="button" class="btn btn--line" id="resume" hidden>Back to your designs</button>
     <button type="button" class="btn btn--line" id="restart" hidden>New brief</button>
   </div>
 </header>
@@ -47,7 +52,11 @@
 <!-- ═══ BRIEF ═══ -->
 <section class="compose" id="compose" aria-label="The brief">
 
+  <!-- The hero and the form side by side: the hero holds still while the form scrolls past. -->
+  <div class="compose__pair">
   <div class="compose__title">
+    <div class="hero3d" id="hero3d" aria-hidden="true"></div>
+    <p class="hero3d__cap"><i></i><b id="hero-cap"></b></p>
     <h1 class="headline" id="headline">
       <span class="headline__soft">A home on</span>
       <span class="headline__hard" id="hl-plot">12 × 18 m</span>
@@ -61,11 +70,28 @@
     </figure>
   </div>
 
-  <div class="compose__sheet">
-    <div class="modes" id="mode-switch" role="tablist" aria-label="How to begin">
-      <button type="button" class="mode-tab" role="tab" data-mode="brief" aria-selected="true">Design from a brief</button>
-      <button type="button" class="mode-tab" role="tab" data-mode="upload" aria-selected="false">Review a plan I have</button>
+  <!-- Three ways in, all in sight: the form first, then words, then a drawing. -->
+  <div class="way" id="way">
+    <div class="way__tabs" role="tablist" aria-label="How do you want to start?">
+      <button type="button" class="way__tab" role="tab" id="tab-form" data-entry="form" aria-controls="sheet" aria-selected="true">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8.5 8.5h7M8.5 12h7M8.5 15.5h4"/></svg>
+        <span class="way__t">Fill in a form</span><span class="way__d">Plot, rooms and budget</span>
+      </button>
+      <button type="button" class="way__tab" role="tab" id="tab-describe" data-entry="describe" aria-controls="chat" aria-selected="false" tabindex="-1">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4zM8 9.5h8M8 12.5h5"/></svg>
+        <span class="way__t">Describe it</span><span class="way__d">Type it in your own words</span>
+      </button>
+      <button type="button" class="way__tab" role="tab" id="tab-upload" data-entry="upload" aria-controls="sheet" aria-selected="false" tabindex="-1">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5M5 15v5h14v-5"/></svg>
+        <span class="way__t">Upload a plan</span><span class="way__d">DXF, SVG or a photo</span>
+      </button>
     </div>
+
+  <!-- Describe it: the conversation -->
+  <div class="chat" id="chat" role="tabpanel" aria-labelledby="tab-describe"></div>
+
+  <!-- Fill in a form, or upload a plan: the specification sheet -->
+  <div class="compose__sheet" id="sheet" role="tabpanel" aria-labelledby="tab-form">
 
     <!-- The brief, as a specification sheet -->
     <form id="brief" class="spec" novalidate>
@@ -76,9 +102,10 @@
         <div class="row">
           <span class="row__k">Plot</span>
           <div class="row__v row__v--pair">
-            <label class="num"><input type="number" id="inp-plot-width" name="plot_width" value="12" min="3" max="200" step="0.5" aria-label="Plot width, east to west, in metres"><i>m wide</i></label>
+            <label class="num"><input type="number" id="inp-plot-width" name="plot_width" value="40" min="3" max="660" step="0.5" aria-label="Plot width, east to west"><i>wide</i></label>
             <span class="times" aria-hidden="true">×</span>
-            <label class="num"><input type="number" id="inp-plot-depth" name="plot_depth" value="18" min="3" max="200" step="0.5" aria-label="Plot depth, north to south, in metres"><i>m deep</i></label>
+            <label class="num"><input type="number" id="inp-plot-depth" name="plot_depth" value="60" min="3" max="660" step="0.5" aria-label="Plot depth, north to south"><i>deep</i></label>
+            <span class="unit" role="radiogroup" aria-label="Plot measured in"><label><input type="radio" name="plot_unit" value="ft" checked><span>ft</span></label><label><input type="radio" name="plot_unit" value="m"><span>m</span></label></span>
           </div>
         </div>
 
@@ -102,9 +129,9 @@
         <div class="row">
           <span class="row__k">Setbacks</span>
           <div class="row__v row__v--trio">
-            <label class="num"><input type="number" name="setback_front" value="2.5" step="0.5" min="1" aria-label="Front setback in metres"><i>m front</i></label>
-            <label class="num"><input type="number" name="setback_rear" value="1.5" step="0.5" min="1" aria-label="Rear setback in metres"><i>m rear</i></label>
-            <label class="num"><input type="number" name="setback_side" value="1.2" step="0.2" min="1" aria-label="Side setbacks in metres"><i>m sides</i></label>
+            <label class="num"><input type="number" name="setback_front" value="" placeholder="auto" step="0.5" min="0" aria-label="Front setback in metres"><i>m front</i></label>
+            <label class="num"><input type="number" name="setback_rear" value="" placeholder="auto" step="0.5" min="0" aria-label="Rear setback in metres"><i>m rear</i></label>
+            <label class="num"><input type="number" name="setback_side" value="" placeholder="auto" step="0.2" min="0" aria-label="Side setbacks in metres"><i>m sides</i></label>
           </div>
         </div>
 
@@ -179,12 +206,34 @@
         </div>
       </section>
 
+      <section class="spec__group" aria-labelledby="g-out">
+        <h2 class="spec__h" id="g-out">Outdoors</h2>
+        <div class="row">
+          <label class="row__k" for="inp-lawn">Lawn</label>
+          <div class="row__v row__v--stack">
+            <input type="range" class="stance" name="lawn_share" id="inp-lawn" min="0" max="50" step="5" value="0" aria-describedby="lawn-words">
+            <span class="row__note" id="lawn-words" aria-live="polite">No lawn asked for: the plot's own setbacks stay open</span>
+          </div>
+        </div>
+        <div class="row">
+          <label class="row__k" for="inp-pool">Pool</label>
+          <div class="row__v">
+            <select name="pool" id="inp-pool">
+              <option value="" selected>No pool</option>
+              <option value="plunge">Plunge pool, about 3 × 6 m</option>
+              <option value="family">Family pool, about 4 × 8 m</option>
+              <option value="lap">Lap pool, about 2.5 × 14 m</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
       <section class="spec__group" aria-labelledby="g-money">
         <h2 class="spec__h" id="g-money">Budget</h2>
         <div class="row">
           <label class="row__k" for="inp-budget">Ceiling</label>
           <div class="row__v row__v--pair">
-            <label class="num num--wide"><i class="num__pre">₹</i><input type="number" name="budget" id="inp-budget" value="6500000" min="500000" step="50000"><i id="budget-words">65 lakh</i></label>
+            <label class="num num--wide"><i class="num__pre">₹</i><input type="number" name="budget" id="inp-budget" value="" placeholder="optional" min="0" step="50000"><i id="budget-words">no budget set</i></label>
           </div>
         </div>
         <div class="row">
@@ -311,6 +360,45 @@
       </div>
     </form>
   </div>
+  </div>
+  </div>
+
+  <div class="explain" aria-label="How it works">
+    <h2 class="explain__h">From a sentence to a set of drawings, in about a minute</h2>
+    <ol class="steps">
+      <li class="step-card"><span class="step-card__n">01</span><b>Say it your way</b><p>Plot size in feet or metres, road side, floors, rooms - and anything you'd love. The studio asks only for what you left out.</p><i class="viz viz--type" aria-hidden="true"><em></em></i></li>
+      <li class="step-card"><span class="step-card__n">02</span><b>Three schemes, drawn live</b><p>Living in front, a dining hub at the heart, the stair stacked floor to floor, every bedroom by its bath. Three real schemes, drawn as the studio works them out.</p><i class="viz viz--plan" aria-hidden="true"><em></em><em></em><em></em><em></em></i></li>
+      <li class="step-card"><span class="step-card__n">03</span><b>Thirteen specialists argue</b><p>The engineer, the architects and their specialists - code, structure, daylight, airflow, Vastu, cost - argue over every scheme, then pick one and say why.</p><i class="viz viz--talk" aria-hidden="true"><em></em><em></em><em></em></i></li>
+      <li class="step-card"><span class="step-card__n">04</span><b>Explore, then change it</b><p>Walk the 3D house, switch facades and colours, watch the breeze move through it - then change anything: tap a suggestion or say it, and the studio redraws.</p><i class="viz viz--air" aria-hidden="true"><em></em><em></em><em></em></i></li>
+    </ol>
+
+    <div class="show">
+      <div class="show__head">
+        <h2 class="explain__h">Everything a client meeting needs</h2>
+        <p class="show__lede">Real output for the house above, not mock-ups: measured drawings, a solved breeze, a model you can walk, a priced bill of quantities.</p>
+      </div>
+      <div class="show__grid">
+        <figure class="tile tile--plan"><img src="demo/plan.svg" alt="Ground floor plan of the demo house" loading="lazy"><figcaption><b>Drawings</b><span>Plans, elevations, sections, roof and site - DXF for your CAD.</span></figcaption></figure>
+        <figure class="tile tile--air"><div class="tile__live" id="show-air"></div><figcaption><b>Airflow</b><span>The breeze solved through every floor; stuffy rooms flagged.</span></figcaption></figure>
+        <figure class="tile tile--facts"><div class="facts">
+          <div><b>13</b><span>specialists review every scheme</span></div>
+          <div><b>3</b><span>schemes, ranked by consensus</span></div>
+          <div><b>84+</b><span>exterior and colour combinations per plan</span></div>
+          <div><b>₹</b><span>itemised cost, phased cash-flow</span></div>
+        </div><figcaption><b>Decided in the open</b><span>Every score explained; every conflict negotiated, not averaged.</span></figcaption></figure>
+      </div>
+    </div>
+
+    <div class="board">
+      <h2 class="explain__h">The committee</h2>
+      <ol class="board__grid" id="board-grid"></ol>
+    </div>
+
+    <div class="cta">
+      <h2 class="cta__h">Start with a sentence.</h2>
+      <button type="button" class="btn btn--cream cta__go" id="cta-go">Describe your home</button>
+    </div>
+  </div>
 </section>
 
 <!-- ═══ RUN ═══ -->
@@ -329,38 +417,29 @@
         <div class="sheet-groups" id="sheet-groups" role="tablist" aria-label="Drawing sets"></div>
         <div class="sheet-tabs" id="sheet-tabs" role="tablist" aria-label="Sheets"></div>
         <div class="pane__tools">
-          <button type="button" class="btn btn--quiet zoom-step" id="zoom-out" aria-label="Zoom out">−</button>
+          <button type="button" class="btn btn--cream edit-open" id="edit-open" aria-expanded="false" aria-controls="editdrawer">Edit design</button>
+          <button type="button" class="btn btn--quiet zoom-step" id="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
           <button type="button" class="btn btn--quiet" id="zoom-val" title="Fit to frame">100%</button>
-          <button type="button" class="btn btn--quiet zoom-step" id="zoom-in" aria-label="Zoom in">+</button>
-          <button type="button" class="btn btn--quiet" id="dl-svg">SVG</button>
-          <button type="button" class="btn btn--quiet" id="dl-dxf" title="Editable CAD: AutoCAD, BricsCAD, LibreCAD or QCAD">DXF</button>
+          <button type="button" class="btn btn--quiet zoom-step" id="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+          <button type="button" class="btn btn--quiet dl-btn" id="dl-svg" aria-label="Download this sheet as SVG" title="Download this sheet as SVG"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>SVG</button>
+          <button type="button" class="btn btn--quiet dl-btn" id="dl-dxf" aria-label="Download as DXF, editable in AutoCAD, BricsCAD, LibreCAD or QCAD" title="Download as DXF: editable CAD (AutoCAD, BricsCAD, LibreCAD, QCAD)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg>DXF</button>
         </div>
       </div>
       <div class="plate" id="plate"></div>
       <p class="plate__caption" id="plate-caption"></p>
-    </div>
-
-    <div class="pane" data-view="mandala" hidden>
-      <div class="mandala-review">
-        <div class="mandala-shell">
-          <svg class="mandala" id="review-mandala" viewBox="0 0 900 900" aria-hidden="true"></svg>
-          <span class="rose-l rose-l--n">N</span><span class="rose-l rose-l--e">E</span>
-          <span class="rose-l rose-l--s">S</span><span class="rose-l rose-l--w">W</span>
-        </div>
-        <div class="mandala-side">
-          <h2 class="pane-h">The scheme on the mandala</h2>
-          <p class="lede">Each room lights the padas it occupies. The centre nine are scored on their own, because the engine requires them kept open.</p>
-          <p class="brahma" id="brahma-note"></p>
-          <div id="quarter-legend" class="legend"></div>
-          <div id="room-sectors"></div>
-        </div>
+      <div class="editdrawer" id="editdrawer" role="dialog" aria-label="Edit this design" hidden>
+        <button type="button" class="editdrawer__x" id="editdrawer-x" aria-label="Close the editor"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div id="edit-slot"></div>
       </div>
     </div>
 
+
+    <div class="pane" data-view="air" hidden></div>
     <div class="pane" data-view="vastu" hidden></div>
     <div class="pane" data-view="cost" hidden></div>
     <div class="pane" data-view="interior" hidden></div>
     <div class="pane" data-view="model" hidden></div>
+    <div class="pane" data-view="exterior" hidden></div>
     <div class="pane" data-view="findings" hidden></div>
     <div class="pane" data-view="negotiation" hidden></div>
     <div class="pane" data-view="audit" hidden></div>
@@ -405,6 +484,7 @@
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="studio.js?v=r1" type="module"></script>
+<script src="config.js"></script>
+<script src="studio.js?v=r64" type="module"></script>
 </body>
 </html>

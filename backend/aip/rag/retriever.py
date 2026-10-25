@@ -66,24 +66,38 @@ async def retrieve_for_brief(brief: ClientBrief, top_k: int | None = None) -> li
     if brief.free_text:
         queries.append((brief.free_text, None))
 
+    from aip.core.telemetry import retriever_span
+
     index = get_index()
     per_query = max(2, limit // max(1, len(queries)) + 1)
 
-    results = await asyncio.gather(
-        *(
-            asyncio.to_thread(index.search, text, top_k=per_query, kinds=kinds)
-            for text, kinds in queries
+    with retriever_span(
+        "rag.retrieve_for_brief",
+        query_count=len(queries),
+        top_k=limit,
+        typology=brief.kind.value,
+    ) as nl_span:
+        results = await asyncio.gather(
+            *(
+                asyncio.to_thread(index.search, text, top_k=per_query, kinds=kinds)
+                for text, kinds in queries
+            )
         )
-    )
 
-    merged: dict[str, SearchHit] = {}
-    for hits in results:
-        for hit in hits:
-            existing = merged.get(hit.document.id)
-            if existing is None or hit.score > existing.score:
-                merged[hit.document.id] = hit
+        merged: dict[str, SearchHit] = {}
+        for hits in results:
+            for hit in hits:
+                existing = merged.get(hit.document.id)
+                if existing is None or hit.score > existing.score:
+                    merged[hit.document.id] = hit
 
-    ordered = sorted(merged.values(), key=lambda h: h.score, reverse=True)[: limit * 2]
+        ordered = sorted(merged.values(), key=lambda h: h.score, reverse=True)[: limit * 2]
+        if nl_span is not None:
+            try:
+                nl_span.set_attribute("aip.rag.unique_hits", len(merged))
+                nl_span.set_attribute("aip.rag.returned", len(ordered))
+            except Exception:  # noqa: BLE001
+                pass
     log_event(
         logger, "retrieve.brief",
         queries=len(queries), unique_hits=len(merged), returned=len(ordered),

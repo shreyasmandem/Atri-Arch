@@ -93,17 +93,34 @@ def test_generated_schemes_are_distinct(plans):
 
 
 def test_generator_is_deterministic_under_a_seed(brief):
-    a = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99)).generate(1)
-    b = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99)).generate(1)
+    a = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99, time_budget=600)).generate(1)
+    b = LayoutGenerator(brief, GeneratorConfig(population=24, generations=16, seed=99, time_budget=600)).generate(1)
     assert [round(r.area, 3) for r in a[0].all_rooms] == [round(r.area, 3) for r in b[0].all_rooms]
 
 
 def test_generator_survives_an_over_constrained_brief(tight_brief):
     """A brief that cannot be satisfied must still return something reviewable."""
-    plans = LayoutGenerator(tight_brief, GeneratorConfig(population=24, generations=20, seed=5)).generate(1)
+    # With the feasibility gate off - an uploaded drawing, say - it still hands
+    # back its least-bad scheme rather than giving up.
+    plans = LayoutGenerator(
+        tight_brief, GeneratorConfig(population=24, generations=20, seed=5, check_feasibility=False)
+    ).generate(1)
     assert plans, "the generator gave up instead of returning its least-bad scheme"
     report = compliance_analysis(plans[0], tight_brief)
     assert report.detail["checks_run"] > 0
+
+
+def test_the_gate_refuses_a_brief_the_plot_cannot_hold(tight_brief):
+    """With the gate on, an impossible programme is a typed refusal, not a squeezed plan."""
+    from aip.domain.geometry import Vec2
+    from aip.engines.architecture.layout import InfeasibleBriefError
+
+    # A plot that cannot hold even the four rooms, however they are relaxed.
+    tight_brief.site.boundary = [Vec2(0, 0), Vec2(4.0, 0), Vec2(4.0, 5.0), Vec2(0, 5.0)]
+    with pytest.raises(InfeasibleBriefError) as caught:
+        LayoutGenerator(tight_brief, GeneratorConfig(population=24, generations=20, seed=5))
+    assert "buildable area" in str(caught.value)
+    assert caught.value.needed_area > caught.value.available_area
 
 
 # ══ Building physics ═══════════════════════════════════════════════════

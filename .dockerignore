@@ -1,0 +1,13 @@
+**/__pycache__
+**/*.pyc
+.git
+.venv
+backend/.venv
+backend/var
+backend/tests
+.env
+backend/.env
+scratch
+docs
+embed
+*.log

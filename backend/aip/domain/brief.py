@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
+from aip.core.words import plural
 from aip.domain.geometry import Direction
 from aip.domain.plan import RoomType, Site
 
@@ -131,8 +132,13 @@ class RoomRequirement(BaseModel):
     needs_daylight: bool = True
     attached_bathroom: bool = False
     level: int | None = Field(default=None, description="Pin to a level, or None to let the optimiser decide")
+    asked_area: float | None = Field(
+        default=None,
+        description="The area the programme asked for, before the generator scaled it to the plot",
+    )
     priority: float = Field(default=1.0, ge=0.0, le=2.0)
     notes: str = ""
+    label: str | None = Field(default=None, description="What the client calls it, when not the type's name")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -251,11 +257,13 @@ class ClientBrief(BaseModel):
     @field_validator("requirements")
     @classmethod
     def _dedupe(cls, value: list[RoomRequirement]) -> list[RoomRequirement]:
-        merged: dict[RoomType, RoomRequirement] = {}
+        # Same kind on the same floor is one requirement with a count; a
+        # kitchen pinned to the ground and another to the second floor stay two.
+        merged: dict[tuple, RoomRequirement] = {}
         for req in value:
-            existing = merged.get(req.type)
+            existing = merged.get((req.type, req.level, req.label))
             if existing is None:
-                merged[req.type] = req
+                merged[(req.type, req.level, req.label)] = req
             else:
                 existing.count += req.count
         return list(merged.values())
@@ -321,7 +329,7 @@ class ClientBrief(BaseModel):
         parts = [
             f"{self.kind.value.replace('_', ' ')} named '{self.project_name}'",
             f"plot {self.site.plot_area:.0f} m2 in {self.site.locality}",
-            f"{self.levels} level(s), target built-up {self.target_built_area:.0f} m2",
+            f"{plural(self.levels, 'level')}, target built-up {self.target_built_area:.0f} m2",
             f"accommodation: {rooms or 'unspecified'}",
             f"style: {', '.join(s.label for s in self.style.styles)}",
             f"vastu stance: {self.vastu.value}",

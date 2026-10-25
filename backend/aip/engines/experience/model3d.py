@@ -446,6 +446,23 @@ def export_glb(plan: FloorPlan, **options: Any) -> bytes:
     `<model-viewer>`, Android Scene Viewer and every WebXR runtime load natively,
     with no conversion service and no licence.
     """
+    # The presentation model (materials, facade, roof, site, furniture) is the
+    # default; the box model below stays as the fallback if it ever fails.
+    try:
+        from aip.engines.experience.arch3d import export_presentation_glb
+
+        return export_presentation_glb(
+            plan,
+            include_furniture=options.get("include_furniture", True),
+            include_ground=options.get("include_ground", True),
+            palette_id=options.get("palette_id"),
+            colour_text=options.get("colour_text"),
+            design_id=options.get("design_id"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log_event(logger, "model3d.presentation_failed", plan=plan.id, error=str(exc))
+
+    options = {k: v for k, v in options.items() if k not in ("palette_id", "colour_text", "design_id")}
     model = build_model(plan, **options)
     try:
         import trimesh
@@ -477,6 +494,7 @@ def export_obj(plan: FloorPlan, **options: Any) -> str:
     Kept because OBJ is the universal import format for the CAD and rendering
     tools architects already own, and it needs no library at all to write.
     """
+    options = {k: v for k, v in options.items() if k not in ("palette_id", "colour_text")}
     model = build_model(plan, **options)
     lines: list[str] = [
         f"# Architect Intelligence Platform - {plan.name}",

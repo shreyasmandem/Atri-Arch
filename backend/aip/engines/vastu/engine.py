@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field
 
 from aip.agents.base import Evidence, EvidenceKind, Finding, Severity
 from aip.core.logging import get_logger, log_event
+from aip.core.words import plural
 from aip.domain.geometry import Direction, Vec2, direction_of, point_in_polygon
 from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, WallKind
 from aip.engines.vastu.knowledge import (
@@ -390,6 +391,8 @@ class VastuEngine:
             RuleCategory.SLOPE: self._observe_slope,
             RuleCategory.CIRCULATION: self._observe_circulation,
             RuleCategory.SLEEPING: self._observe_sleeping,
+            RuleCategory.RELATIONS: self._observe_relation,
+            RuleCategory.SITE: self._observe_site,
         }.get(rule.category)
         if handler is None:
             return _Observation(False, reason="No observer implemented for this category.")
@@ -465,6 +468,9 @@ class VastuEngine:
                 note=f"Road lies {'/'.join(r.value for r in roads)}; door faces {facing.value}.",
             )
 
+        if rule.id == "VS.ENTRANCE.PADA":
+            return _observe_pada(plan, door, wall)
+
         facing = _wall_facing(plan, wall)
         return _Observation(True, direction=facing, subject_label="Main entrance", subject_id=door.id)
 
@@ -517,6 +523,8 @@ class VastuEngine:
         )
 
     def _observe_water(self, rule: VastuRule, plan: FloorPlan) -> _Observation:
+        if rule.id == "VS.POOL.NORTH_EAST":
+            return _observe_pool(plan)
         marker = plan.metadata.get("water_source_direction")
         if marker:
             try:
@@ -717,6 +725,75 @@ class VastuEngine:
 
     # ---------------------------------------------------------- conflicts --
 
+    def _observe_relation(self, rule: VastuRule, plan: FloorPlan) -> _Observation:
+        """What sits above, beside or in front of what."""
+        if rule.id == "VS.STACK.KITCHEN_TOILET":
+            kitchens = plan.rooms_of(RoomType.KITCHEN)
+            if not kitchens:
+                return _Observation(False, reason="No kitchen in this plan.")
+            if len(plan.levels) < 2:
+                return _Observation(True, compliance_override=1.0, subject_label=kitchens[0].display_name(),
+                                    subject_id=kitchens[0].id, note="A single storey: nothing stacks over the kitchen.")
+            for k in kitchens:
+                hit = _stacked(plan, k, {RoomType.TOILET, RoomType.BATHROOM, RoomType.POWDER})
+                if hit is not None:
+                    return _Observation(True, compliance_override=0.0, subject_label=k.display_name(), subject_id=k.id,
+                                        note=f"{hit.display_name()} lies directly {'above' if _level_of(plan, hit) > _level_of(plan, k) else 'below'} it.")
+            return _Observation(True, compliance_override=1.0, subject_label=kitchens[0].display_name(),
+                                subject_id=kitchens[0].id, note="No toilet above or below the kitchen.")
+
+        if rule.id == "VS.PUJA.AWAY_FROM_TOILET":
+            puja = plan.first_room_of(RoomType.PUJA)
+            if puja is None:
+                return _Observation(False, reason="No puja room in this plan.")
+            wet = {RoomType.TOILET, RoomType.BATHROOM, RoomType.POWDER}
+            beside = _beside(plan, puja, wet)
+            stacked = _stacked(plan, puja, wet)
+            if beside is not None or stacked is not None:
+                other = beside or stacked
+                how = "shares a wall with" if beside is not None else "is stacked with"
+                return _Observation(True, compliance_override=0.0 if beside is not None and stacked is not None else 0.25,
+                                    subject_label=puja.display_name(), subject_id=puja.id,
+                                    note=f"The puja {how} {other.display_name()}.")
+            return _Observation(True, compliance_override=1.0, subject_label=puja.display_name(), subject_id=puja.id,
+                                note="No toilet touches the puja.")
+
+        if rule.id in ("VS.ENTRANCE.STAIR_NOT_FACING", "VS.ENTRANCE.TOILET_NOT_FACING"):
+            door, wall = _main_door(plan)
+            if door is None or wall is None:
+                return _Observation(False, reason="No main entrance is defined in this plan.")
+            kinds = ({RoomType.STAIRCASE} if rule.id.endswith("STAIR_NOT_FACING")
+                     else {RoomType.TOILET, RoomType.BATHROOM, RoomType.POWDER})
+            ahead = _ahead_of_door(plan, door, wall)
+            hits = [(d, r) for d, r in ahead if r.type in kinds]
+            if not hits:
+                return _Observation(True, compliance_override=1.0, subject_label="Main entrance", subject_id=door.id,
+                                    note="Clear ahead of the main door.")
+            dist, room = hits[0]
+            return _Observation(True, compliance_override=0.0 if dist <= 1.6 else 0.4,
+                                subject_label=room.display_name(), subject_id=room.id,
+                                note=f"{room.display_name()} lies {dist:.1f} m straight ahead of the main door.")
+
+        if rule.id == "VS.MASTER.LARGEST":
+            master = plan.first_room_of(RoomType.MASTER_BEDROOM)
+            if master is None:
+                return _Observation(False, reason="No master bedroom in this plan.")
+            others = plan.rooms_of(RoomType.BEDROOM, RoomType.CHILDREN_BEDROOM, RoomType.GUEST_BEDROOM)
+            bigger = [r for r in others if r.area > master.area + 0.25]
+            if not bigger:
+                return _Observation(True, compliance_override=1.0, subject_label=master.display_name(), subject_id=master.id,
+                                    note=f"{master.area:.1f} m2, the largest bedroom.")
+            top = max(bigger, key=lambda r: r.area)
+            return _Observation(True, compliance_override=0.4, subject_label=master.display_name(), subject_id=master.id,
+                                note=f"{top.display_name()} ({top.area:.1f} m2) is larger than the master ({master.area:.1f} m2).")
+
+        return _Observation(False, reason="No observer for this relation.")
+
+    def _observe_site(self, rule: VastuRule, plan: FloorPlan) -> _Observation:
+        """Wells, sumps, septic tanks, tanks and trees are placed on site, not
+        in these drawings: listed for the builder, never guessed at in the score."""
+        return _Observation(False, reason="Decided on site, not in the drawings. It is on the site checklist.")
+
     def _resolve_conflicts(
         self, observations: dict[str, _Observation], plan: FloorPlan
     ) -> list[ConflictResolution]:
@@ -875,16 +952,27 @@ class VastuEngine:
             return "No rules were re-weighted at this stance."
 
         names = ", ".join(f"'{e.title}'" for e in suppressed[:3])
-        return (
-            f"At a '{stance}' stance, {len(reduced)} rule(s) were down-weighted and "
-            f"{len(suppressed)} reduced to near-zero influence because they have no "
+        cuts = []
+        if reduced:
+            cuts.append(f"{plural(len(reduced), 'rule')} {'was' if len(reduced) == 1 else 'were'} down-weighted")
+        if suppressed:
+            cuts.append(f"{plural(len(suppressed), 'rule')} {'was' if len(suppressed) == 1 else 'were'} reduced to near-zero influence")
+        kept = sum(1 for e in report.reconciliation if e.modern_validity >= 0.7)
+        note = (
+            f"At a {stance} stance, {' and '.join(cuts)}, because "
+            f"{'it has' if len(reduced) + len(suppressed) == 1 else 'they have'} no "
             f"established functional mechanism"
             + (f" - notably {names}" if names else "")
-            + f". The {sum(1 for e in report.reconciliation if e.modern_validity >= 0.7)} "
-            f"rules with a demonstrable climatic basis kept their full weight, which "
-            f"is why this score still reflects real building performance rather than "
-            f"doctrine alone."
+            + "."
         )
+        if kept:
+            note += (
+                f" {'The one rule' if kept == 1 else f'The {kept} rules'} with a demonstrable "
+                f"climatic basis kept {'its' if kept == 1 else 'their'} full weight, which "
+                f"is why this score still reflects real building performance rather than "
+                f"doctrine alone."
+            )
+        return note
 
     def _counterfactuals(self, report: VastuReport, weight_total: float) -> list[dict[str, Any]]:
         """Rank remedies by the score they would recover.
@@ -1017,20 +1105,20 @@ class VastuEngine:
         disagreements = sum(1 for p in placements if p.agrees_with_text is False)
         scored = len(placements) - undetermined
         report.graph_note = (
-            f"The knowledge graph scored {scored} room placement(s), "
+            f"The knowledge graph scored {plural(scored, 'room placement')}, "
             f"{derived_only} of which no rule in the corpus addresses at all. "
             f"Each carries the derivation chain that produced it, so the score is "
             f"reproducible rather than asserted."
         )
         if undetermined:
             report.graph_note += (
-                f" {undetermined} further room(s) are recorded as undetermined - the "
-                f"graph holds no path linking them to their sector - and are left out "
-                f"of the score rather than counted as average."
+                f" {plural(undetermined, 'further room')} {'is' if undetermined == 1 else 'are'} recorded as undetermined - the "
+                f"graph holds no path linking {'it to its' if undetermined == 1 else 'them to their'} sector - "
+                f"and {'is' if undetermined == 1 else 'are'} left out of the score rather than counted as average."
             )
         if disagreements:
             report.graph_note += (
-                f" {disagreements} derivation(s) disagree with a cited text; the text "
+                f" {plural(disagreements, 'derivation')} {'disagrees' if disagreements == 1 else 'disagree'} with a cited text; the text "
                 f"governs the score and the disagreement is shown rather than hidden."
             )
 
@@ -1045,7 +1133,7 @@ class VastuEngine:
         if report.violations:
             worst = report.violated[0] if report.violated else None
             parts.append(
-                f"{report.violations} rule(s) are not satisfied"
+                f"{plural(report.violations, 'rule')} {'is' if report.violations == 1 else 'are'} not satisfied"
                 + (f", the most costly being '{worst.title}'." if worst else ".")
             )
         else:
@@ -1053,14 +1141,14 @@ class VastuEngine:
 
         if report.conflicts:
             parts.append(
-                f"{len(report.conflicts)} genuine conflict(s) between rules were "
+                f"{plural(len(report.conflicts), 'genuine conflict')} between rules {'was' if len(report.conflicts) == 1 else 'were'} "
                 f"detected and resolved explicitly rather than ignored."
             )
         if report.graph_placements:
             derived = sum(1 for p in report.graph_placements if p.derived)
             parts.append(
                 f"Separately, the knowledge graph scored every room's placement "
-                f"({report.graph_score:.0f}/100), deriving verdicts for {derived} room(s) "
+                f"({report.graph_score:.0f}/100), deriving verdicts for {plural(derived, 'room')} "
                 f"that no classical rule enumerates."
             )
         climatic = [
@@ -1156,6 +1244,135 @@ def _rotate_corner(env, north_angle: float, direction: Direction) -> Vec2:
     return best or corners[Direction.NE]
 
 
+def _poly(room: Room):
+    from shapely.geometry import Polygon
+
+    return Polygon([(p.x, p.y) for p in room.polygon]).buffer(0)
+
+
+def _level_of(plan: FloorPlan, room: Room) -> int:
+    for level in plan.levels:
+        if any(r.id == room.id for r in level.rooms):
+            return level.index
+    return 0
+
+
+def _stacked(plan: FloorPlan, room: Room, kinds: set[RoomType]) -> Room | None:
+    """A room of `kinds` directly above or below `room` (overlapping by half a square metre or more)."""
+    li = _level_of(plan, room)
+    mine = _poly(room)
+    for level in plan.levels:
+        if abs(level.index - li) != 1:
+            continue
+        for other in level.rooms:
+            if other.type in kinds and len(other.polygon) >= 3 and _poly(other).intersection(mine).area >= 0.5:
+                return other
+    return None
+
+
+def _beside(plan: FloorPlan, room: Room, kinds: set[RoomType]) -> Room | None:
+    """A room of `kinds` on the same floor sharing a wall with `room`."""
+    level = plan.level_at(_level_of(plan, room))
+    if level is None:
+        return None
+    grown = _poly(room).buffer(0.3)
+    for other in level.rooms:
+        if other.id != room.id and other.type in kinds and len(other.polygon) >= 3:
+            if grown.intersection(_poly(other)).area >= 0.15:
+                return other
+    return None
+
+
+def _ahead_of_door(plan: FloorPlan, door, wall) -> list[tuple[float, Room]]:
+    """The rooms met walking straight in from the main door, nearest first."""
+    from shapely.geometry import Point
+
+    level = next((lv for lv in plan.levels if any(w is wall for w in lv.walls)), plan.level_at(0))
+    if level is None:
+        return []
+    inward = wall.outward_normal(plan.centre) * -1.0
+    start = wall.point_at(door.position)
+    seen: list[tuple[float, Room]] = []
+    for step in (0.6, 1.2, 1.8, 2.6, 3.4):
+        p = start + inward * step
+        for room in level.rooms:
+            if len(room.polygon) >= 3 and room not in [r for _d, r in seen] and _poly(room).contains(Point(p.x, p.y)):
+                seen.append((step, room))
+    return seen
+
+
+def _compass_vector(plan: FloorPlan, bearing: float) -> Vec2:
+    """A unit vector in plan coordinates pointing to a compass bearing."""
+    theta = math.radians(bearing - plan.site.north_angle)
+    return Vec2(math.sin(theta), math.cos(theta))
+
+
+def _observe_pada(plan: FloorPlan, door, wall) -> _Observation:
+    """Where along its side of the house the main door sits: in the third
+    towards the favoured corner, the middle, or the third towards the
+    unfavoured (south-west) end."""
+    facing = _wall_facing(plan, wall)
+    side = facing.value[0] if facing.value[0] in "NESW" else "N"
+    if facing in (Direction.NE, Direction.SE, Direction.SW, Direction.NW):
+        side = {"NE": "N", "SE": "E", "SW": "S", "NW": "W"}[facing.value]
+    toward = {"N": 90.0, "E": 0.0, "S": 90.0, "W": 0.0}[side]      # N, E, S walls: towards east; W: towards north
+    u = _compass_vector(plan, toward)
+    pts = [p for r in (plan.level_at(0).rooms if plan.level_at(0) else []) for p in r.polygon]
+    if not pts:
+        return _Observation(False, reason="No ground floor to measure the door against.")
+    proj = [p.x * u.x + p.y * u.y for p in pts]
+    lo, hi = min(proj), max(proj)
+    d = wall.point_at(door.position)
+    f = ((d.x * u.x + d.y * u.y) - lo) / (hi - lo) if hi > lo else 0.5
+    corner = {"N": "north-east", "E": "north-east", "S": "south-east", "W": "north-west"}[side]
+    if f >= 0.6:
+        score, where = 1.0, f"in the third towards the {corner}"
+    elif f >= 0.34:
+        score, where = 0.65, "in the middle third"
+    else:
+        score, where = 0.2, f"in the third away from the {corner}"
+    return _Observation(True, compliance_override=score, direction=facing, subject_label="Main entrance",
+                        subject_id=door.id, note=f"On the {facing.value} side, {where}.")
+
+
+def _observe_pool(plan: FloorPlan) -> _Observation:
+    if not plan.site.pool:
+        return _Observation(False, reason="No pool in this design.")
+    from aip.engines.experience.landscape import pool_rect
+
+    placed = pool_rect(plan)
+    if placed is None:
+        return _Observation(False, reason="The pool asked for does not fit this plot.")
+    c = placed[0].centroid
+    plot_centre = plan.site.centre if plan.site.boundary else plan.centre
+    return _Observation(True, direction=direction_of(Vec2(c.x, c.y), plot_centre, plan.site.north_angle),
+                        subject_label="Pool", note="Measured from the centre of the plot.")
+
+
+def vastu_changes(before: VastuReport, after: VastuReport) -> dict[str, Any]:
+    """What changed between two reports at the same stance: the score, and
+    every rule whose verdict moved, better or worse, with the new reading."""
+    old = {v.rule_id: v for v in before.verdicts}
+    moved = []
+    for v in after.verdicts:
+        o = old.get(v.rule_id)
+        if o is None:
+            continue
+        was = o.compliance if o.assessable else None
+        now = v.compliance if v.assessable else None
+        if was == now or (was is not None and now is not None and abs(was - now) < 0.05):
+            continue
+        moved.append({
+            "rule_id": v.rule_id, "title": v.title,
+            "before": was, "after": now,
+            "better": (now or 0) > (was or 0),
+            "note": v.notes or v.reason_not_assessable or "",
+        })
+    moved.sort(key=lambda m: -abs((m["after"] or 0) - (m["before"] or 0)))
+    return {"score_before": before.score, "score_after": after.score,
+            "delta": round(after.score - before.score, 1), "changes": moved}
+
+
 def analyse_vastu(plan: FloorPlan, tradition_weight: float = 0.5) -> VastuReport:
     """Convenience entry point."""
     return VastuEngine(tradition_weight).analyse(plan)
@@ -1171,6 +1388,24 @@ def quick_vastu_score(plan: FloorPlan, tradition_weight: float = 0.5) -> float:
     total = 0.0
     weight = 0.0
     for rule in RULES:
+        if rule.id == "VS.ENTRANCE.PADA":
+            door, wall = _main_door(plan)
+            if door is not None and wall is not None:
+                obs = _observe_pada(plan, door, wall)
+                if obs.assessable and obs.compliance_override is not None:
+                    effective = rule.effective_weight(engine.tradition_weight)
+                    total += effective * obs.compliance_override
+                    weight += effective
+            continue
+        if rule.category is RuleCategory.RELATIONS:
+            # Stacking, shared walls and the door's line of sight shape a
+            # plan as much as its zones do, so the optimiser weighs them too.
+            obs = engine._observe_relation(rule, plan)
+            if obs.assessable and obs.compliance_override is not None:
+                effective = rule.effective_weight(engine.tradition_weight)
+                total += effective * obs.compliance_override
+                weight += effective
+            continue
         if rule.category not in {RuleCategory.ZONE_PLACEMENT, RuleCategory.FIRE}:
             continue
         if rule.subject is None:

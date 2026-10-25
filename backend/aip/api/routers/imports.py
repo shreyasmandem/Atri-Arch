@@ -107,9 +107,11 @@ async def import_plan(
         raise HTTPException(
             status_code=502,
             detail=(
-                "The plan could not be read. For an image this usually means no free "
-                "vision model was reachable just now; try again shortly, or upload the "
-                "DXF or SVG instead, which needs no model at all."
+                "The plan could not be read. For an image, the server reads walls and "
+                "labels itself and only asks a remote vision model when that fails, so "
+                "this usually means the remote model was unreachable too. Try a straighter, "
+                "higher-contrast image with the walls as dark lines, or upload the DXF or "
+                "SVG of this plan, which needs no model at all."
             ),
         ) from exc
 
@@ -145,8 +147,15 @@ async def review_stream(
     vastu: str = "balanced",
     budget: float = 0.0,
     include_generative_critics: bool = True,
+    keep: bool = False,
+    finish_tier: str = "",
+    region: str = "",
 ) -> StreamingResponse:
     """Run the committee, negotiation and rationale on an uploaded plan.
+
+    `keep` is for a plan the client edited by hand: it is scored as drawn and
+    neither refined nor renegotiated, so their edits are never undone.
+    `finish_tier` and `region` price it as the plan it was edited from was priced.
 
     The same events the design stream emits, so the studio shows the same
     critics sitting on the same bench - only the generate stage reports that
@@ -163,6 +172,11 @@ async def review_stream(
         raise HTTPException(status_code=422, detail=f"Unknown Vastu stance {vastu!r}.") from exc
 
     brief = _brief_for(plan, vastu=stance, budget=budget, name=plan.name)
+    # An edited plan is priced as its parent was, not at the default specification.
+    if finish_tier:
+        brief.metadata["finish_tier"] = finish_tier
+    if region:
+        brief.metadata["region"] = region
     project = Project(
         firm_id=principal.firm.id, name=plan.name, source="upload",
         brief=json.loads(brief.model_dump_json()),
@@ -175,7 +189,8 @@ async def review_stream(
     firm_id = principal.firm.id
     project_id = project.id
     pipeline = DesignPipeline(
-        PipelineConfig(candidate_count=1, include_generative_critics=include_generative_critics),
+        PipelineConfig(candidate_count=1, include_generative_critics=include_generative_critics,
+                       enable_refinement=not keep, enable_negotiation=not keep),
         ledger=ledger,
     )
     from aip.core.config import get_settings

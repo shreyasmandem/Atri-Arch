@@ -125,7 +125,7 @@ async def get_principal(
         raw = authorization[7:].strip()
 
     if not raw:
-        if settings.is_production:
+        if settings.is_production and not settings.public_demo:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="An API key is required. Send it as X-API-Key or a Bearer token.",

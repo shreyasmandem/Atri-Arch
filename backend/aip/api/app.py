@@ -48,8 +48,11 @@ is an invariant the test-suite asserts is exactly zero.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from aip.core.telemetry import init_telemetry, shutdown_telemetry
+
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
+    init_telemetry(settings)
 
     problems = settings.validate_production()
     if problems:
@@ -83,6 +86,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        shutdown_telemetry()
         await shutdown_router()
         await dispose_database()
         log_event(logger, "app.stopped")
@@ -105,6 +109,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
+        allow_origin_regex=settings.cors_origin_regex or None,
         allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
         allow_headers=["*"],

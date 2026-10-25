@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from aip.api.schemas import CostRequest, VastuRequest
@@ -65,6 +68,67 @@ def _plan_from_payload(payload: dict[str, Any] | None, plan_id: str | None, prin
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=422, detail=f"Invalid plan payload: {exc}") from exc
     raise HTTPException(status_code=422, detail="Provide either 'plan_id' or 'plan'.")
+
+
+class RestoreRequest(BaseModel):
+    plan: dict[str, Any]
+
+
+@router.post("/restore")
+async def restore_plan(payload: RestoreRequest, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Put a plan the client still holds back in the server's memory.
+
+    Schemes live in memory on the instance that drew them; a restart (a deploy,
+    a free instance waking from sleep) forgets them while a browser still shows
+    them. The client keeps each plan's JSON and sends it back on a 404, so the
+    drawing, the model and the analyses carry on instead of failing.
+    """
+    try:
+        plan = FloorPlan.model_validate(payload.plan)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail=f"Invalid plan: {exc}") from exc
+    if not plan.id or not plan.levels:
+        raise HTTPException(status_code=422, detail="That is not a plan.")
+    get_plan_store().put(principal.firm.id, plan)
+    return {"plan_id": plan.id}
+
+
+class EditRequest(BaseModel):
+    """Edits to a finished plan, applied in order. See `editor` for the kinds."""
+
+    ops: list[dict[str, Any]] = Field(default_factory=list, max_length=16)
+
+
+@router.get("/{plan_id}/rooms")
+async def plan_rooms(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """The rooms of a plan as the editor lists them."""
+    from aip.engines.architecture.editor import describe_rooms
+
+    plan = _load(plan_id, principal)
+    return {"plan_id": plan.id, "rooms": describe_rooms(plan),
+            "levels": [{"index": lv.index, "name": lv.display_name()} for lv in plan.levels]}
+
+
+@router.post("/{plan_id}/edit")
+async def edit_plan(
+    plan_id: str, payload: EditRequest, principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    """Change a finished plan in place - widen a room, swap two, rename, set a ceiling.
+
+    Returns a new plan id (the original is kept, so an edit can be undone) with
+    what was done and what was refused and why.
+    """
+    from aip.engines.architecture.editor import apply_edits, describe_rooms
+
+    plan = _load(plan_id, principal)
+    if not payload.ops:
+        raise HTTPException(status_code=422, detail="No edits were given.")
+    new, applied, refused = await asyncio.to_thread(apply_edits, plan, payload.ops)
+    if not applied:
+        raise HTTPException(status_code=422, detail=" ".join(refused) or "Nothing could be changed.")
+    get_plan_store().put(principal.firm.id, new)
+    return {"plan_id": new.id, "from_plan_id": plan.id, "applied": applied, "refused": refused,
+            "rooms": describe_rooms(new)}
 
 
 @router.get("/{plan_id}")
@@ -138,16 +202,268 @@ async def get_drawing(
     )
 
 
+@router.get("/{plan_id}/airflow/{level_index}")
+async def get_airflow_field(
+    plan_id: str,
+    level_index: int,
+    principal: Principal = Depends(get_principal),
+    wind: str | None = Query(default=None, description="Compass point the wind blows from, or a bearing in degrees"),
+    speed: float = Query(default=2.0, gt=0, le=15),
+    doors_open: bool = Query(default=True),
+    rank: bool = Query(default=False, description="Also score the floor for each of the eight winds"),
+) -> dict[str, Any]:
+    """The solved wind field through one floor, for the live airflow view."""
+    import asyncio
+
+    from aip.engines.architecture.windflow import best_wind, solve_level
+
+    plan = _load(plan_id, principal)
+    w: Direction | float | None = None
+    if wind:
+        try:
+            w = Direction(wind.upper())
+        except ValueError:
+            try:
+                w = float(wind) % 360
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=f"Unknown wind '{wind}'.") from exc
+    try:
+        result = await asyncio.to_thread(solve_level, plan, level_index, wind=w, speed=speed, doors_open=doors_open)
+        if rank:
+            result["ranking"] = await asyncio.to_thread(best_wind, plan, level_index, speed=speed, doors_open=doors_open)
+    except IndexError as exc:
+        raise HTTPException(status_code=404, detail=f"No level {level_index}.") from exc
+    return result
+
+
+@router.get("/{plan_id}/thermal")
+async def get_thermal(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    season: str = Query(default="summer", pattern="^(summer|monsoon|winter)$"),
+    month: int | None = Query(default=None, ge=1, le=12, description="A month in particular, in place of the season"),
+    windows: str = Query(default="open", pattern="^(open|night|shut)$"),
+    fans: bool = Query(default=True),
+    cool_roof: bool = Query(default=False),
+    chajja: float = Query(default=0.6, ge=0.0, le=1.5, description="Sunshade depth over windows, metres"),
+) -> dict[str, Any]:
+    """Each room's temperature hour by hour through a design day of the
+    nearest city's climate, how comfortable it feels, what heats it, the AC
+    it needs, and what each fix would change."""
+    import asyncio
+
+    from aip.engines.architecture.thermal import Options, thermal
+
+    plan = _load(plan_id, principal)
+    opt = Options(season=season, month=month, windows=windows, fans=fans, cool_roof=cool_roof, chajja=chajja)
+    return await asyncio.to_thread(thermal, plan, opt)
+
+
+@router.get("/{plan_id}/thermal/fields/{level_index}")
+async def get_thermal_fields(
+    plan_id: str,
+    level_index: int,
+    principal: Principal = Depends(get_principal),
+    season: str = Query(default="summer", pattern="^(summer|monsoon|winter)$"),
+    month: int | None = Query(default=None, ge=1, le=12),
+    windows: str = Query(default="open", pattern="^(open|night|shut)$"),
+    fans: bool = Query(default=True),
+    cool_roof: bool = Query(default=False),
+    chajja: float = Query(default=0.6, ge=0.0, le=1.5),
+) -> dict[str, Any]:
+    """The temperature across the floor of every room on one level, hour by
+    hour, for the thermal-camera view: walls, glass, sun patches, the breeze,
+    people and appliances."""
+    import asyncio
+
+    from aip.engines.architecture.thermal import Options, room_fields
+
+    plan = _load(plan_id, principal)
+    if not any(lv.index == level_index for lv in plan.levels):
+        raise HTTPException(status_code=404, detail=f"No level {level_index}.")
+    opt = Options(season=season, month=month, windows=windows, fans=fans, cool_roof=cool_roof, chajja=chajja)
+    return await asyncio.to_thread(room_fields, plan, level_index, opt)
+
+
+@router.get("/{plan_id}/thermal/year")
+async def get_thermal_year(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    windows: str = Query(default="open", pattern="^(open|night|shut)$"),
+    fans: bool = Query(default=True),
+    cool_roof: bool = Query(default=False),
+    chajja: float = Query(default=0.6, ge=0.0, le=1.5),
+) -> dict[str, Any]:
+    """The house through its city's year: each month's average outdoor
+    maximum and minimum beside the hottest room and the comfortable hours."""
+    import asyncio
+
+    from aip.engines.architecture.thermal import Options, thermal_year
+
+    plan = _load(plan_id, principal)
+    opt = Options(windows=windows, fans=fans, cool_roof=cool_roof, chajja=chajja)
+    return await asyncio.to_thread(thermal_year, plan, opt)
+
+
+@router.get("/{plan_id}/vastu3d")
+async def get_vastu_placements(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    tradition: float = Query(default=0.5, ge=0.0, le=1.0),
+) -> dict[str, Any]:
+    """The Vastu zones and every assessed room's placement, as geometry for the 3D view."""
+    from aip.engines.vastu.placements import placements
+
+    return placements(_load(plan_id, principal), tradition)
+
+
+@router.get("/{plan_id}/exteriors")
+async def get_exteriors(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    prefs: str = Query(default="", max_length=1200, description="What the client said about the look they want"),
+    seed: str | None = Query(default=None, max_length=40, description="Any value: a fresh batch from the grammar"),
+    n: int = Query(default=12, ge=1, le=40, description="Designs in a fresh batch"),
+    avoid: list[str] = Query(default=[], max_length=80, description="Design ids already shown, never repeated"),
+    style: str | None = Query(default=None, max_length=40, description="Lead a fresh batch with this house style"),
+) -> dict[str, Any]:
+    """Distinct exterior designs for this plan, best first, with the grammar to
+    customise them. Without `seed`, the exterior designer's set for what the
+    client said; with one, a fresh batch kept far from everything in `avoid`."""
+    from aip.engines.experience import registry
+    from aip.engines.experience.exteriors import generate, grammar, heard, prefer_from_text
+
+    plan = _load(plan_id, principal)
+    if style == "signature":
+        # The signature homes: whole houses after admired house types, each
+        # in its colourways, fitted to this plan.
+        from aip.engines.experience.looks import look_designs
+
+        designs = [d for d in look_designs(plan) if d["id"] not in set(avoid)][:n]
+    elif seed is not None:
+        # The client's words steer the batch as well as the style, and no
+        # building another house has claimed is offered again.
+        designs = [e.to_dict() for e in generate(plan, n, seed=seed, avoid=set(avoid), style=style,
+                                                 prefer=prefer_from_text(prefs), taken=registry.taken_forms(plan_id))]
+    else:
+        from aip.agents.exterior_agent import design_exteriors
+
+        designs = await design_exteriors(plan, prefs)
+    return {"designs": designs, "grammar": grammar(), "style": plan.style, "heard": heard(prefs)}
+
+
+class DesignChatRequest(BaseModel):
+    design: str = Field(..., max_length=600, description="The exterior design id being edited")
+    message: str = Field(..., min_length=1, max_length=800, description="What the client wants changed")
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=12)
+    parts: list[str] = Field(default_factory=list, max_length=80, description="Part keys the 3D model shows")
+
+
+@router.post("/{plan_id}/exteriors/chat")
+async def exterior_chat(plan_id: str, req: DesignChatRequest,
+                        principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Change the outside of the house by saying so: "paint the boundary wall
+    charcoal", "a tiled hip roof", "make the gate teak". Returns the edited
+    design, a reply, and a line per change."""
+    from aip.agents.design_chat import edit_exterior
+
+    plan = _load(plan_id, principal)
+    try:
+        return await edit_exterior(plan, req.design, req.message, req.history, parts=req.parts)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/{plan_id}/exteriors/grammar")
+async def exterior_grammar(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """The customising vocabulary and colour schemes, with the plan's style and
+    the design its model shows when none is chosen: what a drawing sheet needs
+    to offer colours without loading a gallery."""
+    from aip.engines.experience.exteriors import generate, grammar
+
+    plan = _load(plan_id, principal)
+    return {"grammar": grammar(), "style": plan.style, "default": generate(plan, 1)[0].id}
+
+
+@router.post("/{plan_id}/exteriors/claim")
+async def claim_exterior(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    design: str = Query(..., max_length=240, description="The exterior this house settles on"),
+) -> dict[str, Any]:
+    """Claim an exact exterior for this house, so no other house is offered
+    it; says whether another house already has it."""
+    from aip.engines.experience import registry
+
+    _load(plan_id, principal)
+    return registry.claim(plan_id, design)
+
+
+@router.get("/{plan_id}/exteriors/fit")
+async def fit_exterior(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    design: str = Query(..., max_length=200, description="A design id (ex:...), possibly customised"),
+) -> dict[str, Any]:
+    """A customised design made buildable on this plan: its normalised id,
+    name and story, and a note for anything that had to change."""
+    from aip.engines.experience.exteriors import Exterior
+
+    ex = Exterior.parse(design)
+    if ex is None:
+        raise HTTPException(status_code=422, detail="Not an exterior design id.")
+    fitted, notes = ex.fitted(len(_load(plan_id, principal).levels) <= 1)
+    return {"design": fitted.to_dict(), "notes": notes}
+
+
+@router.get("/{plan_id}/pools")
+async def get_pools(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Which pools fit round this house, and where: each kind with the places
+    it fits (empty when it fits nowhere), and the pool the plan has now."""
+    from aip.engines.experience.landscape import pool_options, pool_placement
+
+    plan = _load(plan_id, principal)
+    placed = pool_placement(plan)
+    return {
+        "options": pool_options(plan),
+        "current": {"kind": placed[1], "place": placed[2]} if placed else None,
+    }
+
+
+@router.get("/{plan_id}/palettes")
+async def get_palettes(
+    plan_id: str,
+    principal: Principal = Depends(get_principal),
+    colours: str | None = Query(default=None, max_length=600, description="The client's colour preferences, in words"),
+) -> dict[str, Any]:
+    """Coordinated exterior and interior colour schemes for this plan, best first, with reasons."""
+    from aip.engines.experience.palettes import ColourPrefs, preferences_from_text, rank
+
+    plan = _load(plan_id, principal)
+    prefs = preferences_from_text(colours) if colours else ColourPrefs.from_dict(
+        (plan.metadata or {}).get("colour_preferences"))
+    from aip.engines.experience.facades import DESIGNS, ranked_designs
+
+    return {"preferences": prefs.as_dict(), "schemes": rank(plan, prefs),
+            "designs": [{"id": k, "name": DESIGNS[k]["name"], "story": DESIGNS[k]["story"]} for k in ranked_designs(plan)]}
+
+
 @router.get("/{plan_id}/model.glb", response_class=Response)
 async def get_model_glb(
     plan_id: str,
     principal: Principal = Depends(get_principal),
     furniture: bool = Query(default=True),
     ground: bool = Query(default=True),
+    palette: str | None = Query(default=None, description="Colour scheme id; the recommended one if omitted"),
+    colours: str | None = Query(default=None, max_length=600, description="The client's colour preferences, in words"),
+    design: str | None = Query(default=None, description="Facade design language; the recommended one if omitted"),
 ) -> Response:
     """Binary glTF for the 3D viewer, VR walkthrough and AR placement."""
+    import asyncio
+
     plan = _load(plan_id, principal)
-    data = export_glb(plan, include_furniture=furniture, include_ground=ground)
+    data = await asyncio.to_thread(export_glb, plan, include_furniture=furniture, include_ground=ground,
+                                   palette_id=palette, colour_text=colours, design_id=design)
     return Response(
         content=data,
         media_type="model/gltf-binary",
@@ -331,7 +647,14 @@ async def run_vastu(
     """
     plan = _plan_from_payload(payload.plan, payload.plan_id, principal)
     report = analyse_vastu(plan, payload.tradition_weight)
-    return json.loads(report.model_dump_json())
+    out = json.loads(report.model_dump_json())
+    if payload.compare_to:
+        # What an edit did to the Vastu: scored at the same stance, rule by rule.
+        from aip.engines.vastu.engine import vastu_changes
+
+        before = analyse_vastu(_load(payload.compare_to, principal), payload.tradition_weight)
+        out["since_edit"] = vastu_changes(before, report)
+    return out
 
 
 @router.post("/cost")

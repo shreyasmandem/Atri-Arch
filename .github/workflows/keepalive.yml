@@ -1,0 +1,13 @@
+# Keeps the free Render instance awake while the demo is being shown: it sleeps after
+# 15 idle minutes and takes about a minute to wake. A ping every 10 minutes is enough.
+name: keep-alive
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API
+        run: curl -fsS -m 90 https://atri-arch.onrender.com/api/v1/capabilities > /dev/null || true

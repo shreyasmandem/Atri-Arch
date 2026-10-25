@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- app ---
     app_name: str = "Architect Intelligence Platform"
     environment: str = Field(default="development")
+    #: A public studio: callers without a key act as the demo firm even in production.
+    public_demo: bool = Field(default=False)
     debug: bool = Field(default=True)
     log_level: str = Field(default="INFO")
     log_json: bool = Field(default=False)
@@ -41,6 +43,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_prefix: str = "/api/v1"
     cors_origins: str = "*"
+    #: Origins matched by pattern, for a UI hosted apart (Vercel previews and production).
+    cors_origin_regex: str = r"https://[a-z0-9-]+\.vercel\.app"
 
     # Secret used to sign session tokens. Auto-generated in dev; MUST be set in
     # production or startup fails loudly (see `validate_production`).
@@ -71,7 +75,7 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------- behaviour ---
     # Hard ceiling on spend. The router refuses any provider that would bill.
     enforce_zero_cost: bool = True
-    llm_timeout_seconds: float = 90.0
+    llm_timeout_seconds: float = 15.0
     llm_max_retries: int = 3
     llm_cache_enabled: bool = True
 
@@ -94,6 +98,12 @@ class Settings(BaseSettings):
     cost_region_default: str = "IN-TN"
     cost_currency_default: str = "INR"
     cost_monte_carlo_runs: int = 4000
+
+    # Neatlogs observability.
+    neatlogs_api_key: str = ""
+    neatlogs_project_id: str = "467f83ee-e953-4b72-aa4a-2831318be004"
+    neatlogs_endpoint: str = "https://ingest.neatlogs.com"
+    neatlogs_enabled: bool = True
 
     @field_validator("data_dir", "artifact_dir", "cache_dir", mode="after")
     @classmethod
@@ -131,7 +141,7 @@ class Settings(BaseSettings):
             problems.append("DEBUG must be false in production")
         if self.cors_origin_list == ["*"]:
             problems.append("CORS_ORIGINS must be an explicit allow-list in production")
-        if not self.configured_providers():
+        if not self.configured_providers() and not self.public_demo:
             problems.append(
                 "no model provider configured - set at least one free API key "
                 "(GROQ_API_KEY, GOOGLE_API_KEY, ...) or run Ollama locally"
@@ -201,6 +211,8 @@ def hermetic_settings(**overrides: Any) -> Settings:
         "cerebras_api_key": "", "mistral_api_key": "", "together_api_key": "",
         "huggingface_api_key": "", "github_token": "", "nvidia_api_key": "",
         "ollama_enabled": False,
+        "neatlogs_api_key": "",
+        "neatlogs_enabled": False,
         "database_url": "sqlite+aiosqlite:///:memory:",
     }
     base.update(overrides)

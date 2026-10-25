@@ -464,6 +464,12 @@ class Site(BaseModel):
     setback_right: float = 1.2
     max_far: float = Field(default=1.5, description="Floor area ratio permitted")
     max_ground_coverage: float = Field(default=0.6, ge=0.0, le=1.0)
+    #: The share of the plot the client wants kept as lawn and garden, and
+    #: the pool they asked for ("" for none; see engines/experience/landscape.py).
+    garden_share: float = Field(default=0.0, ge=0.0, le=0.8)
+    pool: str = ""
+    #: Where the pool goes: rear (default), side, northeast or corner (landscape.POOL_PLACES).
+    pool_place: str = ""
     max_height: float = 11.5
     slope_percent: float = 0.0
     soil_bearing_kn_m2: float = 150.0

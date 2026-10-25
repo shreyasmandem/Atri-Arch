@@ -88,6 +88,10 @@ RULES: dict[str, CodeRule] = {
         "NBC.3.4.7", "Part 3, Cl. 4.1",
         "Minimum kitchen area of 5.5 m2 with a minimum width of 1.8 m.", Severity.MAJOR,
     ),
+    "DOOR_MAIN": CodeRule(
+        "NBC.3.DOOR", "Part 3 general requirements, as adopted by local bye-laws",
+        "Main entrance door at least 0.9 m clear (1.0 m in common practice).", Severity.MINOR,
+    ),
     "BATH_MIN": CodeRule(
         "NBC.3.4.8", "Part 3, Cl. 4.1",
         "Minimum bathroom area of 1.8 m2, WC 1.1 m2.", Severity.MAJOR,
@@ -334,6 +338,22 @@ def compliance_analysis(plan: FloorPlan, brief: ClientBrief | None = None) -> Me
                     actual=0,
                     expected=1,
                     remedy="Add a compliant staircase connecting the levels.",
+                )
+            )
+        else:
+            checks_passed += 1
+
+    # The front door: wide enough to carry furniture in and an elder through.
+    main = next((o for lv in plan.levels for w in lv.walls for o in w.openings if o.kind.value == "main_door"), None)
+    if main is not None:
+        checks_run += 1
+        if main.width + 1e-6 < 0.9:
+            findings.append(
+                _finding(
+                    "DOOR_MAIN",
+                    f"The main door is {main.width:.2f} m wide, under the 0.9 m minimum.",
+                    metric="main_door_width", actual=main.width, expected=0.9,
+                    remedy="Widen the main door to 1.0 m (1.2 m for a double leaf).",
                 )
             )
         else:

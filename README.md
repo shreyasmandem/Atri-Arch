@@ -1,15 +1,135 @@
-# Architect Intelligence Platform (AIP)
+# Atri Arch: an AI architecture studio
 
-**An explainable multi-agent AI framework for architectural design, interior
-planning, Vastu analysis, cost prediction and client-centric design automation.**
+**Type one sentence about your plot. A team of AI agents designs the house, checks
+it against building code, daylight, airflow, structure, Vastu and cost, and hands
+you a full drawing set in about a minute.**
 
-Give it a plot and a brief. It returns a buildable scheme — floorplans,
-elevations, sections, a furnished interior, an explainable Vastu report, a
-costed bill of quantities and a 3D walkthrough — reviewed by a committee of
-thirteen independent critics, with every verdict traceable to its evidence.
+> "30x40 plot, road on the north, G+1, 3 bedrooms, car parking and a pooja room"
 
-It runs on a laptop. It needs no GPU, no Docker and no cloud account. Model
-spend is **$0.00**, and the test suite asserts that as an invariant.
+→ three competing schemes → a validity gate → a 13-critic committee → a Pareto +
+Borda vote → repair agents → plans, elevations, sections, DXF, a 3D model,
+airflow, a Vastu reading, a Monte Carlo cost estimate and furnished interiors.
+
+| Link | |
+|---|---|
+| **Live** | https://atri-arch.vercel.app (the API is pinged every 5 minutes, so it is awake when you open it) |
+| **Demo video (2:17)** | https://x.com/mandemshreyas/status/2109655589924266239 |
+| **Built for** | [#neatHack](https://neatlogs.com/hackathon), Oct 10-12 2026, solo |
+
+---
+
+## How neatlogs, Entire and cfo.ai were used
+
+### neatlogs: every agent run traced, and the incidents it caught
+
+Every design run is traced through the neatlogs SDK
+([`backend/aip/core/telemetry.py`](backend/aip/core/telemetry.py)) as one span tree:
+
+```
+atriarch.design_pipeline            WORKFLOW
+├─ interpret                         CHAIN
+├─ rag.retrieve_for_brief            RETRIEVER   (NBC 2016 + Vastu corpus)
+├─ generate                          CHAIN       (3 planners)
+└─ critique                          CHAIN
+   ├─ critic.compliance ... critic.cost        AGENT x 10  (analytical tools)
+   └─ critic.coherence / brief / livability    AGENT x 3   (LLM critics)
+      └─ <provider>/<model>                     LLM         (every call, every failover)
+```
+
+1,100+ traces were recorded over the weekend. Two real incidents came out of them:
+
+| | What neatlogs showed | Fix |
+|---|---|---|
+| **Incident 01** | Failed LLM spans on almost every run. Opening them: `http 404 model_not_found` for `qwen/qwen3.6-27b` and `groq/compound`. Groq had withdrawn both ids, and every critic in the parallel fan-out rediscovered the same 404, on every run. | Withdrawn ids replaced with the live `qwen/qwen3.8-27b`, and a retired model is now retired once for the whole process instead of once per critic. [commit `bfae4c0`](https://entire.io/gh/shreyasmandem/neathack-AtriArch/commit/bfae4c0edf19a5abf5393d2b60ed76c0345393ba) |
+| **Incident 02** | `rate limited (retry-after 1.0s / 2.0s)` spans on `openai/gpt-oss-120b` and `gemini-2.5-pro` when 13 critics fan out at once. | A 429 now means "later, not broken": the router fails over to the next model immediately instead of sleeping, and never opens the circuit breaker for a rate limit. |
+
+**Result, from neatlogs' own weekly digest:** traces containing an error span fell
+from **85.3% to 40.0%** after commit `bfae4c0`.
+
+Read that number as span errors, not failed designs. neatlogs records every
+provider-level HTTP 429 on an inner `LLM` span as an error, even when the router
+recovers from it on the next span. A rate-limited call does not fail the run: the
+capability-addressed router fails over to the next provider at once, and if every free
+provider is saturated at the same moment, the LLM critic falls back to the
+deterministic critics, is labelled `degraded` in the API and UI, and the
+`atriarch.design_pipeline` workflow still returns a complete scheme. That fallback is
+asserted by `test_router_degrades_instead_of_raising`.
+
+### Entire: memory for the coding agent
+
+Atri Arch was built with Claude Code inside Entire, so every commit carries a
+checkpoint with the session, the prompts and the reasoning behind the change.
+
+- **Checkpoints, one per commit:** [entire.io/.../commits](https://entire.io/gh/shreyasmandem/neathack-AtriArch/commits) · [analytics (75+ checkpoints)](https://entire.io/gh/shreyasmandem/neathack-AtriArch/analytics)
+- **Key decisions you can open and read the reasoning for:**
+  - [`acbfde7`](https://entire.io/gh/shreyasmandem/neathack-AtriArch/commit/acbfde7eb7b1236551807e86ab51e03fae2c9c11): a scheme that fails the validity check can never win the vote while a clean one exists
+  - [`d653f3d`](https://entire.io/gh/shreyasmandem/neathack-AtriArch/commit/d653f3d82de0979f3d511469d509c55fe156150d): the corridor planner, valid by construction for plots the searching planners could not hold
+  - [`bfae4c0`](https://entire.io/gh/shreyasmandem/neathack-AtriArch/commit/bfae4c0edf19a5abf5393d2b60ed76c0345393ba): the neatlogs incident fix above
+- **entire-graph:** while fixing Incident 01, `entire graph search --query "retire a withdrawn model id"` pointed straight at `DeadModels` in `core/llm.py`, its covering test and the provider probe script, out of 3,391 symbols and 8,334 relations.
+- **Entire Brain:** the invariant "a scheme that fails the validity guardrail never wins the vote" is recorded as a Brain fact, so later sessions don't undo it.
+- **Agent guide checked into the repo:** [`.entire/agent-guide.md`](.entire/agent-guide.md), referenced from `CLAUDE.md` and `AGENTS.md`.
+
+### cfo.ai: the business plan, and the decision it changed
+
+cfo.ai's AI CFO built a 12-month forecast from the pricing: **₹1,999** for a scheme,
+**₹7,999** for a full design set with edits. Base case: about **₹81 lakh** in year one
+at an **84% margin**, with upside and downside scenarios.
+
+The useful part was what it caught. Only about 8% of free users pay, so every buyer
+funds around 12 free designs: the real AI cost per buyer is about **₹560, not ₹40**.
+That changed the product. Every design and import is now metered against a per-firm
+quota ([`check_design_quota`](backend/aip/api/security.py)), and the studio falls back
+to its measured, non-LLM reviews whenever a model is slow or rate-limited.
+Forecast and notes: [`docs/cfo-ai/`](docs/cfo-ai/).
+
+---
+
+## Where the agents and the LLMs are
+
+Atri Arch is a neuro-symbolic multi-agent system: **8 specialised LLM agents** and a
+**manager-worker negotiation orchestrator**, working against **10 deterministic
+physics and code tools**. The LLM agents do what needs judgement: conversation,
+critique, revision, design and explanation. The deterministic engines are their
+ground truth. Every plan an agent proposes is measured before it can win, so a
+hallucinated room size, a corridor too narrow to walk or a code breach is caught by
+arithmetic, not by another model's opinion. The engines do not replace the agents;
+they keep them honest.
+
+| Agent | Role |
+|---|---|
+| **Brief agent** | The conversation. Reads a brief in English, Hindi or Hinglish, asks only what is missing, and starts when the client says go. |
+| **3 generative critics** | Design coherence, brief fidelity and livability: the judgements that resist a formula. |
+| **Revision agent** | "Make the kitchen bigger, add a balcony off the master": reads a change in any language and applies it. |
+| **Exterior designer** | Composes facades in a facade grammar for what the client said. |
+| **Vision plan reader** | Reads a photo or scan of an existing plan with a vision model. |
+| **Design rationale writer** | Writes the client-facing explanation of what was chosen and what it traded away. |
+| **Negotiation orchestrator** | Manager-worker protocol: hands each open constraint to the worker that owns it (floorplan, Vastu, cost, interior), and accepts a repair only when re-measuring the whole design shows a net gain. |
+| **10 deterministic critics** | The ground-truth tools. Code, daylight, ventilation, privacy, circulation, accessibility, space, structure, Vastu and cost are measured, because a daylight factor should be arithmetic, not an opinion. |
+
+The models are free-tier (Groq, Gemini, OpenRouter and others) behind a
+capability-addressed router with failover, rate-limit handling and a circuit breaker.
+That is why the incidents above mattered: the router is the agent's nervous system.
+
+## What was built during neatHack (Oct 10-12, 2026)
+
+The entire platform was built during the 48-hour neatHack sprint and is tracked
+across 75+ Entire checkpoints: the 10 deterministic physics and code critics, the
+Vastu knowledge graph, the manager-worker negotiation protocol, the hand-written
+AutoCAD R12 DXF and glTF generators, the multi-agent LLM studio, the four layout
+planners, the live atelier UI and the telemetry-instrumented model router. Highlights
+from the commit history:
+
+- The conversational **brief agent** (any language) and the **revision agent**
+- The **exterior designer agent** with seven facade languages and palettes, day and night
+- Four planners (**parti, spine, row-house, corridor**), a pre-search **feasibility gate** and the **validity guardrail**
+- The live **atelier**: the committee drafting on stage while the plans are made
+- Elevations and sections drawn live from the 3D model, interior walkthroughs
+- **Exact editing** after design: widen, deepen, swap, rename, retype, ceiling, undo
+- Plan import from **photos and SVGs**, not only DXF
+- **neatlogs tracing**, the incident fixes above, and the **cfo.ai** business model
+- Free deployment (Vercel + Render), a phone layout, and server-restart recovery
+
+## Run it locally
 
 ```bash
 cd backend
@@ -17,9 +137,12 @@ python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"   # Windows
 .venv/Scripts/python -m uvicorn aip.api.app:app --port 8000
 ```
 
-Then open **http://127.0.0.1:8000** for the architect studio, or
-**http://127.0.0.1:8000/embed/demo** to see the client-facing widget embedded in
-a (fictional) practice's website.
+Open **http://127.0.0.1:8000** for the studio, or
+**http://127.0.0.1:8000/embed/demo** for the client-facing widget on a (fictional)
+practice's website. It runs on a laptop with no GPU and no Docker. Add free API keys
+for the LLM agents ([docs/API_SETUP.md](docs/API_SETUP.md)); without them the
+analytical half still works and LLM output is labelled `degraded`. Deployment notes:
+[`DEPLOY.md`](DEPLOY.md).
 
 ---
 
@@ -179,7 +302,7 @@ Home Office  -> NE  Home Office -[hosts]-> Study -[demands]-> Light -[affords]->
 No rule in the corpus mentions a gym, a home theatre or a home office. The graph
 reaches all three by reasoning through what happens inside the room.
 
-| | |
+| Metric | Value |
 |---|---|
 | Placements a cited text addresses | 112 |
 | Placements the graph can derive | 578 |
@@ -222,17 +345,18 @@ treatment makes confidently:
   Monte Carlo band, an S-curve cash flow, a named risk register, and a
   calibration factor that learns *this practice's* deviation from the schedule.
 
-## Zero cost, and why that is structural
+## Free models, with failover, never the source of truth
 
-Everything that can be solved analytically — geometry, solar position, daylight
-factors, airflow, sightlines, quantity takeoff, Vastu rule evaluation — is
-solved analytically, not by burning model credits. Language models are used only
-where judgement resists formalisation.
+The agents' LLM calls handle conversation, revision, facade design, plan reading,
+critique and explanation. What can be measured (geometry, solar position, daylight
+factors, airflow, sightlines, quantity takeoff, Vastu rules) is measured, and the
+agents use those measurements as tools, so a model's opinion is always checked
+against arithmetic.
 
-When a model *is* needed, `aip/core/providers.py` is a registry of free-tier
+For the LLM work, `aip/core/providers.py` is a registry of free-tier
 and local models. The router is capability-addressed (`Capability.REASONING`,
 not a vendor name), rate-limit aware, circuit-broken, failover-capable, and
-routes on **measured latency as well as quality** - a model 4% better and 40x
+routes on **measured latency as well as quality** — a model 4% better and 40x
 slower is the wrong choice when thirteen critics are fanning out.
 
 Provider catalogues rot, so the registry is verified rather than trusted:
@@ -318,9 +442,8 @@ docs/           architecture, research notes, API setup, sample output
 cd backend && .venv/Scripts/python -m pytest -q
 ```
 
-174 tests. They run with **no provider configured**, which is deliberate: it
-proves the analytical half is genuinely independent of any API, and that is the
-whole basis of the zero-cost claim. The suite asserts that isolation explicitly
+240+ tests. They run with **no provider configured**, which is deliberate: it
+proves the measured half of the committee never depends on a model being up. The suite asserts that isolation explicitly
 rather than relying on environment variables being unset — the moment a developer
 creates a `.env`, the trap would be a suite that silently starts calling live
 providers and still passes.
@@ -335,8 +458,8 @@ independent CAD library to confirm every wall's length and thickness survived.
 - [docs/API_SETUP.md](docs/API_SETUP.md) — the free accounts to create, in priority order
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how the pieces fit together
 - [docs/RESEARCH.md](docs/RESEARCH.md) — novelty claims, method, evaluation, limitations
-- [docs/AIP_Project_Report_Phase1.docx](docs/AIP_Project_Report_Phase1.docx) — the
-  Phase 1 report. Regenerate it with `python scripts/build_report.py` from
+- [docs/AIP_Project_Report_Phase1.docx](docs/AIP_Project_Report_Phase1.docx) — an
+  auto-generated technical benchmark report. Regenerate it with `python scripts/build_report.py` from
   `backend/`: every figure in it is measured from the running system at build
   time, so the document cannot drift from the code.
 - `http://127.0.0.1:8000/docs` — interactive OpenAPI reference

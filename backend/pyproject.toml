@@ -32,12 +32,17 @@ dependencies = [
     "rank-bm25>=0.2.2",
     "PyYAML>=6.0",
     "python-dateutil>=2.9",
+    "neatlogs>=1.4",
 ]
 
 [project.optional-dependencies]
 # Local CPU embeddings. Falls back to a deterministic hashing embedder when absent,
 # so the platform runs with zero extra downloads if you want it to.
 embeddings = ["fastembed>=0.4", "onnxruntime>=1.19"]
+# Reads scanned and photographed floor plans on this machine (wall detection and
+# OCR), so an image upload does not depend on a rate-limited remote vision model.
+# Without it the importer says so and falls back to that model.
+vision = ["opencv-python-headless>=4.9", "rapidocr-onnxruntime>=1.3"]
 # PDF report rendering for Vastu / cost deliverables.
 reports = ["reportlab>=4.2"]
 dev = [
@@ -50,6 +55,9 @@ dev = [
     # Reads our hand-written DXF back with an independent CAD library, so the
     # "opens in AutoCAD" claim is verified by something other than our own writer.
     "ezdxf>=1.3",
+    # The raster-plan tests need the local vision stack (the `vision` extra).
+    "opencv-python-headless>=4.9",
+    "rapidocr-onnxruntime>=1.3",
 ]
 
 [project.scripts]
@@ -74,6 +82,8 @@ ignore = ["E501", "B008", "UP042"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# `scripts` (the fixture builders the import tests reuse) lives beside `aip`.
+pythonpath = ["."]
 filterwarnings = ["ignore::DeprecationWarning"]
 
 [tool.mypy]

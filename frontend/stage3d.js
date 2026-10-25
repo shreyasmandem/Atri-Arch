@@ -31,10 +31,10 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
 const GAP = 3.6;          // metres between floor plates
 const WALL_H = 1.05;      // cut-away height: a model, not a building
 const H = 1.9;            // figure height: collectible proportions that read at plan scale
-const WALK = 1.6;         // m/s
-const RUN = 3.6;          // m/s, for long crossings
-const PACE = 1.7;         // m/s while drawing
-const ACCEL = 4.5;        // m/s²
+const WALK = 1.0;         // m/s: an unhurried stroll, easy to follow
+const RUN = 2.2;          // m/s, for long crossings
+const PACE = 1.4;         // m/s while drawing
+const ACCEL = 3.0;        // m/s²
 
 const COL = {
   ground: 0x0b0a09, plot: 0x1c1b19, slab: 0x141312, line: 0xede6dc, chalk: 0x8a847b,
@@ -129,6 +129,8 @@ const LOOKS = {
 const PIGMENT = { indigo: 0x4f6fa3, hingula: 0xb24a36, ochre: 0xa8733a, orpiment: 0xc29a2e, gold: 0xc48a3e, chalk: 0x7d8494 };
 const SKINS = [0xf0c6a4, 0xe8b894, 0xd29a6e, 0xb27a52, 0x8a5a3c];
 const HAIRS = [0x1b1511, 0x2b2118, 0x4a2c1c, 0x6b4a2e, 0x8b8f96];
+const IDLE = ["Bedrooms want the quiet side.", "Stair near the middle?", "Kitchen in the south-east.", "Let's keep the centre open.",
+  "That wall can carry the slab.", "Two windows, opposite walls.", "Parking off the drive.", "Light from the north for the study."];
 const ACKS = ["Noted.", "Good catch. We'll revise it.", "Understood.", "We'll take that on.", "Agreed, adjusting it."];
 
 function criticLook(pig) {
@@ -329,6 +331,148 @@ const brief = (s, n = 92) => {
 
 /* ═══ THE STAGE ═════════════════════════════════════════════════════════ */
 
+/* ── fit-out: finishes and furniture by room ──────────────────────────── */
+
+const bounce = (t) => {
+  // Drops, touches down and settles once: the furniture has weight.
+  if (t < 0.72) return (t / 0.72) ** 2;
+  const k = (t - 0.72) / 0.28;
+  return 1 - Math.sin(k * Math.PI) * 0.08 * (1 - k);
+};
+const elastic = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.pow(2, -9 * t) * Math.cos(t * 9.5));
+const GLOW = new THREE.MeshBasicMaterial({ color: 0xffc46b });
+
+const BEDS = new Set(["master_bedroom", "bedroom", "guest_bedroom", "children_bedroom"]);
+const FLOOR_OF = (t) => (BEDS.has(t) || t === "study" || t === "home_office" ? 0x9a6b45
+  : WET.has(t) ? 0xc9c4ba : t === "kitchen" || t === "store" ? 0x8f9a8e
+  : t === "balcony" || t === "terrace" || t === "verandah" || t === "courtyard" ? 0xa89a86
+  : t === "staircase" ? 0xb9ad9a : t === "garage" || t === "parking" ? 0x7d7a74 : 0xd8cab2);
+const PAINT_OF = (t) => ({
+  master_bedroom: 0xd6c6ae, bedroom: 0xdbe2d2, guest_bedroom: 0xe6dccc, children_bedroom: 0xefe2c6,
+  living: 0xefe7da, dining: 0xebe1d1, kitchen: 0xf3ede3, puja: 0xf1e0b6, study: 0xe2d6c3,
+  bathroom: 0xd9e3e8, toilet: 0xd9e3e8, powder: 0xd9e3e8,
+}[t] ?? 0xede6da);
+
+const C = {
+  wood: 0x8a5f3c, oak: 0xc2a37c, linen: 0xefe9df, fabric: 0x9c8a74, accent: 0x6f8662, dark: 0x2b2a29,
+  steel: 0xbfc3c6, gold: 0xc9a14a, white: 0xf5f4f0, leaf: 0x4f7a3a, pot: 0xa35a3a, rug: 0x8c6b52,
+  stone: 0x3a3a3c, blush: 0xc98f7a, glass: 0x9fb2bf,
+};
+
+// Pieces for a room, in the room's own frame: u runs along its long side,
+// v across it. Each is [u, v, y, size_u, size_v, size_y, colour, kind].
+function FURNISH(type, L, S) {
+  const m = 0.18;
+  const out = [];
+  const add = (...p) => out.push(p);
+  const plant = (u, v) => { add(u, v, 0, 0.32, 0.32, 0.3, C.pot, "cyl"); add(u, v, 0.28, 0.5, 0.5, 0.5, C.leaf, "ball"); };
+  if (L < 1.2 || S < 1.0) return out;
+  if (BEDS.has(type)) {
+    const bw = type === "master_bedroom" ? 1.8 : type === "children_bedroom" ? 1.1 : 1.6;
+    const bl = Math.min(2.05, L - 2 * m - 0.6);
+    const hu = -L / 2 + m;
+    add(hu + bl / 2 + 0.05, 0, 0, bl + 0.5, Math.min(S - 0.6, bw + 0.9), 0.012, C.rug);
+    add(hu + bl / 2, 0, 0, bl, bw, 0.3, C.wood);
+    add(hu + bl / 2 + 0.02, 0, 0.3, bl - 0.06, bw - 0.06, 0.16, C.linen);
+    add(hu + bl * 0.66, 0, 0.46, bl * 0.42, bw - 0.02, 0.05, type === "children_bedroom" ? 0xd6a23a : C.accent);
+    for (const s of bw > 1.3 ? [-bw / 4, bw / 4] : [0]) add(hu + 0.3, s, 0.46, 0.34, bw > 1.3 ? bw / 2 - 0.12 : 0.6, 0.1, C.white);
+    add(hu + 0.04, 0, 0, 0.08, bw + 0.1, 0.95, C.wood);
+    if (S >= bw + 1.1) for (const s of [-1, 1]) add(hu + 0.25, s * (bw / 2 + 0.3), 0, 0.42, 0.42, 0.45, C.oak);
+    if (S >= bw + 1.8 && L >= 3.2) add(L / 2 - m - 0.9, S / 2 - m - 0.3, 0, Math.min(1.8, L - bl - 0.9), 0.6, 1.0, C.oak);
+    if (L >= 3.6) plant(L / 2 - m - 0.3, -S / 2 + m + 0.3);
+  } else if (type === "living" || type === "family" || type === "drawing") {
+    const sl = Math.min(2.6, L - 1.4);
+    const sv = S / 2 - m - 0.45;
+    add(0, 0, 0, Math.min(2.6, L - 1.2), Math.min(2.0, S - 1.4), 0.012, C.rug);
+    add(0, sv, 0, sl, 0.9, 0.42, C.fabric);
+    add(0, sv + 0.36, 0.42, sl, 0.18, 0.4, C.fabric);
+    for (const s of [-1, 1]) add(s * (sl / 2 - 0.08), sv, 0.42, 0.16, 0.9, 0.2, C.fabric);
+    add(-sl / 4, sv - 0.05, 0.42, 0.4, 0.4, 0.12, C.accent);
+    add(sl / 4, sv - 0.05, 0.42, 0.4, 0.4, 0.12, C.blush);
+    add(0, 0.05, 0, 1.0, 0.6, 0.38, C.oak);
+    add(0, -S / 2 + m + 0.2, 0, Math.min(1.8, L - 1.5), 0.4, 0.5, C.wood);
+    add(0, -S / 2 + m + 0.08, 0.5, Math.min(1.3, L - 1.8), 0.06, 0.45, C.dark);
+    if (L >= 3.8) add(-L / 2 + m + 0.5, 0, 0, 0.8, 0.8, 0.45, C.fabric);
+    plant(L / 2 - m - 0.3, S / 2 - m - 0.3);
+    if (S >= 3.4) plant(-L / 2 + m + 0.3, -S / 2 + m + 0.3);
+  } else if (type === "dining") {
+    const tl = Math.min(1.8, L - 1.3), tw = Math.min(0.95, S - 1.3);
+    if (tl < 0.8 || tw < 0.6) return out;
+    add(0, 0, 0, tl, tw, 0.72, C.wood);
+    add(0, 0, 0.72, tl + 0.06, tw + 0.06, 0.04, C.oak);
+    const n = Math.max(1, Math.floor(tl / 0.62));
+    for (let k = 0; k < n; k++) {
+      const u = -tl / 2 + tl * (k + 0.5) / n;
+      for (const s of [-1, 1]) {
+        add(u, s * (tw / 2 + 0.28), 0, 0.42, 0.42, 0.45, C.oak);
+        add(u, s * (tw / 2 + 0.47), 0.45, 0.42, 0.06, 0.4, C.oak);
+      }
+    }
+    add(0, 0, 1.25, 0.3, 0.3, 0.12, C.gold, "cyl");
+    add(0, 0, 1.18, 0.12, 0.12, 0.12, C.gold, "glow");
+  } else if (type === "kitchen" || type === "pantry") {
+    const run = L - 2 * m;
+    add(0, -S / 2 + m + 0.3, 0, run, 0.6, 0.86, C.oak);
+    add(0, -S / 2 + m + 0.3, 0.86, run, 0.62, 0.04, C.stone);
+    add(-run / 4, -S / 2 + m + 0.3, 0.9, 0.6, 0.5, 0.02, C.dark);
+    if (S >= 2.6) {
+      add(-L / 2 + m + 0.3, 0.2, 0, 0.6, Math.min(S - 1.2, 2.0), 0.86, C.oak);
+      add(-L / 2 + m + 0.3, 0.2, 0.86, 0.62, Math.min(S - 1.2, 2.0), 0.04, C.stone);
+    }
+    add(L / 2 - m - 0.38, S / 2 - m - 0.38, 0, 0.7, 0.7, 1.0, C.steel, "gloss");
+    if (S >= 3.2) add(0.4, 0.3, 0, Math.min(1.6, L - 2.4), 0.8, 0.9, C.wood);
+  } else if (WET.has(type)) {
+    if (type === "utility" || type === "laundry") {
+      add(-L / 2 + m + 0.32, -S / 2 + m + 0.32, 0, 0.62, 0.62, 0.85, C.white, "gloss");
+      add(-L / 2 + m + 0.32, -S / 2 + m + 0.02, 0.4, 0.36, 0.04, 0.36, C.dark);
+      add(L / 2 - m - 0.3, -S / 2 + m + 0.25, 0, 0.6, 0.5, 0.85, C.steel);
+      return out;
+    }
+    add(-L / 2 + m + 0.35, S / 2 - m - 0.25, 0, 0.38, 0.38, 0.4, C.white, "cyl");
+    add(-L / 2 + m + 0.35, S / 2 - m - 0.05, 0.3, 0.4, 0.16, 0.42, C.white, "gloss");
+    add(0, -S / 2 + m + 0.25, 0, Math.min(0.9, L - 1.2), 0.48, 0.82, C.oak);
+    add(0, -S / 2 + m + 0.25, 0.82, 0.42, 0.34, 0.08, C.white, "gloss");
+    if (L >= 2.0) add(L / 2 - m - 0.45, 0, 0, 0.04, Math.min(1.0, S - 0.5), 1.0, C.glass, "gloss");
+  } else if (type === "puja") {
+    add(0, -S / 2 + m + 0.3, 0, 0.9, 0.55, 0.7, C.wood);
+    add(0, -S / 2 + m + 0.3, 0.7, 0.7, 0.45, 0.25, C.gold, "gloss");
+    add(0, -S / 2 + m + 0.3, 0.95, 0.5, 0.5, 0.3, C.gold, "cone");
+    for (const s of [-0.22, 0.22]) add(s, -S / 2 + m + 0.68, 0, 0.08, 0.08, 0.08, C.gold, "glow");
+    add(0, 0.1, 0, Math.min(1.2, L - 0.6), Math.min(0.8, S - 0.8), 0.012, 0xb6553a);
+  } else if (type === "study" || type === "home_office" || type === "library") {
+    add(0, -S / 2 + m + 0.3, 0, Math.min(1.4, L - 0.8), 0.6, 0.75, C.oak);
+    add(0, -S / 2 + m + 0.85, 0, 0.5, 0.5, 0.5, C.dark);
+    add(-L / 2 + m + 0.18, 0.2, 0, 0.35, Math.min(1.6, S - 1.2), 1.0, C.wood);
+    plant(L / 2 - m - 0.3, S / 2 - m - 0.3);
+  } else if (type === "staircase") {
+    const n = 9, run = Math.min(L - 0.4, 3.0), sw = Math.min(1.0, S / 2 - 0.1);
+    for (let k = 0; k < n; k++) {
+      add(-run / 2 + run * (k + 0.5) / n, -S / 4, 0, run / n, sw, 0.05 * (k + 1), C.oak);
+      add(run / 2 - run * (k + 0.5) / n, S / 4, 0, run / n, sw, 0.05 * (n + k + 1), C.oak);
+    }
+  } else if (type === "foyer" || type === "lobby") {
+    add(0, -S / 2 + m + 0.2, 0, Math.min(1.1, L - 0.8), 0.35, 0.8, C.wood);
+    add(0, 0, 0, Math.min(1.4, L - 0.6), Math.min(0.9, S - 0.6), 0.012, C.rug);
+    plant(L / 2 - m - 0.25, S / 2 - m - 0.25);
+  } else if (type === "balcony" || type === "terrace" || type === "verandah") {
+    for (let u = -L / 2 + 0.5; u <= L / 2 - 0.4; u += 0.9) plant(u, S / 2 - m - 0.25);
+    if (S >= 1.6 && L >= 2.2) {
+      add(0, -0.1, 0, 0.6, 0.6, 0.45, C.oak, "cyl");
+      for (const s of [-0.7, 0.7]) add(s, -0.1, 0, 0.55, 0.55, 0.45, C.fabric);
+    }
+  } else if (type === "garage" || type === "parking" || type === "car_porch") {
+    // A hatchback, 3.8 x 1.65 m, with a clear metre to walk round it; smaller only if the porch is.
+    const k = clamp(Math.min((L - 1.2) / 3.8, (S - 1.1) / 1.65), 0.5, 1);
+    const cl = 3.8 * k, cw = 1.65 * k;
+    add(0, 0, 0.18 * k, cl, cw, 0.5 * k, 0x8a2f2a, "gloss");
+    add(0.15 * k, 0, 0.68 * k, cl * 0.5, cw * 0.9, 0.36 * k, 0x2b3a44, "gloss");
+    for (const su of [-1, 1]) for (const sv of [-1, 1]) add(su * cl * 0.32, sv * cw * 0.46, 0, 0.5 * k, 0.18 * k, 0.5 * k, C.dark);
+  } else if (type === "corridor") {
+    add(0, 0, 0, Math.max(0.6, L - 0.8), Math.min(0.8, S - 0.3), 0.012, C.rug);
+  }
+  return out;
+}
+
 export class Stage3D {
   constructor(host) {
     this.host = host;
@@ -395,7 +539,8 @@ export class Stage3D {
     this.scene.add(fig);
     const m = { kind, fig, tasks: [], task: null, face: 0, vel: 0, moved: 0, busyUntil: 0 };
     // Where the pen point sits relative to the person holding it.
-    m.reach = look.tool === "staff" ? { f: 0.34, r: 0.27 } : { f: 0.9, r: 0.2 };
+    m.reach0 = look.tool === "staff" ? { f: 0.34, r: 0.27 } : { f: 0.9, r: 0.2 };
+    this._sizeFig(m);
     if (look.tool !== "pen") {
       // The mark being made, and for the architects a stylus beam to it.
       m.dot = new THREE.Mesh(new THREE.CircleGeometry(0.09, 20), new THREE.MeshBasicMaterial({
@@ -414,6 +559,15 @@ export class Stage3D {
       }
     }
     return m;
+  }
+
+  // People are sized to the board: on a large plot a life-size figure is a
+  // speck, so the team grows with the plot (and walks proportionally faster).
+  _sizeFig(m) {
+    const k = this.figS || 1;
+    m.fig.scale.setScalar(H * k);
+    m.reach = { f: m.reach0.f * k, r: m.reach0.r * k };
+    if (m.dot) m.dot.scale.setScalar(k);
   }
 
   /* ── framing: a drone over the work ───────────────────────────────── */
@@ -535,6 +689,8 @@ export class Stage3D {
     this.current = null;
     this.tweens = [];
     this.speed = 1;
+    this.deadline = 0;
+    this.boost = 1;
     this.settling = false;
     this.focusLevel = null;
     this.focusRooms = [];
@@ -550,6 +706,8 @@ export class Stage3D {
     });
     this.resume();
     this.plot = { w, d, n: Math.max(1, levels), road };
+    this.figS = clamp(Math.sqrt(w * d * Math.max(1, levels)) / 17, 1, 3.4);
+    this.team.forEach((m) => this._sizeFig(m));
     const total = this.plot.n * w + (this.plot.n - 1) * GAP;
     this.origin = new THREE.Vector3(-total / 2, 0, d / 2);   // plan (0,0) of plate 0
     this.view.target.set(0, 0, 0);
@@ -598,9 +756,43 @@ export class Stage3D {
 
   // Keep the board in step with the run: the later the engine is, the
   // quicker the team works, so the drawing is never left behind the bar.
-  pace(progress) {
-    if (this.settling) return;
-    this.speed = progress > 0.8 ? 2.4 : progress > 0.6 ? 1.6 : 1;
+  // Keep the board in step with the engine: from how far the run has got
+  // and how long it took to get there, estimate when it will finish, and
+  // let the team aim to put the last line down at that moment.
+  pace(progress, elapsed) {
+    if (this.settling || !(progress > 0.02) || !(elapsed > 0)) return;
+    const eta = (elapsed * (1 - progress)) / Math.max(progress, 0.08);
+    this.deadline = performance.now() + clamp(eta, 2, 180) * 1000;
+  }
+
+  // Metres still to walk and draw for whoever has the most left.
+  _left() {
+    let most = 0;
+    for (const m of this.team) {
+      let left = 0;
+      for (const t of [m.task, ...m.tasks]) {
+        if (t?.type === "draw") left += (t.pts.length - (t.i ?? 0)) * 0.08;
+        else if (t?.type === "run") left += 2;
+      }
+      most = Math.max(most, left);
+    }
+    return most;
+  }
+
+  // A few times a second: the speed that lands the drawing on the deadline,
+  // eased so nobody visibly lurches.
+  _keepPace(now) {
+    if (this.settling || now < (this.paceAt || 0)) return;
+    this.paceAt = now + 400;
+    const s = this.current;
+    let want = 1;
+    if (s && !s.drawn && this.deadline) {
+      const secs = Math.max(1.5, ((this.deadline - performance.now()) / 1000) * 0.85);
+      // Never more than 4x: past that the team blurs and nobody can follow the drawing.
+      want = clamp(this._left() / (PACE * secs), 1, 4);
+    }
+    want *= this.boost || 1;
+    this.speed += (want - this.speed) * 0.35;
   }
 
   /* ── labels and voices ────────────────────────────────────────────── */
@@ -632,7 +824,7 @@ export class Stage3D {
     }
     el.append(document.createTextNode(text));
     this.labelLayer.append(el);
-    const l = { el, world: fig.position.clone(), on: false, follow: fig, lift: H * 1.1, anchor: "translate(-50%, -100%)" };
+    const l = { el, world: fig.position.clone(), on: false, follow: fig, lift: H * 1.1 * (this.figS || 1), anchor: "translate(-50%, -100%)" };
     this.labels.push(l);
     this._labelsTick();
     void el.offsetWidth;
@@ -683,23 +875,19 @@ export class Stage3D {
   // until the schemes arrive, rather than drawing anything made up.
   plan(brief_) {
     const { w, d, n } = this.plot;
-    const eng = this._member("eng"), a1 = this._member("arch1"), a2 = this._member("arch2");
-    this.team.forEach((t, i) => { t.fig.position.copy(this.P(0, w * 0.3 + i * 1.4, -4)); this._clear(t); });
+    const team = [...this.team].sort(() => Math.random() - 0.5);
+    const [p1, p2, p3] = team;
+    // Each run starts from a different place, in a different formation.
+    const start = pick([[w * 0.3, -4], [-3, d * 0.4], [w + 3, d * 0.6], [w * 0.7, d + 3]]);
+    this.team.forEach((t, i) => { t.fig.position.copy(this.P(0, start[0] + i * 1.3 * (this.figS || 1), start[1])); this._clear(t); });
     const quick = (m, a, b, color, opacity, parent) => {
       this._drawLine(m, a, b, color, opacity, parent);
       m.tasks[m.tasks.length - 1].quick = true;
     };
+    const rnd = (a, b) => a + Math.random() * (b - a);
+    const at = (x, y, lv = 0) => this.P(lv, x, y);
+    const say = (m, text) => this._do(m, { type: "say", text, t: 1.6, team: true });
 
-    for (let i = 0; i < n; i++) {
-      const corners = [[0, 0], [w, 0], [w, d], [0, d]].map(([x, y]) => this.P(i, x, y));
-      corners.forEach((c, k) => {
-        const next = corners[(k + 1) % 4];
-        this._do(eng, { type: "run", to: this._standAt(eng, c, next) }, { type: "call", fn: () => this._stake(c) });
-        this._do(eng, { type: "draw", quick: true, pts: resample([c, next]), line: this._line([c, next], COL.line, i === 0 ? 0.55 : 0.32) });
-      });
-    }
-
-    // The setback envelope, on every floor plate.
     const sb = this.setbacks || { front: 0, rear: 0, left: 0, right: 0 };
     const r = this.plot.road;
     const inset = r === "N" ? { t: sb.front, b: sb.rear, l: sb.left, r: sb.right }
@@ -707,32 +895,105 @@ export class Stage3D {
         : r === "E" ? { t: sb.left, b: sb.right, l: sb.rear, r: sb.front }
           : { t: sb.right, b: sb.left, l: sb.front, r: sb.rear };
     const env = { x0: inset.l, x1: w - inset.r, y0: inset.b, y1: d - inset.t };
-    this._do(a1, { type: "wait", t: 1.2 });
-    for (let i = 0; i < n; i++) {
-      const pts = [[env.x0, env.y0], [env.x1, env.y0], [env.x1, env.y1], [env.x0, env.y1], [env.x0, env.y0]].map(([x, y]) => this.P(i, x, y));
-      for (let k = 1; k < pts.length; k++) quick(a1, pts[k - 1], pts[k], COL.gold, 0.55);
-    }
 
-    // Zones inside the envelope: living to the road, services behind,
-    // bedrooms at the back or upstairs, the order the generator starts from.
-    const zones = n > 1
-      ? [[0, "Living & arrival", 0.0, 0.5, COL.public], [0, "Kitchen & services", 0.5, 1.0, COL.service], [1, "Bedrooms", 0.0, 1.0, COL.private]]
-      : [[0, "Living & arrival", 0.0, 0.38, COL.public], [0, "Kitchen & services", 0.38, 0.62, COL.service], [0, "Bedrooms", 0.62, 1.0, COL.private]];
-    // A fraction of the envelope's depth from the road, as a plan y.
-    const ey = (f) => env.y0 + (env.y1 - env.y0) * (r === "S" ? f : 1 - f);
-    this._do(a2, { type: "wait", t: 2.4 });
-    for (const [lv, name, f0, f1, color] of zones) {
-      const ya = ey(f0), yb = ey(f1);
-      const rect = [[env.x0, ya], [env.x1, ya], [env.x1, yb], [env.x0, yb]].map(([x, y]) => this.P(lv, x, y));
-      const fill = shapeFill(rect, color, 0);
-      this.planning.add(fill);
-      // Only the dividing line is drawn; the envelope is already there.
-      if (f1 < 1) quick(a2, this.P(lv, env.x0, yb), this.P(lv, env.x1, yb), color, 0.6, this.planning);
-      else this._do(a2, { type: "run", to: rect.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(0.25) });
-      const centre = rect.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(0.25);
-      const lab = this._label(name, centre, "st-label--zone");
-      this._do(a2, { type: "call", fn: () => { this._fade(fill.material, 0.08, 600); this._show(lab); } });
-    }
+    // A repertoire of real first-day site work. Each render draws a different
+    // hand from it, deals the jobs to different people, in a different order.
+    const plays = {
+      // Pace the plot, drive a few stakes where the soil is tested.
+      survey: (m) => {
+        say(m, pick(["Walking the plot first.", "Let's see the ground.", "Checking levels."]));
+        const k = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < k; i++) {
+          const p = at(rnd(1, w - 1), rnd(1, d - 1));
+          this._do(m, { type: "run", to: p }, { type: "note", t: rnd(0.8, 1.6) }, { type: "call", fn: () => this._stake(p) });
+        }
+      },
+      // Peg the four corners of the plot, string a line round them and write
+      // each side's length on the ground.
+      corners: (m) => {
+        say(m, pick(["Pegging the corners.", "Corners first, then the string.", "Let's find the boundary stones."]));
+        const c = [[0, 0], [w, 0], [w, d], [0, d]];
+        const s0 = Math.floor(Math.random() * 4);
+        for (let k = 0; k < 4; k++) {
+          const [x, y] = c[(s0 + k) % 4], [nx, ny] = c[(s0 + k + 1) % 4];
+          const p = at(x, y);
+          this._do(m, { type: "run", to: p }, { type: "note", t: 0.6 }, { type: "call", fn: () => this._stake(p) });
+          quick(m, p, at(nx, ny), COL.chalk, 0.4, this.planning);
+          this._do(m, { type: "call", fn: () => this._dim(at((x + nx) / 2, (y + ny) / 2), Math.hypot(nx - x, ny - y)) });
+        }
+      },
+      // Tape both diagonals: if they agree, the plot is square.
+      diagonal: (m) => {
+        say(m, pick(["Checking it's square.", "Diagonals, to be sure.", "Taping corner to corner."]));
+        quick(m, at(0, 0), at(w, d), COL.chalk, 0.22, this.planning);
+        this._do(m, { type: "call", fn: () => this._dim(at(w * 0.5, d * 0.5), Math.hypot(w, d), "diag") });
+        quick(m, at(w, 0), at(0, d), COL.chalk, 0.22, this.planning);
+        this._do(m, { type: "note", t: 1.2 }, { type: "say", text: "Diagonals agree - it's square.", t: 1.6, team: true });
+      },
+      // Measure each setback in from the boundary and write it down.
+      setbacks: (m) => {
+        say(m, pick(["Measuring the setbacks.", "How far in can we build?", "Offsets from the boundary."]));
+        const marks = [[env.x0 / 2, d / 2, env.x0, [0, d / 2], [env.x0, d / 2]], [(w + env.x1) / 2, d / 2, w - env.x1, [w, d / 2], [env.x1, d / 2]],
+          [w / 2, env.y0 / 2, env.y0, [w / 2, 0], [w / 2, env.y0]], [w / 2, (d + env.y1) / 2, d - env.y1, [w / 2, d], [w / 2, env.y1]]];
+        for (const [x, y, len, a0, a1] of marks.sort(() => Math.random() - 0.5)) {
+          if (len < 0.3) continue;
+          quick(m, at(...a0), at(...a1), COL.gold, 0.6, this.planning);
+          this._do(m, { type: "note", t: 0.5 }, { type: "call", fn: () => this._dim(at(x, y), len) });
+        }
+      },
+      // Set up the level at a corner and read the staff across the plot.
+      levels: (m) => {
+        say(m, pick(["Taking levels.", "Reading the staff.", "Which way does it drain?"]));
+        for (let i = 0; i < 3; i++) {
+          const p = at(rnd(1, w - 1), rnd(1, d - 1));
+          this._do(m, { type: "run", to: p }, { type: "note", t: rnd(1.0, 1.6) },
+            { type: "call", fn: () => { this._stake(p); this._dim(p, null, `+${(Math.random() * 0.3).toFixed(2)}`); } });
+        }
+      },
+      // Tape the frontage and a side: stakes every few metres, no lines.
+      measure: (m) => {
+        say(m, pick(["Checking the frontage.", "Let's confirm the dimensions.", "Measuring the setbacks."]));
+        const step = pick([2.5, 3, 3.5]);
+        const front = r === "S" ? 0 : d;
+        for (let x = 0; x <= w + 0.01; x += step) {
+          const p = at(x, front);
+          this._do(m, { type: "run", to: p, slow: true }, { type: "note", t: 0.5 }, { type: "call", fn: () => this._stake(p) });
+        }
+      },
+      // The setback envelope, starting from a random corner.
+      envelope: (m) => {
+        say(m, pick(["Marking the setbacks.", "This is what we can build on.", "Envelope first."]));
+        const c = [[env.x0, env.y0], [env.x1, env.y0], [env.x1, env.y1], [env.x0, env.y1]];
+        const s0 = Math.floor(Math.random() * 4), dir = Math.random() < 0.5 ? 1 : 3;
+        for (let k = 0; k < 4; k++) {
+          const a = c[(s0 + k * dir) % 4], b = c[(s0 + (k + 1) * dir) % 4];
+          quick(m, at(...a), at(...b), COL.gold, 0.5);
+        }
+      },
+      // A structural grid: column lines at a bay that suits the plot.
+      grid: (m) => {
+        say(m, pick(["Columns on a 4 m grid?", "Let's set out the bays.", "Grid lines for the frame."]));
+        const bay = pick([3.6, 4.0, 4.5]);
+        for (let x = env.x0; x <= env.x1 + 0.01; x += bay) quick(m, at(x, env.y0), at(x, env.y1), COL.chalk, 0.35, this.planning);
+      },
+      // Stand at the road and look back at the plot: the view from the gate.
+      gate: (m) => {
+        const g = at(w / 2 + rnd(-2, 2), r === "S" ? -1.2 : d + 1.2);
+        this._do(m, { type: "run", to: g }, { type: "face", to: at(w / 2, d / 2) }, { type: "point", t: 1.4 });
+        say(m, pick(["The approach matters.", "First thing a guest sees.", "The gate should frame the door."]));
+      },
+    };
+    // The order a survey team works in: the boundary is pegged and checked
+    // first, then the setbacks and the envelope; levels, the grid and the
+    // view from the gate follow. Jobs are dealt so all three are busy.
+    const first = ["corners", "diagonal"].sort(() => Math.random() - 0.5);
+    const then = ["setbacks", "envelope", "measure"].sort(() => Math.random() - 0.5);
+    const last = ["levels", "grid", "gate", "survey"].sort(() => Math.random() - 0.5);
+    const jobs = [[first[0], then[0], last[0]], [then[1], first[1], last[1]], [then[2], last[2], last[3]]];
+    [p1, p2, p3].forEach((m, i) => {
+      this._do(m, { type: "wait", t: rnd(0, 1.0) });
+      jobs[i].forEach((j) => plays[j](m));
+    });
     this.construction = [];
     this.planningActive = true;
   }
@@ -756,6 +1017,13 @@ export class Stage3D {
     const line = lineOf(resample(pts), color, opacity);
     parent.add(line);
     return line;
+  }
+
+  // A dimension written on the ground: a length in metres, or a note.
+  _dim(at, len, text = null) {
+    const t = text ?? (len >= 10 ? `${len.toFixed(1)} m` : `${len.toFixed(2)} m`);
+    const l = this._label(t, at, "st-label--zone st-label--dim");
+    this._show(l);
   }
 
   _stake(at) {
@@ -947,8 +1215,9 @@ export class Stage3D {
       setTimeout(() => this._tween(520, (t) => { m.scale.y = Math.max(0.001, ease(t)); }), (k / span) * 900 / this.speed);
     }
     const done = () => {
-      this._standBack();
       s.resolve?.();
+      // The shell is up: now the fit-out. The team stands back when it is done.
+      if (this.settling) { this._finishFit(s); this._standBack(); } else this._fitOut(s, instant);
     };
     if (instant) done(); else setTimeout(done, 1100 / this.speed);
   }
@@ -966,6 +1235,291 @@ export class Stage3D {
       this._clear(t);
       t.tasks = [{ type: "run", to: spots[i] }, { type: "face", to: this.view.target }];
     });
+  }
+
+  /* ── fit-out: paint, furniture and the garden ─────────────────────── */
+
+  // Once the walls are up the team fits the house out room by room: each
+  // walks to a room, points, and its floor is laid in a sweep, its walls take
+  // their paint and its furniture is set down piece by piece. The garden
+  // grows in around the ground floor while they work.
+  _fitOut(s, instant = false) {
+    if (s.fitting) return;
+    s.fitting = true;
+    this.renderer.localClippingEnabled = true;
+    s.fit = new THREE.Group();
+    s.group.add(s.fit);
+    const rooms = [...s.rooms].sort((a, b) => a.li - b.li || a.centre.z - b.centre.z || a.centre.x - b.centre.x);
+    if (instant || this.static) {
+      this._landscape(s, true);
+      rooms.forEach((r) => this._fit(s, r, true));
+      this._standBack();
+      return;
+    }
+    this._landscape(s, false);
+    s.unfitted = rooms.length;
+    const team = this.team.filter((m) => !m.consulting);
+    rooms.forEach((r, i) => {
+      const m = team[i % Math.max(1, team.length)];
+      if (!m) { this._fit(s, r); return; }
+      const off = new THREE.Vector3(Math.sin(i * 2.1) * 0.5, 0, Math.cos(i * 2.1) * 0.5);
+      m.tasks.push(
+        { type: "run", to: r.centre.clone().add(off).setY(0) },
+        { type: "face", to: r.centre.clone() },
+        { type: "point", t: 0.7 },
+        { type: "call", fn: () => this._fit(s, r) },
+      );
+      // The member who walks there pays the room a visit; the room does not wait for them.
+      setTimeout(() => this._fit(s, r), (2600 + i * 650) / this.speed);
+    });
+  }
+
+  // Whatever is left, quickly: the result is in and the board must settle.
+  _finishFit(s) {
+    if (!s) return;
+    if (!s.fitting) { this._fitOut(s, true); return; }
+    this.team.forEach((m) => { m.tasks = m.tasks.filter((t) => t.type !== "call" && t.type !== "point"); });
+    s.rooms.filter((r) => !r.fitted).forEach((r, i) => setTimeout(() => this._fit(s, r), i * 60));
+    // Whatever is still growing or being lowered in finishes now.
+    setTimeout(() => this._settleGarden(s), s.rooms.length * 60 + 900);
+  }
+
+  _settleGarden(s) {
+    const gd = s.garden;
+    if (gd) {
+      gd.lawn.forEach((m) => { m.scale[m.userData.axis] = 1; });
+      gd.plants.forEach((p) => { p.scale.setScalar(p.userData.size); p.rotation.z = 0; });
+      if (gd.drive) gd.drive.material.opacity = 0.85;
+    }
+    (s.pieces || []).forEach(({ mesh, rest }) => { mesh.visible = true; mesh.position.y = rest; mesh.scale.setScalar(1); });
+  }
+
+  _fit(s, r, instant = false) {
+    if (r.fitted) return;
+    r.fitted = true;
+    this._paintRoom(s, r, instant);
+    this._furnish(s, r, instant);
+    if (!instant && --s.unfitted <= 0) setTimeout(() => this._standBack(), 900 / this.speed);
+  }
+
+  // The floor is laid in a sweep across the room; the walls around it take
+  // their paint.
+  _paintRoom(s, r, instant) {
+    const t = r.room.type;
+    const floor = FLOOR_OF(t);
+    const xs = r.pts.map((p) => p.x), zs = r.pts.map((p) => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const plane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), instant ? x1 + 1 : x0);
+    const shape = new THREE.Shape(r.pts.map((p) => new THREE.Vector2(p.x, -p.z)));
+    const m = new THREE.MeshStandardMaterial({ color: floor, roughness: 0.75, clippingPlanes: [plane] });
+    const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), m);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.y = 0.016;
+    mesh.receiveShadow = true;
+    s.fit.add(mesh);
+    r.fill.visible = false;
+    if (!instant) this._tween(700, (k) => { plane.constant = lerp(x0, x1 + 0.05, ease(k)); });
+    // Wall paint: every leaf that bounds this room.
+    const paint = new THREE.Color(PAINT_OF(t));
+    const near = (seg) => {
+      const mid = seg[0].clone().lerp(seg[1], 0.5);
+      for (let i = 0; i < r.pts.length; i++) {
+        const a = r.pts[i], b = r.pts[(i + 1) % r.pts.length];
+        const ab = b.clone().sub(a), k = clamp(mid.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-9), 0, 1);
+        if (a.clone().addScaledVector(ab, k).distanceTo(mid) < 0.35) return true;
+      }
+      return false;
+    };
+    for (const w of s.walls) {
+      if (!w.userData.seg || w.material.transparent || !near(w.userData.seg)) continue;
+      if (!w.userData.own) { w.material = w.material.clone(); w.userData.own = true; }
+      const from = w.material.color.clone();
+      const to = from.clone().lerp(paint, 0.55);
+      if (instant) w.material.color.copy(to);
+      else this._tween(800, (k) => { w.material.color.copy(from).lerp(to, ease(k)); });
+    }
+  }
+
+  // Furniture: each piece is lowered in and lands with a small settle.
+  _furnish(s, r, instant) {
+    const xs = r.pts.map((p) => p.x), zs = r.pts.map((p) => p.z);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const wx = Math.max(...xs) - Math.min(...xs), wz = Math.max(...zs) - Math.min(...zs);
+    const alongX = wx >= wz;
+    const L = alongX ? wx : wz, S = alongX ? wz : wx;
+    const parts = FURNISH(r.room.type, L, S);
+    const g = new THREE.Group();
+    s.fit.add(g);
+    parts.forEach((p, i) => {
+      const [u, v, y, su, sv, sy, color, kind] = p;
+      let geom;
+      if (kind === "ball") geom = ball(su / 2);
+      else if (kind === "cyl") geom = cyl(su / 2, su / 2, sy, 14);
+      else if (kind === "cone") geom = cyl(0.001, su / 2, sy, 12);
+      else geom = box(alongX ? su : sv, sy, alongX ? sv : su);
+      const material = kind === "glow" ? GLOW : mat(color, kind === "gloss" ? 0.25 : 0.75);
+      const mesh = new THREE.Mesh(geom, material);
+      const x = cx + (alongX ? u : v), z = cz + (alongX ? v : u);
+      const rest = y + (kind === "ball" ? su / 2 : sy / 2);
+      mesh.position.set(x, rest, z);
+      mesh.castShadow = kind !== "glow" && sy > 0.05;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+      if (instant) return;
+      (s.pieces ||= []).push({ mesh, rest });
+      mesh.visible = false;
+      setTimeout(() => {
+        mesh.visible = true;
+        mesh.position.y = rest + 2.2;
+        mesh.scale.setScalar(0.6);
+        this._tween(520, (k) => {
+          mesh.position.y = rest + 2.2 * (1 - bounce(k));
+          mesh.scale.setScalar(lerp(0.6, 1, ease(Math.min(1, k * 1.6))));
+        }, () => { if (i === 0) this._puff(new THREE.Vector3(x, 0.02, z)); });
+      }, (380 + i * 85) / this.speed);
+    });
+  }
+
+  // A ring of dust where the first piece lands.
+  _puff(at) {
+    const m = new THREE.MeshBasicMaterial({ color: 0xede6dc, transparent: true, opacity: 0.5, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.28, 28), m);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(at);
+    this.root.add(ring);
+    this._tween(600, (k) => { ring.scale.setScalar(1 + k * 3); m.opacity = 0.5 * (1 - k); }, () => { this.root.remove(ring); ring.geometry.dispose(); m.dispose(); });
+  }
+
+  // The garden on the ground plate: lawn in the setbacks, a drive from the
+  // road, shrubs along the house and trees along the boundary, all growing in.
+  _landscape(s, instant) {
+    const { w, d, road } = this.plot;
+    const ground = s.rooms.filter((r) => r.li === 0);
+    if (!ground.length) return;
+    const xs = ground.flatMap((r) => r.pts.map((p) => p.x)), zs = ground.flatMap((r) => r.pts.map((p) => p.z));
+    const fx0 = Math.min(...xs) - 0.12, fx1 = Math.max(...xs) + 0.12, fz0 = Math.min(...zs) - 0.12, fz1 = Math.max(...zs) + 0.12;
+    const A = this.P(0, 0, 0), B = this.P(0, w, d);
+    const px0 = Math.min(A.x, B.x), px1 = Math.max(A.x, B.x), pz0 = Math.min(A.z, B.z), pz1 = Math.max(A.z, B.z);
+    const g = new THREE.Group();
+    s.fit.add(g);
+    const lawn = new THREE.MeshStandardMaterial({ color: 0x5e6c47, roughness: 1, transparent: true, opacity: 0.62, depthWrite: false });
+    // Each setback strip, anchored on its house edge so it can spread outward.
+    const strips = [
+      [px0, px1, pz0, fz0, "z", fz0], [px0, px1, fz1, pz1, "z", fz1],
+      [px0, fx0, fz0, fz1, "x", fx0], [fx1, px1, fz0, fz1, "x", fx1],
+    ];
+    const lawnMeshes = [];
+    for (const [a, b, c, e, axis, edge] of strips) {
+      if (b - a < 0.2 || e - c < 0.2) continue;
+      const geo = new THREE.PlaneGeometry(b - a, e - c);
+      geo.rotateX(-Math.PI / 2);
+      const pivot = new THREE.Group();
+      if (axis === "z") { pivot.position.set((a + b) / 2, 0.006, edge); geo.translate(0, 0, (c + e) / 2 - edge); }
+      else { pivot.position.set(edge, 0.006, (c + e) / 2); geo.translate((a + b) / 2 - edge, 0, 0); }
+      const m = new THREE.Mesh(geo, lawn);
+      m.receiveShadow = true;
+      pivot.add(m);
+      pivot.userData.axis = axis;
+      if (!instant) pivot.scale[axis] = 0.001;
+      g.add(pivot); lawnMeshes.push(pivot);
+    }
+    // The drive: from the road edge to the house, on the road's side.
+    const r0 = road || "N";
+    const roadPt = r0 === "S" ? new THREE.Vector3((fx0 + fx1) / 2, 0, pz1) : r0 === "E" ? new THREE.Vector3(px1, 0, (fz0 + fz1) / 2)
+      : r0 === "W" ? new THREE.Vector3(px0, 0, (fz0 + fz1) / 2) : new THREE.Vector3((fx0 + fx1) / 2, 0, pz0);
+    const houseEdge = r0 === "S" ? fz1 : r0 === "E" ? fx1 : r0 === "W" ? fx0 : fz0;
+    const vertical = r0 === "N" || r0 === "S";
+    const dlen = Math.abs((vertical ? roadPt.z : roadPt.x) - houseEdge);
+    if (dlen > 0.4) {
+      const drive = new THREE.Mesh(new THREE.PlaneGeometry(vertical ? 2.6 : dlen, vertical ? dlen : 2.6), mat(0x77726a, 0.95).clone());
+      drive.material.transparent = true; drive.material.opacity = instant ? 0.85 : 0;
+      drive.rotation.x = -Math.PI / 2;
+      drive.position.set(vertical ? roadPt.x : (roadPt.x + houseEdge) / 2, 0.009, vertical ? (roadPt.z + houseEdge) / 2 : roadPt.z);
+      g.add(drive);
+      if (!instant) this._tween(1600, (k) => { drive.material.opacity = 0.85 * ease(k); });
+    }
+    const inDrive = (x, z) => dlen > 0.4 && (vertical ? Math.abs(x - roadPt.x) < 2 && (z - roadPt.z) * (houseEdge - roadPt.z) >= -0.5
+      : Math.abs(z - roadPt.z) < 2 && (x - roadPt.x) * (houseEdge - roadPt.x) >= -0.5);
+    const inHouse = (x, z, pad) => x > fx0 - pad && x < fx1 + pad && z > fz0 - pad && z < fz1 + pad;
+    const plants = [];
+    // A few trees, where a setback is deep enough to hold a crown: the
+    // corners first, then the middle of a generous side. Never a hedge row.
+    const room = (x, z) => !inHouse(x, z, 0.8) && !inDrive(x, z) && x > px0 + 0.7 && x < px1 - 0.7 && z > pz0 + 0.7 && z < pz1 - 0.7;
+    const spots = [[px0 + 1.3, pz0 + 1.3], [px1 - 1.3, pz1 - 1.3], [px1 - 1.3, pz0 + 1.3], [px0 + 1.3, pz1 - 1.3],
+      [(px0 + fx0) / 2, (pz0 + pz1) / 2], [(fx1 + px1) / 2, (pz0 + pz1) / 2], [(px0 + px1) / 2, (fz1 + pz1) / 2]]
+      .map(([x, z]) => [x + (Math.random() - 0.5) * 0.8, z + (Math.random() - 0.5) * 0.8]).filter(([x, z]) => room(x, z));
+    const open = (px1 - px0) * (pz1 - pz0) - (fx1 - fx0) * (fz1 - fz0);
+    const nTrees = clamp(Math.round(open / 40), 1, 4);
+    const trees = [];
+    for (const [x, z] of spots) {
+      if (trees.length >= nTrees) break;
+      if (trees.some(([a, b]) => Math.hypot(a - x, b - z) < 4)) continue;
+      trees.push([x, z]);
+      plants.push(this._tree(g, x, z, Math.min(1, 0.5 + Math.min(Math.abs(x - (x < fx0 ? fx0 : fx1)), Math.abs(z - (z < fz0 ? fz0 : fz1))) * 0.18) * (0.85 + Math.random() * 0.2)));
+    }
+    // Shrubs in small clusters: either side of the entrance and at a corner or two.
+    const clusters = [];
+    if (dlen > 0.4) {
+      const side = vertical ? [[roadPt.x - 1.9, houseEdge + Math.sign(roadPt.z - houseEdge) * 0.5], [roadPt.x + 1.9, houseEdge + Math.sign(roadPt.z - houseEdge) * 0.5]]
+        : [[houseEdge + Math.sign(roadPt.x - houseEdge) * 0.5, roadPt.z - 1.9], [houseEdge + Math.sign(roadPt.x - houseEdge) * 0.5, roadPt.z + 1.9]];
+      clusters.push(...side);
+    }
+    clusters.push(pick([[fx0 - 0.5, fz1 + 0.5], [fx1 + 0.5, fz1 + 0.5], [fx0 - 0.5, fz0 - 0.5], [fx1 + 0.5, fz0 - 0.5]]));
+    for (const [x, z] of clusters) {
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let k = 0; k < n; k++) {
+        const sx = x + (Math.random() - 0.5) * 0.7, sz = z + (Math.random() - 0.5) * 0.7;
+        if (sx > px0 + 0.2 && sx < px1 - 0.2 && sz > pz0 + 0.2 && sz < pz1 - 0.2 && !inDrive(sx, sz)) plants.push(this._shrub(g, sx, sz));
+      }
+    }
+    s.garden = { lawn: lawnMeshes, plants, drive: g.children.find((c) => c.isMesh && c.material?.color?.getHex?.() === 0x77726a) };
+    if (instant) return;
+    // The garden grows while the rooms are fitted: grass creeps out from the
+    // house on every side at once, saplings appear and fill out.
+    const span = Math.min(6000, Math.max(3600, s.rooms.length * 300)) / this.speed;
+    lawnMeshes.forEach((m, i) => setTimeout(() => this._tween(span * 0.7, (k) => {
+      m.scale[m.userData.axis] = Math.max(0.001, 1 - Math.pow(1 - k, 2.2));
+    }), i * 120 / this.speed));
+    for (const p of plants) {
+      const full = p.userData.size;
+      const tree = p.isGroup;
+      p.scale.setScalar(0.001);
+      setTimeout(() => {
+        // A sapling first, then a long, slowing growth to its full size.
+        this._tween(tree ? span * 0.75 : span * 0.4, (k) => {
+          const grow = 1 - Math.pow(1 - k, 2.6);
+          p.scale.setScalar(Math.max(0.001, full * (0.18 + 0.82 * grow)));
+          if (tree) p.rotation.z = Math.sin(k * 9) * 0.02 * (1 - k);
+        });
+      }, (span * (tree ? 0.05 + Math.random() * 0.25 : 0.25 + Math.random() * 0.4)) / 1);
+    }
+  }
+
+  _tree(g, x, z, size) {
+    const t = new THREE.Group();
+    const trunk = new THREE.Mesh(cyl(0.07, 0.1, 0.9, 8), mat(0x6b4a2e, 0.9));
+    trunk.position.y = 0.45;
+    const leaf = mat(pick([0x52653d, 0x5d6f43, 0x4a5c39, 0x66764a]), 0.9);
+    const c1 = new THREE.Mesh(ball(0.75), leaf); c1.position.set(0, 1.35, 0);
+    const c2 = new THREE.Mesh(ball(0.5), leaf); c2.position.set(0.35, 1.05, 0.2);
+    const c3 = new THREE.Mesh(ball(0.45), leaf); c3.position.set(-0.3, 1.1, -0.2);
+    for (const m of [trunk, c1, c2, c3]) { m.castShadow = true; t.add(m); }
+    t.position.set(x, 0, z);
+    t.rotation.y = Math.random() * TAU;
+    t.userData.size = size;
+    t.scale.setScalar(size);
+    g.add(t);
+    return t;
+  }
+
+  _shrub(g, x, z) {
+    const m = new THREE.Mesh(ball(0.26), mat(pick([0x5b6b40, 0x667449, 0x50603a]), 0.95));
+    m.position.set(x + (Math.random() - 0.5) * 0.2, 0.2, z + (Math.random() - 0.5) * 0.2);
+    m.castShadow = true;
+    m.userData.size = 0.8 + Math.random() * 0.5;
+    m.scale.setScalar(m.userData.size);
+    g.add(m);
+    return m;
   }
 
   /* ── the committee on the board ───────────────────────────────────── */
@@ -1005,9 +1559,10 @@ export class Stage3D {
   _spawnCritic(now) {
     if (this.settling || !this.plot || !this.pending.length || now < (this.nextCritic || 0)) return;
     const live = this.critics.filter((c) => !c.leaving);
-    if (live.length >= 4) this._dismiss(live[0]);
+    if (live.length >= 3) this._dismiss(live[0]);
     const p = this.pending.shift();
-    this.nextCritic = now + 1900;
+    // Unhurried, so a reader can follow who said what to whom.
+    this.nextCritic = now + 3400 / (this.boost || 1);
     const { w, d, n } = this.plot;
     const lv = p.room ? p.room.li : Math.min(n - 1, this.focusLevel ?? 0);
     const enter = this.P(lv, 1 + Math.random() * (w - 2), d + 3.5 + Math.random() * 1.5);
@@ -1026,7 +1581,7 @@ export class Stage3D {
       { type: "call", fn: () => this._consult(c) },
       { type: "await", fn: () => !c.partner || c.partner.ready, t: 3.5 },
       { type: "face", fig: () => c.partner?.m.fig ?? c.peer?.fig },
-      { type: "say", head: p.short, text: brief(p.line), pig: p.pig, t: 2.2 + Math.min(2.4, p.line.length / 45) },
+      { type: "say", head: p.short, text: brief(p.line), pig: p.pig, t: 3.4 + Math.min(3.6, p.line.length / 32) },
       { type: "give", t: 0.8, fn: () => c.partner && this._paper(c.fig, c.partner.m.fig) },
       { type: "call", fn: () => { c.gave = true; } },
       { type: "wait", t: 0.5 },
@@ -1108,19 +1663,32 @@ export class Stage3D {
     });
   }
 
+  // After the result: no more racing the engine's clock - a human pace.
+  calm() { this.deadline = 0; this.boost = 1; }
+
+  // Fast-forward: everything at several times speed until it is done.
+  hurry() { this.boost = 4; this.pending = this.pending.slice(-2); }
+
+  // Nothing left to draw, fit out or say.
+  idle() {
+    const s = this.current;
+    const busy = this.team.some((m) => m.task || m.tasks.length > 0 && m.tasks.some((t) => t.type !== "face"));
+    return !!s && s.drawn && (!s.fitting || (s.unfitted ?? 0) <= 0) && !this.pending.length && !this.critics.length && !busy;
+  }
+
   // The result is in: the team fast-forwards through what is left at a pace
   // you can still follow, every line and wall still drawn and built, the specialists
   // leave, the walls go up and the camera settles to plan view. Resolves
   // when the board is still.
   async settle() {
     this.settling = true;
-    this.speed = 2.5;
+    this.speed = 1.8;
     this.view.rate = 4;
     this.pending = [];
     for (const c of this.critics.slice()) {
       if (c.bubble) this._drop(c.bubble);
       const f = c.fig;
-      this._tween(260, (k) => f.scale.setScalar(H * (1 - ease(k)) + 0.001), () => this._remove(c), { real: true });
+      this._tween(260, (k) => f.scale.setScalar(H * (this.figS || 1) * (1 - ease(k)) + 0.001), () => this._remove(c), { real: true });
     }
     const s = this.current;
     if (s && !s.drawn && !this.static) {
@@ -1128,23 +1696,15 @@ export class Stage3D {
         m.tasks = m.tasks.filter((t) => t.type === "draw" || t.type === "run");
       }
       // Fast-forward, not skip: set the speed from what is left to draw, so
-      // the busiest hand finishes in about five seconds with every line drawn
+      // the busiest hand finishes in about two and a half seconds, every line drawn
       // and every wall raised on screen.
-      let most = 0;
-      for (const m of this.team) {
-        let left = 0;
-        for (const t of [m.task, ...m.tasks]) {
-          if (t?.type === "draw") left += (t.pts.length - (t.i ?? 0)) * 0.08;
-          else if (t?.type === "run") left += 2;
-        }
-        most = Math.max(most, left);
-      }
-      this.speed = clamp(most / (PACE * 5), 2, 12);
-      const until = performance.now() + 15000;   // a safety net, not the plan
+      this.speed = clamp(this._left() / (PACE * 2.5), 2, 14);
+      const until = performance.now() + 6000;   // a safety net, not the plan
       while (!s.drawn && performance.now() < until) await sleep(50);
     }
     if (s && !s.drawn) s.rooms.forEach((x) => this._complete(x, true));
     if (s) this._rise(s, this.static);
+    if (s && s.risen) this._finishFit(s);
     await new Promise((resolve) => {
       if (this.static) { this.view.tilt = 0; resolve(); return; }
       const from = this.view.tilt;
@@ -1190,9 +1750,12 @@ export class Stage3D {
     if (!this.static) {
       this._spawnCritic(now);
       for (const m of this.team) this._member_tick(m, step, dt, now);
-      for (const c of this.critics.slice()) this._member_tick(c, step, dt, now);
+      // The specialists keep a human pace even when the drafting fast-forwards.
+      const calm = dt * Math.min(this.speed, 0.9) * (this.boost || 1);
+      for (const c of this.critics.slice()) this._member_tick(c, calm, dt, now);
     }
 
+    this._keepPace(now);
     this._updateFocus(dt);
     this._placeCamera(now);
     this._frame(dt);
@@ -1207,7 +1770,14 @@ export class Stage3D {
       if (!m.task && m.kind !== "critic" && this.planningActive && this.plot) {
         // No invented lines and no aimless pacing: the team confers.
         const h = this._huddle(m);
-        if (fig.position.distanceTo(h.at) > 0.35) {
+        const roll = Math.random();
+        if (roll < 0.22) {
+          // Wander off to check something on the plot.
+          const { w, d } = this.plot;
+          m.tasks.push({ type: "run", to: this.P(0, Math.random() * w, Math.random() * d), slow: true }, { type: pick(["note", "point", "wait"]), t: 1 + Math.random() * 1.5 });
+        } else if (roll < 0.32) {
+          m.tasks.push({ type: "say", text: pick(IDLE), t: 1.8, team: true });
+        } else if (fig.position.distanceTo(h.at) > 0.35 * (this.figS || 1)) {
           m.tasks.push({ type: "run", to: h.at }, { type: "face", to: h.centre });
         } else if (m.kind === "arch1") {
           m.tasks.push(pick([{ type: "talk", t: 2.4 }, { type: "point", t: 1.4 }, { type: "talk", t: 1.8 }]));
@@ -1227,7 +1797,7 @@ export class Stage3D {
           const v = t.to.clone().sub(fig.position);
           v.y = 0;
           const dist = v.length();
-          t.max ??= t.slow ? 1.1 : dist > 7 ? RUN : WALK;
+          t.max ??= (t.slow ? 1.1 : dist > 7 * (this.figS || 1) ? RUN : WALK) * (this.figS || 1);
           // Ease in and out: never faster than lets you stop on the mark.
           const want = Math.min(t.max, Math.sqrt(2 * ACCEL * Math.max(0, dist - 0.02)) + 0.25);
           m.vel += clamp(want - m.vel, -ACCEL * step, ACCEL * step);
@@ -1345,9 +1915,12 @@ export class Stage3D {
     m.moved = 0;
     const v = step > 0 ? moved / step : 0;
     u.speed += (v - u.speed) * damp(step, 10);
-    const loco = clamp(u.speed / 0.45, 0, 1);
-    const runW = clamp((u.speed - 2.1) / 0.9, 0, 1);
-    u.phase += (moved / lerp(0.95, 1.6, runW)) * TAU;
+    // Gait in the figure's own size: a big figure on a big plot takes long
+    // strides, so its legs keep time with the ground it covers.
+    const fs = this.figS || 1;
+    const loco = clamp(u.speed / (0.45 * fs), 0, 1);
+    const runW = clamp((u.speed / fs - 2.1) / 0.9, 0, 1);
+    u.phase += (moved / (lerp(0.95, 1.6, runW) * fs)) * TAU;
     u.clock += dt;
     const c = u.clock;
 

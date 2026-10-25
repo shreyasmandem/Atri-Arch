@@ -28,6 +28,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from aip.core.logging import get_logger, log_event
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief
 from aip.domain.geometry import BoundingBox, Direction, Vec2
 from aip.domain.plan import FloorPlan, Room, RoomType
@@ -340,7 +341,7 @@ def _place_room(
 
     if unplaced:
         notes.append(
-            f"{len(unplaced)} essential item(s) could not be placed. The room is "
+            f"{plural(len(unplaced), 'essential item')} could not be placed. The room is "
             f"too small or too awkwardly shaped for its intended function."
         )
     if utilisation > 0.62:
@@ -780,7 +781,7 @@ def design_interior(
         f"{scheme.total_cost:,.0f} {scheme.currency}. "
         f"Mean layout quality {mean_score:.2f}."
         + (
-            f" {unplaced_essential} essential item(s) could not be placed - "
+            f" {plural(unplaced_essential, 'essential item')} could not be placed - "
             f"those rooms need more space or a different arrangement."
             if unplaced_essential
             else " Every essential item was placed with its required clearances."

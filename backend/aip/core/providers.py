@@ -78,6 +78,9 @@ class ModelSpec:
         return self.quality / (1.0 + self.typical_latency_ms / 6000.0)
 
 
+_ROTATION: dict[str, int] = {}
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderSpec:
     """An OpenAI-compatible endpoint plus its credential source."""
@@ -92,8 +95,18 @@ class ProviderSpec:
     extra_headers: dict[str, str] = field(default_factory=dict)
     models: tuple[ModelSpec, ...] = ()
 
+    def credentials(self, settings: Settings) -> list[str]:
+        """Every key configured for the provider: a comma-separated list spreads
+        a committee's burst of calls across several free-tier quotas."""
+        raw = str(getattr(settings, self.settings_key, "") or "")
+        return [k.strip() for k in raw.split(",") if k.strip()]
+
     def credential(self, settings: Settings) -> str:
-        return str(getattr(settings, self.settings_key, "") or "").strip()
+        keys = self.credentials(settings)
+        if not keys:
+            return ""
+        _ROTATION[self.name] = (_ROTATION.get(self.name, -1) + 1) % len(keys)
+        return keys[_ROTATION[self.name]]
 
     def is_available(self, settings: Settings) -> bool:
         # Order matters. Ollama needs no credential, so an `AuthStyle.NONE`
@@ -144,9 +157,7 @@ GROQ = ProviderSpec(
     # stale entry degrades one model instead of the whole account.
     models=(
         ModelSpec("openai/gpt-oss-120b", "groq", _TEXT_LONG, 131072, 0.90, 30, 1000, supports_tools=True, typical_latency_ms=640),
-        ModelSpec("qwen/qwen3.6-27b", "groq", _TEXT_LONG, 131072, 0.83, 30, 1000, typical_latency_ms=280),
-        ModelSpec("groq/compound", "groq", _TEXT_LONG, 131072, 0.84, 30, 1000,
-                  notes="Agentic system with built-in tool use.", typical_latency_ms=1500),
+        ModelSpec("qwen/qwen3.8-27b", "groq", _TEXT_LONG, 131072, 0.83, 30, 1000, typical_latency_ms=280),
     ),
 )
 

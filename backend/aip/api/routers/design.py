@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 from typing import Any
 
@@ -17,10 +19,42 @@ from aip.api.store import get_plan_store
 from aip.core.logging import get_logger, log_event
 from aip.db.models import DesignSession, Project
 from aip.db.session import get_session
-from aip.engines.architecture.layout import GeneratorConfig
+from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefError
 
 logger = get_logger("aip.api.design")
 router = APIRouter(prefix="/design", tags=["design"])
+
+# Drawing a scheme is CPU work. A small free instance that is asked for several
+# at once slows every one of them and can run out of memory, so runs take turns:
+# the ones waiting are told how many are ahead of them.
+_GATE: asyncio.Semaphore | None = None
+_WAITING = 0
+
+
+def _name_schemes(result) -> None:
+    """Scheme A, B, C in the order the studio lists them, and the winner under the
+    letter of the candidate it came from - so the tab, the rail and the drawing
+    title all say the same thing."""
+    letters = {p.id: chr(65 + i) for i, p in enumerate(result.plans)}
+    for p in result.plans:
+        p.name = f"Scheme {letters[p.id]}"
+    winner = result.winner
+    if winner is not None and winner.id not in letters:
+        origin = result.consensus.winner_id if result.consensus else ""
+        if origin in letters:
+            winner.name = f"Scheme {letters[origin]}"
+
+
+def _design_gate() -> asyncio.Semaphore:
+    global _GATE
+    if _GATE is None:
+        import os
+
+        from aip.core.config import get_settings
+
+        default = "1" if get_settings().public_demo else "3"
+        _GATE = asyncio.Semaphore(max(1, int(os.environ.get("MAX_CONCURRENT_DESIGNS", default))))
+    return _GATE
 
 
 def _pipeline_config(request: DesignRequest) -> PipelineConfig:
@@ -134,6 +168,18 @@ async def create_design(
     pipeline = DesignPipeline(_pipeline_config(payload), ledger=ledger)
     try:
         result = await pipeline.run(brief)
+    except InfeasibleBriefError as exc:
+        # The plot cannot hold the programme. That is the client's answer, not a
+        # server fault: 422 with the numbers and what to change.
+        log_event(logger, "design.infeasible", level=30, error=str(exc))
+        session.add(
+            DesignSession(
+                project_id=project.id, status="infeasible",
+                brief=json.loads(brief.model_dump_json()), error=str(exc)[:2000],
+            )
+        )
+        await session.flush()
+        raise HTTPException(status_code=422, detail=exc.to_dict()) from exc
     except Exception as exc:  # noqa: BLE001
         log_event(logger, "design.failed", level=40, error=f"{type(exc).__name__}: {exc}")
         session.add(
@@ -147,6 +193,7 @@ async def create_design(
         ) from exc
 
     store = get_plan_store()
+    _name_schemes(result)
     store.put_many(principal.firm.id, result.plans)
     if result.winner is not None:
         store.put(principal.firm.id, result.winner)
@@ -199,6 +246,7 @@ async def create_design(
         consensus=consensus_dump,
         vastu=result.vastu,
         cost=result.cost,
+        advisories=result.advisories,
         explanation=result.explanation,
         recommendations=result.recommendations,
         committee=result.committee,
@@ -253,12 +301,35 @@ async def stream_design(
         def sse(event: str, data: dict[str, Any]) -> str:
             return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
+        global _WAITING
         yield sse("open", {"project_id": project_id})
+        gate = _design_gate()
+        held = False
         try:
+            if gate.locked():
+                _WAITING += 1
+                try:
+                    while True:
+                        try:
+                            await asyncio.wait_for(gate.acquire(), 2.5)
+                            held = True
+                            break
+                        except asyncio.TimeoutError:
+                            yield sse("progress", {
+                                "stage": "generate", "status": "running", "percent": 0.0,
+                                "message": f"Other designs are being drawn first - you are {_WAITING} in the queue.",
+                                "detail": {}, "elapsed_ms": 0.0,
+                            })
+                finally:
+                    _WAITING = max(0, _WAITING - 1)
+            else:
+                await gate.acquire()
+                held = True
             async for progress, result in pipeline.stream(brief):
                 if progress is not None:
                     yield sse("progress", json.loads(progress.model_dump_json()))
                 elif result is not None:
+                    _name_schemes(result)
                     store = get_plan_store()
                     store.put_many(firm_id, result.plans)
                     if result.winner:
@@ -275,6 +346,7 @@ async def stream_design(
                             if result.consensus else {},
                             "vastu": result.vastu,
                             "cost": result.cost,
+                            "advisories": result.advisories,
                             "explanation": result.explanation,
                             "recommendations": result.recommendations,
                             "committee": result.committee,
@@ -303,9 +375,17 @@ async def stream_design(
                             "degraded_reason": result.degraded_reason,
                         },
                     )
+        except InfeasibleBriefError as exc:
+            # A clean, visible refusal: the message, the numbers and the code the
+            # studio keys its "change the brief" panel on - not a stack trace.
+            log_event(logger, "design.infeasible", level=30, error=str(exc))
+            yield sse("error", {"message": str(exc), **exc.to_dict()})
         except Exception as exc:  # noqa: BLE001
             log_event(logger, "design.stream_failed", level=40, error=str(exc))
             yield sse("error", {"message": f"{type(exc).__name__}: {exc}"})
+        finally:
+            if held:
+                gate.release()
         yield sse("done", {})
 
     return StreamingResponse(
@@ -317,3 +397,37 @@ async def stream_design(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# --------------------------------------------------------------------- chat
+
+
+@router.post("/chat")
+async def design_chat(payload: dict[str, Any]) -> dict[str, Any]:
+    """One turn of the brief conversation: what was understood, what to ask next.
+
+    Body: {"message": str, "brief": {...so far}}. When `ready`, `request` is a
+    `SimpleBriefRequest` the design endpoint accepts as is.
+    """
+    from aip.agents.brief_agent import converse, to_request
+
+    message = str(payload.get("message", ""))[:4000]
+    history = payload.get("history") or []
+    turn = await converse(message, payload.get("brief") or {},
+                          history=[h for h in history if isinstance(h, dict)][-12:])
+    turn["request"] = to_request(turn["brief"]) if turn["ready"] else None
+    return turn
+
+
+@router.post("/revise")
+async def design_revise(payload: dict[str, Any]) -> dict[str, Any]:
+    """Change a finished design from a sentence: the new brief and what changed.
+
+    Body: {"instruction": str, "brief": {...}}. The client re-runs the design
+    with `request` to see the revision.
+    """
+    from aip.agents.brief_agent import revise, to_request
+
+    out = await revise(str(payload.get("instruction", ""))[:2000], payload.get("brief") or {})
+    out["request"] = to_request(out["brief"])
+    return out

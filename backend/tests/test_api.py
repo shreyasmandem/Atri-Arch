@@ -372,3 +372,128 @@ def test_widget_script_is_served_with_open_cors(client):
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "*"
     assert "attachShadow" in response.text
+
+
+# ══ Infeasible and advised briefs ═════════════════════════════════════
+
+_TOO_BIG = {"plot_width": 6, "plot_depth": 8, "bedrooms": 5, "bathrooms": 5, "levels": 1,
+            "max_ground_coverage": 0.6, "max_far": 1.5}
+
+
+def test_an_infeasible_brief_is_a_clear_422_not_a_500(client):
+    response = client.post(
+        "/api/v1/design",
+        json={"simple": _TOO_BIG, "candidates": 1, "include_generative_critics": False, "seed": 1},
+    )
+    assert response.status_code == 422, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "infeasible_brief"
+    assert detail["message"].startswith("A 5-bedroom")
+    assert detail["needed_area_m2"] > detail["available_area_m2"] > 0
+
+
+def test_the_stream_reports_an_infeasible_brief_as_a_visible_error_event(client):
+    with client.stream(
+        "POST", "/api/v1/design/stream",
+        json={"simple": _TOO_BIG, "candidates": 1, "include_generative_critics": False, "seed": 1},
+    ) as response:
+        assert response.status_code == 200
+        events, payloads = [], []
+        for line in response.iter_lines():
+            if line.startswith("event:"):
+                events.append(line.split(":", 1)[1].strip())
+            elif line.startswith("data:"):
+                payloads.append(line.split(":", 1)[1].strip())
+
+    assert "error" in events and events[-1] == "done" and "result" not in events
+    error = json.loads(payloads[events.index("error")])
+    assert error["code"] == "infeasible_brief" and "buildable area" in error["message"]
+    # The generate stage was told, so the progress rail shows where it stopped.
+    failed = [json.loads(p) for e, p in zip(events, payloads, strict=False)
+              if e == "progress" and json.loads(p).get("status") == "failed"]
+    assert failed and failed[0]["stage"] == "generate"
+
+
+def test_advisories_reach_the_design_response(client):
+    response = client.post(
+        "/api/v1/design",
+        json={
+            "simple": {"plot_width": 10, "plot_depth": 14, "bedrooms": 4, "bathrooms": 3,
+                       "levels": 1, "amenities": ["utility"]},
+            "candidates": 1, "include_generative_critics": False, "seed": 2,
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["advisories"], "the plan departed from the brief and the response did not say so"
+    assert any("floor" in a for a in body["advisories"])
+    assert body["plan"]["metadata"]["advisories"] == body["advisories"]
+
+
+# ══ A restart must not strand an open page ═════════════════════════════
+
+
+def test_a_plan_the_client_holds_can_be_put_back_after_a_restart(client, designed):
+    from aip.api.store import get_plan_store
+
+    plan_id = designed["winner_plan_id"]
+    plan = client.get(f"/api/v1/plans/{plan_id}").json()
+    assert client.get(f"/api/v1/plans/{plan_id}/model.glb").status_code == 200
+
+    get_plan_store()._items.clear()              # the server restarted: memory is gone
+    assert client.get(f"/api/v1/plans/{plan_id}/model.glb").status_code == 404
+
+    assert client.post("/api/v1/plans/restore", json={"plan": plan}).status_code == 200
+    assert client.get(f"/api/v1/plans/{plan_id}/model.glb").status_code == 200
+
+
+def test_restoring_something_that_is_not_a_plan_is_a_422(client):
+    assert client.post("/api/v1/plans/restore", json={"plan": {"hello": 1}}).status_code == 422
+
+
+def test_exterior_batches_and_customised_fit(client, designed):
+    pid = designed["winner_plan_id"]
+    first = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "a", "n": 8}).json()
+    assert len(first["designs"]) == 8 and "balcony" in first["grammar"]["feature"]
+    worded = client.get(f"/api/v1/plans/{pid}/exteriors",
+                        params={"seed": "w", "n": 4, "style": "biophilic", "prefs": "wooden, lots of greenery"}).json()
+    assert worded["heard"] == ["wooden", "greenery"] and len(worded["designs"]) == 4
+    ids = [d["id"] for d in first["designs"]]
+    more = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "b", "n": 8, "avoid": ids}).json()
+    assert not set(ids) & {d["id"] for d in more["designs"]}
+    fit = client.get(f"/api/v1/plans/{pid}/exteriors/fit",
+                     params={"design": "ex:hip.stone.timber.none.punched.n.teak.chhatri~w:efe9dc"}).json()
+    assert fit["design"]["roof"] == "flat" and fit["notes"] and fit["design"]["colours"]["wall"] == "#efe9dc"
+    assert client.get(f"/api/v1/plans/{pid}/exteriors/fit", params={"design": "nope"}).status_code == 422
+    th = client.get(f"/api/v1/plans/{pid}/thermal", params={"season": "summer", "cool_roof": "true"}).json()
+    assert th["rooms"] and len(th["outdoor"]) == 24 and th["city"]
+    assert client.get(f"/api/v1/plans/{pid}/thermal", params={"season": "spring"}).status_code == 422
+    assert client.get(f"/api/v1/plans/{pid}/thermal", params={"month": 1}).json()["month"] == 1
+    assert len(client.get(f"/api/v1/plans/{pid}/thermal/year").json()["months"]) == 12
+    assert client.get(f"/api/v1/plans/{pid}/thermal/fields/0").json()["rooms"]
+    assert client.get(f"/api/v1/plans/{pid}/thermal/fields/9").status_code == 404
+    sig = client.get(f"/api/v1/plans/{pid}/exteriors", params={"seed": "s", "n": 40, "style": "signature"}).json()
+    assert len(sig["designs"]) == 40 and all(d.get("look") for d in sig["designs"])
+    g = client.get(f"/api/v1/plans/{pid}/exteriors/grammar").json()
+    assert g["default"].startswith("ex:") and g["grammar"]["schemes"]
+    glb = client.get(f"/api/v1/plans/{pid}/model.glb", params={"design": fit["design"]["id"], "furniture": "false"})
+    assert glb.status_code == 200 and glb.content[:4] == b"glTF"
+
+
+def test_vastu_after_an_edit_says_what_changed(client, designed):
+    pid = designed["winner_plan_id"]
+    rooms = client.get(f"/api/v1/plans/{pid}/rooms").json()["rooms"]
+    ground = [r for r in rooms if r.get("level", 0) == 0]
+    for a in ground:
+        for b in ground:
+            if a["id"] >= b["id"]:
+                continue
+            edit = client.post(f"/api/v1/plans/{pid}/edit", json={"ops": [{"op": "swap", "a": a["id"], "b": b["id"]}]})
+            if edit.status_code != 200:
+                continue
+            new_id = edit.json()["plan_id"]
+            out = client.post("/api/v1/plans/vastu", json={"plan_id": new_id, "tradition_weight": 0.75, "compare_to": pid}).json()
+            since = out["since_edit"]
+            assert set(since) >= {"score_before", "score_after", "delta", "changes"}
+            assert out["tradition_weight"] == 0.75
+            return

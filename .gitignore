@@ -13,3 +13,8 @@ backend/var/
 .DS_Store
 _t_*.py
 docs/samples/gallery.html
+spans_raw_optimized.log
+
+
+# Exteriors claimed by houses at runtime (see aip/engines/experience/registry.py)
+backend/data/claimed_exteriors.json

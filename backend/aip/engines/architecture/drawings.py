@@ -174,6 +174,8 @@ def floor_plan_svg(
             room.polygon,
             fill=style.accent if highlighted else canvas.style.room_colour(room),
             opacity=0.28 if highlighted else 1.0,
+            # The editor picks a room by clicking it on the plan.
+            extra=f'data-room="{room.id}"',
         )
 
     for wall in level.walls:
@@ -203,11 +205,10 @@ def floor_plan_svg(
 
 
 def _padded_extent(plan: FloorPlan, level: Level) -> BoundingBox:
+    # A floor plan frames the building; the site plan shows the plot.
     points = [p for r in level.rooms for p in r.polygon]
-    if plan.site.boundary:
-        points.extend(plan.site.boundary)
     box = bounding_box(points)
-    pad = 1.2
+    pad = 1.6
     return BoundingBox(box.min_x - pad, box.min_y - pad, box.max_x + pad, box.max_y + pad)
 
 
@@ -794,6 +795,23 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
                 opacity=0.9 if not room.type.is_outdoor else 0.6,
             )
 
+    # The lawn as asked and the paved terrace round the house (landscape.ground_cover).
+    from aip.engines.experience.landscape import POOL_NAMES, ground_cover, pool_rect, simple_parts
+
+    cover = ground_cover(plan)
+    for g in simple_parts(cover["lawn"]):
+        canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#cfe0c4", opacity=0.9)
+    for g in simple_parts(cover["paved"]):
+        canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#e4ded3", stroke="#c9c1b3", width=0.5)
+
+    pool = pool_rect(plan)
+    if pool is not None:
+        rect, kind = pool
+        pts = [Vec2(x, y) for x, y in list(rect.exterior.coords)[:-1]]
+        canvas.polygon(pts, fill="#8fc9d6", stroke="#3f8796", width=1.4)
+        c = rect.centroid
+        canvas.text(Vec2(c.x, c.y), POOL_NAMES[kind].upper(), size=8.5, weight="700", fill="#1f4f59")
+
     # Road on the approach side.
     road = site.road_directions[0] if site.road_directions else Direction.N
     _draw_road(canvas, box, road, style)
@@ -805,7 +823,12 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
     canvas.text(
         Vec2(extent.min_x + 0.4, extent.max_y - 0.8),
         f"Plot {site.plot_area:.0f} m²   |   Footprint {plan.footprint_area:.0f} m²   "
-        f"|   Coverage {plan.footprint_area / site.plot_area:.0%}   |   FAR {plan.achieved_far:.2f}",
+        f"|   Coverage {plan.footprint_area / site.plot_area:.0%}   |   FAR {plan.achieved_far:.2f}"
+        f"   |   Lawn {cover['shares'].get('lawn', 0) * site.plot_area:.0f} m² ({cover['shares'].get('lawn', 0):.0%}"
+        + (f", as asked)" if site.garden_share else ")")
+        + (f"   |   Terrace and walks {cover['shares']['paved']:.0%}" if cover["shares"].get("paved") else "")
+        + ("" if not site.pool else f"   |   {POOL_NAMES[pool[1]].capitalize()}" if pool is not None
+           else "   |   The pool asked for does not fit this plot"),
         size=9, fill=style.text_muted, anchor="start",
     )
     _draw_north_point(canvas, plan, style)

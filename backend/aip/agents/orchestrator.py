@@ -49,9 +49,10 @@ from aip.agents.critics import build_committee, committee_charter
 from aip.core.llm import LLMRouter, get_router, system, user
 from aip.core.logging import get_logger, log_event, span, trace_context
 from aip.core.providers import Capability
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief
 from aip.domain.plan import FloorPlan
-from aip.engines.architecture.layout import GeneratorConfig, LayoutGenerator
+from aip.engines.architecture.layout import GeneratorConfig, InfeasibleBriefError, LayoutGenerator
 
 logger = get_logger("aip.pipeline")
 
@@ -88,6 +89,10 @@ class DesignResult(BaseModel):
     vastu: dict[str, Any] | None = None
     cost: dict[str, Any] | None = None
 
+    #: Plain-English notes on where the plan departs from the brief: a floor
+    #: added, a room left out, rooms drawn smaller, a house grown to its plot.
+    advisories: list[str] = Field(default_factory=list)
+
     explanation: str = ""
     recommendations: list[str] = Field(default_factory=list)
     evidence: list[Evidence] = Field(default_factory=list)
@@ -123,10 +128,10 @@ class PipelineConfig:
     enable_refinement: bool = True
     enable_negotiation: bool = True
     negotiation_rounds: int = 3
-    negotiation_seconds: float = 25.0
+    negotiation_seconds: float = 14.0
     generator: GeneratorConfig = field(default_factory=GeneratorConfig)
     max_parallel_agents: int = 6
-    agent_timeout_seconds: float = 90.0
+    agent_timeout_seconds: float = 22.0
 
 
 ProgressCallback = Callable[[ProgressEvent], None] | None
@@ -169,8 +174,19 @@ class DesignPipeline:
         upload exactly as it would its own work, the negotiation repairs
         what it legally can, and the rationale explains what it found.
         """
+        from aip.core.telemetry import flush_telemetry, workflow_span
+
         started = time.perf_counter()
-        with trace_context() as trace_id:
+        with trace_context() as trace_id, workflow_span(
+            "atriarch.design_pipeline",
+            session_id=trace_id,
+            input_value=brief.summary_text(),
+            attributes={
+                "aip.brief.kind": brief.kind.value,
+                "aip.brief.rooms": brief.total_rooms,
+                "aip.brief.plot_area_sqm": round(brief.site.plot_area, 1),
+            },
+        ) as wf_span:
             result = DesignResult(trace_id=trace_id, brief_summary=brief.summary_text())
             ctx = AgentContext(
                 brief=brief,
@@ -187,7 +203,7 @@ class DesignPipeline:
             if plans:
                 emit(
                     "generate", "skipped",
-                    f"Reviewing {len(plans)} uploaded scheme(s) rather than generating.",
+                    f"Reviewing {plural(len(plans), 'uploaded scheme')} rather than generating.",
                     0.34,
                     schemes=[{"id": p.id, "name": p.name, "area": p.total_built_area}
                              for p in plans],
@@ -209,6 +225,9 @@ class DesignPipeline:
                 result.debate_rounds = consensus.debate_rounds
             else:
                 emit("debate", "skipped", "Committee agreement was high; no debate needed.", 0.62)
+
+            consensus = self._prefer_valid(candidates, consensus)
+            result.consensus = consensus
 
             winner = next((c for c in candidates if c.id == consensus.winner_id), candidates[0])
             result.winner = winner.artifact
@@ -260,6 +279,7 @@ class DesignPipeline:
                     await asyncio.to_thread(estimate_cost, final, brief)
                 ).model_dump()
 
+            result.advisories = list(final.metadata.get("advisories", []))
             result.evidence = merge_evidence(candidates)[:40]
             result.committee = committee_charter()
             chosen = next((c for c in candidates if c.id == consensus.winner_id), candidates[0])
@@ -272,11 +292,21 @@ class DesignPipeline:
             if degraded:
                 result.degraded = True
                 result.degraded_reason = (
-                    f"{len(degraded)} generative critique(s) ran in degraded mode "
+                    f"{plural(len(degraded), 'generative critique')} ran in degraded mode "
                     f"because no model provider was reachable. All analytical "
                     f"results - geometry, code compliance, Vastu, cost - are "
                     f"unaffected and remain valid."
                 )
+
+            if wf_span is not None:
+                try:
+                    wf_span.set_attribute("aip.winner_id", consensus.winner_id)
+                    wf_span.set_attribute("aip.winner_score", round(consensus.winner_score, 4))
+                    wf_span.set_attribute("aip.agreement", round(consensus.overall_agreement, 4))
+                    wf_span.set_attribute("aip.negotiation_outcome", result.negotiation_outcome)
+                    wf_span.set_attribute("output.value", result.explanation[:2000])
+                except Exception:  # noqa: BLE001
+                    pass
 
             log_event(
                 logger, "pipeline.complete",
@@ -284,7 +314,8 @@ class DesignPipeline:
                 score=consensus.winner_score, agreement=consensus.overall_agreement,
                 ms=round(result.duration_ms), cost_usd=result.total_cost_usd,
             )
-            return result
+        flush_telemetry()
+        return result
 
     async def stream(
         self, brief: ClientBrief, *, plans: list[FloorPlan] | None = None
@@ -301,22 +332,29 @@ class DesignPipeline:
             queue.put_nowait(event)
 
         task = asyncio.create_task(self.run(brief, on_progress=on_progress, plans=plans))
-
-        while True:
-            drain = asyncio.create_task(queue.get())
-            done, _ = await asyncio.wait({drain, task}, return_when=asyncio.FIRST_COMPLETED)
-            if drain in done:
-                event = drain.result()
-                if event is not None:
-                    yield event, None
-                continue
-            drain.cancel()
-            while not queue.empty():
-                event = queue.get_nowait()
-                if event is not None:
-                    yield event, None
-            yield None, await task
-            return
+        drain: asyncio.Task | None = None
+        try:
+            while True:
+                drain = asyncio.create_task(queue.get())
+                done, _ = await asyncio.wait({drain, task}, return_when=asyncio.FIRST_COMPLETED)
+                if drain in done:
+                    event = drain.result()
+                    if event is not None:
+                        yield event, None
+                    continue
+                drain.cancel()
+                while not queue.empty():
+                    event = queue.get_nowait()
+                    if event is not None:
+                        yield event, None
+                yield None, await task
+                return
+        finally:
+            # A client that went away must not leave the run grinding on.
+            if drain is not None and not drain.done():
+                drain.cancel()
+            if not task.done():
+                task.cancel()
 
     # ------------------------------------------------------------- stages --
 
@@ -369,7 +407,7 @@ class DesignPipeline:
             ctx.retrieved = evidence
             emit(
                 "retrieve", "done",
-                f"Retrieved {len(evidence)} reference passage(s) from the corpus.",
+                f"Retrieved {plural(len(evidence), 'reference passage')} from the corpus.",
                 0.16, count=len(evidence),
             )
         except Exception as exc:  # noqa: BLE001 - retrieval is an enhancement
@@ -381,13 +419,22 @@ class DesignPipeline:
     ) -> list[FloorPlan]:
         emit("generate", "running", "Generating candidate schemes...", 0.18)
         with span("generate"):
-            generator = LayoutGenerator(brief, self.config.generator)
-            plans = await asyncio.to_thread(generator.generate, self.config.candidate_count)
+            try:
+                generator = LayoutGenerator(brief, self.config.generator)
+                plans = await asyncio.to_thread(generator.generate, self.config.candidate_count)
+            except InfeasibleBriefError as exc:
+                # A programme the plot cannot hold is an answer, not a crash: tell
+                # the stream why, in words the client can act on, then let the
+                # typed error carry on to the API.
+                emit("generate", "failed", str(exc), 0.18, code="infeasible_brief",
+                     needed_area=round(exc.needed_area, 1), available_area=round(exc.available_area, 1),
+                     advisories=exc.advisories)
+                raise
         if not plans:
             raise RuntimeError("the layout generator produced no viable schemes")
         emit(
             "generate", "done",
-            f"Generated {len(plans)} distinct scheme(s).",
+            f"Generated {plural(len(plans), 'distinct scheme')}.",
             0.34,
             schemes=[
                 {"id": p.id, "name": p.name, "area": p.total_built_area,
@@ -404,16 +451,19 @@ class DesignPipeline:
         committee = build_committee(include_generative=self.config.include_generative_critics)
         emit(
             "critique", "running",
-            f"{len(committee)} critics reviewing {len(plans)} scheme(s)...",
+            f"{len(committee)} critics reviewing {plural(len(plans), 'scheme')}...",
             0.36, critics=[c.id for c in committee],
         )
 
-        candidates: list[Candidate[FloorPlan]] = []
-        for index, plan in enumerate(plans):
+        # Every scheme is reviewed at once: the committee's model calls for one
+        # scheme no longer wait on another's.
+        async def review(plan: FloorPlan):
             with span("critique", plan=plan.id):
-                results = await run_agents(
-                    committee, plan, ctx, max_parallel=self.config.max_parallel_agents
-                )
+                return await run_agents(committee, plan, ctx, max_parallel=self.config.max_parallel_agents)
+
+        reviews = await asyncio.gather(*(review(p) for p in plans))
+        candidates: list[Candidate[FloorPlan]] = []
+        for index, (plan, results) in enumerate(zip(plans, reviews, strict=True)):
             critiques = collect_critiques(results)
             candidates.append(
                 Candidate(
@@ -436,6 +486,29 @@ class DesignPipeline:
         total = sum(len(c.critiques) for c in candidates)
         emit("critique", "done", f"{total} independent verdicts collected.", 0.56)
         return candidates
+
+    @staticmethod
+    def _prefer_valid(candidates, consensus):
+        """A drawing that fails the validity guardrail is not the committee's pick
+        while a clean scheme is on the table; the critics score the numbers, and a
+        0.5 m passage scores well."""
+        def flawed(c) -> bool:
+            return bool((getattr(c.artifact, "metadata", None) or {}).get("guardrail"))
+
+        by_id = {c.id: c for c in candidates}
+        current = by_id.get(consensus.winner_id)
+        if current is None or not flawed(current):
+            return consensus
+        clean = [c for c in candidates if not flawed(c)]
+        if not clean:
+            return consensus
+        order = [r["candidate_id"] for r in consensus.ranking]
+        clean.sort(key=lambda c: order.index(c.id) if c.id in order else len(order))
+        pick = clean[0]
+        ranking = sorted(consensus.ranking, key=lambda r: r["candidate_id"] != pick.id)
+        score = next((r["score"] for r in consensus.ranking if r["candidate_id"] == pick.id),
+                     consensus.winner_score)
+        return consensus.model_copy(update={"winner_id": pick.id, "winner_score": score, "ranking": ranking})
 
     async def _stage_consensus(
         self, candidates: list[Candidate[FloorPlan]], brief: ClientBrief, emit
@@ -510,7 +583,7 @@ class DesignPipeline:
         )
         emit(
             "debate", "done",
-            f"{revised} position(s) revised; agreement moved from "
+            f"{plural(revised, 'position')} revised; agreement moved from "
             f"{consensus.overall_agreement:.0%} to {updated.overall_agreement:.0%}.",
             0.70, revised=revised,
         )
@@ -565,7 +638,7 @@ class DesignPipeline:
 
         emit(
             "refine", "running",
-            f"Repairing {len(findings)} finding(s) on the selected scheme...",
+            f"Repairing {plural(len(findings), 'finding')} on the selected scheme...",
             0.74, findings=[f.code for f in findings[:8]],
         )
 
@@ -588,7 +661,7 @@ class DesignPipeline:
 
         emit(
             "refine", "done",
-            f"Applied {len(applied)} repair(s); analytical score improved by {delta:+.3f}.",
+            f"Applied {plural(len(applied), 'repair')}; analytical score improved by {delta:+.3f}.",
             0.82, applied=len(applied), delta=round(delta, 4), repairs=applied[:8],
         )
         return repaired, delta
@@ -623,7 +696,7 @@ class DesignPipeline:
         emit(
             "negotiate", "running",
             (
-                f"Negotiating {len(open_now)} open constraint(s) between "
+                f"Negotiating {plural(len(open_now), 'open constraint')} between "
                 f"{len(protocol.workers)} agents..."
                 if open_now else
                 "Verifying all constraints hold on the selected scheme..."
@@ -748,24 +821,25 @@ def _negotiation_message(transcript: Any, accepted: int) -> str:
     if transcript.outcome == "satisfied":
         if accepted:
             return (
-                f"All constraints satisfied after {rounds} round(s); "
-                f"{accepted} agent proposal(s) were accepted."
+                f"All constraints satisfied after {plural(rounds, 'round')}; "
+                f"{plural(accepted, 'agent proposal')} {'was' if accepted == 1 else 'were'} accepted."
             )
         return "All constraints already held; no changes were needed."
     if transcript.outcome == "converged":
         return (
-            f"Negotiation converged after {rounds} round(s) with "
-            f"{accepted} accepted change(s); further rounds stopped paying for themselves."
+            f"Negotiation converged after {plural(rounds, 'round')} with "
+            f"{plural(accepted, 'accepted change')}; further rounds stopped paying for themselves."
         )
     if transcript.outcome == "converged_with_open_constraints":
         return (
-            f"{transcript.hard_open} hard constraint(s) remain open after {rounds} "
-            f"round(s). No agent could propose a change that improved the design, "
-            f"so they are reported rather than papered over."
+            f"{plural(transcript.hard_open, 'hard constraint')} "
+            f"{'remains' if transcript.hard_open == 1 else 'remain'} open after {plural(rounds, 'round')}. "
+            f"No agent could propose a change that improved the design, "
+            f"so {'it is' if transcript.hard_open == 1 else 'they are'} reported rather than papered over."
         )
     return (
-        f"Negotiation stopped at the time budget after {rounds} round(s) with "
-        f"{accepted} accepted change(s)."
+        f"Negotiation stopped at the time budget after {plural(rounds, 'round')} with "
+        f"{plural(accepted, 'accepted change')}."
     )
 
 

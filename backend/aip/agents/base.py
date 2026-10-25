@@ -221,27 +221,46 @@ class Agent(abc.ABC, Generic[TIn, TOut]):
 
     async def execute(self, payload: TIn, ctx: AgentContext) -> AgentResult[TOut]:
         """Run with timing, error capture and structured logging."""
-        started = time.perf_counter()
-        try:
-            output = await asyncio.wait_for(self.run(payload, ctx), timeout=ctx.budget_seconds)
-        except TimeoutError:
-            elapsed = (time.perf_counter() - started) * 1000
-            log_event(logger, "agent.timeout", level=30, agent=self.id, ms=round(elapsed, 1))
-            return AgentResult(self.id, self.role, None, ok=False, error="timeout", duration_ms=elapsed)
-        except Exception as exc:  # noqa: BLE001 - a failing agent must not fail the run
-            elapsed = (time.perf_counter() - started) * 1000
-            log_event(
-                logger, "agent.failed", level=40,
-                agent=self.id, error=f"{type(exc).__name__}: {exc}", ms=round(elapsed, 1),
-            )
-            return AgentResult(
-                self.id, self.role, None, ok=False,
-                error=f"{type(exc).__name__}: {exc}", duration_ms=elapsed,
-            )
+        from aip.core.telemetry import agent_span
 
-        elapsed = (time.perf_counter() - started) * 1000
-        log_event(logger, "agent.ok", agent=self.id, ms=round(elapsed, 1))
-        return AgentResult(self.id, self.role, output, duration_ms=elapsed)
+        started = time.perf_counter()
+        with agent_span(
+            self.id,
+            role=self.role.value,
+            name=self.name,
+            goal=self.charter,
+            analytical=self.analytical,
+            trace_id=ctx.trace_id,
+        ) as nl_span:
+            try:
+                output = await asyncio.wait_for(self.run(payload, ctx), timeout=ctx.budget_seconds)
+            except TimeoutError:
+                elapsed = (time.perf_counter() - started) * 1000
+                log_event(logger, "agent.timeout", level=30, agent=self.id, ms=round(elapsed, 1))
+                return AgentResult(self.id, self.role, None, ok=False, error="timeout", duration_ms=elapsed)
+            except Exception as exc:  # noqa: BLE001 - a failing agent must not fail the run
+                elapsed = (time.perf_counter() - started) * 1000
+                log_event(
+                    logger, "agent.failed", level=40,
+                    agent=self.id, error=f"{type(exc).__name__}: {exc}", ms=round(elapsed, 1),
+                )
+                return AgentResult(
+                    self.id, self.role, None, ok=False,
+                    error=f"{type(exc).__name__}: {exc}", duration_ms=elapsed,
+                )
+
+            elapsed = (time.perf_counter() - started) * 1000
+            if nl_span is not None and isinstance(output, Critique):
+                try:
+                    nl_span.set_attribute("aip.critic.axis", output.axis)
+                    nl_span.set_attribute("aip.critic.score", round(output.score, 4))
+                    nl_span.set_attribute("aip.critic.confidence", round(output.confidence, 4))
+                    nl_span.set_attribute("aip.critic.findings_count", len(output.findings))
+                    nl_span.set_attribute("output.value", output.rationale[:1000])
+                except Exception:  # noqa: BLE001
+                    pass
+            log_event(logger, "agent.ok", agent=self.id, ms=round(elapsed, 1))
+            return AgentResult(self.id, self.role, output, duration_ms=elapsed)
 
 
 class CriticAgent(Agent[Any, Critique]):

@@ -17,6 +17,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from aip.agents.base import Evidence, EvidenceKind, Finding, Severity
+from aip.core.words import plural
 from aip.domain.brief import ClientBrief
 from aip.domain.geometry import (
     Direction,
@@ -25,7 +26,7 @@ from aip.domain.geometry import (
     distance_point_to_segment,
     segments_intersect,
 )
-from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, Wall
+from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, Wall, WallKind
 from aip.engines.architecture.solar import (
     average_daylight_factor,
     daylight_quality_by_orientation,
@@ -105,7 +106,8 @@ def daylight_analysis(plan: FloorPlan) -> MetricReport:
                 weighted_quality += area * q
                 orientations[direction.value] = orientations.get(direction.value, 0.0) + area
                 shading = float(room.metadata.get("shading_factor", 0.0))
-                overheat = max(overheat, overheating_risk(direction, lat, shading) * min(1.0, area / 2.0))
+                fins = "fins" in (opening.notes or "")
+                overheat = max(overheat, overheating_risk(direction, lat, shading, fins) * min(1.0, area / 2.0))
 
         df = average_daylight_factor(glazed, room.area)
         orientation_score = (weighted_quality / glazed) if glazed > 0 else 0.0
@@ -250,7 +252,7 @@ def daylight_analysis(plan: FloorPlan) -> MetricReport:
         detail=detail,
         summary=(
             f"Mean daylight score {score:.2f} across {len(per_room)} habitable rooms; "
-            f"{sum(1 for f in findings if f.severity.weight >= 0.75)} serious issue(s)."
+            f"{plural(sum(1 for f in findings if f.severity.weight >= 0.75), 'serious issue')}."
         ),
     )
 
@@ -858,7 +860,11 @@ def circulation_analysis(plan: FloorPlan) -> MetricReport:
         connectivity = plan.connectivity(level.index)
         entry = _entry_room(plan, level.index)
         reached = _bfs_depths(connectivity, entry)
-        unreachable = [r for r in level.rooms if r.id not in reached and not r.type.is_outdoor]
+        # A car porch is entered from the drive, not through the house: it needs
+        # an outside wall, not a door from a room.
+        porch = {r.id for r in level.rooms if r.type is RoomType.GARAGE and any(
+            w.kind is WallKind.EXTERIOR and r.id in w.rooms for w in level.walls)}
+        unreachable = [r for r in level.rooms if r.id not in reached and not r.type.is_outdoor and r.id not in porch]
         if unreachable and level.rooms:
             reachability_score = min(
                 reachability_score, _clamp(1.0 - len(unreachable) / len(level.rooms))

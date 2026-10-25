@@ -62,6 +62,11 @@ class ModelUnavailable(LLMError):
     """This model id is gone. The provider itself may be perfectly healthy."""
 
 
+class CredentialRejected(LLMError):
+    """The provider refused the key (401/403). It will not start working again
+    until someone replaces the key, so the provider is parked for the process."""
+
+
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
@@ -117,6 +122,10 @@ class LLMResponse:
 # ---------------------------------------------------------------------------
 
 
+#: How many keys each provider has, set by the router from the settings.
+KEYS_PER_PROVIDER: dict[str, int] = {}
+
+
 class RateLimiter:
     """Sliding-window limiter enforcing per-model RPM and RPD ceilings."""
 
@@ -135,7 +144,8 @@ class RateLimiter:
                 minute.popleft()
             while day and now - day[0] > 86_400:
                 day.popleft()
-            if len(minute) >= model.rpm or len(day) >= model.rpd:
+            keys = KEYS_PER_PROVIDER.get(model.provider, 1)
+            if len(minute) >= model.rpm * keys or len(day) >= model.rpd * keys:
                 return False
             minute.append(now)
             day.append(now)
@@ -170,6 +180,14 @@ class CircuitBreaker:
         if until:
             self._open_until.pop(provider, None)
         return False
+
+    def park(self, provider: str) -> None:
+        """Take a provider out until restart - its key was refused."""
+        self._open_until[provider] = float("inf")
+        log_event(logger, "circuit.parked", level=40, provider=provider, reason="credential rejected")
+
+    def parked(self) -> list[str]:
+        return sorted(p for p, until in self._open_until.items() if until == float("inf"))
 
     def record_success(self, provider: str) -> None:
         self._failures.pop(provider, None)
@@ -219,8 +237,12 @@ class DeadModels:
     instead, so the router simply skips it and moves to the next one.
     """
 
+    #: Shared by every router in the process. Seen in neatlogs: with one set per
+    #: router, each critic in a parallel fan-out rediscovered the same 404.
+    _shared: set[str] = set()
+
     def __init__(self) -> None:
-        self._dead: set[str] = set()
+        self._dead = DeadModels._shared
 
     def mark(self, model: ModelSpec, reason: str) -> None:
         key = f"{model.provider}/{model.id}"
@@ -476,6 +498,13 @@ class OfflineBackend:
 # ---------------------------------------------------------------------------
 
 
+#: Models a provider has told to come back later, shared by every router in the
+#: process: a 429 with "retry-after 600s" is not worth asking again next turn.
+_COOLING: dict[str, float] = {}
+#: The longest one model may take on an interactive call before the next is asked.
+INTERACTIVE_TIMEOUT = 8.0
+
+
 class LLMRouter:
     """Capability-addressed, failover-capable, strictly-free model access."""
 
@@ -522,12 +551,17 @@ class LLMRouter:
         min_context: int = 0,
         cache_key: str | None = None,
         latency_sensitive: bool = True,
+        interactive: bool = False,
     ) -> LLMResponse:
         """Run a completion against the best available free model.
 
         `latency_sensitive` defaults to True because most calls are one of many
         in a committee fan-out. Set it False for a single, user-visible call -
         the final rationale - where the best model is worth waiting for.
+
+        `interactive` is for a person waiting on the reply (the chat): one pass
+        down the list, no back-off sleeps, and no model given more than
+        `INTERACTIVE_TIMEOUT` seconds - the next one is tried instead.
         """
         if self.settings.llm_cache_enabled:
             key = cache_key or self._cache_key(messages, capability, temperature, json_schema)
@@ -545,19 +579,58 @@ class LLMRouter:
 
         errors: list[str] = []
         attempts = 0
-        for model in models:
+        try:
+            from aip.core.providers import PROVIDERS as _P
+            for _spec in (_P.values() if isinstance(_P, dict) else _P):
+                KEYS_PER_PROVIDER[_spec.name] = max(1, len(_spec.credentials(self.settings)))
+        except Exception:  # noqa: BLE001
+            pass
+        # A committee fans out dozens of calls at once; a free tier says "not
+        # this second", not "never". Wait and go round again before falling
+        # back to the offline narrative.
+        rounds = list(models) if interactive else [m for _ in range(4) for m in (models + [None])]
+        wait = 1.5
+        for model in rounds:
+            if model is None:
+                await asyncio.sleep(wait + random.random())
+                wait *= 1.8
+                continue
             if self.dead.is_dead(model):
                 continue
             if self.breaker.is_open(model.provider):
+                continue
+            if _COOLING.get(f"{model.provider}/{model.id}", 0.0) > time.monotonic():
                 continue
             if not await self.limiter.try_acquire(model):
                 errors.append(f"{model.provider}/{model.id}: locally rate-limited")
                 continue
             attempts += 1
             try:
-                response = await self._call(
-                    model, messages, temperature, max_tokens, json_schema
+                from aip.core.telemetry import llm_call_span
+
+                with llm_call_span(
+                    provider=model.provider,
+                    model=model.id,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ) as llm_rec:
+                    call = self._call(model, messages, temperature, max_tokens, json_schema)
+                    response = await (asyncio.wait_for(call, INTERACTIVE_TIMEOUT) if interactive else call)
+                    llm_rec["text"] = response.text
+                    llm_rec["prompt_tokens"] = response.prompt_tokens
+                    llm_rec["completion_tokens"] = response.completion_tokens
+                    llm_rec["latency_ms"] = response.latency_ms
+            except CredentialRejected as exc:
+                # A refused key fails every model on the provider, on every call.
+                # Found in neatlogs: each chat turn spent seconds on a revoked
+                # Groq key before failing over. Park the provider instead.
+                self.breaker.park(model.provider)
+                errors.append(f"{model.provider}/{model.id}: {exc}")
+                self.ledger.record(
+                    UsageRecord(model.provider, model.id, capability.value, 0, 0, 0.0, ok=False)
                 )
+                continue
             except ModelUnavailable as exc:
                 # The id is gone, not the provider. Retire the model and keep
                 # every other model on this provider in play.
@@ -565,14 +638,21 @@ class LLMRouter:
                 errors.append(f"{model.provider}/{model.id}: retired ({exc})")
                 continue
             except Exception as exc:  # noqa: BLE001 - failover is the point
-                self.breaker.record_failure(model.provider)
+                # A rate limit is "later", not "broken": it must not open the
+                # breaker and take the provider out for the whole committee.
+                if "429" not in str(exc) and "rate" not in str(exc).lower():
+                    self.breaker.record_failure(model.provider)
+                elif m := re.search(r"retry-after ([\d.]+)s", str(exc)):
+                    if float(m.group(1)) > 15:
+                        _COOLING[f"{model.provider}/{model.id}"] = time.monotonic() + float(m.group(1))
                 detail = f"{model.provider}/{model.id}: {type(exc).__name__}: {exc}"
                 errors.append(detail)
                 self.ledger.record(
                     UsageRecord(model.provider, model.id, capability.value, 0, 0, 0.0, ok=False)
                 )
                 log_event(logger, "llm.attempt_failed", level=30, detail=detail)
-                await asyncio.sleep(min(0.4 * attempts, 2.0) + random.random() * 0.3)
+                if not interactive:
+                    await asyncio.sleep(min(0.4 * attempts, 2.0) + random.random() * 0.3)
                 continue
 
             self.breaker.record_success(model.provider)
@@ -601,7 +681,23 @@ class LLMRouter:
             tried=len(models),
             errors=errors[:4],
         )
-        text = self.offline.generate(messages, json_schema)
+        from aip.core.telemetry import llm_call_span
+
+        with llm_call_span(
+            provider="offline",
+            model="offline-deterministic",
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        ) as llm_rec:
+            text = self.offline.generate(messages, json_schema)
+            prompt_est = estimate_tokens("\n".join(m.content for m in messages))
+            comp_est = estimate_tokens(text)
+            llm_rec["text"] = text
+            llm_rec["prompt_tokens"] = prompt_est
+            llm_rec["completion_tokens"] = comp_est
+            llm_rec["latency_ms"] = 0.5
+            llm_rec["degraded"] = True
         response = LLMResponse(
             text=text,
             model="offline-deterministic",
@@ -795,6 +891,8 @@ class LLMRouter:
                 # extract_json() is robust enough to cope.
                 body.pop("response_format", None)
                 continue
+            if res.status_code in (401, 403):
+                raise CredentialRejected(f"key rejected by {provider.name} (http {res.status_code})")
             if res.status_code >= 400:
                 body = res.text[:300]
                 lowered = body.lower()
