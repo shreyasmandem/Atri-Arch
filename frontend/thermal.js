@@ -379,7 +379,7 @@ export class ThermalView {
     this.paintRoom();
     this.paintFixes();
     this.paintTable();
-    this.note.textContent = `${d.comfort.model}. Climate: ${d.city}'s monthly averages (IMD climatological normals, rounded); sun from the NOAA algorithm; air changes from the breeze solve. A concept-stage model: it ranks the rooms and sizes each fix, but it is not a full simulation.`;
+    this.note.textContent = `${d.comfort.model}. Climate: ${d.city}'s monthly averages, IMD's 1991–2020 normals; sun from the NOAA algorithm; air changes from the breeze solve; the roof slab and brick pass the sun's heat on hours late and damped. A concept-stage model: trust the ranking of rooms and the size of each fix more than any single degree. It is not a full simulation.`;
   }
 
   // ── the floor as a heat map ─────────────────────────────────────────

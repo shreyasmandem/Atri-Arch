@@ -3891,7 +3891,7 @@ async function renderAir() {
     bar.append(modes, floors);
     const body = el("div", "air-heat");
     p.append(bar, body);
-    const { ThermalView } = await import("./thermal.js?v=t5");
+    const { ThermalView } = await import("./thermal.js?v=t6");
     if (S.view !== "air" || S.activeId !== id) return;
     const th = (S.airHeat ||= { season: "summer", windows: "open", fans: true, cool_roof: false, chajja: 0.6 });
     S.air = new ThermalView(body, { api: API, planId: id, level: st.level, state: th });

@@ -8,8 +8,9 @@ through a design day of the nearest Indian city's climate:
 walls, the RCC floor and ceiling). Heat reaches the mass first - the sun on an
 outside wall or the roof is conducted in through it - and the mass hands it to
 the air later, which is the afternoon-to-evening lag every Indian home with a
-west wall or an exposed roof slab knows. Glass, ventilation and people act on
-the air directly.
+west wall or an exposed roof slab knows: the slab passes the sun on about
+4.5 hours late and the brick about 7, each with its swing cut down (CIBSE time
+lag and decrement factor). Glass, ventilation and people act on the air directly.
 
 **What drives it.**
 
@@ -48,49 +49,50 @@ from aip.domain.plan import FloorPlan, OpeningKind, Room, RoomType, WallKind
 from aip.engines.architecture.solar import prevailing_wind, sun_position
 
 #: Monthly climate normals, January to December: mean daily maximum and
-#: minimum (C) and mean relative humidity (%), after IMD's 1991-2020
-#: climatological normals for each city's observatory, rounded to the half
-#: degree. Approximate: for a design decision, not a weather record.
+#: minimum (C), as IMD publishes them in its 1991-2020 climatological normals
+#: for each city's main observatory (Kochi: its airport, the only 1991-2020
+#: station), and an approximate daily mean relative humidity (%), which sits
+#: above IMD's dry 17:30 reading. For a design decision, not a weather record.
 #: city -> (lat, lon, max x12, min x12, RH x12)
 CITIES: dict[str, tuple[float, float, tuple, tuple, tuple]] = {
-    "Chennai": (13.08, 80.27, (29.5, 31.0, 33.0, 35.0, 38.0, 37.5, 35.5, 34.5, 34.0, 32.0, 29.5, 28.5),
-                (21.0, 22.0, 24.0, 26.5, 28.0, 27.5, 26.5, 26.0, 25.5, 24.5, 23.0, 22.0), (70, 68, 68, 70, 64, 58, 63, 66, 70, 77, 79, 75)),
-    "Bengaluru": (12.97, 77.59, (28.0, 30.5, 33.0, 34.0, 33.0, 29.5, 28.0, 27.5, 28.5, 28.5, 27.0, 26.5),
-                  (16.0, 17.5, 20.0, 22.0, 21.5, 20.5, 20.0, 20.0, 19.5, 19.5, 18.0, 16.0), (60, 52, 48, 55, 64, 75, 79, 79, 76, 74, 71, 66)),
-    "Hyderabad": (17.39, 78.49, (29.0, 32.0, 35.5, 38.5, 39.5, 34.0, 30.5, 30.0, 30.5, 30.5, 29.0, 28.0),
-                  (15.5, 18.0, 21.0, 24.5, 26.5, 24.5, 23.0, 22.5, 22.0, 20.5, 17.0, 14.5), (55, 46, 39, 39, 39, 62, 73, 76, 74, 66, 60, 58)),
-    "Mumbai": (19.08, 72.88, (30.5, 31.5, 32.5, 33.0, 33.5, 32.0, 30.0, 29.5, 30.5, 33.0, 33.5, 32.0),
-               (17.0, 18.0, 20.5, 23.5, 26.5, 26.0, 25.0, 25.0, 24.5, 23.5, 21.0, 18.5), (62, 62, 65, 69, 70, 79, 85, 85, 82, 74, 64, 61)),
-    "Pune": (18.52, 73.86, (30.5, 32.5, 35.5, 37.5, 36.5, 31.0, 28.0, 27.0, 29.0, 31.5, 30.5, 29.5),
-             (11.0, 12.0, 15.5, 19.5, 22.0, 22.5, 21.5, 21.0, 20.5, 18.0, 13.5, 11.0), (56, 48, 42, 47, 57, 75, 83, 84, 79, 66, 58, 57)),
-    "Delhi": (28.61, 77.21, (20.5, 24.5, 30.5, 36.5, 40.5, 39.5, 35.5, 34.0, 34.0, 33.0, 28.0, 23.0),
-              (7.5, 10.0, 15.0, 21.0, 25.5, 27.5, 27.0, 26.5, 24.5, 19.5, 13.0, 8.5), (75, 66, 55, 39, 38, 51, 72, 76, 70, 59, 62, 71)),
-    "Kolkata": (22.57, 88.36, (26.5, 29.5, 34.0, 36.0, 35.5, 34.0, 32.0, 32.0, 32.0, 31.5, 30.0, 27.5),
-                (14.0, 17.5, 22.0, 25.0, 26.5, 26.5, 26.0, 26.0, 25.5, 24.0, 19.0, 14.5), (67, 63, 63, 70, 74, 80, 84, 85, 83, 78, 71, 68)),
-    "Ahmedabad": (23.02, 72.57, (28.5, 31.0, 36.0, 40.0, 41.5, 38.5, 33.5, 32.5, 34.0, 36.0, 33.0, 30.0),
-                  (12.0, 14.5, 19.5, 23.5, 26.5, 27.5, 26.0, 25.5, 25.0, 21.5, 17.0, 13.0), (50, 43, 38, 42, 52, 65, 78, 80, 73, 55, 47, 51)),
-    "Jaipur": (26.91, 75.79, (22.5, 26.0, 31.5, 37.5, 41.0, 39.5, 35.0, 33.0, 33.5, 33.5, 29.0, 24.5),
-               (8.5, 10.5, 15.5, 21.5, 25.5, 27.0, 26.0, 24.5, 23.0, 19.0, 13.5, 9.5), (55, 46, 35, 26, 30, 46, 68, 74, 65, 45, 45, 52)),
-    "Kochi": (9.93, 76.27, (31.5, 32.0, 32.5, 33.0, 32.5, 29.5, 29.0, 29.0, 30.0, 30.5, 31.0, 31.5),
-              (23.0, 24.0, 25.5, 26.0, 25.5, 24.0, 23.5, 24.0, 24.0, 24.0, 24.0, 23.5), (70, 72, 73, 75, 77, 86, 88, 86, 84, 83, 79, 72)),
-    "Thiruvananthapuram": (8.52, 76.94, (31.5, 32.0, 33.0, 32.5, 31.5, 29.5, 29.0, 29.5, 30.0, 30.0, 30.5, 31.0),
-                           (22.5, 23.5, 24.5, 25.5, 25.5, 24.0, 23.5, 23.5, 24.0, 23.5, 23.5, 23.0), (71, 71, 72, 75, 78, 84, 84, 82, 80, 82, 81, 75)),
-    "Lucknow": (26.85, 80.95, (22.5, 26.5, 32.5, 38.5, 40.5, 38.5, 34.0, 33.5, 33.5, 32.5, 29.0, 24.5),
-                (7.5, 10.5, 15.0, 20.5, 25.0, 27.5, 26.5, 26.0, 24.5, 19.5, 13.0, 8.5), (75, 65, 50, 38, 42, 60, 79, 83, 79, 68, 66, 73)),
-    "Bhopal": (23.26, 77.41, (25.5, 29.0, 34.0, 38.5, 41.5, 36.5, 30.5, 28.5, 30.5, 31.5, 29.0, 26.5),
-               (10.5, 12.5, 17.0, 22.0, 26.5, 25.5, 23.5, 23.0, 22.0, 18.5, 14.0, 10.5), (52, 42, 30, 25, 26, 55, 80, 85, 75, 55, 50, 52)),
-    "Nagpur": (21.15, 79.09, (28.5, 32.0, 36.5, 41.0, 43.0, 37.5, 31.5, 30.5, 32.0, 32.5, 30.5, 28.5),
-               (12.5, 15.0, 19.5, 24.0, 28.0, 27.0, 24.5, 24.0, 23.5, 19.5, 14.5, 12.0), (55, 44, 33, 28, 28, 55, 79, 82, 76, 62, 55, 56)),
-    "Coimbatore": (11.02, 76.96, (30.0, 32.5, 35.0, 35.0, 33.0, 30.5, 30.0, 30.5, 31.5, 30.5, 29.0, 28.5),
-                   (19.0, 19.5, 21.5, 23.0, 23.0, 22.0, 21.5, 21.5, 21.5, 21.5, 20.5, 19.5), (65, 58, 55, 62, 67, 70, 72, 72, 71, 75, 77, 72)),
-    "Visakhapatnam": (17.69, 83.22, (28.5, 30.5, 33.0, 33.5, 34.5, 33.5, 32.0, 32.0, 32.0, 31.5, 30.0, 28.5),
-                      (18.0, 20.0, 23.0, 26.0, 27.5, 27.0, 26.0, 26.0, 25.5, 24.0, 21.0, 18.5), (69, 71, 74, 76, 74, 72, 76, 76, 78, 74, 68, 67)),
-    "Chandigarh": (30.73, 76.78, (19.5, 23.0, 28.0, 34.5, 38.5, 38.0, 33.5, 32.5, 32.5, 31.5, 27.0, 21.5),
-                   (6.0, 8.5, 13.0, 18.0, 22.5, 24.5, 24.5, 24.0, 22.0, 16.5, 10.5, 6.5), (75, 68, 58, 40, 36, 48, 75, 80, 72, 60, 65, 74)),
-    "Guwahati": (26.14, 91.74, (24.0, 27.0, 30.5, 31.5, 32.0, 32.0, 32.0, 32.5, 31.5, 30.5, 28.0, 25.0),
-                 (10.5, 12.5, 16.5, 20.0, 22.5, 24.5, 25.5, 25.5, 24.5, 21.5, 16.5, 12.0), (78, 68, 62, 72, 79, 84, 85, 84, 84, 82, 80, 80)),
-    "Panaji": (15.49, 73.83, (31.5, 31.5, 32.0, 33.0, 33.5, 30.5, 29.0, 29.0, 30.0, 32.0, 33.0, 32.5),
-               (19.5, 20.5, 23.0, 25.0, 26.5, 25.0, 24.5, 24.0, 24.0, 24.0, 22.0, 20.5), (64, 67, 70, 72, 73, 85, 88, 87, 84, 77, 67, 63)),
+    "Chennai": (13.08, 80.27, (29.3, 30.9, 32.9, 34.5, 37.1, 37.0, 35.3, 34.7, 34.2, 32.1, 29.9, 28.9),
+                (21.2, 22.2, 24.2, 26.6, 28.0, 27.5, 26.4, 25.9, 25.6, 24.6, 23.1, 21.9), (70, 68, 68, 70, 64, 58, 63, 66, 70, 77, 79, 75)),
+    "Bengaluru": (12.97, 77.59, (28.4, 30.9, 33.4, 34.1, 33.1, 29.7, 28.3, 28.1, 28.6, 28.5, 27.4, 26.9),
+                  (16.1, 17.6, 20.2, 22.1, 21.8, 20.6, 20.1, 20.0, 20.0, 19.8, 18.3, 16.4), (60, 52, 48, 55, 64, 75, 79, 79, 76, 74, 71, 66)),
+    "Hyderabad": (17.39, 78.49, (28.6, 31.8, 35.2, 37.6, 38.8, 34.4, 30.5, 29.6, 30.1, 30.4, 28.8, 27.8),
+                  (13.9, 15.5, 20.3, 24.1, 26.0, 23.9, 22.5, 22.0, 21.7, 20.0, 16.4, 13.1), (55, 46, 39, 39, 39, 62, 73, 76, 74, 66, 60, 58)),
+    "Mumbai": (19.08, 72.88, (31.2, 31.7, 33.1, 33.4, 33.7, 32.5, 30.4, 30.2, 30.9, 33.6, 34.1, 32.6),
+               (16.9, 18.1, 21.1, 24.2, 27.0, 26.6, 25.5, 25.2, 24.9, 23.9, 21.4, 18.4), (62, 62, 65, 69, 70, 79, 85, 85, 82, 74, 64, 61)),
+    "Pune": (18.52, 73.86, (29.8, 32.2, 35.6, 37.9, 37.3, 32.0, 28.3, 27.8, 29.5, 31.5, 30.7, 29.5),
+             (11.2, 12.7, 16.0, 19.9, 22.9, 23.1, 22.4, 21.7, 21.0, 19.0, 15.1, 11.8), (56, 48, 42, 47, 57, 75, 83, 84, 79, 66, 58, 57)),
+    "Delhi": (28.61, 77.21, (20.1, 24.2, 29.9, 36.5, 39.9, 39.0, 35.6, 34.2, 34.1, 33.0, 28.4, 22.8),
+              (7.5, 10.6, 15.6, 21.3, 25.8, 27.7, 27.5, 26.7, 25.0, 19.5, 13.0, 8.4), (75, 66, 55, 39, 38, 51, 72, 76, 70, 59, 62, 71)),
+    "Kolkata": (22.57, 88.36, (25.5, 29.4, 33.7, 35.4, 35.5, 34.1, 32.5, 32.3, 32.6, 32.3, 30.2, 26.7),
+                (14.3, 18.1, 22.9, 25.7, 26.8, 27.1, 26.7, 26.6, 26.3, 24.4, 20.1, 15.5), (67, 63, 63, 70, 74, 80, 84, 85, 83, 78, 71, 68)),
+    "Ahmedabad": (23.02, 72.57, (27.9, 31.0, 35.8, 39.7, 41.8, 39.0, 33.7, 32.3, 33.6, 35.6, 33.1, 29.5),
+                  (12.4, 14.6, 19.6, 24.2, 27.3, 27.7, 26.1, 25.3, 24.9, 21.8, 17.2, 13.6), (50, 43, 38, 42, 52, 65, 78, 80, 73, 55, 47, 51)),
+    "Jaipur": (26.91, 75.79, (22.5, 26.1, 32.0, 37.6, 41.1, 39.7, 34.8, 32.7, 34.2, 34.1, 29.6, 25.1),
+               (8.4, 12.0, 17.4, 22.8, 27.1, 27.9, 26.2, 24.9, 24.0, 20.1, 14.4, 9.9), (55, 46, 35, 26, 30, 46, 68, 74, 65, 45, 45, 52)),
+    "Kochi": (9.93, 76.27, (33.7, 34.6, 34.8, 34.4, 33.2, 30.7, 30.0, 30.2, 30.9, 31.8, 32.6, 32.9),
+              (20.6, 21.8, 23.9, 24.7, 24.5, 23.5, 23.1, 23.3, 23.3, 23.2, 22.9, 21.8), (70, 72, 73, 75, 77, 86, 88, 86, 84, 83, 79, 72)),
+    "Thiruvananthapuram": (8.52, 76.94, (32.4, 32.8, 33.5, 33.3, 32.6, 30.4, 30.1, 30.3, 30.9, 30.9, 31.0, 32.0),
+                           (22.3, 22.9, 24.3, 25.1, 25.1, 23.8, 23.3, 23.4, 23.5, 23.5, 23.2, 22.6), (71, 71, 72, 75, 78, 84, 84, 82, 80, 82, 81, 75)),
+    "Lucknow": (26.85, 80.95, (21.4, 26.2, 32.2, 38.2, 39.9, 38.3, 34.2, 33.4, 33.4, 32.8, 29.0, 23.6),
+                (7.8, 11.0, 15.4, 21.0, 24.8, 26.7, 26.0, 25.6, 24.4, 19.5, 13.3, 8.9), (75, 65, 50, 38, 42, 60, 79, 83, 79, 68, 66, 73)),
+    "Bhopal": (23.26, 77.41, (24.9, 28.4, 33.9, 38.7, 41.1, 37.4, 30.9, 28.9, 31.3, 32.7, 29.9, 26.7),
+               (10.6, 13.1, 17.6, 22.4, 26.6, 26.0, 23.8, 23.0, 22.2, 19.1, 15.0, 11.2), (52, 42, 30, 25, 26, 55, 80, 85, 75, 55, 50, 52)),
+    "Nagpur": (21.15, 79.09, (28.9, 31.9, 36.4, 40.6, 43.1, 38.1, 31.9, 30.8, 32.4, 33.2, 31.3, 29.3),
+               (14.1, 16.0, 19.7, 25.1, 28.1, 26.6, 24.4, 23.5, 23.4, 21.4, 17.1, 13.2), (55, 44, 33, 28, 28, 55, 79, 82, 76, 62, 55, 56)),
+    "Coimbatore": (11.02, 76.96, (30.9, 33.2, 35.6, 36.4, 35.0, 32.4, 31.5, 31.8, 32.5, 31.7, 30.2, 29.5),
+                   (19.2, 20.3, 22.3, 24.1, 24.0, 23.0, 22.4, 22.4, 22.5, 22.3, 21.5, 19.7), (65, 58, 55, 62, 67, 70, 72, 72, 71, 75, 77, 72)),
+    "Visakhapatnam": (17.69, 83.22, (28.1, 29.6, 31.2, 32.1, 33.3, 32.8, 31.4, 31.5, 31.6, 31.5, 30.3, 28.7),
+                      (20.5, 22.1, 24.6, 26.5, 27.8, 27.4, 26.4, 26.2, 26.0, 25.2, 23.2, 21.0), (69, 71, 74, 76, 74, 72, 76, 76, 78, 74, 68, 67)),
+    "Chandigarh": (30.73, 76.78, (18.2, 22.6, 28.0, 34.6, 38.6, 37.7, 34.1, 33.2, 32.9, 32.0, 27.0, 22.1),
+                   (7.2, 10.4, 14.7, 20.3, 24.7, 26.7, 26.9, 26.2, 24.4, 18.4, 12.3, 8.0), (75, 68, 58, 40, 36, 48, 75, 80, 72, 60, 65, 74)),
+    "Guwahati": (26.14, 91.74, (23.9, 27.0, 30.5, 31.2, 31.8, 32.6, 32.8, 33.2, 32.5, 31.3, 28.5, 25.4),
+                 (10.8, 13.0, 16.5, 20.3, 22.9, 25.2, 25.9, 25.8, 24.9, 22.3, 17.2, 12.6), (78, 68, 62, 72, 79, 84, 85, 84, 84, 82, 80, 80)),
+    "Panaji": (15.49, 73.83, (32.5, 32.4, 32.6, 33.4, 33.8, 30.9, 29.3, 29.5, 30.2, 32.0, 33.5, 33.1),
+               (20.0, 20.6, 23.3, 25.4, 26.3, 24.9, 24.2, 24.2, 24.0, 24.0, 22.7, 20.9), (64, 67, 70, 72, 73, 85, 88, 87, 84, 77, 67, 63)),
 }
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September",
           "October", "November", "December")
@@ -135,6 +137,11 @@ ABS_ROOF_COOL = 0.25  # white reflective roof coat
 H_OUT = 17.0          # outside surface coefficient, W/m2K
 H_MASS = 3.5          # mass-to-air convective coefficient
 C_MASS = 120e3        # J/m2K of exposed mass area (first ~80 mm of brick/RCC)
+# How a heavy wall or slab passes the day's outdoor swing on to the inside:
+# late by its time lag, and shrunk by its decrement factor (CIBSE Guide A).
+LAG_ROOF, DEC_ROOF = 4.5, 0.6   # h, -: 150 mm RCC slab
+LAG_WALL, DEC_WALL = 7.0, 0.4   # h, -: 230 mm brick, plastered both sides
+SKY_ROOF = 4.0        # K: a flat roof's long-wave loss to the sky (ASHRAE, horizontal)
 RHO_CP = 1200.0       # J/m3K of air
 INFILTRATION = 0.6    # air changes an hour with everything shut
 MAX_ACH = 30.0        # beyond this the room is at outdoor temperature anyway
@@ -344,6 +351,15 @@ def _sky(plan: FloorPlan, climate: dict, steps: int) -> list[tuple]:
     return out
 
 
+def _damped(series: list[float], lag: float, decrement: float) -> list[float]:
+    """A periodic day's series as it arrives through a heavy layer: shifted
+    `lag` steps later and its swing about the daily mean scaled by `decrement`."""
+    n = len(series)
+    mean = sum(series) / n
+    lo, w = int(lag), lag - int(lag)
+    return [mean + decrement * ((1 - w) * series[(k - lo) % n] + w * series[(k - lo - 1) % n] - mean) for k in range(n)]
+
+
 def _run(zones: list[_Zone], plan: FloorPlan, opt: Options, climate: dict,
          hold: float | None = None, sky: list[tuple] | None = None, surfaces: bool = False) -> list[dict]:
     """Hourly results per zone. `hold` pins the air at a setpoint (windows
@@ -362,11 +378,17 @@ def _run(zones: list[_Zone], plan: FloorPlan, opt: Options, climate: dict,
         a_mass = 2 * r.area + r.perimeter_length * r.ceiling_height * 0.6
         hm = H_MASS * a_mass
         cm = C_MASS * a_mass
-        ua_wall = sum(f.area for f in z.faces) * U_WALL
         ua_roof = z.roof * u_roof
         ua_glass = sum(f.glass for f in z.faces) * U_GLASS
         kind = _KIND.get(r.type)
         tm = (climate["max"] + climate["min"]) / 2 + 1.5
+        # The sun on each face and the roof through the day, and what reaches
+        # the inner mass of it: the sol-air temperature, late and damped.
+        face_sun_all = [[_irradiance(alt, az, f.bearing, clear) for (_h, _to, alt, az, _rb, _rd) in sky] for f in z.faces]
+        face_sa = [[to + ABS_WALL * (b + df) / H_OUT for (b, df), (_h, to, *_r) in zip(fs, sky)] for fs in face_sun_all]
+        roof_sa = [to + a_roof * (rb + rd) / H_OUT - SKY_ROOF for (_h, to, _a, _z, rb, rd) in sky]
+        face_te = [_damped(sa, LAG_WALL * steps, DEC_WALL) for sa in face_sa]
+        roof_te = _damped(roof_sa, LAG_ROOF * steps, DEC_ROOF)
         hours = []
         for d in range(4):                 # three days to settle, keep the fourth
             for k, (h, to, alt, az, rb, rd) in enumerate(sky):
@@ -374,16 +396,14 @@ def _run(zones: list[_Zone], plan: FloorPlan, opt: Options, climate: dict,
                 keep = d == 3 and k % steps == 0
                 q_glass = q_wall_sol = 0.0
                 face_sun = []
-                for f in z.faces:
-                    beam, dif = _irradiance(alt, az, f.bearing, clear)
+                for i, f in enumerate(z.faces):
+                    beam, dif = face_sun_all[i][k]
                     shade = _shaded(alt, az, f.bearing, opt.chajja, f.glass_h) if f.glass else 0
                     q_glass += f.glass * SHGC * (beam * (1 - shade) + dif)
-                    q_wall_sol += f.area * U_WALL * ABS_WALL * (beam + dif) / H_OUT
+                    q_wall_sol += f.area * U_WALL * (face_te[i][k] - tm)
                     if keep and surfaces:
                         face_sun.append((beam, dif, shade))
-                # Night sky: a roof radiates to it and runs a few degrees under the air.
-                roof_sol = a_roof * (rb + rd) / H_OUT - (0 if alt > 0 else 3.0)
-                q_roof_sol = ua_roof * roof_sol
+                q_roof_sol = ua_roof * (roof_te[k] - tm)
                 q_int = _gains(kind, hour)
                 ach = (min(z.ach, MAX_ACH) + INFILTRATION) if (hold is None and _open(opt.windows, hour)) else INFILTRATION
                 if kind == "kitchen" and q_int > 500:
@@ -398,26 +418,24 @@ def _run(zones: list[_Zone], plan: FloorPlan, opt: Options, climate: dict,
                 else:
                     ti = hold
                     load = max(0.0, ua_vent * (to - ti) + ua_glass * (to - ti) + hm * (tm - ti) + to_air)
-                q_mass = (ua_wall * (to - tm) + q_wall_sol + ua_roof * (to - tm) + q_roof_sol
-                          + hm * (ti - tm) + to_mass)
+                q_mass = q_wall_sol + q_roof_sol + hm * (ti - tm) + to_mass
                 if keep:
                     x = {"t": ti, "to": to, "load": load,
-                         "parts": {"roof": ua_roof * (to - tm) + q_roof_sol,
-                                   "walls": ua_wall * (to - tm) + q_wall_sol,
+                         "parts": {"roof": q_roof_sol,
+                                   "walls": q_wall_sol,
                                    "windows": q_glass + ua_glass * (to - ti),
                                    "people": q_int, "air": ua_vent * (to - ti)}}
                     if surfaces:
                         faces = []
-                        for f, (beam, dif, shade) in zip(z.faces, face_sun):
-                            tsa = to + ABS_WALL * (beam + dif) / H_OUT
+                        for i, (f, (beam, dif, shade)) in enumerate(zip(z.faces, face_sun)):
+                            tsa = face_sa[i][k]
                             # Glass: halfway between in and out, plus the sun patch it lets in.
                             win = ti + 0.5 * (to - ti) + SHGC * (beam * (1 - shade) + dif) * 0.012
-                            faces.append({"in": tm + (tsa - tm) * U_WALL / H_IN,
+                            faces.append({"in": tm + (face_te[i][k] - tm) * U_WALL / H_IN,
                                           "out": tsa - (tsa - tm) * U_WALL / H_OUT, "win": win})
                         x["faces"] = faces
-                        # The slab stores much of the day's heat itself, so its underside
-                        # moves less than a thin wall's would (about 0.6 of U / h_in).
-                        x["ceiling"] = tm + (to + roof_sol - tm) * 0.6 * u_roof / H_IN if z.roof else None
+                        # The slab's underside follows its damped, late sol-air.
+                        x["ceiling"] = tm + (roof_te[k] - tm) * u_roof / H_IN if z.roof else None
                         x["mass"] = tm
                         x["sun"] = (alt, az)
                         x["beam"] = [(b, sh) for b, _d, sh in face_sun]
