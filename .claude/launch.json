@@ -39,6 +39,21 @@
       ],
       "port": 8001,
       "cwd": "backend"
+    },
+    {
+      "name": "aip-mac",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "aip.api.app:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8010"
+      ],
+      "port": 8010,
+      "cwd": "backend"
     }
   ]
 }
