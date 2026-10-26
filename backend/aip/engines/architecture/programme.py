@@ -190,16 +190,18 @@ PRIVATE_HOST: dict[RoomType, tuple[RoomType, ...]] = {
 #:
 #: Rooms not listed are unconstrained beyond the through-room rule.
 ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
+    # An Indian house does not spend floor on corridors: its bedrooms open off
+    # the dining hall downstairs and the family lounge upstairs.
     RoomType.MASTER_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                        RoomType.FAMILY}),
+                                        RoomType.FAMILY, RoomType.DINING}),
     RoomType.BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                 RoomType.FAMILY}),
+                                 RoomType.FAMILY, RoomType.DINING}),
     RoomType.GUEST_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                       RoomType.FAMILY, RoomType.FOYER}),
+                                       RoomType.FAMILY, RoomType.FOYER, RoomType.DINING}),
     RoomType.CHILDREN_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                          RoomType.FAMILY}),
+                                          RoomType.FAMILY, RoomType.DINING}),
     RoomType.STUDY: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                               RoomType.MASTER_BEDROOM, RoomType.BEDROOM}),
+                               RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.DINING}),
     RoomType.KITCHEN: frozenset({RoomType.DINING, RoomType.CORRIDOR, RoomType.LIVING,
                                  RoomType.FAMILY, RoomType.UTILITY}),
     RoomType.DINING: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
@@ -220,14 +222,16 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
                                 RoomType.CORRIDOR}),
     RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR, RoomType.LOBBY,
                                RoomType.STAIRCASE, RoomType.FOYER}),   # under the stair; a shoe store
-    RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER}),
+    RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER, RoomType.DINING,
+                                RoomType.FAMILY}),
     RoomType.POWDER: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,
                                 RoomType.LIVING}),
-    # A bathroom is entered from the passage, or from the bedroom it is
-    # attached to. Never from the dining room, the kitchen or the entrance.
+    # A bathroom is entered from the bedroom it is attached to, or for
+    # everyone from the hall the rooms open off - the passage, the dining hall,
+    # the family lounge. Never from the kitchen or the entrance.
     RoomType.BATHROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.MASTER_BEDROOM,
                                   RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
-                                  RoomType.CHILDREN_BEDROOM}),
+                                  RoomType.CHILDREN_BEDROOM, RoomType.DINING, RoomType.FAMILY}),
 }
 
 

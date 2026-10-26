@@ -1293,6 +1293,8 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
     # none asked for, the plot is paved and nothing of a lawn is laid on it.
     cover = ground_cover(plan)
     has_lawn = not cover["lawn"].is_empty
+    # Lamps and stepping stones only on a lawn the client asked for.
+    asked = has_lawn and plan.site.garden_share > 0
     b.slab("site", "lawn" if has_lawn else "terrace", [Vec2(x, y) for x, y in list(plot.exterior.coords)[:-1]], -0.12, 0.0)
     # Plinth under the building.
     if footprint is not None:
@@ -1352,7 +1354,7 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
         _yard(b, b.p.yard, yard[0], yard[1])
 
     # A lawn is lived on: lamps along the drive, and stones across the grass to the garden's feature.
-    if has_lawn and getattr(b.p, "garden", "") != "none" and footprint is not None and gate_c is not None:
+    if asked and getattr(b.p, "garden", "") != "none" and footprint is not None and gate_c is not None:
         _lawn_life(b, plot, footprint, gate_c, pool[0] if pool is not None else None, yard)
 
     # A lush garden plants the inside of the boundary too, which a tight

@@ -274,17 +274,21 @@ def yard_spot(plan: FloorPlan, kind: str):
     return None
 
 
+#: The widest the paved terrace and walks round the house and drive grow, metres.
+APRON_MAX = 4.0
+
+
 def ground_cover(plan: FloorPlan) -> dict:
     """The plot's ground laid out as the client asked: what is house, drive,
     pool, lawn and paving, with each share of the plot.
 
     Open ground is the plot less the house (its plinth), the drive and the pool
     with its deck. When the client set a lawn share and there is more open
-    ground than that, the lawn is exactly what they asked for: the rest becomes
-    a paved terrace and walks round the house and along the drive - grown out
-    from them evenly, the way a garden is laid - and the lawn is what remains
-    towards the boundary. With no lawn asked for there is none: the open ground
-    is paved, the way a city plot's setbacks are.
+    ground than that, the lawn is what they asked for, never less: the rest
+    becomes a paved terrace and walks round the house and along the drive -
+    grown out from them evenly, the way a garden is laid, up to `APRON_MAX`
+    wide - and the lawn is what remains towards the boundary. With no lawn
+    asked for, the open ground is plain grass.
     """
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
@@ -304,9 +308,7 @@ def ground_cover(plan: FloorPlan) -> dict:
     open_ = plot.difference(unary_union([house, drive, pool]))
     lawn, paved = open_, empty
     want = float(plan.site.garden_share or 0.0) * plot.area
-    if want <= 0:
-        lawn, paved = empty, open_
-    elif open_.area > want + 1.0:
+    if want > 0 and open_.area > want + 1.0:
         # Grow the apron round the house and the drive until the lawn left is what was asked.
         core = unary_union([house, drive])
         lo, hi = 0.0, max(plot.bounds[2] - plot.bounds[0], plot.bounds[3] - plot.bounds[1])
@@ -316,6 +318,10 @@ def ground_cover(plan: FloorPlan) -> dict:
                 lo = mid
             else:
                 hi = mid
+        # The terrace and walks are an apron, never a car park: past a couple
+        # of metres from the house the ground a plot cannot build on is grass,
+        # so a lawn is never less than asked, and on a big plot it is more.
+        lo = min(lo, APRON_MAX)
         lawn = open_.difference(core.buffer(lo, join_style=2))
         paved = open_.difference(lawn)
     a = plot.area or 1.0

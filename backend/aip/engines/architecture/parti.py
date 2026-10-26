@@ -213,7 +213,7 @@ class PartiPlanner:
         self.stair_on = stair_on
         # A small plot takes a tighter dog-leg: two 0.9 m flights, 3.5 m long.
         self.min_scale = 0.86 if compact_stair else 1.0
-        self.st_w, self.st_run, self.st_rot_w, self.st_rot_d = (2.0, 3.5, 3.5, 2.0) if compact_stair else (STAIR_W, STAIR_RUN, STAIR_ROT_W, STAIR_ROT_D)
+        self.st_w, self.st_run, self.st_rot_w, self.st_rot_d = (2.0, 3.85, 3.85, 2.0) if compact_stair else (STAIR_W, STAIR_RUN, STAIR_ROT_W, STAIR_ROT_D)
         self.cover = cover or self.W * self.D
         self.north = north_angle
         self.prefer = prefer or (lambda t: None)
@@ -342,11 +342,13 @@ class PartiPlanner:
                 rooms.remove(fam)
                 hub = Cell([[fam]])
             else:
-                hub = Cell([[P(T.LOBBY, 0.0, name="Lobby")]], fixed_w=g["lobby_w"])
+                hub = Cell([[P(T.LOBBY, 0.0, name="Family lounge")]], fixed_w=g["lobby_w"])
         private_here = any(r.type in BEDS | {T.SERVANT} for r in rooms) or \
             any(w.type in {T.TOILET, T.BATHROOM} for w in wets)
         passage = None
-        if ground and (private_here or dine_back is not None):
+        # Downstairs the dining hall is the hub every room opens off; a passage
+        # is drawn only where there is no hall to open off.
+        if ground and (dine_back is not None or (private_here and hub is None)):
             passage = Cell([[P(T.CORRIDOR, 0.0, name="Passage")]], fixed_w=PASSAGE)
 
         # --- 2 Front or back: the bands balanced by area, the master's side chosen.
@@ -424,7 +426,7 @@ class PartiPlanner:
         # pairs, one behind the other, so none of them is a slot the depth of
         # the band. A shrine never pairs with a toilet. Baths sit beside the
         # passage or the lobby, never off the dining table.
-        anchor = passage if passage is not None else (hub if not ground else None)
+        anchor = passage if passage is not None else hub
         smalls_left: list[P] = []
         foyer_puja = None
         if foyer and puja and rng.r(key("foyerpuja")) < 0.5:
@@ -477,7 +479,7 @@ class PartiPlanner:
                 # Beside the passage, which can serve its store, or the hub.
                 at = anchor if (anchor is not None and anchor in mid) else hub
                 k = mid.index(at) if at in mid else len(mid)
-                mid.insert(min(len(mid), k + rng.choice(key("smallat", ix[id(cell.pieces()[0])]), [0, 1])), cell)
+                mid.insert(min(len(mid), k + rng.choice(key("smallat", ix.get(id(cell.pieces()[0]), "x")), [0, 1])), cell)
         # The kitchen: a back corner under the dining room, or the far end of the core.
         if kitchen:
             k = kitchen[0]
@@ -789,8 +791,8 @@ class PartiPlanner:
             if T.STAIRCASE in types and not nb_types & {T.CORRIDOR, T.LOBBY, T.DINING, T.FAMILY}:
                 pen += 30
             if any(t in WET for t in types) and not any(p.host is not None for p in c.pieces()) \
-                    and not nb_types & {T.CORRIDOR, T.LOBBY}:
-                pen += 60                     # a common bath needs the passage
+                    and not nb_types & {T.CORRIDOR, T.LOBBY, T.DINING, T.FAMILY}:
+                pen += 60                     # a common bath needs a hall to open off
             if T.PUJA in types and nb_types & WET:
                 pen += 50
             if T.DINING in types and 0 < i < n - 1:
@@ -1393,7 +1395,7 @@ class PartiPlanner:
                 if p.type in BEDS:
                     # A bedroom off the passage or lobby, not off the living room.
                     via = [types[j] for j in range(n) if adj[i][j] >= 1.0]
-                    if not any(t in (T.CORRIDOR, T.LOBBY, T.FAMILY) for t in via):
+                    if not any(t in (T.CORRIDOR, T.LOBBY, T.FAMILY, T.DINING) for t in via):
                         hit(40, "bed_off_public")
                     if p.type is T.MASTER_BEDROOM:
                         others = [(x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].type in BEDS - {T.MASTER_BEDROOM}]

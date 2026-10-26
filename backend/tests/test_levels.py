@@ -72,13 +72,14 @@ def test_duplex_has_two_floors_of_the_right_rooms(duplex_plans):
         assert upper[RoomType.BATHROOM] == 2
 
 
-def test_one_staircase_per_floor_and_one_passage(duplex_plans):
-    """Thirteen staircases on one floor was the bug that started this file."""
+def test_one_staircase_per_floor_and_at_most_one_passage(duplex_plans):
+    """Thirteen staircases on one floor was the bug that started this file.
+    A floor whose rooms open off the dining hall needs no passage at all."""
     for plan in duplex_plans:
         for level in plan.levels:
             kinds = Counter(r.type for r in level.rooms)
             assert kinds[RoomType.STAIRCASE] == 1, plan.name
-            assert kinds[RoomType.CORRIDOR] + kinds[RoomType.LOBBY] == 1, plan.name
+            assert kinds[RoomType.CORRIDOR] + kinds[RoomType.LOBBY] <= 1, plan.name
 
 
 def test_every_room_on_every_floor_is_reached_the_right_way(duplex_plans):
@@ -200,9 +201,12 @@ def test_the_guardrail_catches_a_bedroom_reached_through_the_kitchen(duplex_plan
     plan = duplex_plans[0].clone()
     gen = LayoutGenerator(_brief(plot_width=12, plot_depth=18, levels=2, bedrooms=3, bathrooms=3))
     assert gen._sanity(plan) == []
-    # Relabel the ground-floor hall as a kitchen: every room off it is now
-    # reached through the kitchen, and the plan must say so.
-    hall = next(r for r in plan.level_at(0).rooms if r.type is RoomType.CORRIDOR)
+    # Relabel the ground-floor hall - the passage, or the dining hall the rooms
+    # open off - as a kitchen: every room off it is now reached through the
+    # kitchen, and the plan must say so.
+    ground = plan.level_at(0).rooms
+    hall = next((r for r in ground if r.type is RoomType.CORRIDOR), None) or \
+        next(r for r in ground if r.type is RoomType.DINING)
     hall.type = RoomType.KITCHEN
     problems = gen._sanity(plan)
     assert any("passes through" in p or "entered from" in p for p in problems), problems
