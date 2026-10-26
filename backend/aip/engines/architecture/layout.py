@@ -1580,6 +1580,15 @@ def _doors_to_hosts(plan: FloorPlan) -> None:
                                          connects=(host.id, bal.id)))
 
 
+#: A passage longer than this is a corridor, not a hall or a landing.
+LONG_PASSAGE = 6.0
+
+
+def _long_passage(plan: FloorPlan) -> bool:
+    return any(r.type in (RoomType.CORRIDOR, RoomType.LOBBY) and max(r.bbox.width, r.bbox.height) > LONG_PASSAGE
+               for lv in plan.levels for r in lv.rooms)
+
+
 def _pristine(plan: FloorPlan) -> bool:
     return not plan.metadata["guardrail"] and not plan.metadata["quality"]
 
@@ -1830,7 +1839,14 @@ class LayoutGenerator:
 
         clean = [item for item in scored if not item[2].metadata["guardrail"]]
         flawed = [item for item in scored if item[2].metadata["guardrail"]]
-        selected = self._select_diverse(clean, count)
+        # A plan whose passage runs the length or width of the house is the
+        # corridor plan again; while any plan does without one, only those are
+        # offered, and a corridor plan only fills a place nothing else can.
+        short = [item for item in clean if not _long_passage(item[2])]
+        selected = self._select_diverse(short, count) if short else []
+        if len(selected) < count:
+            rest = [item for item in clean if item not in selected]
+            selected += self._select_diverse(rest, count - len(selected)) if rest else []
         if len(selected) < count and flawed:
             # Nothing clean is left to offer. Offer the least-broken rather than
             # nothing, but say so on the plan and in the log: a silent fallback
@@ -1897,8 +1913,10 @@ class LayoutGenerator:
         partis = [PartiPlanner(outer or self._envelope, road, len(levels) > 1, cover=cover, side=k,
                                north_angle=site.north_angle, prefer=self._vastu_direction,
                                vastu_weight=self.brief.vastu.tradition_weight, elders=elders,
-                               seed=(self.config.seed or 0) + 31 * k,
-                               compact_stair=self._compact_stair) for k in sides]
+                               seed=(self.config.seed or 0) + 31 * k + 977 * run,
+                               compact_stair=self._compact_stair) for k in sides for run in range(5)]
+        # Three runs of the parti from different starts: one run often finds a
+        # single sound plan, and the client should have three to choose from.
         # A narrow plot also gets the row house: no hall, a short passage between two bands.
         tries = [(p, None) for p in partis] + [(p, v) for p in planners for v in variants()] \
             + [(r, v) for r in rows if r.fits() for v in row_variants()]
@@ -1971,12 +1989,24 @@ class LayoutGenerator:
             return plan
 
         clean_yielded = 0
+        short_partis: list[FloorPlan] = []
+        parti_started = None
         for who, v in tries:
             try:
                 if isinstance(who, PartiPlanner):
+                    # Another run of the parti only while it is needed: three
+                    # different sound plans without a corridor are enough, and
+                    # the runs share a few seconds between them.
+                    if parti_started is None:
+                        parti_started = time.perf_counter()
+                    elif time.perf_counter() - parti_started > 6.0 or sum(
+                        1 for i, a in enumerate(short_partis)
+                        if all(self._similarity(a, b) < 0.5 for b in short_partis[:i])
+                    ) >= 3:
+                        continue
                     # The parti's own score ranks its sketches; the judge has the
                     # last word on the best of them, and the best few are offered.
-                    judged = [p for p in (build(who, rooms) for rooms in who.plans(levels, count=48, samples=400, climbs=20)) if p is not None]
+                    judged = [p for p in (build(who, rooms) for rooms in who.plans(levels, count=20, samples=400, climbs=20)) if p is not None]
                     order = {id(p): k for k, p in enumerate(judged)}
                     judged.sort(key=lambda p: (_weight(p), order[id(p)]))
                     # The clean sketches all go to the selector, so it can offer
@@ -1992,6 +2022,8 @@ class LayoutGenerator:
                     continue
                 made += 1
                 clean_yielded += not plan.metadata.get("guardrail")
+                if isinstance(who, PartiPlanner) and not plan.metadata.get("guardrail") and not _long_passage(plan):
+                    short_partis.append(plan)
                 yield plan
         # None of the searching planners found a plan that holds: the corridor
         # planner builds one that does, whatever the plot.

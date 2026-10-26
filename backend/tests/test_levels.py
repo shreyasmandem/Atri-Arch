@@ -179,15 +179,15 @@ def test_other_briefs_walk_through(kw):
             assert sum(1 for r in level.rooms if r.type is RoomType.STAIRCASE) == 1
 
 
-def test_a_narrow_plot_runs_its_passage_down_one_side():
-    """6.5 m of frontage cannot hold two rooms and a passage: single-loaded."""
+def test_a_narrow_plot_still_has_a_proper_passage_upstairs():
+    """6.5 m of frontage: the upper floor's passage or landing is never a squeeze."""
     plans = _generate(_brief(plot_width=9, plot_depth=15, levels=2, bedrooms=3, bathrooms=2,
                              road_direction="N"), seed=3)
     clean = [p for p in plans if not p.metadata["guardrail"]]
     assert clean
     upper = clean[0].level_at(1)
-    corridor = next(r for r in upper.rooms if r.type is RoomType.CORRIDOR)
-    assert min(corridor.bbox.width, corridor.bbox.height) >= 1.0
+    passage = next(r for r in upper.rooms if r.type in (RoomType.CORRIDOR, RoomType.LOBBY))
+    assert min(passage.bbox.width, passage.bbox.height) >= 1.0
     assert not _illegal(clean[0])
 
 
