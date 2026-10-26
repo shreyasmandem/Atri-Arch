@@ -1589,6 +1589,13 @@ def _long_passage(plan: FloorPlan) -> bool:
                for lv in plan.levels for r in lv.rooms)
 
 
+def _passage_tier(plan: FloorPlan) -> int:
+    """0: no passage at all, the rooms open off one another; 1: a short hall; 2: a corridor."""
+    if _long_passage(plan):
+        return 2
+    return int(any(r.type in (RoomType.CORRIDOR, RoomType.LOBBY) for lv in plan.levels for r in lv.rooms))
+
+
 def _pristine(plan: FloorPlan) -> bool:
     return not plan.metadata["guardrail"] and not plan.metadata["quality"]
 
@@ -1839,14 +1846,14 @@ class LayoutGenerator:
 
         clean = [item for item in scored if not item[2].metadata["guardrail"]]
         flawed = [item for item in scored if item[2].metadata["guardrail"]]
-        # A plan whose passage runs the length or width of the house is the
-        # corridor plan again; while any plan does without one, only those are
-        # offered, and a corridor plan only fills a place nothing else can.
-        short = [item for item in clean if not _long_passage(item[2])]
-        selected = self._select_diverse(short, count) if short else []
-        if len(selected) < count:
-            rest = [item for item in clean if item not in selected]
-            selected += self._select_diverse(rest, count - len(selected)) if rest else []
+        # Rooms that open straight off one another come first, then a plan with
+        # a short hall; a passage running the length or width of the house is
+        # the corridor plan again, offered only where nothing else is left.
+        selected: list[tuple[float, dict[str, float], FloorPlan]] = []
+        for tier in (0, 1, 2):
+            pool = [item for item in clean if _passage_tier(item[2]) == tier]
+            if pool and len(selected) < count:
+                selected += self._select_diverse(pool, count - len(selected))
         if len(selected) < count and flawed:
             # Nothing clean is left to offer. Offer the least-broken rather than
             # nothing, but say so on the plan and in the log: a silent fallback
@@ -1914,9 +1921,13 @@ class LayoutGenerator:
                                north_angle=site.north_angle, prefer=self._vastu_direction,
                                vastu_weight=self.brief.vastu.tradition_weight, elders=elders,
                                seed=(self.config.seed or 0) + 31 * k + 977 * run,
-                               compact_stair=self._compact_stair) for k in sides for run in range(5)]
-        # Three runs of the parti from different starts: one run often finds a
+                               compact_stair=self._compact_stair, landing="none" if run % 2 == 0 else None)
+                  for k in sides for run in range(9)]
+        # Several runs of the parti from different starts: one run often finds a
         # single sound plan, and the client should have three to choose from.
+        # Every other run keeps upstairs to rooms off the stair's landing, so
+        # the plan without a passage is always looked for; the rest may also
+        # try a small lobby at the head of the stair.
         # A narrow plot also gets the row house: no hall, a short passage between two bands.
         tries = [(p, None) for p in partis] + [(p, v) for p in planners for v in variants()] \
             + [(r, v) for r in rows if r.fits() for v in row_variants()]
@@ -1995,11 +2006,11 @@ class LayoutGenerator:
             try:
                 if isinstance(who, PartiPlanner):
                     # Another run of the parti only while it is needed: three
-                    # different sound plans without a corridor are enough, and
+                    # different sound plans without a passage are enough, and
                     # the runs share a few seconds between them.
                     if parti_started is None:
                         parti_started = time.perf_counter()
-                    elif time.perf_counter() - parti_started > 6.0 or sum(
+                    elif time.perf_counter() - parti_started > 12.0 or sum(
                         1 for i, a in enumerate(short_partis)
                         if all(self._similarity(a, b) < 0.5 for b in short_partis[:i])
                     ) >= 3:
@@ -2022,7 +2033,7 @@ class LayoutGenerator:
                     continue
                 made += 1
                 clean_yielded += not plan.metadata.get("guardrail")
-                if isinstance(who, PartiPlanner) and not plan.metadata.get("guardrail") and not _long_passage(plan):
+                if isinstance(who, PartiPlanner) and not plan.metadata.get("guardrail") and _passage_tier(plan) == 0:
                     short_partis.append(plan)
                 yield plan
         # None of the searching planners found a plan that holds: the corridor

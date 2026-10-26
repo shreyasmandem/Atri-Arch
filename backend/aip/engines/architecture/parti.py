@@ -203,15 +203,18 @@ class PartiPlanner:
     def __init__(self, envelope: BoundingBox, road: Direction | None, stair_on: bool, *,
                  cover: float = 0.0, side: int = 0, north_angle: float = 0.0,
                  prefer=None, vastu_weight: float = 0.0, elders: bool = False, seed: int = 0,
-                 compact_stair: bool = False) -> None:
+                 compact_stair: bool = False, landing: str | None = None) -> None:
         self.env = envelope
+        # Upstairs: "none" - the rooms open off the stair's landing; "lobby" - a
+        # small lobby at the head of the stair; None - either, as the search finds.
+        self.landing = landing
         r = (road.cardinal if road is not None else Direction.N).value
         self.road = r if r in {"N", "S", "E", "W"} else (r[side] if len(r) == 2 and r[side] in "NSEW" else "N")
         across_x = self.road in {"N", "S"}
         self.W = envelope.width if across_x else envelope.height
         self.D = envelope.height if across_x else envelope.width
         self.stair_on = stair_on
-        # A small plot takes a tighter dog-leg: two 0.9 m flights, 3.5 m long.
+        # A small plot takes a tighter dog-leg: two 0.9 m flights, 3.85 m long.
         self.min_scale = 0.86 if compact_stair else 1.0
         self.st_w, self.st_run, self.st_rot_w, self.st_rot_d = (2.0, 3.85, 3.85, 2.0) if compact_stair else (STAIR_W, STAIR_RUN, STAIR_ROT_W, STAIR_ROT_D)
         self.cover = cover or self.W * self.D
@@ -341,8 +344,9 @@ class PartiPlanner:
             if fam is not None and rng.r(key("fam")) < 0.4:
                 rooms.remove(fam)
                 hub = Cell([[fam]])
-            else:
-                hub = Cell([[P(T.LOBBY, 0.0, name="Family lounge")]], fixed_w=g["lobby_w"])
+            elif self.landing == "lobby" or (self.landing is None and rng.r(key("landing")) < 0.5):
+                hub = Cell([[P(T.LOBBY, 0.0, name="Lobby")]], fixed_w=g["lobby_w"])
+            # Otherwise no lobby at all: the rooms open off the stair's landing.
         private_here = any(r.type in BEDS | {T.SERVANT} for r in rooms) or \
             any(w.type in {T.TOILET, T.BATHROOM} for w in wets)
         passage = None
@@ -788,7 +792,8 @@ class PartiPlanner:
             types = [p.type for p in c.pieces()]
             nb = [core[j] for j in (i - 1, i + 1) if 0 <= j < n]
             nb_types = {p.type for x in nb for p in x.pieces()}
-            if T.STAIRCASE in types and not nb_types & {T.CORRIDOR, T.LOBBY, T.DINING, T.FAMILY}:
+            if T.STAIRCASE in types and not nb_types & {T.CORRIDOR, T.LOBBY, T.DINING, T.FAMILY} \
+                    and any(p.type in (T.CORRIDOR, T.LOBBY, T.DINING, T.FAMILY) for x in core for p in x.pieces()):
                 pen += 30
             if any(t in WET for t in types) and not any(p.host is not None for p in c.pieces()) \
                     and not nb_types & {T.CORRIDOR, T.LOBBY, T.DINING, T.FAMILY}:
@@ -1395,7 +1400,7 @@ class PartiPlanner:
                 if p.type in BEDS:
                     # A bedroom off the passage or lobby, not off the living room.
                     via = [types[j] for j in range(n) if adj[i][j] >= 1.0]
-                    if not any(t in (T.CORRIDOR, T.LOBBY, T.FAMILY, T.DINING) for t in via):
+                    if not any(t in (T.CORRIDOR, T.LOBBY, T.FAMILY, T.DINING, T.STAIRCASE) for t in via):
                         hit(40, "bed_off_public")
                     if p.type is T.MASTER_BEDROOM:
                         others = [(x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].type in BEDS - {T.MASTER_BEDROOM}]
