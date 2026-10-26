@@ -25,13 +25,18 @@ def _by(plan, name: str, level: int = 0):
 def test_resize_slides_one_wall_and_leaves_the_rest(plan):
     before = {r["id"]: r for r in describe_rooms(plan)}
     living = _by(plan, "Living")
-    new, applied, refused = apply_edits(plan, [{"op": "resize", "room": living["id"], "depth": -0.3}])
+    # Whichever way the living room gives ground to a neighbour: the plan decides
+    # which of its walls is shared and which is on the outside.
+    for axis in ("depth", "width"):
+        new, applied, refused = apply_edits(plan, [{"op": "resize", "room": living["id"], axis: -0.3}])
+        if applied:
+            break
     assert applied and not refused
     assert new.id != plan.id and new.metadata["edited_from"] == plan.id
     after = {r["id"]: r for r in describe_rooms(new)}
     changed = [i for i in before if (before[i]["width"], before[i]["depth"]) != (after[i]["width"], after[i]["depth"])]
     assert living["id"] in changed and 1 <= len(changed) <= 3          # the room and the room it gave to
-    assert after[living["id"]]["depth"] == pytest.approx(living["depth"] - 0.3, abs=0.02)
+    assert after[living["id"]][axis] == pytest.approx(living[axis] - 0.3, abs=0.02)
     # The original is untouched, so an edit can be undone.
     assert _by(plan, "Living")["depth"] == living["depth"]
 

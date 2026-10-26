@@ -3562,7 +3562,7 @@ async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page =
       now.append(sw, el("span", null, paintOf(k) ? `Painted ${nowHex}` : "The design's own colour"));
       const grid = el("div", "exw-edit__grid"); grid.setAttribute("role", "listbox"); grid.setAttribute("aria-label", `Colours for the ${info.label.toLowerCase()}`);
       const seen = new Set();
-      const groups = info.group === "Roof" ? ["roof_tint", "wall", "clad"] : info.group === "Windows and doors" ? ["frame", "door", "metal", "wall"]
+      const groups = k === "lawn" ? ["lawn"] : info.group === "Roof" ? ["roof_tint", "wall", "clad"] : info.group === "Windows and doors" ? ["frame", "door", "metal", "wall"]
         : info.group === "Outside" ? ["clad", "wall", "metal", "door"] : info.group === "Trims" ? ["metal", "wall", "clad"] : ["wall", "clad", "metal"];
       for (const g of groups) for (const c of grammar?.paints?.[g] || []) {
         const hx = c.hex.toLowerCase();

@@ -271,10 +271,10 @@ def test_the_lawn_is_the_share_the_client_asked_for(w, d, lawn):
     assert f"({cover['shares']['lawn']:.0%}, as asked)" in site_plan_svg(plan)
 
 
-def test_with_no_lawn_asked_all_open_ground_is_lawn():
+def test_with_no_lawn_asked_the_open_ground_is_paved():
     from aip.engines.experience.landscape import ground_cover
 
     req = SimpleBriefRequest(plot_width=12.19, plot_depth=18.29, levels=2, bedrooms=3, road_direction="N")
     plan = LayoutGenerator(req.to_brief(), GeneratorConfig(population=16, generations=8, seed=3)).generate(count=1)[0]
     cover = ground_cover(plan)
-    assert cover["paved"].is_empty and cover["shares"]["lawn"] > 0.3
+    assert cover["lawn"].is_empty and cover["shares"]["paved"] > 0.3

@@ -283,7 +283,8 @@ def ground_cover(plan: FloorPlan) -> dict:
     ground than that, the lawn is exactly what they asked for: the rest becomes
     a paved terrace and walks round the house and along the drive - grown out
     from them evenly, the way a garden is laid - and the lawn is what remains
-    towards the boundary. With no lawn asked for, all the open ground is lawn.
+    towards the boundary. With no lawn asked for there is none: the open ground
+    is paved, the way a city plot's setbacks are.
     """
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
@@ -303,7 +304,9 @@ def ground_cover(plan: FloorPlan) -> dict:
     open_ = plot.difference(unary_union([house, drive, pool]))
     lawn, paved = open_, empty
     want = float(plan.site.garden_share or 0.0) * plot.area
-    if want > 0 and open_.area > want + 1.0:
+    if want <= 0:
+        lawn, paved = empty, open_
+    elif open_.area > want + 1.0:
         # Grow the apron round the house and the drive until the lawn left is what was asked.
         core = unary_union([house, drive])
         lo, hi = 0.0, max(plot.bounds[2] - plot.bounds[0], plot.bounds[3] - plot.bounds[1])

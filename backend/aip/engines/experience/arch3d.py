@@ -1287,7 +1287,13 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
     if not plan.site.boundary:
         return
     plot = Polygon([(p.x, p.y) for p in plan.site.boundary]).buffer(0)
-    b.slab("site", "lawn", [Vec2(x, y) for x, y in list(plot.exterior.coords)[:-1]], -0.12, 0.0)
+    from aip.engines.experience.landscape import ground_cover, simple_parts
+
+    # The lawn the client asked for, exactly (see landscape.ground_cover); with
+    # none asked for, the plot is paved and nothing of a lawn is laid on it.
+    cover = ground_cover(plan)
+    has_lawn = not cover["lawn"].is_empty
+    b.slab("site", "lawn" if has_lawn else "terrace", [Vec2(x, y) for x, y in list(plot.exterior.coords)[:-1]], -0.12, 0.0)
     # Plinth under the building.
     if footprint is not None:
         b.slab("site", "plinth", _poly_pts(footprint.buffer(0.15, join_style=2)), 0.0, PLINTH)
@@ -1326,11 +1332,7 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
             if g.geom_type == "Polygon" and g.area > 0.5:
                 b.slab("site", "paving", [Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], 0.0, 0.03)
 
-    # The lawn the client asked for, exactly: the rest of the open ground is a
-    # paved terrace and walks round the house (see landscape.ground_cover).
-    from aip.engines.experience.landscape import ground_cover, simple_parts
-
-    cover = ground_cover(plan)
+    # The rest of the open ground is a paved terrace and walks round the house.
     for g in simple_parts(cover["paved"]):
         b.slab("site", "terrace", [Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], 0.0, 0.025)
     lawn_only = cover["lawn"] if not cover["paved"].is_empty else None
@@ -1350,7 +1352,7 @@ def _site(b: Builder, plan: FloorPlan, footprint, road: Vec2 | None) -> None:
         _yard(b, b.p.yard, yard[0], yard[1])
 
     # A lawn is lived on: lamps along the drive, and stones across the grass to the garden's feature.
-    if getattr(b.p, "garden", "") != "none" and footprint is not None and gate_c is not None:
+    if has_lawn and getattr(b.p, "garden", "") != "none" and footprint is not None and gate_c is not None:
         _lawn_life(b, plot, footprint, gate_c, pool[0] if pool is not None else None, yard)
 
     # A lush garden plants the inside of the boundary too, which a tight

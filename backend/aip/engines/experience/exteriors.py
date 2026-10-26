@@ -149,6 +149,10 @@ PAINTS: dict[str, tuple[tuple[str, str], ...]] = {
               ("Grey", "#77797b"), ("Green", "#2f4a36"), ("Blue", "#2b3a52")),
     "door": (("Teak", "#55331d"), ("Walnut", "#3e2a1c"), ("Oak", "#8a6a4c"), ("Black", "#1f1e1d"), ("Indigo", "#2b3a6e"),
              ("Peacock", "#1f5a5e"), ("Forest", "#2f4a36"), ("Mustard", "#c08a2e"), ("Vermilion", "#a8352a"), ("Ivory", "#efe9dc")),
+    # The lawn: grasses through the year, turf, and the ground a garden is left as.
+    "lawn": (("Fresh lawn", "#4f7a32"), ("Monsoon green", "#3d6b2a"), ("Bermuda", "#5c8a3a"), ("Zoysia", "#2f5424"),
+             ("Spring green", "#7aa346"), ("Sunlit grass", "#8fae4f"), ("Moss", "#556b2f"), ("Artificial turf", "#3f8a3a"),
+             ("Dry summer", "#a3a35a"), ("Straw", "#c2b27a"), ("Red earth", "#8e4f34"), ("Gravel bed", "#a9a196")),
 }
 #: Wall washes and roof tones a fresh batch draws from, so a batch differs in
 #: colour as well as form. Each wash sits with the roofs listed beside it.

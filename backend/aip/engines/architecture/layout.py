@@ -1820,7 +1820,13 @@ class LayoutGenerator:
                 ground = plan.level_at(0) if plan.levels else None
                 return max(0.0, 1.0 - (sum(r.area for r in ground.rooms) if ground else 0.0) / plate)
 
-            scored = [(exact - 0.08 * unfilled(plan), breakdown, plan) for exact, breakdown, plan in scored]
+            def cost(plan: FloorPlan) -> float:
+                # A parti that leaves a sixth of the plate unbuilt has not used the
+                # plot, and loses the lead its plan would otherwise earn it.
+                gap = unfilled(plan)
+                return 0.08 * gap + (plan.metadata.get("_lead", 0.0) if gap > 0.15 else 0.0)
+
+            scored = [(exact - cost(plan), breakdown, plan) for exact, breakdown, plan in scored]
 
         clean = [item for item in scored if not item[2].metadata["guardrail"]]
         flawed = [item for item in scored if item[2].metadata["guardrail"]]
@@ -1901,6 +1907,19 @@ class LayoutGenerator:
                 return None
             if cover and sum(r.area for r in rooms[0]) > cover * 1.02:
                 return None            # over the ground coverage the plot allows
+            # A bath or wardrobe drawn away from the bedroom it was meant for is
+            # not that bedroom's: a bath opens off the passage for everyone, a
+            # wardrobe is a store. Left as a suite, the door placer will not give
+            # it a door, and an otherwise sound plan is lost.
+            for lv in rooms:
+                by_id = {r.id: r for r in lv}
+                for r in lv:
+                    owner = by_id.get(r.metadata.get("suite_of"))
+                    if owner is None or _shared_length(r, owner) >= DOOR_WALL:
+                        continue
+                    r.metadata.pop("suite_of", None)
+                    if r.type in (RoomType.BATHROOM, RoomType.TOILET):
+                        r.metadata["common"] = True
             # Walls on the house's own outline are its outside walls; the
             # buildable envelope may be larger (the rest is garden).
             xs = [p.x for lv in rooms for r in lv for p in r.polygon]
@@ -1957,10 +1976,12 @@ class LayoutGenerator:
                 if isinstance(who, PartiPlanner):
                     # The parti's own score ranks its sketches; the judge has the
                     # last word on the best of them, and the best few are offered.
-                    judged = [p for p in (build(who, rooms) for rooms in who.plans(levels, count=36)) if p is not None]
+                    judged = [p for p in (build(who, rooms) for rooms in who.plans(levels, count=48, samples=400, climbs=20)) if p is not None]
                     order = {id(p): k for k, p in enumerate(judged)}
                     judged.sort(key=lambda p: (_weight(p), order[id(p)]))
-                    batch = judged[:5]
+                    # The clean sketches all go to the selector, so it can offer
+                    # different partis rather than three takes on one.
+                    batch = [p for p in judged if not p.metadata["guardrail"]][:8] or judged[:5]
                 else:
                     batch = [build(who, who.plan(levels, v))]
             except Exception as exc:  # noqa: BLE001
@@ -2308,7 +2329,32 @@ class LayoutGenerator:
                     if not route.legal:
                         problems.append(f"{tag}: {route.room} {route.reason}")
         quality.extend(self._household_problems(plan))
+        problems.extend(self._ensuite_problems(plan))
         return problems, quality
+
+    @staticmethod
+    def _ensuite_problems(plan: FloorPlan) -> list[str]:
+        """With a bathroom for every bedroom, or one opening off a lesser
+        bedroom, the master's bath is its own, not the one down the landing."""
+        every = plan.all_rooms
+        bath_each = sum(r.type is RoomType.BATHROOM for r in every) >= sum(r.type in _BEDROOMS for r in every)
+        problems = []
+        for level in plan.levels:
+            by_id = {r.id: r for r in level.rooms}
+            baths_of: dict[str, set[str]] = {r.id: set() for r in level.rooms}
+            for wall in level.walls:
+                for o in wall.openings:
+                    if o.kind.is_door and o.connects and all(x in by_id for x in o.connects):
+                        a, b = o.connects
+                        if by_id[b].type is RoomType.BATHROOM:
+                            baths_of[a].add(b)
+                        if by_id[a].type is RoomType.BATHROOM:
+                            baths_of[b].add(a)
+            beds = [r for r in level.rooms if r.type in _BEDROOMS and r.type is not RoomType.MASTER_BEDROOM]
+            for m in (r for r in level.rooms if r.type is RoomType.MASTER_BEDROOM):
+                if not baths_of[m.id] and (bath_each or any(baths_of[b.id] for b in beds)):
+                    problems.append(f"level {level.index}: the master bedroom has no bathroom of its own")
+        return problems
 
     def _household_problems(self, plan: FloorPlan) -> list[str]:
         """The things a household checks on first reading the plan.
@@ -5053,11 +5099,16 @@ class LayoutGenerator:
         while pool and len(chosen) < count:
             best_index = 0
             best_value = -math.inf
+            sims = [max(self._similarity(plan, picked[2]) for picked in chosen) for _s, _b, plan in pool]
+            # A near-copy of a scheme already chosen - the same plan with a store
+            # and a bath swapped - tells the client nothing new: it is offered
+            # only when nothing different is left.
+            distinct = any(x < 0.75 for x in sims)
             for index, (score, _breakdown, plan) in enumerate(pool):
-                similarity = max(
-                    self._similarity(plan, picked[2]) for picked in chosen
-                )
-                value = score - 0.45 * similarity
+                similarity = sims[index]
+                if distinct and similarity >= 0.75:
+                    continue
+                value = score - 0.45 * similarity - 1.5 * max(0.0, similarity - 0.5)
                 if value > best_value:
                     best_value = value
                     best_index = index

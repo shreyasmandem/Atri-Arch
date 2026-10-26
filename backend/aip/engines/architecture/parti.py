@@ -1272,6 +1272,18 @@ class PartiPlanner:
 
         below = []
         wet_below = []
+        # A grandparent in the house sleeps on the ground floor, not up a flight of stairs.
+        if self.elders and len(floors) > 1 and not any(x[0].type in BEDS for x in floors[0]):
+            hit(90, "elder_upstairs")
+            notes.append("no bedroom downstairs for the elder")
+        # The flight from one floor arrives where the next one starts: the stair
+        # is one rectangle on every floor, or it is not a stair.
+        stairs = [next(((u0, v0, u1, v1) for p, u0, v0, u1, v1 in placed if p.type is T.STAIRCASE), None)
+                  for placed in floors]
+        stairs = [s_ for s_ in stairs if s_ is not None]
+        if any(max(abs(a - b) for a, b in zip(s_, stairs[0])) > 0.3 for s_ in stairs[1:]):
+            hit(150, "stair_stack")
+            notes.append("stair does not stack")
         for li, placed in enumerate(floors):
             n = len(placed)
             adj = [[0.0] * n for _ in range(n)]
@@ -1352,11 +1364,12 @@ class PartiPlanner:
             K, Dn, L = idx(T.KITCHEN), idx(T.DINING), idx(T.LIVING)
             liv_area = max(((placed[a][3] - placed[a][1]) * (placed[a][4] - placed[a][2]) for a in L), default=0.0)
             # A long passage is dead floor and a long walk: the shorter the better.
+            # A hall the width of the house is the corridor plan again, turned.
             for i, t in enumerate(types):
                 if t in (T.CORRIDOR, T.LOBBY):
                     run = max(placed[i][3] - placed[i][1], placed[i][4] - placed[i][2])
-                    if run > 5.0:
-                        hit(7.0 * (run - 5.0), "long_passage")
+                    if run > 4.0:
+                        hit(16.0 * (run - 4.0), "long_passage")
                         notes.append(f"L{li} passage {run:.1f} m long")
             if K and Dn and max(adj[k][d] for k in K for d in Dn) < 1.0:
                 hit(60, "kitchen_dining")
@@ -1412,8 +1425,8 @@ class PartiPlanner:
                     ideal = self.prefer(p.type)
                     if ideal is not None:
                         # A strict or orthodox client asked for Vastu first: it pulls three times as hard.
-                        pen = VASTU_PEN * (3.0 if self.vastu_w >= 0.8 else 1.0)
-                        hit(pen * self.vastu_w * self._miss(placed[i], ideal, cu, cv), "vastu")
+                        pull = VASTU_PEN * (3.0 if self.vastu_w >= 0.8 else 1.0)
+                        hit(pull * self.vastu_w * self._miss(placed[i], ideal, cu, cv), "vastu")
             for i, t in enumerate(types):
                 if t is T.CORRIDOR and sum(1 for j in range(n) if adj[i][j] >= 1.0) < 3:
                     hit(20, "stub_passage")
@@ -1422,8 +1435,8 @@ class PartiPlanner:
             # 5 Circulation share: passages are a few square metres.
             tot = sum((x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].type not in OUTDOOR) or 1.0
             circ = sum((x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].type in (T.CORRIDOR, T.LOBBY))
-            if circ / tot > 0.1:
-                hit(100 * (circ / tot - 0.1) + 400 * max(0.0, circ / tot - 0.14), "circulation")
+            if circ / tot > 0.08:
+                hit(300 * (circ / tot - 0.08) + 600 * max(0.0, circ / tot - 0.12), "circulation")
             ter = sum((x[3] - x[1]) * (x[4] - x[2]) for x in placed if x[0].filler)
             # A house shows the street a proper front: on a wide plot it is not a 7 m sliver.
             if li == 0:
@@ -1523,7 +1536,7 @@ class PartiPlanner:
         def evaluate(genes: dict, scale: float) -> tuple[float, dict]:
             G = self.genes = Genes(self.rng, genes)
             g = {"stair_end": "L" if G.r("stair_end") < 0.5 else "R", "stair_rot": G.r("stair_rot") < (0.5 if self.cover < 85.0 else 0.2),
-                 "lobby_w": G.choice("lobby_w", [1.5, 1.8, 2.1]), "ter_end": "L" if G.r("ter_end") < 0.5 else "R",
+                 "lobby_w": G.choice("lobby_w", [1.5, 1.8, 2.1, 2.7, 3.3]), "ter_end": "L" if G.r("ter_end") < 0.5 else "R",
                  "u_shift": 0.5, "bed_down": G.r("bed_down"),
                  "thin": G.r("thin") < (0.55 if self.D < 12.5 else 0.15),
                  "stair_top": G.r("stair_top") < 0.5}
