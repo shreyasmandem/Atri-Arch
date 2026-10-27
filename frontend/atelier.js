@@ -244,8 +244,11 @@ class Atelier {
     await this._ensureStage();
     if (run !== this.run || !this.stage3d) return;
     if (!upload && brief?.plot_width && brief?.plot_depth) {
+      // Width runs along the road, so an east or west plot lies turned (as the server lays it).
+      const turned = brief.road_direction === "E" || brief.road_direction === "W";
       this.stage3d.setPlot({
-        w: +brief.plot_width, d: +brief.plot_depth, levels: +brief.levels || 1,
+        w: turned ? +brief.plot_depth : +brief.plot_width, d: turned ? +brief.plot_width : +brief.plot_depth,
+        levels: +brief.levels || 1,
         road: brief.road_direction || "N",
         setbacks: (() => {
           const sb = autoSetbacks(+brief.plot_width * +brief.plot_depth, brief.setback_front ?? null,

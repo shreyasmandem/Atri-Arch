@@ -274,21 +274,16 @@ def yard_spot(plan: FloorPlan, kind: str):
     return None
 
 
-#: The widest the paved terrace and walks round the house and drive grow, metres.
-APRON_MAX = 4.0
-
-
 def ground_cover(plan: FloorPlan) -> dict:
     """The plot's ground laid out as the client asked: what is house, drive,
     pool, lawn and paving, with each share of the plot.
 
     Open ground is the plot less the house (its plinth), the drive and the pool
     with its deck. When the client set a lawn share and there is more open
-    ground than that, the lawn is what they asked for, never less: the rest
-    becomes a paved terrace and walks round the house and along the drive -
-    grown out from them evenly, the way a garden is laid, up to `APRON_MAX`
-    wide - and the lawn is what remains towards the boundary. With no lawn
-    asked for, the open ground is plain grass.
+    ground than that, the lawn is exactly what they asked for: the rest becomes
+    a paved court and walks round the house and along the drive - grown out
+    from them evenly, the way a garden is laid - and the lawn is what remains
+    towards the boundary. With no lawn asked for, the open ground is plain grass.
     """
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
@@ -318,10 +313,6 @@ def ground_cover(plan: FloorPlan) -> dict:
                 lo = mid
             else:
                 hi = mid
-        # The terrace and walks are an apron, never a car park: past a couple
-        # of metres from the house the ground a plot cannot build on is grass,
-        # so a lawn is never less than asked, and on a big plot it is more.
-        lo = min(lo, APRON_MAX)
         lawn = open_.difference(core.buffer(lo, join_style=2))
         paved = open_.difference(lawn)
     a = plot.area or 1.0

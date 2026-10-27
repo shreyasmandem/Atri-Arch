@@ -121,7 +121,7 @@ def _min_clear_widths() -> dict[RoomType, float]:
     widths.update({
         RoomType.CORRIDOR: 1.0, RoomType.LOBBY: 1.2,
         RoomType.BATHROOM: 1.5, RoomType.TOILET: 1.0, RoomType.POWDER: 0.9,
-        RoomType.PUJA: 1.2, RoomType.STORE: 1.2, RoomType.UTILITY: 1.2,
+        RoomType.PUJA: 1.2, RoomType.STORE: 1.2, RoomType.UTILITY: 1.2, RoomType.WARDROBE: 1.2,
         RoomType.PANTRY: 1.2, RoomType.LAUNDRY: 1.2,
         RoomType.FOYER: 1.5, RoomType.STAIRCASE: 2.0,
         RoomType.VERANDAH: 1.0, RoomType.BALCONY: 1.0, RoomType.TERRACE: 1.0,
@@ -1580,6 +1580,10 @@ def _doors_to_hosts(plan: FloorPlan) -> None:
                                          connects=(host.id, bal.id)))
 
 
+#: A two-storey house is spread over one storey on a plot at least this big,
+#: m² (about 8,000 sq ft), when its rooms fit comfortably on one floor of it.
+SPREAD_PLOT = 750.0
+
 #: A passage longer than this is a corridor, not a hall or a landing.
 LONG_PASSAGE = 6.0
 
@@ -1684,6 +1688,7 @@ class LayoutGenerator:
         self._cap_boost = 1.0
         self._stair_scale = 1.0
         self._compact_stair = False
+        self._spread = False            # set when a two-storey brief is drawn on one floor (see `_resolve_programme`)
         self._passage_scale = 1.0
         self._resolve_programme()
         self._envelope = self._buildable_envelope()
@@ -1840,7 +1845,7 @@ class LayoutGenerator:
                 # A parti that leaves a sixth of the plate unbuilt has not used the
                 # plot, and loses the lead its plan would otherwise earn it.
                 gap = unfilled(plan)
-                return 0.08 * gap + (plan.metadata.get("_lead", 0.0) if gap > 0.15 else 0.0)
+                return 0.6 * gap + (plan.metadata.get("_lead", 0.0) if gap > 0.15 else 0.0)
 
             scored = [(exact - cost(plan), breakdown, plan) for exact, breakdown, plan in scored]
 
@@ -1848,16 +1853,20 @@ class LayoutGenerator:
         flawed = [item for item in scored if item[2].metadata["guardrail"]]
         # Rooms that open straight off one another come first, then a plan with
         # a short hall; a passage running the length or width of the house is
-        # the corridor plan again, offered only where nothing else is left.
+        # the corridor plan again, offered only when there is nothing else at
+        # all - two sound schemes are better than three with a corridor in one.
         selected: list[tuple[float, dict[str, float], FloorPlan]] = []
         for tier in (0, 1, 2):
+            if tier == 2 and selected:
+                break
             pool = [item for item in clean if _passage_tier(item[2]) == tier]
             if pool and len(selected) < count:
                 selected += self._select_diverse(pool, count - len(selected))
-        if len(selected) < count and flawed:
-            # Nothing clean is left to offer. Offer the least-broken rather than
-            # nothing, but say so on the plan and in the log: a silent fallback
-            # is how a bad plan reaches a client looking like a good one.
+        if not selected and flawed:
+            # Nothing clean at all. Offer the least-broken rather than nothing,
+            # but say so on the plan and in the log: a silent fallback is how a
+            # bad plan reaches a client looking like a good one. While anything
+            # sound exists, fewer schemes are offered rather than a broken one.
             flawed.sort(key=lambda item: (_weight(item[2]), -item[0]))
             for item in flawed[: count - len(selected)]:
                 selected.append(item)
@@ -1921,7 +1930,8 @@ class LayoutGenerator:
                                north_angle=site.north_angle, prefer=self._vastu_direction,
                                vastu_weight=self.brief.vastu.tradition_weight, elders=elders,
                                seed=(self.config.seed or 0) + 31 * k + 977 * run,
-                               compact_stair=self._compact_stair, landing="none" if run % 2 == 0 else None)
+                               compact_stair=self._compact_stair, landing="none" if run % 2 == 0 else None,
+                               boost=self._cap_boost)
                   for k in sides for run in range(9)]
         # Several runs of the parti from different starts: one run often finds a
         # single sound plan, and the client should have three to choose from.
@@ -1949,6 +1959,8 @@ class LayoutGenerator:
                     r.metadata.pop("suite_of", None)
                     if r.type in (RoomType.BATHROOM, RoomType.TOILET):
                         r.metadata["common"] = True
+                    elif r.type is RoomType.WARDROBE:
+                        r.type, r.name = RoomType.STORE, "Store"
             # Walls on the house's own outline are its outside walls; the
             # buildable envelope may be larger (the rest is garden).
             xs = [p.x for lv in rooms for r in lv for p in r.polygon]
@@ -2459,7 +2471,10 @@ class LayoutGenerator:
             beds = [r for r in rooms if r.type in (RoomType.BEDROOM, RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM)]
             if masters and beds and masters[0].area < 1.1 * max(r.area for r in beds):
                 problems.append(f"{tag}: the master bedroom is not the largest bedroom")
-            passage_ids = {r.id for r in rooms if r.type in (RoomType.CORRIDOR, RoomType.LOBBY)}
+            # A shared bathroom is one off a hall everybody uses: the passage, the
+            # landing, the dining hall, the family lounge, the courtyard.
+            passage_ids = {r.id for r in rooms if r.type in (RoomType.CORRIDOR, RoomType.LOBBY, RoomType.DINING,
+                                                             RoomType.FAMILY, RoomType.STAIRCASE, RoomType.COURTYARD)}
             for room in beds + masters:
                 bath_doors = [x for x in doors_of[room.id] if by_id[x].type is RoomType.BATHROOM]
                 shared = any(
@@ -2843,6 +2858,20 @@ class LayoutGenerator:
                 f"is drawn with {levels}."
             )
 
+        # A plot that can hold the whole house on one floor gets it on one floor:
+        # the footprint doubles, nobody climbs a stair, and the plot is used
+        # rather than left to paving round a small two-storey block.
+        if requested == 2 and levels == 2:
+            one = self._assess(1, base)
+            if (site.plot_area or 0.0) >= SPREAD_PLOT and max(one.comfort) <= avail:
+                advisories.append(
+                    f"The brief asks for {requested} floors, but this plot holds the whole house on one: "
+                    f"it is spread over a single storey, so the house uses the plot and nobody climbs a stair."
+                )
+                levels = 1
+                cur = one
+                self._spread = True
+
         def comfy(a: _Assessment) -> bool:
             return max(a.comfort) <= avail
 
@@ -3140,14 +3169,23 @@ class LayoutGenerator:
         # (auto_extras), or when the house would otherwise leave far more lawn
         # than they asked to keep; otherwise the rest of the plot is garden.
         auto = bool((self.brief.metadata or {}).get("auto_extras", False)) or too_much_lawn
-        pending = list(EXTRA_ROOMS) if auto else []
+        # Not a study or a theatre the client never asked for: one more room on
+        # a floor than its hall can open onto brings the corridor back. Never a
+        # guest suite either: it brings a bathroom, and the client chose how
+        # many bathrooms the house has. A house spread over one storey has the
+        # plot already; it is not given rooms.
+        skip = {RoomType.STUDY, RoomType.HOME_THEATRE, RoomType.GUEST_BEDROOM}
+        if self._spread:
+            skip.add(RoomType.FAMILY)
+        pending = [e for e in EXTRA_ROOMS if e[0] not in skip] if auto else []
         # Elders go first to a bedroom on the ground floor: stairs are the thing
         # an older household avoids, and a guest suite is the room that serves.
         if any(o.role == "elder" and o.count for o in self.brief.occupants):
             pending.sort(key=lambda e: e[0] is not RoomType.GUEST_BEDROOM)
         # Where each addition belongs: the living and sleeping extras downstairs,
-        # where a household uses them every day; the study and the theatre above.
-        home_level = {RoomType.STUDY: 1, RoomType.HOME_THEATRE: 1}
+        # where a household uses them every day; the study and the theatre above,
+        # and the family lounge with them, as the room the bedrooms open off.
+        home_level = {RoomType.STUDY: 1, RoomType.HOME_THEATRE: 1, RoomType.FAMILY: 1}
         fill_to = 0.92 * want if too_much_lawn else FILL_TARGET * footprint
         while not filled and max(grown.target) * 1.08 < fill_to and pending:
             kind, area, label, why = pending.pop(0)

@@ -220,7 +220,8 @@ def test_through_rooms_form_one_chain(plans):
 
 
 def is_through_name(name: str) -> bool:
-    return name in {"Foyer", "Living", "Dining", "Corridor", "Lobby", "Family", "Drawing", "Verandah"}
+    return name in {"Foyer", "Living", "Dining", "Corridor", "Lobby", "Family", "Drawing", "Verandah",
+                    "Passage", "Landing", "Staircase", "Courtyard", "Family lounge"}
 
 
 def test_a_passage_is_added_for_multiple_bedrooms(brief):

@@ -50,7 +50,7 @@ WET = {T.BATHROOM, T.TOILET, T.POWDER}
 #: Rooms that live like a bedroom: a door off the passage, a window, a corner of their own.
 ROOMISH = BEDS | {T.STUDY, T.HOME_OFFICE, T.LIBRARY, T.GYM, T.HOME_THEATRE, T.SERVANT, T.FAMILY}
 SERVICE = {T.UTILITY, T.LAUNDRY, T.PANTRY, T.STORE}
-OUTDOOR = {T.BALCONY, T.TERRACE, T.VERANDAH}
+OUTDOOR = {T.BALCONY, T.TERRACE, T.VERANDAH, T.COURTYARD}
 #: Rooms that need no door onto the core: entered from outside, or the house's own entrance.
 FREE = {T.GARAGE, T.TERRACE, T.BALCONY, T.VERANDAH, T.LIVING, T.DRAWING, T.FOYER, T.COURTYARD}
 #: The circulation the planner draws itself; the programme's guesses at it are dropped.
@@ -69,7 +69,7 @@ ASPECT = {T.LIVING: 1.8, T.DRAWING: 1.8, T.FAMILY: 1.9, T.DINING: 1.8, T.MASTER_
           T.BEDROOM: 1.6, T.GUEST_BEDROOM: 1.6, T.CHILDREN_BEDROOM: 1.6, T.KITCHEN: 2.2,
           T.STUDY: 2.0, T.HOME_OFFICE: 2.0, T.LIBRARY: 2.0, T.GYM: 2.0, T.HOME_THEATRE: 1.8,
           T.SERVANT: 1.9, T.BATHROOM: 2.3, T.TOILET: 2.4, T.POWDER: 2.4, T.PUJA: 1.9,
-          T.GARAGE: 2.3, T.FOYER: 2.4, T.STAIRCASE: 2.2}
+          T.GARAGE: 2.3, T.FOYER: 2.4, T.STAIRCASE: 2.2, T.COURTYARD: 2.0}
 #: The longest a room should run along its band before it is a corridor with furniture in it.
 MAX_W = {T.LIVING: 6.8, T.DRAWING: 6.0, T.FAMILY: 6.0, T.DINING: 5.0, T.KITCHEN: 4.4, T.MASTER_BEDROOM: 5.4,
          T.BEDROOM: 4.8, T.GUEST_BEDROOM: 4.8, T.CHILDREN_BEDROOM: 4.8, T.STUDY: 4.2, T.HOME_OFFICE: 4.2,
@@ -92,6 +92,8 @@ STAIR_W, STAIR_RUN = 2.6, 4.0          # a dog-leg for a 3.15 m storey: 2.6 wide
 STAIR_ROT_W, STAIR_ROT_D = 4.2, 2.6    # the same stair turned across the band
 PASSAGE = 1.2
 CAR_DEPTH = 5.2
+#: The largest courtyard and verandah the parti draws, m².
+OPEN_MAX = {T.COURTYARD: 64.0, T.VERANDAH: 48.0}
 
 
 @dataclass(eq=False)
@@ -203,8 +205,11 @@ class PartiPlanner:
     def __init__(self, envelope: BoundingBox, road: Direction | None, stair_on: bool, *,
                  cover: float = 0.0, side: int = 0, north_angle: float = 0.0,
                  prefer=None, vastu_weight: float = 0.0, elders: bool = False, seed: int = 0,
-                 compact_stair: bool = False, landing: str | None = None) -> None:
+                 compact_stair: bool = False, landing: str | None = None, boost: float = 1.0) -> None:
         self.env = envelope
+        # How far the programme grew its rooms to fill a generous plot: a room
+        # grown to its target is not "too big" against what was first asked.
+        self.boost = boost
         # Upstairs: "none" - the rooms open off the stair's landing; "lobby" - a
         # small lobby at the head of the stair; None - either, as the search finds.
         self.landing = landing
@@ -258,7 +263,13 @@ class PartiPlanner:
                 continue
             if r.type is T.FOYER and self.W < 9.0 and "Requested" not in (r.notes or ""):
                 continue          # on a narrow plot the living room receives; the hall is not drawn
-            out.append(P(r.type, float(r.target_area), r, name=getattr(r, "label", None), scale=self.min_scale))
+            area = float(r.target_area)
+            if r.type in OPEN_MAX:
+                # The courtyard or verandah a generous plot asks for is drawn at
+                # the size a house has: at the plot's size it stretches every
+                # room round it into a slot.
+                area = min(area, OPEN_MAX[r.type])
+            out.append(P(r.type, area, r, name=getattr(r, "label", None), scale=self.min_scale))
         return out
 
     @staticmethod
@@ -336,16 +347,21 @@ class PartiPlanner:
             # the middle off a passage, dining and kitchen together at the back.
             dine_back = Cell([[dining[0]]])
             rooms.extend(dining[1:])
+        elif ground and courts and not self.stair_on and rng.r(key("courthub")) < 0.7:
+            # A house on one floor round its courtyard: the rooms open onto it,
+            # the dining room among them, as the old courtyard houses do.
+            hub = Cell([[courts.pop(0)]])
+            rooms.extend(dining)
         elif ground and dining:
             hub = Cell([[dining[0]]])
             rooms.extend(dining[1:])
         elif not ground:
             fam = next((r for r in rooms if r.type is T.FAMILY), None)
-            if fam is not None and rng.r(key("fam")) < 0.4:
+            if fam is not None and rng.r(key("fam")) < 0.85:
                 rooms.remove(fam)
                 hub = Cell([[fam]])
             elif self.landing == "lobby" or (self.landing is None and rng.r(key("landing")) < 0.5):
-                hub = Cell([[P(T.LOBBY, 0.0, name="Lobby")]], fixed_w=g["lobby_w"])
+                hub = Cell([[P(T.LOBBY, 0.0, name="Landing")]], fixed_w=g["lobby_w"])
             # Otherwise no lobby at all: the rooms open off the stair's landing.
         private_here = any(r.type in BEDS | {T.SERVANT} for r in rooms) or \
             any(w.type in {T.TOILET, T.BATHROOM} for w in wets)
@@ -415,7 +431,7 @@ class PartiPlanner:
                 if fb is not None and core_f is None or bb is not None and core_b is None:
                     commons.insert(0, fb or bb)
                 core_f = core_b = None
-        elif ground and hub is not None and rng.r(key("farhub")) < 0.85:
+        elif ground and hub is not None and self.stair_on and rng.r(key("farhub")) < 0.85:
             far, far_kind = hub, "hub"
 
         # --- 4 The core, from the stair outward.
@@ -494,7 +510,7 @@ class PartiPlanner:
                 kc = Cell([[k] + serv[:1]] + ([serv[1:]] if serv[1:] else []))   # the wash area beside the kitchen
             else:
                 kc = Cell([[k]] + ([serv] if serv else []))                       # the wash area behind it
-            if ground and far is None and rng.r(key("kfar")) < 0.2:
+            if ground and far is None and rng.r(key("kfar")) < (0.2 if self.stair_on else 0.8):
                 far, far_kind = kc, "kitchen"
             else:
                 u = rng.r(key("kend"))
@@ -1346,6 +1362,15 @@ class PartiPlanner:
                 need = FURNISH_MIN.get(p.type)
                 if need and (s < need[0] - 0.05 or l < need[1] - 0.05):
                     hit(25, "furnish")
+                if p.type is T.COURTYARD and ar > 2.2:
+                    # A courtyard is a square of sky, not a corridor open to it.
+                    hit(80 + 40 * (ar - 2.2), "court_strip")
+                    notes.append(f"L{li} courtyard a strip {w:.1f}x{d:.1f}")
+                if p.type in (T.DINING, T.FAMILY) and ar > 2.2:
+                    # The hall the rooms open off is a room with a table in it;
+                    # stretched across the house it is the corridor renamed.
+                    hit(80 + 40 * (ar - 2.2), "hall_strip")
+                    notes.append(f"L{li} {p.type.value} a strip {w:.1f}x{d:.1f}")
                 if p.type is T.STAIRCASE and w * d > 14.5:
                     hit(2 * (w * d - 14.5), "stair_big")
                 if p.type in (T.LOBBY, T.CORRIDOR) and s > 2.4:
@@ -1354,6 +1379,8 @@ class PartiPlanner:
                 if p.area > 0 and not p.filler:
                     a = w * d
                     asked = getattr(p.req, "asked_area", None) or p.area
+                    if self.boost > 1.0:
+                        asked = max(asked, p.area)
                     dev = (a - p.area) / p.area
                     wt = WEIGHT.get(p.type, 0.6) * (2.0 if "Requested" in (getattr(p.req, "notes", "") or "") else 1.0)
                     if a < MIN_AREA.get(p.type, 0.0) - 0.2:
@@ -1363,6 +1390,8 @@ class PartiPlanner:
                         hit(40, "too_big")
                         notes.append(f"L{li} {p.type.value} {a:.0f}m2 vs {asked:.0f}")
                     cap_a = comfort_cap(p.type, self.beds)
+                    if cap_a is not None:
+                        cap_a *= self.boost
                     if cap_a is not None and a > 1.08 * cap_a:
                         hit(4 + 2 * (a - 1.08 * cap_a), "over_cap")
             # 4 Relationships the household expects.
@@ -1463,7 +1492,7 @@ class PartiPlanner:
                         good = sum(max(0.0, min(u1, b[2]) - max(u0, b[0])) * max(0.0, min(v1, b[3]) - max(v0, b[1]))
                                    for b in wet_below)
                         if bad > 0.3 * a:
-                            hit(25, "wet_over")
+                            hit(70, "wet_over")
                             notes.append(f"L{li} bath over kitchen/puja/dining")
                         hit(-(4 * min(1.0, good / max(a, 0.1))), "wet_stack")
             if li == 0:
@@ -1537,7 +1566,7 @@ class PartiPlanner:
                 levels[0].append(r)
         found: dict[tuple, tuple] = {}
         inf = float("inf")
-        area_need = max(sum(r.target_area for r in l if r.type not in DRAWN
+        area_need = max(sum(min(r.target_area, OPEN_MAX.get(r.type, r.target_area)) for r in l if r.type not in DRAWN
                             and "fills the footprint" not in (r.notes or "")) for l in levels)
 
         def evaluate(genes: dict, scale: float) -> tuple[float, dict]:
@@ -1712,8 +1741,12 @@ class PartiPlanner:
                     continue
                 area = round((u1 - u0) * (v1 - v0), 2)
                 req = p.req
+                # The dressing room or wardrobe a spare strip beside a bedroom
+                # becomes opens off that bedroom: a wardrobe, not a store, which
+                # may only be reached from the kitchen or a hall.
+                kind = T.WARDROBE if p.filler and p.host is not None and p.host.type in BEDS else p.type
                 rooms.append(Room(
-                    name=p.name or p.type.label, type=p.type, polygon=self._poly(u0, v0, u1, v1), level=li,
+                    name=p.name or p.type.label, type=kind, polygon=self._poly(u0, v0, u1, v1), level=li,
                     ceiling_height=3.0,
                     metadata={"_c": (u0, v0, u1, v1), "notes": getattr(req, "notes", "") or "",
                               "target_area": getattr(req, "target_area", None) or area,

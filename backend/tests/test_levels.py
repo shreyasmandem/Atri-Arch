@@ -173,7 +173,8 @@ def test_requirements_do_not_grow_with_use():
 def test_other_briefs_walk_through(kw):
     plans = _generate(_brief(**kw), seed=1)
     clean = [p for p in plans if not p.metadata["guardrail"]]
-    assert len(clean) >= 2, [p.metadata["guardrail"] for p in plans]
+    # Every scheme offered is sound: fewer of them rather than a broken one.
+    assert clean and len(clean) == len(plans), [p.metadata["guardrail"] for p in plans]
     for plan in clean:
         assert not _illegal(plan)
         for level in plan.levels:

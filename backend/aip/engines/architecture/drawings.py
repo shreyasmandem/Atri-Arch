@@ -802,7 +802,7 @@ def site_plan_svg(plan: FloorPlan, *, style: DrawingStyle | None = None) -> str:
     for g in simple_parts(cover["lawn"]):
         canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#cfe0c4", opacity=0.9)
     for g in simple_parts(cover["paved"]):
-        canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#e4ded3", stroke="#c9c1b3", width=0.5)
+        canvas.polygon([Vec2(x, y) for x, y in list(g.exterior.coords)[:-1]], fill="#d9c9ae", stroke="#bfae92", width=0.5)
 
     pool = pool_rect(plan)
     if pool is not None:

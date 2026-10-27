@@ -372,7 +372,9 @@ def test_rooms_scale_up_to_their_caps_and_never_past_them():
 
 
 def test_when_the_caps_bind_useful_rooms_are_added_and_the_advisories_say_why():
-    brief = _brief(plot_width=30, plot_depth=40, levels=2, bedrooms=4, bathrooms=4, max_far=3.0,
+    # Three floors asked for: a two-storey brief on a plot this size is spread
+    # over one floor instead (see the next test).
+    brief = _brief(plot_width=30, plot_depth=40, levels=3, bedrooms=4, bathrooms=4, max_far=3.0,
                    amenities=["pooja", "dining", "utility"], road_direction="N")
     generator = LayoutGenerator(brief, GeneratorConfig(seed=1, **QUICK))
     kinds = _kinds(generator)
@@ -385,6 +387,18 @@ def test_when_the_caps_bind_useful_rooms_are_added_and_the_advisories_say_why():
     assert RoomType.FAMILY in kinds
     ground = {generator.requirements[i].type for i in generator.level_buckets[0]}
     assert RoomType.COURTYARD in ground or RoomType.VERANDAH in ground
+
+
+def test_a_two_storey_brief_on_a_big_plot_is_spread_over_one_floor():
+    brief = _brief(plot_width=30, plot_depth=40, levels=2, bedrooms=4, bathrooms=4, max_far=3.0,
+                   amenities=["pooja", "dining", "utility"], road_direction="N")
+    generator = LayoutGenerator(brief, GeneratorConfig(seed=1, **QUICK))
+    assert len(generator.level_buckets) == 1
+    assert any("single storey" in a for a in generator.advisories)
+    # A town plot keeps its two floors.
+    town = LayoutGenerator(_brief(plot_width=12, plot_depth=18, levels=2, bedrooms=3, bathrooms=3, road_direction="N"),
+                           GeneratorConfig(seed=1, **QUICK))
+    assert len(town.level_buckets) == 2
 
 
 def test_a_plot_the_programme_already_fills_is_not_grown():

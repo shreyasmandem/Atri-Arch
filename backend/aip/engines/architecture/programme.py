@@ -155,7 +155,7 @@ def depth_fit(room_type: RoomType, depth: float) -> float:
 THROUGH_ROOMS: frozenset[RoomType] = frozenset({
     RoomType.FOYER, RoomType.LOBBY, RoomType.CORRIDOR, RoomType.STAIRCASE,
     RoomType.LIVING, RoomType.DINING, RoomType.FAMILY, RoomType.DRAWING,
-    RoomType.VERANDAH,
+    RoomType.VERANDAH, RoomType.COURTYARD,
 })
 
 
@@ -191,23 +191,24 @@ PRIVATE_HOST: dict[RoomType, tuple[RoomType, ...]] = {
 #: Rooms not listed are unconstrained beyond the through-room rule.
 ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
     # An Indian house does not spend floor on corridors: its bedrooms open off
-    # the dining hall downstairs and off the stair's landing upstairs.
+    # the dining hall downstairs, the stair's landing upstairs, or the
+    # courtyard of a house built round one.
     RoomType.MASTER_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                        RoomType.FAMILY, RoomType.DINING, RoomType.STAIRCASE}),
+                                        RoomType.FAMILY, RoomType.DINING, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                 RoomType.FAMILY, RoomType.DINING, RoomType.STAIRCASE}),
+                                 RoomType.FAMILY, RoomType.DINING, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.GUEST_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                       RoomType.FAMILY, RoomType.FOYER, RoomType.DINING, RoomType.STAIRCASE}),
+                                       RoomType.FAMILY, RoomType.FOYER, RoomType.DINING, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.CHILDREN_BEDROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                                          RoomType.FAMILY, RoomType.DINING, RoomType.STAIRCASE}),
+                                          RoomType.FAMILY, RoomType.DINING, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.STUDY: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.LIVING,
-                               RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.DINING, RoomType.STAIRCASE}),
+                               RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.DINING, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.KITCHEN: frozenset({RoomType.DINING, RoomType.CORRIDOR, RoomType.LIVING,
-                                 RoomType.FAMILY, RoomType.UTILITY}),
+                                 RoomType.FAMILY, RoomType.UTILITY, RoomType.COURTYARD}),
     RoomType.DINING: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
-                                RoomType.FAMILY, RoomType.KITCHEN}),
+                                RoomType.FAMILY, RoomType.KITCHEN, RoomType.COURTYARD}),
     RoomType.PUJA: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
-                              RoomType.DINING, RoomType.FAMILY}),
+                              RoomType.DINING, RoomType.FAMILY, RoomType.COURTYARD}),
     RoomType.UTILITY: frozenset({RoomType.KITCHEN, RoomType.CORRIDOR}),
     # A balcony or terrace opens off a landing as readily as off a bedroom: the
     # upper floor of a one-bedroom house has a lobby, a bedroom and a terrace,
@@ -223,7 +224,7 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
     RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR, RoomType.LOBBY,
                                RoomType.STAIRCASE, RoomType.FOYER}),   # under the stair; a shoe store
     RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER, RoomType.DINING,
-                                RoomType.FAMILY, RoomType.STAIRCASE}),
+                                RoomType.FAMILY, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.POWDER: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,
                                 RoomType.LIVING}),
     # A bathroom is entered from the bedroom it is attached to, or for
@@ -232,7 +233,7 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
     RoomType.BATHROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.MASTER_BEDROOM,
                                   RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
                                   RoomType.CHILDREN_BEDROOM, RoomType.DINING, RoomType.FAMILY,
-                                  RoomType.STAIRCASE}),
+                                  RoomType.STAIRCASE, RoomType.COURTYARD}),
 }
 
 

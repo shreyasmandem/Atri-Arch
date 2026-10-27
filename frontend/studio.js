@@ -7,7 +7,7 @@
    just quiet.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { atelier, person, avatar } from "./atelier.js?v=s2";
+import { atelier, person, avatar } from "./atelier.js?v=s3";
 import { mountEditor } from "./editor.js?v=e5";
 import { icon } from "./icons.js?v=i2";
 import { autoSetbacks } from "./setbacks.js";
@@ -216,6 +216,9 @@ function renderBrief() {
 function drawPlot({ w, d, rw = w, rd = d, unit = "m", road, levels, front, rear, side, lawn = 0 }) {
   const svg = $("plot-svg");
   if (!svg) return;
+  // Width runs along the road: an east or west plot is drawn turned, its
+  // width north to south beside the road and its depth across (as the server lays it).
+  if (road === "E" || road === "W") [w, d, rw, rd] = [d, w, rd, rw];
   const VW = 420, VH = 340, M = 56;
   const k = Math.min((VW - M * 2) / w, (VH - M * 2) / d);
   const pw = w * k, pd = d * k;
@@ -418,7 +421,7 @@ async function initHome() {
   import("./steps.js").then(({ mountSteps }) => mountSteps()).catch(() => {});
   const grid = $("board-grid");
   if (grid) {
-    const { PEOPLE, glyph } = await import("./atelier.js?v=s2");
+    const { PEOPLE, glyph } = await import("./atelier.js?v=s3");
     for (const p of Object.values(PEOPLE)) {
       const li = el("li", "member"); li.dataset.pig = p.pig;
       li.append(glyph(p.glyph, "member__gl"), el("b", null, p.name), el("span", null, p.role));

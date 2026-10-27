@@ -217,7 +217,7 @@ class Palette:
             "flower_white": Material("flower_white", (0.95, 0.94, 0.90), 0.9),
             "soil": Material("garden_soil", (0.30, 0.21, 0.14), 1.0),
             # The terrace and walks round the house where the brief keeps less lawn.
-            "terrace": Material("terrace_paving", (0.74, 0.71, 0.66), 0.9),
+            "terrace": Material("terrace_paving", (0.64, 0.56, 0.45), 0.9),     # sandstone, not a white slab
             "fire": Material("fire_glow", (1.0, 0.52, 0.16), 0.6, 0.0, 1.0, (1.0, 0.42, 0.08)),
             "ex_panel": Material("panel_stone_cladding", ext["clad"], 0.85),
             # Warm facade lighting: a lamp, so it glows in the night view.

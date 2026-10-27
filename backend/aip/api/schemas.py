@@ -229,12 +229,17 @@ class SimpleBriefRequest(BaseModel):
         sb = auto_setbacks(self.plot_width * self.plot_depth,
                            (self.setback_front, self.setback_rear, self.setback_left, self.setback_right),
                            min(self.plot_width, self.plot_depth))
+        # Width runs along the road and depth away from it, the way a plot is
+        # named: "40 x 60, facing east" is 40 ft on the east road and 60 ft deep,
+        # not a 60 ft frontage 40 ft deep. North and south roads run along x.
+        along_x = Direction(self.road_direction).value not in ("E", "W")
+        sx, sy = (self.plot_width, self.plot_depth) if along_x else (self.plot_depth, self.plot_width)
         site = Site(
             boundary=[
                 Vec2(0.0, 0.0),
-                Vec2(self.plot_width, 0.0),
-                Vec2(self.plot_width, self.plot_depth),
-                Vec2(0.0, self.plot_depth),
+                Vec2(sx, 0.0),
+                Vec2(sx, sy),
+                Vec2(0.0, sy),
             ],
             north_angle=self.north_angle,
             latitude=self.latitude,
