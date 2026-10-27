@@ -423,7 +423,9 @@ def reach_consensus(
     # 3 & 4. Borda + utility ----------------------------------------------
     borda = borda_scores(front, ledger, priorities)
     ranking: list[dict[str, Any]] = []
-    for cand in front:
+    # The front is ranked first; a scheme another beats on every axis is still
+    # ranked after it, so every scheme offered has its verdict and findings.
+    for cand in list(front) + [c for c in dominated if c not in front]:
         weighted = weighted_axis_scores(cand, ledger, priorities)
         utility = (
             sum(weighted.get(ax, 0.0) * priorities.get(ax, 0.0) for ax in axes)
@@ -441,11 +443,12 @@ def reach_consensus(
                 "agreement": overall,
                 "axis_scores": {k: round(v, 4) for k, v in weighted.items()},
                 "finding_counts": _severity_histogram(cand),
+                "dominated": cand not in front,
                 "_agreement_rows": rows,
             }
         )
 
-    ranking.sort(key=lambda r: (r["score"], r["agreement"]), reverse=True)
+    ranking.sort(key=lambda r: (not r["dominated"], r["score"], r["agreement"]), reverse=True)
     best = ranking[0]
     best_rows: list[AxisAgreement] = best.pop("_agreement_rows")
     for row in ranking[1:]:

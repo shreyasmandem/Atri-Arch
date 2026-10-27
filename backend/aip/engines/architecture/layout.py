@@ -1966,6 +1966,21 @@ class LayoutGenerator:
                         r.metadata["common"] = True
                     elif r.type is RoomType.WARDROBE:
                         r.type, r.name = RoomType.STORE, "Store"
+            # The master bedroom is the largest one: where a plain bedroom came
+            # out bigger and is as well served (its own bath, or the master has
+            # none), the two change names rather than the plan being lost.
+            for lv in rooms:
+                suites = {r.metadata.get("suite_of") for r in lv if r.type is RoomType.BATHROOM}
+                masters = [r for r in lv if r.type is RoomType.MASTER_BEDROOM]
+                others = [r for r in lv if r.type in (RoomType.BEDROOM, RoomType.CHILDREN_BEDROOM)]
+                if len(masters) == 1 and others:
+                    m, big = masters[0], max(others, key=lambda r: r.area)
+                    if big.area > 1.05 * m.area and (big.id in suites or m.id not in suites):
+                        m.type, big.type = big.type, m.type
+                        m.name, big.name = big.name, m.name
+                        for key in ("target_area", "brief_area", "notes"):
+                            if key in m.metadata and key in big.metadata:
+                                m.metadata[key], big.metadata[key] = big.metadata[key], m.metadata[key]
             # Walls on the house's own outline are its outside walls; the
             # buildable envelope may be larger (the rest is garden).
             xs = [p.x for lv in rooms for r in lv for p in r.polygon]
@@ -2499,7 +2514,11 @@ class LayoutGenerator:
                 ):
                     problems.append(f"{tag}: {room.display_name()} has no bathroom of its own")
             for room in rooms:
-                if room.type in _BEDROOMS and count[room.id] > 2:
+                # Its own bathroom, dressing room and balcony are the bedroom's
+                # own doors; past one more, to the hall, it is a through room.
+                own = sum(1 for x in doors_of[room.id] if by_id.get(x) is not None
+                          and by_id[x].type in (RoomType.BATHROOM, RoomType.WARDROBE, RoomType.BALCONY))
+                if room.type in _BEDROOMS and count[room.id] - own > 2:
                     problems.append(f"{tag}: {room.display_name()} has {count[room.id]} doors")
 
             def kinds(kind: RoomType, rooms=rooms) -> list[Room]:
@@ -4856,7 +4875,7 @@ class LayoutGenerator:
         # A plan that says whose bath is whose is taken at its word.
         for r in level.rooms:
             owner = r.metadata.get("suite_of")
-            if r.type is RoomType.BATHROOM and owner in rooms and owner in adjacency.get(r.id, set()):
+            if r.type in (RoomType.BATHROOM, RoomType.WARDROBE) and owner in rooms and owner in adjacency.get(r.id, set()):
                 reserved[r.id] = owner
         for host in sorted(level.rooms, key=lambda r: r.type is not RoomType.MASTER_BEDROOM):
             if host.id in reserved.values():

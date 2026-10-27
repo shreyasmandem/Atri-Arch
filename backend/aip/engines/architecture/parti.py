@@ -1413,6 +1413,12 @@ class PartiPlanner:
             if L and Dn and max(adj[a][d] for a in L for d in Dn) < 1.9:
                 hit(55, "living_dining")
                 notes.append("living off dining")
+            # A toilet shares no wall with the kitchen or the dining room: the
+            # cooking, the table and the drain are kept apart.
+            for i in K + Dn:
+                if any(adj[i][w] > 0.3 for w in range(n) if types[w] in WET):
+                    hit(40, "food_wet")
+                    notes.append(f"{types[i].value} beside a toilet")
             for pj in idx(T.PUJA):
                 if any(adj[pj][w] > 0.05 for w in range(n) if types[w] in WET):
                     hit(50, "puja_wet")

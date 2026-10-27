@@ -168,7 +168,8 @@ def is_through(room_type: RoomType) -> bool:
 #: bedroom it serves. Listed so the door placer knows the host is the correct
 #: door, not a circulation failure.
 PRIVATE_HOST: dict[RoomType, tuple[RoomType, ...]] = {
-    RoomType.WARDROBE: (RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM),
+    RoomType.WARDROBE: (RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                        RoomType.CHILDREN_BEDROOM),
     # The wash area, pantry and dry store open off the kitchen. Reaching them
     # through the kitchen is the correct route, not a breach.
     RoomType.UTILITY: (RoomType.KITCHEN,),
@@ -210,6 +211,10 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
     RoomType.PUJA: frozenset({RoomType.LIVING, RoomType.CORRIDOR, RoomType.FOYER,
                               RoomType.DINING, RoomType.FAMILY, RoomType.COURTYARD}),
     RoomType.UTILITY: frozenset({RoomType.KITCHEN, RoomType.CORRIDOR}),
+    # A wardrobe or dressing room opens off the bedroom it serves, never off the
+    # stair, the landing or the dining hall.
+    RoomType.WARDROBE: frozenset({RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
+                                  RoomType.CHILDREN_BEDROOM}),
     # A balcony or terrace opens off a landing as readily as off a bedroom: the
     # upper floor of a one-bedroom house has a lobby, a bedroom and a terrace,
     # and the terrace is reached from the lobby, not through the bed.
@@ -223,16 +228,16 @@ ENTERED_FROM: dict[RoomType, frozenset[RoomType]] = {
                                 RoomType.CORRIDOR}),
     RoomType.STORE: frozenset({RoomType.KITCHEN, RoomType.UTILITY, RoomType.CORRIDOR, RoomType.LOBBY,
                                RoomType.STAIRCASE, RoomType.FOYER}),   # under the stair; a shoe store
-    RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER, RoomType.DINING,
+    RoomType.TOILET: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,
                                 RoomType.FAMILY, RoomType.STAIRCASE, RoomType.COURTYARD}),
     RoomType.POWDER: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.FOYER,
                                 RoomType.LIVING}),
     # A bathroom is entered from the bedroom it is attached to, or for
-    # everyone from the hall the rooms open off - the passage, the dining hall,
-    # the family lounge, the stair's landing. Never from the kitchen or the entrance.
+    # everyone from a hall - the passage, the family lounge, the stair's
+    # landing, the courtyard. Never from the kitchen, the dining table or the entrance.
     RoomType.BATHROOM: frozenset({RoomType.CORRIDOR, RoomType.LOBBY, RoomType.MASTER_BEDROOM,
                                   RoomType.BEDROOM, RoomType.GUEST_BEDROOM,
-                                  RoomType.CHILDREN_BEDROOM, RoomType.DINING, RoomType.FAMILY,
+                                  RoomType.CHILDREN_BEDROOM, RoomType.FAMILY,
                                   RoomType.STAIRCASE, RoomType.COURTYARD}),
 }
 
