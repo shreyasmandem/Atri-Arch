@@ -1584,6 +1584,11 @@ def _doors_to_hosts(plan: FloorPlan) -> None:
 #: m² (about 8,000 sq ft), when its rooms fit comfortably on one floor of it.
 SPREAD_PLOT = 750.0
 
+#: How many runs of the parti planner, and the seconds they share, before
+#: the corridor planners are let in.
+PARTI_RUNS = 30
+PARTI_SECONDS = 30.0
+
 #: A passage longer than this is a corridor, not a hall or a landing.
 LONG_PASSAGE = 6.0
 
@@ -1932,7 +1937,7 @@ class LayoutGenerator:
                                seed=(self.config.seed or 0) + 31 * k + 977 * run,
                                compact_stair=self._compact_stair, landing="none" if run % 2 == 0 else None,
                                boost=self._cap_boost)
-                  for k in sides for run in range(9)]
+                  for k in sides for run in range(PARTI_RUNS)]
         # Several runs of the parti from different starts: one run often finds a
         # single sound plan, and the client should have three to choose from.
         # Every other run keeps upstairs to rooms off the stair's landing, so
@@ -2022,7 +2027,7 @@ class LayoutGenerator:
                     # the runs share a few seconds between them.
                     if parti_started is None:
                         parti_started = time.perf_counter()
-                    elif time.perf_counter() - parti_started > 12.0 or sum(
+                    elif time.perf_counter() - parti_started > PARTI_SECONDS or sum(
                         1 for i, a in enumerate(short_partis)
                         if all(self._similarity(a, b) < 0.5 for b in short_partis[:i])
                     ) >= 3:
