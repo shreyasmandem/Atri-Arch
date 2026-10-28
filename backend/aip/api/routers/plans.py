@@ -457,13 +457,14 @@ async def get_model_glb(
     palette: str | None = Query(default=None, description="Colour scheme id; the recommended one if omitted"),
     colours: str | None = Query(default=None, max_length=600, description="The client's colour preferences, in words"),
     design: str | None = Query(default=None, description="Facade design language; the recommended one if omitted"),
+    real: bool = Query(default=False, description="Leave out pieces the viewer draws with real models"),
 ) -> Response:
     """Binary glTF for the 3D viewer, VR walkthrough and AR placement."""
     import asyncio
 
     plan = _load(plan_id, principal)
     data = await asyncio.to_thread(export_glb, plan, include_furniture=furniture, include_ground=ground,
-                                   palette_id=palette, colour_text=colours, design_id=design)
+                                   palette_id=palette, colour_text=colours, design_id=design, real=real)
     return Response(
         content=data,
         media_type="model/gltf-binary",
@@ -620,19 +621,101 @@ async def run_interior(
     style: str | None = Query(default=None),
 ) -> dict[str, Any]:
     """Solve the furniture layout, palette, lighting and finishes for a plan."""
-    from aip.domain.brief import ClientBrief, DesignStyle, StylePreference
     from aip.engines.interior.engine import design_interior
 
     plan = _load(plan_id, principal)
+    scheme = design_interior(plan, _interior_brief(plan, style))
+    out = json.loads(scheme.model_dump_json())
+    out["rev"] = int((plan.metadata or {}).get("interior_rev", 0))
+    return out
+    return json.loads(scheme.model_dump_json())
+
+
+class RoomEditRequest(BaseModel):
+    items: list[dict[str, Any]] = Field(default_factory=list, max_length=60)
+    finishes: dict[str, Any] = Field(default_factory=dict)
+
+
+def _room_of(plan: FloorPlan, room_id: str):
+    room = next((r for r in plan.all_rooms if r.id == room_id), None)
+    if room is None:
+        raise HTTPException(status_code=404, detail="That room is not in this plan.")
+    return room
+
+
+@router.get("/{plan_id}/interior/catalogue")
+async def interior_catalogue(
+    plan_id: str, room_id: str = Query(...), principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    """What a room may hold - furniture by group, the colours each comes in, floors and paints."""
+    from aip.engines.interior.editing import catalogue_for
+
+    plan = _load(plan_id, principal)
+    return catalogue_for(_room_of(plan, room_id).type)
+
+
+@router.get("/{plan_id}/furnishings")
+async def get_furnishings(plan_id: str, principal: Principal = Depends(get_principal)) -> dict[str, Any]:
+    """Real furniture models, decoration and paintings for the walkthrough, placed in model space."""
+    from aip.engines.interior.engine import design_interior
+    from aip.engines.interior.furnish import furnishings
+
+    plan = _load(plan_id, principal)
+    scheme = await asyncio.to_thread(design_interior, plan, _interior_brief(plan))
+    return furnishings(plan, scheme)
+
+
+@router.post("/{plan_id}/interior/rooms/{room_id}")
+async def edit_interior_room(
+    plan_id: str, room_id: str, payload: RoomEditRequest, principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    """Keep a client's arrangement of one room: its items, where they stand, their colours, its finishes."""
+    from aip.engines.interior.editing import clean_room_edit
+    from aip.engines.interior.engine import design_room
+
+    plan = _load(plan_id, principal)
+    room = _room_of(plan, room_id)
+    edit, notes = clean_room_edit(plan, room, payload.items, payload.finishes)
+    meta = dict(plan.metadata or {})
+    edits = dict(meta.get("interior_edits") or {})
+    edits[room_id] = edit
+    meta["interior_edits"] = edits
+    meta["interior_rev"] = int(meta.get("interior_rev", 0)) + 1
+    plan.metadata = meta
+    get_plan_store().put(principal.firm.id, plan)
+    interior = design_room(plan, room, _interior_brief(plan))
+    return {"room": json.loads(interior.model_dump_json()), "notes": notes, "rev": meta["interior_rev"]}
+
+
+@router.delete("/{plan_id}/interior/rooms/{room_id}")
+async def reset_interior_room(
+    plan_id: str, room_id: str, principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    """Forget a client's arrangement of a room and let the designer furnish it again."""
+    from aip.engines.interior.engine import design_room
+
+    plan = _load(plan_id, principal)
+    room = _room_of(plan, room_id)
+    meta = dict(plan.metadata or {})
+    edits = dict(meta.get("interior_edits") or {})
+    edits.pop(room_id, None)
+    meta["interior_edits"] = edits
+    meta["interior_rev"] = int(meta.get("interior_rev", 0)) + 1
+    plan.metadata = meta
+    get_plan_store().put(principal.firm.id, plan)
+    interior = design_room(plan, room, _interior_brief(plan))
+    return {"room": json.loads(interior.model_dump_json()), "notes": [], "rev": meta["interior_rev"]}
+
+
+def _interior_brief(plan: FloorPlan, style: str | None = None):
+    from aip.domain.brief import ClientBrief, DesignStyle, StylePreference
+
     brief = ClientBrief()
-    chosen = style or plan.style
     try:
-        brief.style = StylePreference(styles=[DesignStyle(chosen)])
+        brief.style = StylePreference(styles=[DesignStyle(style or plan.style)])
     except ValueError:
         brief.style = StylePreference()
-
-    scheme = design_interior(plan, brief)
-    return json.loads(scheme.model_dump_json())
+    return brief
 
 
 @router.post("/vastu")

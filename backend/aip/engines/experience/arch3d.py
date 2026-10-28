@@ -194,6 +194,7 @@ class Palette:
             "appliance": Material("appliance", (0.82, 0.83, 0.84), 0.3, 0.6),
             "screen": Material("screen", (0.05, 0.05, 0.06), 0.2),
             "brass": Material("brass", (0.78, 0.60, 0.28), 0.3, 0.9),
+            "curtain": Material("curtain_fabric", (0.82, 0.70, 0.52), 1.0),      # handloom cotton, sand
             "light": Material("light", (1.0, 0.95, 0.84), 0.5, 0.0, 1.0, (1.0, 0.86, 0.62)),
             # Exterior skins.
             "ex_brick": Material("brick", (0.56, 0.30, 0.22), 0.9),
@@ -225,6 +226,8 @@ class Palette:
             "facade_light": Material("facade_light", (0.95, 0.93, 0.88), 0.4, 0.0, 1.0, (1.0, 0.8, 0.52)),
         }
         self.scheme = scheme
+        #: A client's own wall, accent and floor per room, from the interior editor.
+        self.room_finishes: dict[str, dict[str, str]] = {}
         if scheme is not None:
             self._apply(scheme)
 
@@ -248,8 +251,52 @@ class Palette:
         self.m["tile_bath"] = Material("wall_tile_bath", _hex(i["bath_tile"], (0.85, 0.84, 0.82)), 0.25)
         self.m["tile_kitchen"] = Material("backsplash_kitchen", _hex(i["kitchen_tile"], (0.6, 0.6, 0.6)), 0.2)
 
+    #: Floors a client may choose for a room: colour and roughness.
+    FLOOR_FINISH = {
+        "kota": ((0.50, 0.54, 0.49), 0.55), "marble": ((0.91, 0.90, 0.87), 0.15),
+        "terrazzo": ((0.81, 0.78, 0.71), 0.35), "athangudi": ((0.66, 0.35, 0.24), 0.3),
+        "granite": ((0.18, 0.18, 0.19), 0.15), "vitrified": ((0.85, 0.83, 0.79), 0.25),
+        "wood": ((0.58, 0.40, 0.25), 0.55), "redoxide": ((0.56, 0.23, 0.16), 0.35),
+        "jaisalmer": ((0.85, 0.72, 0.47), 0.6),
+    }
+
+    def custom(self, hex_: str | None, base: str) -> str:
+        """A material like `base` in the client's chosen colour; `base` itself if none was chosen."""
+        if not hex_ or base not in self.m:
+            return base
+        key = f"{base}#{hex_.lstrip('#').lower()}"
+        if key not in self.m:
+            m = self.m[base]
+            self.m[key] = Material(f"{m.name}_{hex_.lstrip('#').lower()}", _hex(hex_, m.rgb), m.roughness,
+                                   m.metallic, m.alpha, m.emissive)
+        return key
+
+    def floor_for(self, room: Room, default: str) -> str:
+        """The floor a client chose for a room, else the usual one."""
+        fid = self.room_finishes.get(room.id, {}).get("floor")
+        if fid not in self.FLOOR_FINISH:
+            return default
+        key = f"floor_{fid}"
+        if key not in self.m:
+            rgb, rough = self.FLOOR_FINISH[fid]
+            self.m[key] = Material(key, rgb, rough)
+        return key
+
     def side_finish(self, room: Room | None, accent: bool = False) -> list[tuple[float, str]]:
         """A wall face's finish as bands from the floor up: (top of band, material)."""
+        bands = self._side_finish(room, accent)
+        mine = self.room_finishes.get(room.id) if room is not None else None
+        if not mine:
+            return bands
+        chosen = mine.get("accent") if accent else None
+        chosen = chosen or mine.get("wall")
+        if not chosen:
+            return bands
+        paint = self.custom(chosen, "wall_accent" if accent and mine.get("accent") else "wall_in")
+        tiles = ("tile_bath", "tile_kitchen")
+        return [(top, mat if mat in tiles else paint) for top, mat in bands]
+
+    def _side_finish(self, room: Room | None, accent: bool = False) -> list[tuple[float, str]]:
         if self.scheme is None or room is None:
             return [(99.0, "wall_in")]
         from aip.engines.experience.palettes import room_slot
@@ -715,6 +762,22 @@ def _window(b: Builder, node: str, o: Opening, mid: Vec2, yaw: float, base: floa
             x, z = off(-w / 2 + w * k / n)
             b.box(node, "frame", (x, y0 + h / 2, z), (fr * 0.8, h, 0.08), yaw)
     b.box(node, "glass", (cx, y0 + h / 2, cz), (w - fr, h - fr, 0.012), yaw)
+    if out is not None and h >= 0.9 and sill <= 1.2:
+        # Curtains, drawn back to either side of the window on a brass rod, inside the room.
+        ix, iz = -out.x * (t / 2 + 0.09), out.y * (t / 2 + 0.09)
+        top = base + head + 0.18
+        rx, rz = cx + ix, cz + iz
+        b.box(node, "brass", (rx, top + 0.02, rz), (w + 0.7, 0.025, 0.025), yaw)
+        drop = top - (base + 0.03)
+        # Drawn back, each side gathers into deep folds: alternate pleats stand
+        # forward and back, so the cloth catches light like cloth.
+        for side in (-1, 1):
+            for k in range(9):
+                u = side * (w / 2 - 0.08 + k * 0.055)
+                x, z = off(u)
+                fold = 0.045 if k % 2 else 0.0
+                b.box(node, "curtain", (x + ix - out.x * fold, base + 0.03 + drop / 2, z + iz + out.y * fold),
+                      (0.075, drop, 0.012), yaw + (0.6 if k % 2 else -0.6) * side)
     if out is not None:
         # Stone sill and a concrete sunshade, both projecting outward.
         sx, sz = cx + out.x * (t / 2 + 0.03), cz - out.y * (t / 2 + 0.03)
@@ -1426,30 +1489,302 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
     rot = math.radians(item.rotation)
     cx, cz = item.x, -item.y
 
+    # The client's colour goes on what the piece is made of: its boards, its cloth or its metal.
+    remap: dict[str, str] = {}
+    colour = getattr(item, "colour", None)
+    if colour:
+        from aip.engines.interior.editing import colour_group
+
+        group = colour_group(iid)
+        bases = {"wood": ("joinery",), "fabric": ("uph",), "metal": ("metal", "brass")}.get(group, ())
+        remap = {m: b.p.custom(colour, m) for m in bases}
+
+    def at(u: float, v: float) -> tuple[float, float]:
+        lx, lz = u, -(d / 2 - v)
+        return (cx + lx * math.cos(rot) - lz * math.sin(rot), cz - (lx * math.sin(rot) + lz * math.cos(rot)))
+
     def part(m: str, u: float, v: float, y0: float, sw: float, sd: float, sh: float) -> None:
         """A box at (u across, v front-to-back from the back edge) in the item's frame."""
         # The engine puts an item's back on its local -y (rotation 0 is against a
         # south wall, facing north), so the back edge is at lz = -d/2.
+        m = remap.get(m, m)
         lx, lz = u, -(d / 2 - v - sd / 2)
         x = cx + lx * math.cos(rot) - lz * math.sin(rot)
         z = cz - (lx * math.sin(rot) + lz * math.cos(rot))
         b.box(node, m, (x, base + y0 + sh / 2, z), (sw, sh, sd), -rot)
 
-    if iid.startswith("bed"):
-        part("joinery", 0, 0, 0.0, w, d, 0.32)
-        part("linen", 0, 0.08, 0.32, w - 0.06, d - 0.1, 0.2)
-        part("joinery", 0, 0, 0.0, w + 0.04, 0.08, max(h, 1.0))
+    def leaves(u: float, v: float, y: float, r: float) -> None:
+        x, z = at(u, v)
+        b.blob(node, "leaf", (x, base + y, z), r, 0.9)
+
+    if iid == "bed_bunk":
+        for y0 in (0.0, 1.0):
+            part("joinery", 0, 0, y0 + 0.15, w, d, 0.12)
+            part("linen", 0, 0.05, y0 + 0.27, w - 0.06, d - 0.1, 0.15)
+        for su in (-1, 1):
+            for sv in (0, 1):
+                part("joinery", su * (w / 2 - 0.03), sv * (d - 0.06), 0.0, 0.06, 0.06, h)
+        part("joinery", w / 2 - 0.03, d * 0.3, 0.0, 0.04, 0.4, h)
+    elif iid == "bed_palang":
+        part("joinery", 0, 0, 0.1, w, d, 0.35)
+        part("linen", 0, 0.08, 0.45, w - 0.06, d - 0.1, 0.2)
+        part("joinery", 0, 0, 0.0, w + 0.06, 0.1, h)
+        part("accent", 0, d * 0.62, 0.65, w - 0.02, d * 0.3, 0.03)
+        for su in (-1, 1):
+            for sv in (0, 1):
+                part("joinery", su * (w / 2), sv * (d - 0.08), 0.0, 0.09, 0.09, 2.1 if sv == 0 else 1.0)
+        for k in range(2):
+            part("ceramic", (k - 0.5) * (w / 2), 0.14, 0.65, w / 2 - 0.12, 0.35, 0.12)
+    elif iid.startswith("bed"):
+        # A platform bed: a recessed plinth, the frame, an upholstered headboard
+        # in panels, a mattress, a duvet turned down, pillows and a runner.
+        part("joinery", 0, 0.12, 0.0, w - 0.12, d - 0.2, 0.1)
+        part("joinery", 0, 0.08, 0.1, w, d - 0.08, 0.2)
+        part("joinery", 0, 0, 0.0, w + 0.1, 0.08, max(h, 1.1))
+        panels = 3 if w > 1.4 else 2
+        for k in range(panels):
+            u = -w / 2 + w * (k + 0.5) / panels
+            part("uph", u, 0.08, 0.42, w / panels - 0.03, 0.06, max(h, 1.1) - 0.5)
+        part("linen", 0, 0.12, 0.3, w - 0.06, d - 0.16, 0.2)
+        part("accent", 0, 0.62, 0.5, w + 0.02, d - 0.66, 0.06)
+        part("linen", 0, 0.55, 0.5, w + 0.02, 0.1, 0.075)
         pillows = 2 if w > 1.2 else 1
         for k in range(pillows):
             u = (k - (pillows - 1) / 2) * (w / pillows)
-            part("ceramic", u, 0.12, 0.52, w / pillows - 0.12, 0.35, 0.12)
-        part("accent", 0, d * 0.62, 0.52, w - 0.02, d * 0.3, 0.03)
-    elif iid.startswith(("sofa", "sectional", "recliner")):
-        part("uph", 0, 0.15, 0.0, w, d - 0.15, 0.42)
+            part("ceramic", u, 0.16, 0.5, w / pillows - 0.14, 0.38, 0.14)
+        part("uph", 0, d - 0.55, 0.56, w + 0.04, 0.35, 0.015)
+    elif iid == "sofa_l":
+        part("uph", 0, 0.15, 0.0, w, 0.75, 0.42)
         part("uph", 0, 0, 0.0, w, 0.18, 0.82)
-        for s in (-1, 1):
-            part("uph", s * (w / 2 - 0.09), 0.15, 0.0, 0.18, d - 0.15, 0.6)
+        part("uph", w / 2 - 0.4, 0.9, 0.0, 0.8, d - 0.9, 0.42)
+        part("uph", -w / 2 + 0.09, 0.15, 0.0, 0.18, 0.75, 0.6)
         part("accent", -w / 4, 0.2, 0.42, 0.4, 0.12, 0.35)
+    elif iid in ("diwan", "baithak"):
+        low = 0.3 if iid == "diwan" else 0.0
+        if low:
+            part("joinery", 0, 0, 0.0, w, d, low)
+        part("uph", 0, 0, low, w - 0.04, d - 0.04, 0.15)
+        for su in (-1, 1):
+            part("accent", su * (w / 2 - 0.18), 0.05, low + 0.15, 0.3, 0.2, 0.2)
+        part("accent", 0, 0.02, low + 0.15, w * 0.6, 0.2, 0.3)
+    elif iid == "jhoola":
+        for su in (-1, 1):
+            part("joinery", su * (w / 2 - 0.05), d / 2 - 0.05, 0.0, 0.1, 0.1, h)
+        part("joinery", 0, d / 2 - 0.05, h - 0.1, w, 0.1, 0.1)
+        part("joinery", 0, 0.2, 0.45, w - 0.35, d - 0.4, 0.06)
+        part("uph", 0, 0.2, 0.51, w - 0.4, d - 0.45, 0.06)
+        for su in (-1, 1):
+            part("metal", su * (w / 2 - 0.25), d / 2 - 0.02, 0.51, 0.02, 0.02, h - 0.61)
+    elif iid in ("bean_bag", "pouffe"):
+        x, z = at(0, d / 2)
+        if iid == "bean_bag":
+            b.blob(node, remap.get("uph", "uph"), (x, base + 0.32, z), w / 2, 0.75)
+        else:
+            part("uph", 0, 0, 0.0, w, d, h)
+    elif iid == "bench":
+        part("joinery", 0, 0, 0.0, w, d, 0.36)
+        part("uph", 0, 0, 0.36, w, d, 0.09)
+    elif iid == "outdoor_set":
+        part("joinery", 0, d / 2 - 0.3, 0.0, 0.6, 0.6, 0.45)
+        for su in (-1, 1):
+            part("joinery", su * (w / 2 - 0.3), d / 2 - 0.3, 0.0, 0.55, 0.55, 0.4)
+            part("joinery", su * (w / 2 - 0.3), d / 2 - 0.55, 0.4, 0.55, 0.06, 0.4)
+    elif iid in ("rug_dhurrie", "rug_round"):
+        part("uph", 0, 0, 0.0, w, d, 0.012)
+        part("accent", 0, 0.12, 0.012, w - 0.24, 0.05, 0.002)
+        part("accent", 0, d - 0.17, 0.012, w - 0.24, 0.05, 0.002)
+    elif iid in ("plant_tall", "plant_small", "tulsi"):
+        pot = "ex_terracotta" if iid != "plant_tall" else "ceramic"
+        ph = 0.45 if iid == "tulsi" else h * 0.3
+        part(pot, 0, d * 0.1, 0.0, w * 0.75, d * 0.8, ph)
+        if iid == "plant_tall":
+            leaves(0, d / 2, h * 0.65, w * 0.6)
+            leaves(0.05, d / 2, h * 0.9, w * 0.45)
+        else:
+            leaves(0, d / 2, ph + w * 0.3, w * 0.45)
+    elif iid in ("floor_lamp", "brass_lamp", "diya_stand"):
+        part("brass" if iid != "floor_lamp" else "metal", 0, d / 2 - 0.15, 0.0, 0.3, 0.3, 0.03)
+        part("brass" if iid != "floor_lamp" else "metal", 0, d / 2 - 0.02, 0.0, 0.04, 0.04, h - 0.25)
+        if iid == "floor_lamp":
+            part("light", 0, d / 2 - 0.15, h - 0.3, 0.3, 0.3, 0.3)
+        else:
+            part("brass", 0, d / 2 - 0.12, h - 0.25, 0.24, 0.24, 0.05)
+            part("light", 0, d / 2 - 0.03, h - 0.2, 0.06, 0.06, 0.08)
+    elif iid == "mirror_full":
+        part("joinery", 0, 0, 0.05, w, 0.04, h)
+        part("glass", 0, 0.03, 0.1, w - 0.08, 0.01, h - 0.1)
+    elif iid == "wall_art":
+        part("joinery", 0, 0, 1.0, w, 0.03, h)
+        part("accent", 0, 0.025, 1.05, w - 0.1, 0.01, h - 0.1)
+    elif iid == "wall_shelf":
+        part("joinery", 0, 0, 1.4, w, d, 0.04)
+        part("accent", -w / 4, 0.05, 1.44, 0.12, 0.12, 0.2)
+        part("brass", w / 5, 0.06, 1.44, 0.1, 0.1, 0.14)
+    elif iid == "urli":
+        part("brass", 0, 0, 0.0, w, d, 0.14)
+        part("flower_pink", 0, 0.15, 0.14, w * 0.5, d * 0.5, 0.03)
+    elif iid == "mandir_wall":
+        part("joinery", 0, 0, 0.9, w, d, 0.06)
+        part("brass", 0, 0.05, 0.96, w * 0.8, d * 0.7, h * 0.6)
+        part("joinery", 0, 0, 0.96 + h * 0.6, w + 0.04, d + 0.04, 0.06)
+    elif iid == "counter_l":
+        part("joinery", 0, 0, 0.0, w, 0.6, 0.86)
+        part("counter", 0, 0, 0.86, w, 0.62, 0.04)
+        part("joinery", -w / 2 + 0.3, 0.6, 0.0, 0.6, d - 0.6, 0.86)
+        part("counter", -w / 2 + 0.3, 0.6, 0.86, 0.62, d - 0.6, 0.04)
+        part("joinery", 0, 0, 1.45, w, 0.35, 0.7)
+        part("metal", w / 5, 0.15, 0.9, 0.6, 0.45, 0.02)
+        part("appliance", -w / 2 + 0.3, 1.2, 0.9, 0.45, 0.5, 0.02)
+    elif iid == "breakfast_counter":
+        part("joinery", 0, 0, 0.0, w, 0.4, 0.86)
+        part("counter", 0, 0, 0.86, w + 0.04, d, 0.04)
+        for k in (-1, 1):
+            part("uph", k * w / 4, d + 0.05, 0.0, 0.38, 0.38, 0.68)
+    elif iid == "towel_ladder":
+        for su in (-1, 1):
+            part("metal", su * (w / 2 - 0.02), d - 0.06, 0.0, 0.03, 0.03, h)
+        for k in range(4):
+            part("metal", 0, d - 0.06 - k * 0.04, 0.4 + k * 0.3, w, 0.02, 0.02)
+        part("linen", 0, d - 0.1, 0.95, w - 0.1, 0.04, 0.4)
+    elif iid in ("microwave",):
+        part("appliance", 0, 0, 0.9, w, d, h)                       # on the counter
+        part("screen", -w * 0.12, d - 0.005, 0.95, w * 0.6, 0.01, h - 0.1)
+    elif iid == "chimney":
+        part("appliance", 0, 0, 1.55, w, d, 0.12)                   # the hood, over the hob
+        part("appliance", 0, 0, 1.67, w * 0.32, d * 0.55, 0.9)      # its duct
+    elif iid == "purifier":
+        part("ceramic", 0, 0, 1.15, w, d, h)
+        part("metal", w * 0.25, d, 1.1, 0.03, 0.06, 0.06)
+    elif iid == "dishwasher":
+        part("appliance", 0, 0, 0.0, w, d, 0.82)
+        part("counter", 0, 0, 0.82, w + 0.02, d + 0.02, 0.04)
+        part("metal", 0, d - 0.01, 0.7, w * 0.7, 0.02, 0.03)
+    elif iid == "ac_split":
+        part("ceramic", 0, 0, 2.15, w, d, h)
+        part("metal", 0, d - 0.01, 2.17, w * 0.85, 0.02, 0.04)
+    elif iid == "tv_wall":
+        part("screen", 0, 0, 1.3 - h / 2, w, 0.04, h)
+        part("metal", 0, 0.04, 1.3 - h / 2 - 0.02, w * 0.9, 0.01, 0.02)
+    elif iid == "geyser":
+        part("ceramic", 0, 0, 1.75, w, d, h)
+    elif iid == "chest_drawers":
+        part("joinery", 0, 0, 0.08, w, d, h - 0.08)
+        n = max(3, round(h / 0.25))
+        for k in range(n):
+            y = 0.1 + k * (h - 0.12) / n
+            part("joinery", 0, d - 0.005, y + 0.01, w - 0.04, 0.012, (h - 0.12) / n - 0.02)
+            part("brass", 0, d + 0.01, y + (h - 0.12) / n / 2, 0.14, 0.02, 0.02)
+        for su in (-1, 1):
+            for sv in (0.04, d - 0.04):
+                part("joinery", su * (w / 2 - 0.04), sv, 0.0, 0.04, 0.04, 0.08)
+    elif iid == "toy_chest":
+        part("joinery", 0, 0, 0.0, w, d, h)
+        part("accent", 0, d - 0.005, h * 0.4, w * 0.8, 0.01, h * 0.3)
+    elif iid == "jaali_screen":
+        part("joinery", 0, 0, 0.0, w, d, 0.06)
+        part("joinery", 0, 0, h - 0.06, w, d, 0.06)
+        n = max(4, int(w / 0.12))
+        for k in range(n + 1):
+            part("joinery", -w / 2 + k * w / n, 0, 0.06, 0.03, d, h - 0.12)
+        for k in range(1, int(h / 0.15)):
+            part("joinery", 0, 0, 0.06 + k * 0.15, w, d * 0.8, 0.02)
+    elif iid == "filing_cabinet":
+        part("metal", 0, 0, 0.0, w, d, h)
+        for k in range(4):
+            part("metal", 0, d, 0.2 + k * h / 4, 0.12, 0.02, 0.02)
+    elif iid == "drying_rack":
+        for su in (-1, 1):
+            part("metal", su * (w / 2 - 0.02), d / 2, 0.0, 0.03, 0.03, h)
+        for k in range(5):
+            part("metal", 0, 0.05 + k * (d - 0.1) / 4, h - 0.02, w, 0.015, 0.015)
+        part("linen", -w / 5, d / 2 - 0.05, h * 0.45, 0.5, 0.01, h * 0.53)
+    elif iid in ("cradle", "crib"):
+        legs = 0.5 if iid == "crib" else 0.25
+        for su in (-1, 1):
+            part("joinery", su * (w / 2 - 0.03), d / 2 - 0.03, 0.0, 0.05, 0.05 if iid == "crib" else d, h)
+        part("joinery", 0, 0, legs, w - 0.08, d, 0.05)
+        part("linen", 0, 0.03, legs + 0.05, w - 0.12, d - 0.06, 0.1)
+        for k in range(int((w - 0.1) / 0.09)):
+            u = -w / 2 + 0.08 + k * 0.09
+            for v in (0.0, d - 0.02):
+                part("joinery", u, v, legs + 0.05, 0.02, 0.02, h - legs - 0.08)
+        part("joinery", 0, 0, h - 0.04, w, 0.04, 0.04)
+        part("joinery", 0, d - 0.04, h - 0.04, w, 0.04, 0.04)
+    elif iid == "swing_chair":
+        part("metal", 0, d / 2 - 0.02, 0.0, 0.5, 0.5, 0.03)
+        part("metal", 0.0, d / 2 - 0.02, 0.0, 0.04, 0.04, h)
+        part("metal", 0.0, d / 2 - 0.25, h - 0.04, 0.04, 0.5, 0.04)
+        part("joinery", 0, 0.1, 0.45, w * 0.8, d * 0.75, 0.06)
+        part("joinery", 0, 0.05, 0.5, w * 0.8, 0.06, 0.75)
+        for su in (-1, 1):
+            part("joinery", su * w * 0.38, 0.1, 0.5, 0.05, d * 0.7, 0.45)
+        part("uph", 0, 0.12, 0.51, w * 0.7, d * 0.65, 0.1)
+    elif iid == "ottoman_storage":
+        part("uph", 0, 0, 0.05, w, d, h - 0.05)
+        part("joinery", 0, 0, 0.0, w - 0.06, d - 0.06, 0.05)
+    elif iid == "office_chair":
+        part("metal", 0, d / 2 - 0.3, 0.0, 0.6, 0.05, 0.05)
+        part("metal", 0, d / 2 - 0.03, 0.0, 0.05, 0.6, 0.05)
+        part("metal", 0, d / 2 - 0.03, 0.05, 0.06, 0.06, 0.4)
+        part("uph", 0, 0.1, 0.45, 0.5, 0.48, 0.08)
+        part("uph", 0, 0.05, 0.53, 0.48, 0.06, 0.55)
+    elif iid in ("bench_dining", "garden_bench"):
+        part("joinery", 0, 0, 0.4, w, d * (0.75 if iid == "garden_bench" else 1.0), 0.05)
+        for su in (-1, 1):
+            part("joinery", su * (w / 2 - 0.06), 0, 0.0, 0.06, d * (0.75 if iid == "garden_bench" else 1.0), 0.4)
+        if iid == "garden_bench":
+            part("joinery", 0, 0, 0.45, w, 0.05, 0.4)
+    elif iid == "bathtub":
+        part("ceramic", 0, 0, 0.0, w, d, h)
+        part("f_tile", 0, 0.08, h - 0.01, w - 0.16, d - 0.16, 0.012)
+        part("metal", -w / 2 + 0.15, d / 2, h, 0.05, 0.05, 0.15)
+    elif iid == "mirror_cabinet":
+        part("joinery", 0, 0, 1.2, w, d, h)
+        part("glass", 0, d - 0.005, 1.23, w - 0.06, 0.01, h - 0.06)
+    elif iid == "mirror_round":
+        part("brass", 0, 0, 1.2, w, 0.03, h)
+        part("glass", 0, 0.02, 1.24, w - 0.08, 0.01, h - 0.08)
+    elif iid == "aquarium":
+        part("joinery", 0, 0, 0.0, w, d, 0.75)
+        part("glass", 0, 0, 0.75, w, d, h - 0.75)
+        part("accent", 0, 0.03, 0.76, w - 0.06, d - 0.06, 0.05)                     # gravel
+        part("leaf", -w / 4, d / 2 - 0.05, 0.81, 0.08, 0.08, (h - 0.75) * 0.6)      # water weed
+        part("leaf2", w / 5, d / 2 - 0.05, 0.81, 0.06, 0.06, (h - 0.75) * 0.45)
+        part("joinery", 0, 0, h - 0.02, w + 0.02, d + 0.02, 0.04)
+    elif iid == "harmonium":
+        part("joinery", 0, 0, 0.0, w, d, 0.2)
+        part("joinery", 0, 0, 0.2, w, d, 0.22)
+        part("ceramic", 0, d * 0.45, 0.42, w - 0.08, d * 0.35, 0.02)                 # the keys
+        part("uph", 0, 0, 0.26, w + 0.01, 0.06, 0.14)                               # the bellows
+    elif iid == "puja_bell":
+        part("brass", 0, d / 2 - 0.1, 0.0, 0.2, 0.2, 0.03)
+        part("brass", 0, d / 2 - 0.015, 0.03, 0.03, 0.03, 0.2)
+        part("brass", 0, d / 2 - 0.07, 0.22, 0.14, 0.14, 0.12)
+    elif iid == "rangoli":
+        part("accent", 0, 0, 0.0, w, d, 0.004)
+        part("flower_pink", 0, d * 0.2, 0.004, w * 0.6, d * 0.6, 0.002)
+        part("flower_yellow", 0, d * 0.35, 0.006, w * 0.3, d * 0.3, 0.002)
+    elif iid == "side_table":
+        part("joinery", 0, 0, h - 0.04, w, d, 0.04)
+        part("joinery", 0, d / 2 - 0.03, 0.0, 0.06, 0.06, h - 0.04)
+        part("joinery", 0, 0.05, 0.0, w * 0.8, d * 0.8, 0.03)
+    elif iid.startswith(("sofa", "sectional", "recliner")):
+        # A modern sofa: a frame on slim legs, loose seat and back cushions, padded arms.
+        arm = 0.16
+        for su in (-1, 1):
+            for sv in (0.06, d - 0.08):
+                part("metal", su * (w / 2 - 0.08), sv, 0.0, 0.04, 0.04, 0.12)
+        part("uph", 0, 0, 0.12, w, d, 0.2)
+        part("uph", 0, 0, 0.32, w, 0.2, 0.5)
+        for su in (-1, 1):
+            part("uph", su * (w / 2 - arm / 2), 0.0, 0.12, arm, d, 0.52)
+            part("uph", su * (w / 2 - arm / 2), 0.02, 0.64, arm + 0.02, d - 0.04, 0.04)
+        seats = max(1, round((w - 2 * arm) / 0.65))
+        sw = (w - 2 * arm) / seats
+        for k in range(seats):
+            u = -w / 2 + arm + sw * (k + 0.5)
+            part("uph", u, 0.22, 0.32, sw - 0.02, d - 0.26, 0.14)
+            part("uph", u, 0.19, 0.46, sw - 0.03, 0.18, 0.42)
     elif iid.startswith(("accent_chair", "wing_chair", "armchair", "reading_chair")):
         part("uph", 0, 0.1, 0.0, w, d - 0.1, 0.42)
         part("uph", 0, 0, 0.0, w, 0.12, 0.9)
@@ -1468,8 +1803,8 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
             u = -w / 2 + w * (k + 0.5) / seats
             for v in (-0.5, d + 0.05):
                 part("uph", u, v, 0.0, 0.45, 0.45, 0.46)
-    elif iid.startswith(("wardrobe", "tall_unit", "crockery", "storage", "shoe_unit", "bookshelf",
-                         "bookwall", "shelving", "sideboard")):
+    elif iid.startswith(("wardrobe", "tall_unit", "crockery", "storage", "shoe", "bookshelf",
+                         "bookwall", "shelving", "sideboard", "bar_cabinet")):
         part("joinery", 0, 0, 0.0, w, d, h)
         n = max(1, int(w / 0.5))
         for k in range(1, n):
@@ -1477,7 +1812,7 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
     elif iid.startswith(("tv_unit", "family_tv", "media", "screen_wall")):
         part("joinery", 0, 0, 0.0, w, d, min(h, 0.45))
         part("screen", 0, 0.02, 1.0, min(1.45, w * 0.7), 0.04, 0.82)
-    elif iid.startswith("counter_run"):
+    elif iid.startswith(("counter_run", "counter_parallel")):
         part("joinery", 0, 0, 0.0, w, d, 0.86)
         part("counter", 0, 0, 0.86, w + 0.02, d + 0.02, 0.04)
         part("joinery", 0, 0, 1.45, w, 0.35, 0.7)
@@ -1485,11 +1820,14 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         part("appliance", w / 4, 0.12, 0.9, 0.5, 0.4, 0.02)
     elif iid.startswith("fridge"):
         part("appliance", 0, 0, 0.0, w, d, h)
-    elif iid.startswith(("desk", "study_desk", "console", "mirror_console", "dresser")):
+    elif iid.startswith(("desk", "study_desk", "console", "mirror_console", "dresser", "dressing")):
         part("joinery", 0, 0, 0.72, w, d, 0.04)
         part("joinery", -w / 2 + 0.25, 0, 0.0, 0.45, d, 0.72)
         part("joinery", w / 2 - 0.03, 0, 0.0, 0.04, d, 0.72)
-        if iid.startswith(("dresser", "mirror_console")):
+        if iid.startswith("study_desk_x"):
+            part("uph", 0, d + 0.1, 0.0, 0.45, 0.45, 0.46)
+            part("uph", 0, d + 0.5, 0.46, 0.45, 0.06, 0.45)
+        if iid.startswith(("dresser", "mirror_console", "dressing")):
             part("glass", 0, 0.01, 1.0, w * 0.7, 0.02, 0.8)
     elif iid.startswith("task_chair"):
         part("uph", 0, 0.05, 0.42, 0.48, 0.45, 0.08)
@@ -1519,7 +1857,7 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         part("joinery", 0, 0, 0.0, w, d, max(h, 0.1))
 
 
-def _interiors(b: Builder, plan: FloorPlan, bases: list[float]) -> None:
+def _interiors(b: Builder, plan: FloorPlan, bases: list[float], skip: frozenset[str] = frozenset()) -> None:
     try:
         from aip.engines.interior.engine import design_interior
 
@@ -1534,6 +1872,8 @@ def _interiors(b: Builder, plan: FloorPlan, bases: list[float]) -> None:
             continue
         node = f"level_{li}/furniture"
         for item in ri.furniture:
+            if item.item_id in skip:
+                continue
             try:
                 _furniture(b, item, bases[li], node)
             except Exception:  # noqa: BLE001 - one odd item must not lose the room
@@ -1555,8 +1895,11 @@ def _road(plan: FloorPlan) -> Vec2 | None:
 
 def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_ground: bool = True,
                 palette_id: str | None = None, colour_text: str | None = None,
-                design_id: str | None = None):
+                design_id: str | None = None, real: bool = False):
     """The full presentation model as a trimesh Scene.
+
+    With `real`, the pieces the viewer draws with photographed models (see
+    `interior.furnish`) are left out, so they are not drawn twice.
 
     Coloured with `palette_id` if given, otherwise with the scheme the palette
     ranking recommends for this plan; `colour_text` (the client's own words)
@@ -1570,6 +1913,9 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
     except Exception:  # noqa: BLE001 - colour must never stop the model being built
         scheme = None
     palette = Palette(plan.style or "contemporary", scheme)
+    palette.room_finishes = {
+        rid: dict(e.get("finishes") or {}) for rid, e in ((plan.metadata or {}).get("interior_edits") or {}).items()
+    }
     b = Builder(palette)
     road = _road(plan)
     ground_fp = _footprint(plan.levels[0]) if plan.levels else None
@@ -1611,7 +1957,7 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
         for room in level.rooms:
             if room.type is RoomType.SHAFT or len(room.polygon) < 3:
                 continue
-            b.slab(f"{node}/floors", _room_floor_material(room), room.polygon, y, y + 0.02)
+            b.slab(f"{node}/floors", b.p.floor_for(room, _room_floor_material(room)), room.polygon, y, y + 0.02)
             if room.type not in _OPEN_TO_SKY and room.type not in _RAILED and room.area > 2.0:
                 c = room.centre
                 b.cylinder(f"{node}/lights", "light", (c.x, y + level.floor_to_floor - SLAB - 0.06, -c.y),
@@ -1653,7 +1999,12 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
         if palette.solar and roof_kind in ("flat", "slab"):
             _solar(b, top, fp, y + (0.18 if roof_kind == "slab" else 0.0))
     if include_furniture:
-        _interiors(b, plan, bases)
+        skip: frozenset[str] = frozenset()
+        if real:
+            from aip.engines.interior.furnish import MODELS
+
+            skip = frozenset({*MODELS, "wall_art"})
+        _interiors(b, plan, bases, skip)
     return b.scene()
 
 

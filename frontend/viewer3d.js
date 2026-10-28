@@ -8,7 +8,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { dress, skyTexture } from "./materials.js?v=m2";
+import { dress, skyTexture } from "./materials.js?v=m3";
 import { iconHTML } from "./icons.js?v=i2";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -106,7 +106,9 @@ export class Viewer3D {
     this.ro.observe(host);
     this.resize();
     this._tick = this._tick.bind(this);
-    this.raf = requestAnimationFrame(this._tick);
+    // The renderer's own loop, so a VR headset can drive it as well as the page.
+    r.xr.enabled = true;
+    r.setAnimationLoop(this._tick);
   }
 
   resize() {
@@ -371,6 +373,7 @@ export class Viewer3D {
     const levels = [];
     this.model.traverse((o) => { const m = /^level_(\d+)$/.exec(o.name); if (m) levels.push([+m[1], o]); });
     const top = levels.length ? Math.max(...levels.map(([i]) => i)) : 0;
+    if (mode !== "walk" && this.walking) this.leaveWalk();
     const show = mode === "interior" ? Math.min(level, top) : top;
     for (const [i, o] of levels) o.visible = i <= show;
     const roof = this.model.getObjectByName("roof");
@@ -392,11 +395,19 @@ export class Viewer3D {
     // Daylight outside: the sky, open ground and a sky-tinted fill. Inside,
     // at night and for Vastu the studio dark reads the rooms better.
     const day = this.daylight && mode === "exterior";
-    this.scene.background = day ? this.sky : null;
+    // Walking inside: a sky through the windows, and the rooms lit as by day.
+    if (mode === "walk") this.sky ||= skyTexture();
+    this.scene.background = day || mode === "walk" ? this.sky : null;
     if (this.ground) this.ground.material.opacity = day || !this.daylight ? 1 : 0;
     this.hemi.color.setHex(day ? 0xdde6ee : 0xf4ead8);
     this.hemi.groundColor.setHex(day ? 0x6b5f4f : 0x221c16);
     if (day) this.hemi.intensity = 0.95;
+    if (mode === "walk") {
+      this.hemi.intensity = 1.6;
+      this.hemi.groundColor.setHex(0xcdbfa8);     // daylight off a pale floor lights the ceiling
+      this.scene.environmentIntensity = 1.3;
+      this.renderer.toneMappingExposure = 1.1;
+    }
     this.mode = mode;
     this.modeLevel = level;
     return { levels: top + 1 };
@@ -676,16 +687,313 @@ export class Viewer3D {
   }
 
   _tick(now) {
-    this.raf = requestAnimationFrame(this._tick);
+    if (this.walking) this._walkTick(now || performance.now());
+    if (this.hung?.length) {
+      // Fans and pendants hang from a ceiling the doll's-house view has lifted
+      // away: seen from above they would float, so they show only from inside.
+      const cy = this.renderer.xr.isPresenting ? 0 : this.camera.getWorldPosition(this._v ||= new THREE.Vector3()).y;
+      for (const o of this.hung) o.visible = this.walking || this.renderer.xr.isPresenting || cy < o.userData.top;
+    }
+    if (this.renderer.xr.isPresenting) { this.renderer.render(this.scene, this.camera); return; }
     this.controls.update();
     this.renderer.render(this.scene, this.orthoKind ? this.ortho : this.camera);
     this._pinsTick(now || performance.now());
     this._datumTick();
   }
 
+  // ── furnishing: real pieces and paintings ───────────────────────────
+  // The model leaves out what has a photographed model; each one is loaded
+  // once, fitted to the size the plan gave it and stood in its place on its
+  // floor, so it lifts away with that floor like everything else.
+  async furnish(data, base = "") {
+    if (!this.model || !data) return;
+    const model = this.model;
+    for (const g of this.furnished || []) { g.parent?.remove(g); disposeTree(g); }
+    this.furnished = [];
+    this.hung = [];
+    const loader = (this._gl ||= new GLTFLoader());
+    const cache = (this._assets ||= new Map());
+    const asset = (name) => {
+      if (!cache.has(name)) {
+        cache.set(name, loader.loadAsync(`${base}${data.assets}${name}/${name}_1k.gltf`).then((g) => {
+          const box = new THREE.Box3().setFromObject(g.scene);
+          return { scene: g.scene, size: box.getSize(new THREE.Vector3()), centre: box.getCenter(new THREE.Vector3()), minY: box.min.y };
+        }).catch(() => null));
+      }
+      return cache.get(name);
+    };
+    const levelNode = (i) => model.getObjectByName(`level_${i}`) || model;
+    // Each piece's fitted top, so what stands on it (a vase, a tea set) rests on it.
+    const tops = new Array(data.models.length);
+    const jobs = [];
+    data.models.forEach((m, i) => { tops[i] = jobs[i] = (async () => {
+      const a = await asset(m.asset);
+      if (!a || this.model !== model) return null;
+      const s = m.fit === "height" ? m.h / Math.max(a.size.y, 1e-3)
+        : Math.min(m.w / Math.max(a.size.x, 1e-3), m.d / Math.max(a.size.z, 1e-3), m.h / Math.max(a.size.y, 1e-3));
+      let y = m.y;
+      if (m.on != null) { const top = await tops[m.on]; if (top != null) y = top; }
+      const inner = a.scene.clone(true);
+      inner.position.set(-a.centre.x * s, -a.minY * s, -a.centre.z * s);
+      inner.scale.setScalar(s);
+      const g = new THREE.Group();
+      g.add(inner);
+      g.position.set(m.x, y, m.z);
+      g.rotation.y = m.yaw;
+      g.name = `furnish__${m.asset}`;
+      inner.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = o.receiveShadow = true;
+        if (m.colour) {
+          o.material = o.material.clone();
+          o.material.color = new THREE.Color(m.colour).lerp(new THREE.Color(0xffffff), 0.3);
+        }
+      });
+      levelNode(m.level).add(g);
+      this.furnished.push(g);
+      if (/ceiling_fan|ceiling_lamp|diya_lantern|Chandelier/.test(m.asset)) {
+        g.updateWorldMatrix(true, false);
+        g.userData.top = g.getWorldPosition(new THREE.Vector3()).y + m.h + 0.3;
+        this.hung.push(g);
+      }
+      return y + a.size.y * s;
+    })(); });
+    const texLoader = (this._tl ||= new THREE.TextureLoader());
+    const frameMat = (this._frameMat ||= new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.55 }));
+    for (const p of data.paintings) {
+      const t = texLoader.load(`${base}${data.art}${p.art}.jpg`);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 8;
+      const g = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(p.w + 0.07, p.h + 0.07, 0.035), frameMat);
+      // The painting as painted: its own colours, not re-graded by the room's exposure.
+      const canvas = new THREE.Mesh(new THREE.PlaneGeometry(p.w, p.h),
+        new THREE.MeshBasicMaterial({ map: t, color: 0xe8e4dc, toneMapped: false }));
+      canvas.position.z = 0.019;
+      frame.castShadow = true;
+      g.add(frame, canvas);
+      g.position.set(p.x, p.y, p.z);
+      g.rotation.y = p.yaw;
+      g.name = `painting__${p.art}`;
+      g.userData.title = `${p.title} · ${p.artist}`;
+      levelNode(p.level).add(g);
+      this.furnished.push(g);
+    }
+    await Promise.all(jobs);
+  }
+
+  // ── walking: standing in the house at eye height ─────────────────────
+  // Drag to look round, double-click the floor to walk to that spot, or use
+  // the arrow keys / WASD. Walls stop you; doors let you through.
+  walkInto(box, level = 0, { from = null, look = null } = {}) {
+    if (!this.model) return;
+    this.setMode("walk", level);
+    const floorY = this._floorY(level);
+    const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+    // Stand back in a corner of the room and look across it, as you would from its door.
+    const sx = from ? from.x : cx - (box.x1 - box.x0) * 0.3, sy = from ? from.y : cy - (box.y1 - box.y0) * 0.3;
+    const eye = this.model.localToWorld(new THREE.Vector3(sx, floorY + 1.6, -sy));
+    const at = look
+      ? this.model.localToWorld(new THREE.Vector3(look.x, floorY + 1.0, -look.y))
+      : this.model.localToWorld(new THREE.Vector3(cx + (cx - sx) * 0.5, floorY + 1.35, -(cy + (cy - sy) * 0.5)));
+    this.walking = { level, floorY, keys: new Set(), last: performance.now() };
+    const c = this.controls;
+    this._orbit ||= { min: c.minDistance, max: c.maxDistance, pol: c.maxPolarAngle, zoom: c.enableZoom, pan: c.enablePan, speed: c.rotateSpeed };
+    c.autoRotate = false;
+    c.enableZoom = false; c.enablePan = false;
+    c.minDistance = 0.01; c.maxDistance = 0.2;
+    c.minPolarAngle = Math.PI * 0.12; c.maxPolarAngle = Math.PI * 0.88;
+    c.rotateSpeed = -0.5;
+    this.camera.fov = 62; this.camera.near = 0.05; this.camera.updateProjectionMatrix();
+    this.camera.position.copy(eye);
+    c.target.copy(eye.clone().add(at.clone().sub(eye).normalize().multiplyScalar(0.1)));
+    c.update();
+    this._bindWalk();
+    if (this.renderer.xr.isPresenting) this._placeRig(eye, at);
+  }
+
+  leaveWalk() {
+    if (!this.walking) return;
+    this.walking = null;
+    const c = this.controls, o = this._orbit;
+    if (o) {
+      c.minDistance = o.min; c.maxDistance = o.max; c.maxPolarAngle = o.pol; c.minPolarAngle = 0;
+      c.enableZoom = o.zoom; c.enablePan = o.pan; c.rotateSpeed = o.speed;
+    }
+    this.camera.fov = 32; this.camera.near = 0.1; this.camera.updateProjectionMatrix();
+  }
+
+  _floorY(level) {
+    let base = 0;
+    const g = this.model.getObjectByName(`level_${level}`);
+    if (g) {
+      // The floor finishes, not the stair or a sunken courtyard, set the level.
+      const bb = new THREE.Box3();
+      g.traverse((o) => { if (o.isMesh && /__floors__/.test(o.name)) bb.expandByObject(o); });
+      if (bb.isEmpty()) bb.setFromObject(g);
+      if (!bb.isEmpty()) base = bb.max.y;
+    }
+    return base - this.model.position.y;
+  }
+
+  _bindWalk() {
+    if (this._walkBound) return;
+    this._walkBound = true;
+    const el = this.renderer.domElement;
+    el.tabIndex = 0;
+    el.addEventListener("keydown", (e) => {
+      if (!this.walking) return;
+      const k = e.key.toLowerCase();
+      if (["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d"].includes(k)) { e.preventDefault(); this.walking.keys.add(k); }
+    });
+    el.addEventListener("keyup", (e) => this.walking?.keys.delete(e.key.toLowerCase()));
+    el.addEventListener("blur", () => this.walking?.keys.clear());
+    el.addEventListener("dblclick", (e) => {
+      if (!this.walking) return;
+      const hit = this._pick(e.clientX, e.clientY);
+      if (!hit) return;
+      const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+      if (n.y < 0.6) return;                        // walk to a floor, not into a wall
+      const to = hit.point.clone().setY(this.camera.position.y);
+      this._glideWalk(to);
+    });
+    el.addEventListener("pointerdown", () => el.focus({ preventScroll: true }));
+  }
+
+  _pick(clientX, clientY) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    const ray = (this._ray ||= new THREE.Raycaster());
+    ray.setFromCamera(ndc, this.camera);
+    return this._visibleMeshes().length ? ray.intersectObjects(this._visibleMeshes(), false)[0] : null;
+  }
+
+  _visibleMeshes() {
+    const out = [];
+    this.model.traverse((o) => {
+      if (!o.isMesh) return;
+      let v = true;
+      for (let p = o; p; p = p.parent) if (!p.visible) { v = false; break; }
+      if (v && !(o.material && o.material.transparent)) out.push(o);
+    });
+    return out;
+  }
+
+  // Would a step from `from` along `dir` (unit, horizontal) of `len` run into something?
+  _blocked(from, dir, len) {
+    const ray = (this._wray ||= new THREE.Raycaster());
+    ray.far = len + 0.3;
+    for (const h of [-0.75, -0.25]) {     // knee and chest, below the eye
+      ray.set(from.clone().add(new THREE.Vector3(0, h, 0)), dir);
+      if (ray.intersectObjects(this._wallMeshes ||= this._visibleMeshes(), false).length) return true;
+    }
+    return false;
+  }
+
+  _glideWalk(to) {
+    const from = this.camera.position.clone();
+    const look = this.controls.target.clone().sub(from);
+    const t0 = performance.now(), ms = Math.min(1600, from.distanceTo(to) * 450);
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / ms), e = 1 - (1 - k) ** 3;
+      this.camera.position.lerpVectors(from, to, e);
+      this.controls.target.copy(this.camera.position).add(look);
+      if (k < 1 && this.walking) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  _walkTick(now) {
+    const w = this.walking;
+    const dt = Math.min(0.05, (now - w.last) / 1000);
+    w.last = now;
+    if (!w.keys.size || this.renderer.xr.isPresenting) { this._wallMeshes = null; return; }
+    const fwd = this.controls.target.clone().sub(this.camera.position).setY(0).normalize();
+    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const mv = new THREE.Vector3();
+    if (w.keys.has("w") || w.keys.has("arrowup")) mv.add(fwd);
+    if (w.keys.has("s") || w.keys.has("arrowdown")) mv.sub(fwd);
+    if (w.keys.has("d") || w.keys.has("arrowright")) mv.add(right);
+    if (w.keys.has("a") || w.keys.has("arrowleft")) mv.sub(right);
+    if (!mv.lengthSq()) return;
+    mv.normalize();
+    const len = 1.4 * dt;
+    if (this._blocked(this.camera.position, mv, len)) return;
+    mv.multiplyScalar(len);
+    this.camera.position.add(mv);
+    this.controls.target.add(mv);
+  }
+
+  // ── VR: the same walk, in a headset ──────────────────────────────────
+  // The headset gives the eye height and where you look; the trigger
+  // teleports to the spot on the floor you point at, the grip button goes
+  // on to the next room.
+  static async vrSupported() {
+    try { return !!(navigator.xr && await navigator.xr.isSessionSupported("immersive-vr")); } catch { return false; }
+  }
+
+  async enterVR({ onNextRoom } = {}) {
+    if (!navigator.xr) throw new Error("This browser has no WebXR");
+    this.onNextRoom = onNextRoom;
+    const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
+    const xr = this.renderer.xr;
+    xr.setReferenceSpaceType("local-floor");
+    await xr.setSession(session);
+    this.controls.enabled = false;
+    const rig = (this.rig ||= new THREE.Group());
+    this.scene.add(rig);
+    rig.add(this.camera);
+    const eye = this.camera.position.clone(), at = this.controls.target.clone();
+    this._placeRig(eye, at);
+    this._bindControllers(rig);
+    session.addEventListener("end", () => {
+      this.controls.enabled = true;
+      const p = this.camera.getWorldPosition(new THREE.Vector3());
+      this.scene.add(this.camera);
+      this.camera.position.copy(p);
+      this.camera.updateProjectionMatrix();
+    });
+  }
+
+  _placeRig(eye, at) {
+    const rig = this.rig;
+    if (!rig) return;
+    // The rig stands on the floor; the headset adds the eye height itself.
+    rig.position.set(eye.x, eye.y - 1.6, eye.z);
+    const d = at.clone().sub(eye);
+    rig.rotation.set(0, Math.atan2(-d.x, -d.z), 0);
+    this.camera.position.set(0, 0, 0);
+    this.camera.rotation.set(0, 0, 0);
+  }
+
+  _bindControllers(rig) {
+    if (this._controllers) return;
+    this._controllers = [0, 1].map((i) => {
+      const c = this.renderer.xr.getController(i);
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -4)]),
+        new THREE.LineBasicMaterial({ color: 0xf2e6cf }));
+      c.add(line);
+      rig.add(c);
+      c.addEventListener("selectstart", () => {
+        const m = new THREE.Matrix4().extractRotation(c.matrixWorld);
+        const ray = (this._xray ||= new THREE.Raycaster());
+        ray.ray.origin.setFromMatrixPosition(c.matrixWorld);
+        ray.ray.direction.set(0, 0, -1).applyMatrix4(m);
+        const hit = ray.intersectObjects(this._visibleMeshes(), false)[0];
+        if (!hit) return;
+        const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+        if (n.y < 0.6) return;                      // only onto a floor, not up a wall
+        rig.position.set(hit.point.x, hit.point.y, hit.point.z);
+      });
+      c.addEventListener("squeezestart", () => this.onNextRoom?.());
+      return c;
+    });
+  }
+
   dispose() {
     this.clearVastu();
-    cancelAnimationFrame(this.raf);
+    this.renderer.setAnimationLoop(null);
+    this.renderer.xr.getSession?.()?.end().catch(() => {});
     this.ro.disconnect();
     this.controls.dispose();
     this.renderer.dispose();

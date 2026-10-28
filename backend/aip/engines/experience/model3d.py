@@ -458,11 +458,12 @@ def export_glb(plan: FloorPlan, **options: Any) -> bytes:
             palette_id=options.get("palette_id"),
             colour_text=options.get("colour_text"),
             design_id=options.get("design_id"),
+            real=options.get("real", False),
         )
     except Exception as exc:  # noqa: BLE001
         log_event(logger, "model3d.presentation_failed", plan=plan.id, error=str(exc))
 
-    options = {k: v for k, v in options.items() if k not in ("palette_id", "colour_text", "design_id")}
+    options = {k: v for k, v in options.items() if k not in ("palette_id", "colour_text", "design_id", "real")}
     model = build_model(plan, **options)
     try:
         import trimesh

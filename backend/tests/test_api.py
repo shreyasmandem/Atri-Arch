@@ -226,6 +226,63 @@ def test_interior_endpoint_solves_a_layout(client, designed):
     assert body["palette"]["swatches"]
 
 
+def test_a_client_can_rearrange_a_room(client, designed):
+    """Swap the furniture, recolour it, move it and refinish the room; the scheme and the model follow."""
+    plan_id = designed["winner_plan_id"]
+    scheme = client.post(f"/api/v1/plans/{plan_id}/interior").json()
+    room = next(r for r in scheme["rooms"] if r["furniture"])
+    assert all(f["uid"] for f in room["furniture"])
+
+    cat = client.get(f"/api/v1/plans/{plan_id}/interior/catalogue", params={"room_id": room["room_id"]}).json()
+    ids = {i["id"] for g in cat["groups"] for i in g["items"]}
+    assert {"rug_dhurrie", "plant_tall"} <= ids and cat["floors"] and cat["colours"]["wood"]
+
+    first = room["furniture"][0]
+    items = [
+        {**first, "rotation": 90, "colour": "#5a3d2a"},
+        {"item_id": "rug_dhurrie", "x": first["x"], "y": first["y"], "colour": "#a8552e"},
+        {"item_id": "plant_tall", "x": -999, "y": -999},            # kept, but pulled back inside
+        {"item_id": "no_such_thing", "x": 0, "y": 0},               # dropped
+    ]
+    finishes = {"wall": "#e2b8a6", "accent": "#7f8fb0", "floor": "kota"}
+    res = client.post(f"/api/v1/plans/{plan_id}/interior/rooms/{room['room_id']}",
+                      json={"items": items, "finishes": finishes})
+    assert res.status_code == 200, res.text
+    body = res.json()
+    got = body["room"]
+    assert got["edited"] and got["finishes"] == finishes
+    assert [f["item_id"] for f in got["furniture"]] == [first["item_id"], "rug_dhurrie", "plant_tall"]
+    assert got["furniture"][0]["colour"] == "#5a3d2a" and got["furniture"][0]["rotation"] == 90
+    assert any("not in the catalogue" in n for n in body["notes"])
+    assert "Kota" in got["materials"]["floor"]
+
+    again = client.post(f"/api/v1/plans/{plan_id}/interior").json()
+    assert next(r for r in again["rooms"] if r["room_id"] == room["room_id"])["edited"]
+    glb = client.get(f"/api/v1/plans/{plan_id}/model.glb", params={"v": body["rev"]})
+    assert glb.status_code == 200 and b"floor_kota" in glb.content and b"5a3d2a" in glb.content
+
+    reset = client.delete(f"/api/v1/plans/{plan_id}/interior/rooms/{room['room_id']}").json()
+    assert not reset["room"]["edited"]
+
+
+def test_the_walkthrough_is_furnished_with_real_pieces(client, designed):
+    """Real models, fans, cushions and paintings come placed; the model leaves out what they replace."""
+    plan_id = designed["winner_plan_id"]
+    body = client.get(f"/api/v1/plans/{plan_id}/furnishings").json()
+    assets = {m["asset"] for m in body["models"]}
+    assert "ceiling_fan" in assets and "throw_pillows_01" in assets
+    assert body["paintings"] and all(p["art"] and p["w"] > 0 for p in body["paintings"])
+    assert all(p["licence"] for p in body["credits"]["paintings"])
+    for m in body["models"]:
+        assert m["y"] > 0 and m["w"] > 0 and m["h"] > 0
+    full = client.get(f"/api/v1/plans/{plan_id}/model.glb").content
+    lean = client.get(f"/api/v1/plans/{plan_id}/model.glb", params={"real": True}).content
+    scheme = client.post(f"/api/v1/plans/{plan_id}/interior").json()
+    if any(f["item_id"] in body["skip"] for r in scheme["rooms"] for f in r["furniture"]):
+        assert len(lean) < len(full)          # pieces with a real model are not drawn twice
+    assert b"curtain_fabric" in full
+
+
 def test_vastu_rescoring_changes_rule_weights_not_the_corpus(client, designed):
     plan_id = designed["winner_plan_id"]
     orthodox = client.post(

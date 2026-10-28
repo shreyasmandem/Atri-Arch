@@ -39,6 +39,8 @@ from aip.engines.interior.catalog import (
     items_for,
     palette_for,
 )
+from aip.engines.interior.editing import FLOORS, room_edit
+from aip.engines.interior.editing import item as catalogue_item
 
 logger = get_logger("aip.interior")
 
@@ -60,6 +62,9 @@ class PlacedFurniture(BaseModel):
     against_wall: str = ""
     facing: str = ""
     notes: str = ""
+    uid: str = ""                  # stable id, so a client's edit can name the item
+    colour: str | None = None      # a client's chosen finish, "#rrggbb"
+    art: str | None = None         # the painting in a frame, for wall art
 
     @property
     def footprint(self) -> BoundingBox:
@@ -94,6 +99,9 @@ class RoomInterior(BaseModel):
     layout_score: float = 0.0
     notes: list[str] = Field(default_factory=list)
     render_prompt: str = ""
+
+    edited: bool = False           # the client has arranged this room themselves
+    finishes: dict[str, str] = Field(default_factory=dict)   # wall / accent / floor overrides
 
 
 class InteriorScheme(BaseModel):
@@ -318,6 +326,20 @@ def _place_room(
                     f"smaller size or a wider room."
                 )
 
+        if result is None and item.essential and item.id.startswith("bed"):
+            # Still no bed: a smaller one, as a family would buy for a small room,
+            # rather than a bedroom without a bed.
+            from dataclasses import replace
+
+            for w_, d_, name in ((1.37, 1.9, "Double bed"), (0.99, 1.9, "Single bed")):
+                if w_ >= item.width:
+                    continue
+                smaller = replace(item, width=w_, depth=d_, name=name, side_clearance=0.2, front_clearance=0.55)
+                result = _try_place(smaller, room, box, windows, placed, collides, brief)
+                if result is not None:
+                    notes.append(f"A {item.name.lower()} does not fit with its clearances; a {name.lower()} is shown.")
+                    break
+
         if result is None:
             if item.essential:
                 unplaced.append(
@@ -368,24 +390,23 @@ def _try_place(
         parent = next((p for p in placed if p.item_id == item.parent), None)
         if parent is None:
             return None
-        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-            pf = parent.footprint
-            x = parent.x + dx * (pf.width / 2 + item.width / 2 + 0.05)
-            y = parent.y + dy * (pf.height / 2 + item.depth / 2 + 0.05)
-            candidate = BoundingBox(
-                x - item.width / 2, y - item.depth / 2,
-                x + item.width / 2, y + item.depth / 2,
+        # Beside it means at its side, level with its back: a nightstand stands
+        # by the bed head, against the same wall and facing the same way -
+        # never at the foot of the bed. The left one tries the left side first.
+        rot = math.radians(parent.rotation)
+        sides = (-1, 1) if item.id.endswith("_l") else (1, -1)
+        for side in sides:
+            lx = side * (parent.width / 2 + item.width / 2 + 0.05)
+            ly = -parent.depth / 2 + item.depth / 2
+            x = parent.x + lx * math.cos(rot) - ly * math.sin(rot)
+            y = parent.y + lx * math.sin(rot) + ly * math.cos(rot)
+            pf = PlacedFurniture(
+                item_id=item.id, name=item.name, x=round(x, 3), y=round(y, 3), rotation=parent.rotation,
+                width=item.width, depth=item.depth, height=item.height, cost=item.cost, notes=item.notes,
+                against_wall=parent.against_wall, facing=parent.facing,
             )
-            clearance = BoundingBox(
-                candidate.min_x, candidate.min_y - item.front_clearance,
-                candidate.max_x, candidate.max_y,
-            )
-            if not collides(candidate, clearance):
-                return PlacedFurniture(
-                    item_id=item.id, name=item.name, x=round(x, 3), y=round(y, 3),
-                    width=item.width, depth=item.depth, height=item.height,
-                    cost=item.cost, notes=item.notes,
-                )
+            if not collides(pf.footprint, pf.footprint):
+                return pf
         return None
 
     if item.placement is Placement.CENTRE:
@@ -587,7 +608,14 @@ def design_room(
 ) -> RoomInterior:
     """Full interior specification for a single room."""
     palette = palette or palette_for(brief.style.primary)
-    placed, unplaced, utilisation, notes = _place_room(plan, room, brief)
+    edit = room_edit(plan, room.id)
+    if edit is not None:
+        placed, unplaced, utilisation, notes = _edited_room(room, edit)
+    else:
+        placed, unplaced, utilisation, notes = _place_room(plan, room, brief)
+        for n, p in enumerate(placed):
+            p.uid = f"{room.id}-{n}"
+    finishes = dict((edit or {}).get("finishes") or {})
 
     furniture_cost = sum(p.cost for p in placed)
     finishes_cost = _finishes_cost(room)
@@ -610,9 +638,9 @@ def design_room(
             "character": palette.character,
         },
         materials={
-            "floor": palette.floor_material,
-            "walls": f"{palette.wall} emulsion over putty",
-            "accent_wall": palette.wall_accent,
+            "floor": _floor_name(finishes.get("floor")) or palette.floor_material,
+            "walls": f"{finishes.get('wall', palette.wall)} emulsion over putty",
+            "accent_wall": finishes.get("accent", palette.wall_accent),
             "ceiling": f"{palette.ceiling}, gypsum false ceiling" if not room.type.is_wet else "moisture-resistant board",
             "joinery": palette.joinery_material,
             "metal": palette.metal,
@@ -624,9 +652,50 @@ def design_room(
         utilisation=round(utilisation, 4),
         layout_score=round(layout_score, 4),
         notes=notes,
+        edited=edit is not None,
+        finishes=finishes,
     )
     interior.render_prompt = build_render_prompt(interior, palette, room, direction)
     return interior
+
+
+def _edited_room(
+    room: Room, edit: dict[str, Any]
+) -> tuple[list[PlacedFurniture], list[dict[str, Any]], float, list[str]]:
+    """The room as the client arranged it: their items, where they put them."""
+    placed: list[PlacedFurniture] = []
+    for raw in edit.get("items", []):
+        it = catalogue_item(str(raw.get("item_id", "")))
+        if it is None:
+            continue
+        rot = float(raw.get("rotation", 0.0))
+        name = f"{it.name} ({raw['size']})" if raw.get("size") else it.name
+        placed.append(PlacedFurniture(
+            item_id=it.id, name=name, x=float(raw["x"]), y=float(raw["y"]),
+            rotation=rot, width=float(raw.get("w") or it.width), depth=float(raw.get("d") or it.depth), height=it.height,
+            cost=it.cost, uid=str(raw.get("uid", "")), colour=raw.get("colour"), art=raw.get("art"),
+            facing=_facing_label(_FACING.get(int(rot) % 360, Vec2(0, 1))),
+        ))
+    notes: list[str] = []
+    solid = [p for p in placed if p.height > 0.05]          # rugs lie under things
+    clashes = sum(
+        1 for i, a in enumerate(solid) for b in solid[i + 1:] if _overlaps(a.footprint, b.footprint, 0.03)
+    )
+    if clashes:
+        notes.append(f"{plural(clashes, 'pair')} of items overlap in this arrangement.")
+    covered = sum(p.footprint.area for p in solid)
+    utilisation = covered / room.area if room.area > 0 else 0.0
+    if utilisation > 0.62:
+        notes.append(f"Furniture covers {utilisation:.0%} of the floor; the room will feel cramped.")
+    return placed, [], utilisation, notes
+
+
+#: The way an item faces for each rotation (its back to the wall it stands on).
+_FACING = {0: Vec2(0, 1), 90: Vec2(-1, 0), 180: Vec2(0, -1), 270: Vec2(1, 0)}
+
+
+def _floor_name(floor_id: str | None) -> str | None:
+    return next((f["name"] for f in FLOORS if f["id"] == floor_id), None)
 
 
 def _finishes_cost(room: Room) -> float:

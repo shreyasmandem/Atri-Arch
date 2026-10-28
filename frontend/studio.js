@@ -1636,7 +1636,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p10");
+    const { Viewer3D } = await import("./viewer3d.js?v=p15");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2216,20 +2216,34 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p10");
+  const { Viewer3D } = await import("./viewer3d.js?v=p15");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
   const pal = (S.palette ||= {});
+  // The model without the pieces that have real ones; those, the fans, the
+  // cushions and the paintings are stood in afterwards.
+  let furn = null, furnP = null;
+  const furnish = async () => {
+    try {
+      furnP = fetch(`${API}/plans/${id}/furnishings`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      furn = await furnP;
+      await viewer.furnish(furn);
+    } catch { /* the model still stands without them */ }
+  };
   const url = () => {
-    const q = new URLSearchParams();
+    const q = new URLSearchParams({ real: "1" });
     if (pal.id) q.set("palette", pal.id);
     if (pal.text) q.set("colours", pal.text);
     if (pal.design) q.set("design", pal.design);
+    const rev = S.plans[id]?.interior?.rev;
+    if (rev) q.set("v", rev);
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try { await viewer.load(url()); } catch (e) { cap.textContent = `The model could not be shown (${e.message}).`; return; }
-  cap.textContent = "Pick a room to walk into it · drag to look around";
+  cap.textContent = "Pick a room to stand in it and change it";
+  furnish();
+  const vr = await Viewer3D.vrSupported();
 
   // Interior palettes, cycled in place.
   let schemes = [];
@@ -2254,7 +2268,7 @@ async function renderInterior() {
         pal.id = schemes[(i + step + schemes.length) % schemes.length].id;
         drawStyle();
         await viewer.load(url(), { keepView: true });
-        if (current) viewer.focusRoom(current.box, current.lv, true);
+        await furnish();
       });
       nav.append(b);
     }
@@ -2262,62 +2276,575 @@ async function renderInterior() {
     style.append(row, sw, el("p", "inx__story", s.story || ""));
   };
 
-  // Walk into a room: the floors above lift away, the camera stands in a
-  // corner at eye height, and the furniture and its cost come up beside it.
+  // ── Rooms: pick one and you stand in it, with a small window to change it ──
   let current = null;
-  const open = async (item, li) => {
-    list.querySelectorAll("li").forEach((x) => x.classList.toggle("is-on", x === li));
+  const boxOf = (item) => {
     const xs = item.r.polygon.map((q) => q.x ?? q[0]), ys = item.r.polygon.map((q) => q.y ?? q[1]);
-    const box = { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
-    current = { box, lv: item.lv };
-    viewer.focusRoom(box, item.lv);
-    // Back (or Esc) leaves the room first, then the view.
-    S.exitRoom = () => {
-      S.exitRoom = null;
-      current = null;
-      list.querySelectorAll("li").forEach((x) => x.classList.remove("is-on"));
-      info.hidden = true;
-      cap.textContent = "Pick a room to walk into it · drag to look around";
-      viewer.load(url()).then(() => viewer.setMode("exterior")).catch(() => {});
-    };
-    const s = await scP;
-    const rs = s?.rooms?.find((x) => x.room_id === item.r.id);
-    info.innerHTML = "";
-    const out = el("button", "ghost-btn inx__out", "Whole house"); out.type = "button";
-    out.setAttribute("aria-label", "Leave the room and see the whole house");
-    out.addEventListener("click", () => S.exitRoom?.());
-    info.append(out);
-    info.append(el("b", "inx__room", item.r.name || item.r.type));
-    info.append(el("span", "inx__meta", `${(item.r.area ?? 0).toFixed?.(1) ?? ""} m² · ${floorName(item.lv)}${rs?.direction ? ` · ${rs.direction}` : ""}`));
-    if (rs?.furniture?.length) {
-      const ul = el("ul", "inx__items");
-      let total = 0;
-      for (const f of rs.furniture) {
-        total += f.cost || 0;
-        const li2 = el("li");
-        li2.append(el("span", null, f.name), el("span", "n", inr(f.cost || 0)));
-        ul.append(li2);
-      }
-      info.append(ul, el("p", "inx__total", `Furniture ${inr(total)}`));
-    } else {
-      info.append(el("p", "inx__meta", "No loose furniture - finishes only."));
-    }
-    if (rs?.lighting) info.append(el("p", "inx__meta", `${rs.lighting.target_lux} lux · ${rs.lighting.colour_temperature_k} K · ${rs.lighting.downlight_count} downlights`));
-    info.hidden = false;
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
   };
+  const roomOf = (item) => (S.plans[id]?.interior)?.rooms?.find((x) => x.room_id === item.r.id);
+  const ft = (m) => `${(m / 0.3048).toFixed(1).replace(/\.0$/, "")} ft`;
+  const mm = (m) => `${(+m).toFixed(2)} m`;
+
+  // Stand facing the room's main piece - the bed, the sofa, the table - a few steps back from it.
+  const stand = (item, box) => {
+    const fur = roomOf(item)?.furniture || [];
+    const anchor = fur.find((f) => /^bed/.test(f.item_id)) || fur.find((f) => /^(sofa|sectional|diwan)/.test(f.item_id))
+      || fur.find((f) => /^(dining|desk|study_desk|counter|mandir)/.test(f.item_id))
+      || [...fur].sort((a, b) => b.width * b.depth - a.width * a.depth)[0];
+    let pose = {};
+    if (anchor) {
+      const r = (anchor.rotation * Math.PI) / 180, fx = -Math.sin(r), fy = Math.cos(r);
+      const back = Math.min(3.2, Math.max(1.6, ((Math.abs(fy) > 0.5 ? box.y1 - box.y0 : box.x1 - box.x0) - anchor.depth) * 0.85));
+      const m = 0.35;
+      pose = {
+        from: { x: Math.min(box.x1 - m, Math.max(box.x0 + m, anchor.x + fx * (anchor.depth / 2 + back))),
+                y: Math.min(box.y1 - m, Math.max(box.y0 + m, anchor.y + fy * (anchor.depth / 2 + back))) },
+        look: { x: anchor.x, y: anchor.y },
+      };
+    }
+    viewer.walkInto(box, item.lv, pose);
+  };
+
+  // The bar under the view: the room you are in, the rooms either side, and how you see it.
+  const walkBar = el("div", "inx__walkbar");
+  walkBar.hidden = true;
+  stage.append(walkBar);
+  let walkIdx = -1, fromAbove = false;
+  const drawBar = (item) => {
+    walkBar.innerHTML = "";
+    const prev = el("button", "ghost-btn ghost-btn--ico"); prev.type = "button"; prev.append(icon("prev"));
+    prev.setAttribute("aria-label", "Previous room"); prev.addEventListener("click", () => stepRoom(-1));
+    const next = el("button", "ghost-btn ghost-btn--ico"); next.type = "button"; next.append(icon("next"));
+    next.setAttribute("aria-label", "Next room"); next.addEventListener("click", () => stepRoom(1));
+    const name = el("b", null, item.r.name || item.r.type);
+    const view = el("button", "ghost-btn", fromAbove ? "Stand inside" : "See from above"); view.type = "button";
+    view.addEventListener("click", () => {
+      fromAbove = !fromAbove;
+      if (fromAbove) { viewer.leaveWalk(); viewer.focusRoom(current.box, item.lv); cap.textContent = "Drag to turn the room · scroll to zoom"; }
+      else { stand(item, current.box); cap.textContent = WALK_HINT; }
+      drawBar(item);
+    });
+    const out = el("button", "ghost-btn", "Whole house"); out.type = "button";
+    out.addEventListener("click", () => leave());
+    walkBar.append(prev, name, next, view);
+    if (wrap.classList.contains("ed-hidden")) {
+      const ed = el("button", "ghost-btn", "Edit room"); ed.type = "button";
+      ed.addEventListener("click", () => { wrap.classList.remove("ed-hidden"); drawBar(item); });
+      walkBar.append(ed);
+    }
+    if (vr) {
+      const vrB = el("button", "ghost-btn", "VR"); vrB.type = "button";
+      vrB.title = "In a VR headset: trigger to step where you point, grip for the next room";
+      vrB.addEventListener("click", async () => {
+        if (fromAbove) { fromAbove = false; stand(item, current.box); drawBar(item); }
+        try { await viewer.enterVR({ onNextRoom: () => stepRoom(1) }); } catch (e) { toast(`VR could not start (${e.message}).`); }
+      });
+      walkBar.append(vrB);
+    }
+    walkBar.append(out);
+    walkBar.hidden = false;
+  };
+  const WALK_HINT = "Drag to look round · double-click the floor to walk · WASD to move";
+
+  const enter = async (item) => {
+    walkIdx = rooms.indexOf(item);
+    list.querySelectorAll("li").forEach((x) => x.classList.toggle("is-on", x === lis.get(item)));
+    lis.get(item)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    await scP;
+    const box = boxOf(item);
+    current = { box, lv: item.lv, item };
+    fromAbove = false;
+    stand(item, box);
+    drawBar(item);
+    cap.textContent = WALK_HINT;
+    S.exitRoom = () => leave();
+    editor(item);
+  };
+  const leave = () => {
+    S.exitRoom = null;
+    current = null;
+    wrap.querySelector(".inx__ed")?.remove();
+    wrap.classList.remove("has-ed", "ed-hidden");
+    list.querySelectorAll("li").forEach((x) => x.classList.remove("is-on"));
+    walkBar.hidden = true;
+    viewer.leaveWalk();
+    viewer.setMode("exterior");
+    cap.textContent = "Pick a room to stand in it and change it";
+  };
+  const stepRoom = (k) => {
+    if (!rooms.length) return;
+    enter(rooms[((walkIdx < 0 ? 0 : walkIdx) + k + rooms.length) % rooms.length]);
+  };
+
+  // ── The edit window ─────────────────────────────────────────────────
+  // One room at a time: its look, its pieces (what each is, its standard size,
+  // its colour, where it stands), what to add, its walls and floor, and the
+  // room from above. Every change is kept as it is made and the view follows.
+  let catCache = new Map();
+  const editor = async (item) => {
+    wrap.querySelector(".inx__ed")?.remove();
+    const rs = roomOf(item);
+    if (!rs) return;
+    const win = el("section", "inx__ed");
+    win.setAttribute("aria-label", `Change the ${item.r.name || item.r.type}`);
+    wrap.append(win);
+    wrap.classList.add("has-ed");
+    wrap.classList.remove("ed-hidden");
+    const head = el("header", "inx__ed-head");
+    const title = el("div", "inx__ed-title");
+    const where = item.lv === 0 ? "ground floor" : `level ${item.lv}`;
+    title.append(el("h3", null, item.r.name || item.r.type),
+      el("p", null, `${(+item.r.area || 0).toFixed(1)} m², ${where}${rs.direction ? `, ${rs.direction} side` : ""}`));
+    const status = el("span", "inx__ed-status", rs.edited ? "Your changes are kept" : "Changes save as you go");
+    status.setAttribute("aria-live", "polite");
+    const fold = el("button", "inx__ed-fold"); fold.type = "button";
+    fold.setAttribute("aria-label", "Close the edit panel");
+    fold.addEventListener("click", () => {
+      wrap.classList.add("ed-hidden");
+      if (current) drawBar(current.item);
+    });
+    head.append(title, fold);
+    win.append(head);
+    const loading = el("p", "inx__ed-empty", "Loading what this room can hold…");
+    win.append(loading);
+
+    let cat = catCache.get(item.r.type);
+    if (!cat) {
+      cat = await fetch(`${API}/plans/${id}/interior/catalogue?room_id=${encodeURIComponent(item.r.id)}`)
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (cat) catCache.set(item.r.type, cat);
+    }
+    if (!win.isConnected) return;
+    loading.remove();
+    if (!cat) { win.append(el("p", "inx__ed-empty", "The furniture list could not be loaded. Pick the room again to retry.")); return; }
+
+    const byId = new Map(), groupOf = new Map();
+    for (const g of cat.groups) for (const it of g.items) { byId.set(it.id, it); groupOf.set(it.id, g.name); }
+    const swatchHex = { wood: "#8a6a4c", fabric: "#b9ab90", metal: "#b08a3e", none: "#d9d6cf" };
+    const draft = {
+      items: rs.furniture.map((f) => ({ uid: f.uid, item_id: f.item_id, x: f.x, y: f.y, rotation: f.rotation || 0,
+        colour: f.colour || null, art: f.art || null, w: f.width, d: f.depth })),
+      finishes: { ...(rs.finishes || {}) },
+    };
+    let sel = draft.items[0]?.uid || null;
+    const bx = current.box;
+    const snap = (v) => Math.round(v / 0.05) * 0.05;
+    const size = (d) => { const it = byId.get(d.item_id) || { width: 0.5, depth: 0.5 }; return [d.w || it.width, d.d || it.depth]; };
+    const dims = (d) => { const [w, dd] = size(d); return Math.round(d.rotation / 90) % 2 === 1 ? [dd, w] : [w, dd]; };
+    const keepIn = (d) => {
+      const [w, h] = dims(d);
+      d.x = Math.min(Math.max(d.x, bx.x0 + w / 2), Math.max(bx.x0 + w / 2, bx.x1 - w / 2));
+      d.y = Math.min(Math.max(d.y, bx.y0 + h / 2), Math.max(bx.y0 + h / 2, bx.y1 - h / 2));
+    };
+    const sizeName = (d) => {
+      const [w, dd] = size(d);
+      const z = (byId.get(d.item_id)?.sizes || []).find((x) => Math.abs(x.w - w) < 0.1 && Math.abs(x.d - dd) < 0.1);
+      return z ? `${z.name}, ${ft(w)} × ${ft(dd)}` : `${ft(w)} × ${ft(dd)}`;
+    };
+
+    // Keep each change as it is made: a short pause, then the room is saved and the view redrawn.
+    let timer = null, saving = false, again = false;
+    const commit = () => {
+      status.textContent = "Saving…";
+      clearTimeout(timer);
+      timer = setTimeout(push, 650);
+    };
+    const push = async () => {
+      if (saving) { again = true; return; }
+      saving = true;
+      try {
+        const res = await fetch(`${API}/plans/${id}/interior/rooms/${encodeURIComponent(item.r.id)}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(draft),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
+        const out = await res.json();
+        apply(out);
+        for (const n of out.notes || []) toast(n);
+        status.textContent = "Updating the view…";
+        await viewer.load(url(), { keepView: true });
+        await furnish();
+        if (fromAbove && current) viewer.focusRoom(current.box, item.lv, true);
+        status.textContent = "Saved";
+      } catch (e) {
+        status.textContent = "Not saved";
+        toast(`The room could not be saved (${e.message}). Try the change again.`);
+      } finally {
+        saving = false;
+        if (again) { again = false; push(); }
+      }
+    };
+    const apply = (out) => {
+      const sc2 = S.plans[id].interior;
+      if (sc2) {
+        sc2.rooms = sc2.rooms.map((x) => (x.room_id === out.room.room_id ? out.room : x));
+        sc2.rev = out.rev;
+      }
+    };
+    const changed = () => { drawPlan(); drawTab(); commit(); };
+
+    // Tabs.
+    const tabs = el("div", "inx__ed-tabs"); tabs.setAttribute("role", "tablist");
+    const body = el("div", "inx__ed-body");
+    const TABS = [["looks", "Looks"], ["pieces", "Furniture"], ["add", "Add"], ["room", "Walls & floor"], ["plan", "Layout"]];
+    let tab = "looks";
+    for (const [k, label] of TABS) {
+      const b = el("button", null, label); b.type = "button"; b.setAttribute("role", "tab"); b.dataset.tab = k;
+      b.addEventListener("click", () => { tab = k; drawTab(); });
+      tabs.append(b);
+    }
+    win.append(tabs, body);
+    const foot = el("footer", "inx__ed-foot");
+    const reset = el("button", "link", "Undo all changes"); reset.type = "button";
+    reset.title = "Go back to the designer's layout for this room";
+    reset.addEventListener("click", async () => {
+      if (!confirm("Undo every change to this room and go back to the designer's layout?")) return;
+      status.textContent = "Resetting…";
+      try {
+        const res = await fetch(`${API}/plans/${id}/interior/rooms/${encodeURIComponent(item.r.id)}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        apply(await res.json());
+        await viewer.load(url(), { keepView: true });
+        await furnish();
+        editor(item);
+      } catch (e) { status.textContent = "Not reset"; toast(`The room could not be reset (${e.message}).`); }
+    });
+    foot.append(status, reset);
+    win.append(foot);
+
+    // Small parts.
+    const label = (t) => el("p", "inx__lbl", t);
+    const swatches = (list, current, pick, name, { custom = true } = {}) => {
+      const row = el("div", "inx__swatches");
+      row.setAttribute("role", "radiogroup"); row.setAttribute("aria-label", name);
+      for (const c of list) {
+        const on = current && (current === c.hex || current === c.id);
+        const b = el("button", `inx__swatch${on ? " is-on" : ""}`); b.type = "button";
+        b.style.background = c.hex; b.title = c.name; b.setAttribute("aria-label", c.name);
+        b.setAttribute("role", "radio"); b.setAttribute("aria-checked", String(!!on));
+        b.addEventListener("click", () => { pick(c.hex); changed(); });
+        row.append(b);
+      }
+      if (custom) {
+        // Any colour at all, for a client who has a shade in mind.
+        const own = el("label", "inx__swatch inx__swatch--own"); own.title = "Any colour";
+        const inp = el("input"); inp.type = "color"; inp.value = /^#[0-9a-f]{6}$/i.test(current || "") ? current : "#c8b89a";
+        inp.setAttribute("aria-label", `${name}: any colour`);
+        inp.addEventListener("change", () => { pick(inp.value); changed(); });
+        own.append(inp);
+        row.append(own);
+      }
+      return row;
+    };
+    const artPicker = (current, pick, allowNone = false) => {
+      const grid = el("div", "inx__art");
+      for (const a of [...(allowNone ? [{ id: "none", title: "No painting" }] : []), ...(cat.art || [])]) {
+        const on = current === a.id;
+        const b = el("button", `inx__art-btn${on ? " is-on" : ""}`); b.type = "button";
+        b.title = a.artist ? `${a.title}, ${a.artist}` : a.title;
+        b.setAttribute("aria-label", b.title); b.setAttribute("aria-pressed", String(on));
+        if (a.id === "none") b.append(el("span", null, "None"));
+        else { const im = el("img"); im.src = `assets/art/${a.id}.jpg`; im.alt = ""; im.loading = "lazy"; b.append(im); }
+        b.addEventListener("click", () => { pick(a.id); changed(); });
+        grid.append(b);
+      }
+      return grid;
+    };
+    // Where a new piece goes: a wall piece on a wall (a television over its unit),
+    // a light over the table, a piece that stands against a wall along the
+    // first free one, anything else in the middle of the room.
+    const lowSolid = (x) => { const it = byId.get(x.item_id); return it && !it.mount && (it.height || 0) > 0.05; };
+    const clash = (c) => {
+      const [w, h] = dims(c);
+      return draft.items.some((x) => {
+        if (!lowSolid(x)) return false;
+        const [xw, xh] = dims(x);
+        return Math.abs(x.x - c.x) < (w + xw) / 2 - 0.02 && Math.abs(x.y - c.y) < (h + xh) / 2 - 0.02;
+      });
+    };
+    const placeNew = (o) => {
+      const cx = (bx.x0 + bx.x1) / 2, cy = (bx.y0 + bx.y1) / 2;
+      const c = { uid: newUid(), item_id: o.id, x: cx, y: cy, rotation: 0, colour: null, w: null, d: null, art: null };
+      if (o.mount === "ceiling") {
+        const t = draft.items.find((x) => /^dining/.test(x.item_id));
+        if (t) { c.x = t.x; c.y = t.y; }
+        keepIn(c);
+        return c;
+      }
+      const unit = o.id === "tv_wall" && draft.items.find((x) => /^(tv_unit|family_tv)/.test(x.item_id));
+      if (unit) {
+        const [, ud] = size(unit), r = (unit.rotation * Math.PI) / 180, ly = -ud / 2 + o.depth / 2;
+        c.rotation = unit.rotation; c.x = unit.x - ly * Math.sin(r); c.y = unit.y + ly * Math.cos(r);
+        return c;
+      }
+      if (o.mount === "wall" || ["against_wall", "corner", "counter_run"].includes(o.placement)) {
+        const d = o.depth, w = o.width;
+        const walls = [[0, (t) => [bx.x0 + w / 2 + t * (bx.x1 - bx.x0 - w), bx.y0 + d / 2]],
+          [180, (t) => [bx.x0 + w / 2 + t * (bx.x1 - bx.x0 - w), bx.y1 - d / 2]],
+          [270, (t) => [bx.x0 + d / 2, bx.y0 + w / 2 + t * (bx.y1 - bx.y0 - w)]],
+          [90, (t) => [bx.x1 - d / 2, bx.y0 + w / 2 + t * (bx.y1 - bx.y0 - w)]]];
+        const along = o.placement === "corner" ? [0, 1, 0.5] : [0.5, 0.2, 0.8, 0, 1];
+        for (const [rot, at] of walls) {
+          for (const t of along) {
+            [c.x, c.y] = at(t); c.rotation = rot; keepIn(c);
+            if (o.mount === "wall" || !clash(c)) return c;
+          }
+        }
+        [c.x, c.y] = walls[0][1](0.5); c.rotation = 0;
+        keepIn(c);
+        return c;
+      }
+      // Free-standing: the open spot nearest the middle, on a 25 cm grid.
+      keepIn(c);
+      if (clash(c) && (byId.get(o.id)?.height || o.height || 0) > 0.05) {
+        const spots = [];
+        for (let x = bx.x0 + 0.3; x <= bx.x1 - 0.3; x += 0.25) for (let y = bx.y0 + 0.3; y <= bx.y1 - 0.3; y += 0.25) spots.push([x, y]);
+        spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy));
+        for (const [x, y] of spots) { c.x = x; c.y = y; keepIn(c); if (!clash(c)) return c; }
+        c.x = cx; c.y = cy; keepIn(c);
+      }
+      return c;
+    };
+    const turn = (d) => { d.rotation = (d.rotation + 90) % 360; keepIn(d); changed(); };
+    const remove = (d) => { draft.items = draft.items.filter((x) => x !== d); sel = draft.items[0]?.uid || null; changed(); };
+    const nudge = (d, dx, dy) => { d.x = snap(d.x + dx); d.y = snap(d.y + dy); keepIn(d); changed(); };
+    const newUid = () => `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+
+    // The room from above, for the Layout tab.
+    const NS = "http://www.w3.org/2000/svg";
+    const pad = 0.25;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "inx__plan");
+    svg.setAttribute("viewBox", `${bx.x0 - pad} ${-bx.y1 - pad} ${bx.x1 - bx.x0 + 2 * pad} ${bx.y1 - bx.y0 + 2 * pad}`);
+    svg.setAttribute("role", "application");
+    svg.setAttribute("aria-label", "The room from above: drag a piece to move it, R turns it, Delete removes it, arrow keys nudge it");
+    svg.tabIndex = 0;
+    const ptOf = (ev) => { const m = svg.getScreenCTM().inverse(); const q = new DOMPoint(ev.clientX, ev.clientY).matrixTransform(m); return { x: q.x, y: -q.y }; };
+    const drawPlan = () => {
+      svg.innerHTML = "";
+      const room = document.createElementNS(NS, "polygon");
+      room.setAttribute("points", item.r.polygon.map((q) => `${q.x ?? q[0]},${-(q.y ?? q[1])}`).join(" "));
+      room.setAttribute("class", "inx__plan-room");
+      if (draft.finishes.floor) room.style.fill = (cat.floors.find((f) => f.id === draft.finishes.floor) || {}).hex || "";
+      svg.append(room);
+      const order = [...draft.items].sort((a, b) => (byId.get(a.item_id)?.height || 0) - (byId.get(b.item_id)?.height || 0));
+      const fs = Math.max(0.12, Math.min(0.2, (bx.x1 - bx.x0) / 26));
+      for (const d of order) {
+        const it = byId.get(d.item_id);
+        if (!it) continue;
+        const [w, dd] = size(d);
+        const g = document.createElementNS(NS, "g");
+        g.setAttribute("class", `inx__piece${d.uid === sel ? " is-sel" : ""}`);
+        g.setAttribute("transform", `translate(${d.x} ${-d.y}) rotate(${-d.rotation})`);
+        const r = document.createElementNS(NS, "rect");
+        r.setAttribute("x", -w / 2); r.setAttribute("y", -dd / 2); r.setAttribute("width", w); r.setAttribute("height", dd);
+        r.style.fill = d.colour || swatchHex[it.colour_group] || "#8a6a4c";
+        if ((it.height || 0) < 0.05) r.style.opacity = "0.55";
+        const front = document.createElementNS(NS, "line");
+        front.setAttribute("x1", -w / 2); front.setAttribute("x2", w / 2); front.setAttribute("y1", -dd / 2); front.setAttribute("y2", -dd / 2);
+        front.setAttribute("class", "inx__front");
+        const t = document.createElementNS(NS, "text");
+        t.textContent = it.name.length > 18 ? `${it.name.slice(0, 16)}…` : it.name;
+        t.setAttribute("font-size", fs); t.setAttribute("transform", `rotate(${d.rotation})`);
+        t.setAttribute("text-anchor", "middle"); t.setAttribute("dominant-baseline", "middle");
+        const tip = document.createElementNS(NS, "title"); tip.textContent = `${it.name}, ${sizeName(d)}`;
+        g.append(r, front, t, tip);
+        g.addEventListener("pointerdown", (ev) => {
+          ev.preventDefault();
+          sel = d.uid; drawPlan();
+          const start = ptOf(ev), ox = d.x, oy = d.y;
+          let moved = false;
+          svg.setPointerCapture(ev.pointerId);
+          const move = (e2) => {
+            const q = ptOf(e2);
+            d.x = snap(ox + q.x - start.x); d.y = snap(oy + q.y - start.y); keepIn(d); moved = true;
+            svg.querySelector(".inx__piece.is-sel")?.setAttribute("transform", `translate(${d.x} ${-d.y}) rotate(${-d.rotation})`);
+          };
+          const up = () => {
+            svg.removeEventListener("pointermove", move); svg.removeEventListener("pointerup", up); svg.removeEventListener("pointercancel", up);
+            if (moved) changed(); else drawTab();
+          };
+          svg.addEventListener("pointermove", move); svg.addEventListener("pointerup", up); svg.addEventListener("pointercancel", up);
+        });
+        svg.append(g);
+      }
+    };
+    svg.addEventListener("keydown", (ev) => {
+      const d = draft.items.find((x) => x.uid === sel);
+      if (!d) return;
+      const st = ev.shiftKey ? 0.25 : 0.05;
+      const k = { ArrowLeft: [-st, 0], ArrowRight: [st, 0], ArrowUp: [0, st], ArrowDown: [0, -st] }[ev.key];
+      if (k) { ev.preventDefault(); nudge(d, k[0], k[1]); return; }
+      if (ev.key === "r" || ev.key === "R") { ev.preventDefault(); turn(d); }
+      if (ev.key === "Delete" || ev.key === "Backspace") { ev.preventDefault(); remove(d); }
+    });
+
+    // What a piece is: its kind, a standard size, its colour, and where it stands.
+    const pieceDetail = (d) => {
+      const it = byId.get(d.item_id);
+      const box = el("div", "inx__detail");
+      const top = el("div", "inx__detail-top");
+      top.append(el("b", null, it.name), el("span", null, sizeName(d)));
+      box.append(top);
+      const kinds = cat.groups.find((g) => g.name === groupOf.get(d.item_id))?.items || [];
+      if (kinds.length > 1) {
+        const lab = el("label", "inx__field"); lab.append(label("Type"));
+        const pick = el("select");
+        for (const o of kinds) { const op = el("option", null, o.name); op.value = o.id; op.selected = o.id === d.item_id; pick.append(op); }
+        pick.addEventListener("change", () => {
+          const was = byId.get(d.item_id)?.colour_group;
+          d.item_id = pick.value; d.w = d.d = null;
+          if (byId.get(d.item_id)?.colour_group !== was) d.colour = null;
+          keepIn(d); changed();
+        });
+        lab.append(pick);
+        box.append(lab);
+      }
+      if (it.sizes?.length) {
+        box.append(label("Standard size"));
+        const row = el("div", "inx__sizes");
+        const [w, dd] = size(d);
+        for (const z of it.sizes) {
+          const on = Math.abs(z.w - w) < 0.1 && Math.abs(z.d - dd) < 0.1;
+          const b = el("button", `inx__size${on ? " is-on" : ""}`); b.type = "button";
+          b.setAttribute("aria-pressed", String(on));
+          b.append(el("b", null, z.name), el("span", null, z.ft), el("small", null, z.m));
+          b.addEventListener("click", () => { d.w = z.w; d.d = z.d; keepIn(d); changed(); });
+          row.append(b);
+        }
+        box.append(row);
+      } else {
+        box.append(el("p", "inx__note", `${mm(it.width)} wide, ${mm(it.depth)} deep, ${mm(it.height)} high (${ft(it.width)} × ${ft(it.depth)})`));
+      }
+      if (d.item_id === "wall_art" && cat.art?.length) box.append(label("Painting"), artPicker(d.art, (a) => { d.art = a; }));
+      if (cat.colours[it.colour_group]) {
+        box.append(label(it.colour_group === "fabric" ? "Fabric colour" : it.colour_group === "metal" ? "Metal finish" : "Wood finish"));
+        box.append(swatches(cat.colours[it.colour_group], d.colour, (h) => { d.colour = h; }, "Colour"));
+      }
+      box.append(label("Place it"));
+      const acts = el("div", "inx__acts");
+      const pad4 = el("div", "inx__nudge"); pad4.setAttribute("role", "group"); pad4.setAttribute("aria-label", "Move by 10 cm");
+      for (const [t, dx, dy, a] of [["←", -0.1, 0, "Move west"], ["↑", 0, 0.1, "Move north"], ["↓", 0, -0.1, "Move south"], ["→", 0.1, 0, "Move east"]]) {
+        const b = el("button", "ghost-btn ghost-btn--ico", t); b.type = "button"; b.setAttribute("aria-label", `${a} by 10 cm`);
+        b.addEventListener("click", () => nudge(d, dx, dy));
+        pad4.append(b);
+      }
+      const tb = el("button", "ghost-btn", "Turn"); tb.type = "button"; tb.addEventListener("click", () => turn(d));
+      const db = el("button", "ghost-btn", "Duplicate"); db.type = "button";
+      db.addEventListener("click", () => { const c = { ...d, uid: newUid(), x: d.x + 0.3, y: d.y - 0.3 }; keepIn(c); draft.items.push(c); sel = c.uid; changed(); });
+      const rb = el("button", "ghost-btn inx__del", "Remove"); rb.type = "button"; rb.addEventListener("click", () => remove(d));
+      acts.append(pad4, tb, db, rb);
+      box.append(acts);
+      return box;
+    };
+
+    const drawTab = () => {
+      tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+      body.innerHTML = "";
+      body.scrollTop = 0;
+      if (tab === "looks") {
+        body.append(el("p", "inx__note", "One click colours the whole room: walls, accent wall, floor, and the wood and fabric of every piece."));
+        const grid = el("div", "inx__looks");
+        for (const lk of cat.looks || []) {
+          const on = draft.finishes.look === lk.id;
+          const b = el("button", `inx__look${on ? " is-on" : ""}`); b.type = "button"; b.setAttribute("aria-pressed", String(on));
+          const strip = el("span", "inx__look-strip");
+          const floorHex = (cat.floors.find((f) => f.id === lk.floor) || {}).hex || "#999";
+          for (const [hex, part] of [[lk.wall, "walls"], [lk.accent, "accent"], [lk.wood, "wood"], [lk.fabric, "fabric"], [floorHex, "floor"]]) {
+            const c = el("i"); c.style.background = hex; c.title = part; strip.append(c);
+          }
+          b.append(strip, el("b", null, lk.name), el("small", null, lk.story));
+          b.addEventListener("click", () => {
+            draft.finishes = { ...draft.finishes, wall: lk.wall, accent: lk.accent, floor: lk.floor, look: lk.id };
+            for (const d of draft.items) {
+              const g = byId.get(d.item_id)?.colour_group;
+              d.colour = g === "wood" ? lk.wood : g === "fabric" ? lk.fabric : g === "metal" ? lk.metal : null;
+            }
+            changed();
+          });
+          grid.append(b);
+        }
+        body.append(grid);
+      } else if (tab === "pieces") {
+        const d = draft.items.find((x) => x.uid === sel);
+        if (d && byId.get(d.item_id)) body.append(pieceDetail(d));
+        else body.append(el("p", "inx__ed-empty", draft.items.length ? "Pick a piece below to change it." : "This room is empty. Add a piece from the Add tab."));
+        if (draft.items.length) {
+          body.append(label(`In this room (${draft.items.length})`));
+          const ul = el("ul", "inx__list");
+          for (const x of draft.items) {
+            const it = byId.get(x.item_id);
+            if (!it) continue;
+            const li2 = el("li"); const b = el("button", x.uid === sel ? "is-on" : null); b.type = "button";
+            const dot = el("i"); dot.style.background = x.colour || swatchHex[it.colour_group] || "#8a6a4c";
+            b.append(dot, el("span", null, it.name), el("small", null, sizeName(x)));
+            b.addEventListener("click", () => { sel = x.uid; drawPlan(); drawTab(); });
+            li2.append(b); ul.append(li2);
+          }
+          body.append(ul);
+        }
+      } else if (tab === "add") {
+        body.append(el("p", "inx__note", "A piece is placed in the middle of the room. Move it from Furniture or Layout."));
+        for (const g of cat.groups) {
+          body.append(label(g.name));
+          const grid = el("div", "inx__add");
+          for (const o of g.items) {
+            const std = `${ft(o.width)} × ${ft(o.depth)}${o.sizes?.length > 1 ? `, ${o.sizes.length} standard sizes` : ""}`;
+            const b = el("button", "inx__add-btn"); b.type = "button";
+            b.append(el("b", null, o.name), el("small", null, std));
+            b.addEventListener("click", () => {
+              const c = placeNew(o);
+              draft.items.push(c); sel = c.uid; tab = "pieces";
+              toast(`${o.name} added. Move it from Furniture or Layout.`);
+              changed();
+            });
+            grid.append(b);
+          }
+          body.append(grid);
+        }
+      } else if (tab === "room") {
+        const fin = draft.finishes;
+        const unlook = () => { delete fin.look; };
+        body.append(label("Walls"), swatches(cat.paints, fin.wall, (h) => { fin.wall = h; unlook(); }, "Wall paint"));
+        body.append(label("Accent wall"), swatches(cat.paints, fin.accent, (h) => { fin.accent = h; unlook(); }, "Accent wall paint"));
+        body.append(label("Floor"));
+        const fl = el("div", "inx__floors");
+        for (const f of cat.floors) {
+          const on = fin.floor === f.id;
+          const b = el("button", `inx__floor${on ? " is-on" : ""}`); b.type = "button"; b.setAttribute("aria-pressed", String(on));
+          const chip = el("i"); chip.style.background = f.hex;
+          b.append(chip, el("span", null, f.name));
+          b.addEventListener("click", () => { fin.floor = f.id; unlook(); changed(); });
+          fl.append(b);
+        }
+        body.append(fl);
+        if (cat.art?.length) body.append(label("Painting over the bed or sofa"), artPicker(fin.art, (a) => { fin.art = a; }, true));
+        const clr = el("button", "ghost-btn", "Use the house colours"); clr.type = "button";
+        clr.addEventListener("click", () => { draft.finishes = {}; changed(); });
+        body.append(clr);
+      } else {
+        body.append(el("p", "inx__note", "Drag a piece to move it. Click one, then R turns it, Delete removes it, arrow keys nudge it."));
+        body.append(svg);
+        drawPlan();
+      }
+    };
+    drawPlan();
+    drawTab();
+  };
+
   const lis = new Map();
   for (const item of rooms) {
     const li = el("li");
     lis.set(item, li);
     const b = el("button", "inx__room-btn"); b.type = "button";
-    b.append(el("span", null, item.r.name || item.r.type), el("small", null, `${floorName(item.lv)} · ${(+item.r.area || 0).toFixed(1)} m²`));
-    b.addEventListener("click", () => open(item, li));
+    b.append(el("span", null, item.r.name || item.r.type), el("small", null, `${floorName(item.lv)}, ${(+item.r.area || 0).toFixed(1)} m²`));
+    b.addEventListener("click", () => enter(item));
     li.append(b);
     list.append(li);
   }
   info.hidden = true;
   const first = rooms.find((x) => x.r.type === "living") || rooms[0];
-  if (first) open(first, lis.get(first));
+  if (first) enter(first);
 }
 
 /* ── 3D ────────────────────────────────────────────────────────────── */
@@ -2358,10 +2885,12 @@ async function renderModel() {
     if (pal.id) q.set("palette", pal.id);
     if (pal.text) q.set("colours", pal.text);
     if (pal.design) q.set("design", pal.design);
+    const rev = S.plans[id]?.interior?.rev;
+    if (rev) q.set("v", rev);
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p10");
+    const { Viewer3D } = await import("./viewer3d.js?v=p15");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2480,7 +3009,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p10");
+    const { Viewer3D } = await import("./viewer3d.js?v=p15");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -2565,7 +3094,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m2")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m3")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };

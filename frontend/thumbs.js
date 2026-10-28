@@ -7,8 +7,8 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { studioEnvironment } from "./viewer3d.js?v=p10";
-import { dress, skyTexture } from "./materials.js?v=m2";
+import { studioEnvironment } from "./viewer3d.js?v=p15";
+import { dress, skyTexture } from "./materials.js?v=m3";
 
 const W = 480, H = 360;
 // The catalogue's lead design is shot wide, like the photograph on a brochure cover.

@@ -935,6 +935,8 @@ class PartiPlanner:
         self._stair_top = g.get("stair_top", True)
         for li, fl in enumerate(house):
             depths = floors_d[li]
+            # Whether this floor has its lounge already, for `_lay`'s fillers.
+            self._has_lounge = any(p.type is T.FAMILY for row in fl for c in row for p in c.pieces())
             core = self._lay(list(fl[1]), depths[1], 0.0, Wh, li, 1, g)
             if core is None:
                 self.why[468] = self.why.get(468, 0) + 1
@@ -1013,7 +1015,11 @@ class PartiPlanner:
         nat = [c.area / d for c in flex]
         caps = [c.max_w for c in flex]
         avail = width - sum(fixed.values())
-        roomy = sum(min(1.12 * n_, m) for n_, m in zip(nat, caps))
+        # Upstairs the rooms take the floor before any of it is left as roof:
+        # a bedroom a third bigger than asked is a better room; a strip of
+        # terrace beside it no one uses is not.
+        grow_k = 1.35 if li > 0 else 1.12
+        roomy = sum(min(grow_k * n_, m) for n_, m in zip(nat, caps))
         spare = avail - roomy
         row = list(row)
         open_kind = T.TERRACE if li > 0 else (T.VERANDAH if r == 0 else None)
@@ -1028,10 +1034,27 @@ class PartiPlanner:
                 fixed[id(lob)] += add
                 spare -= add
                 avail -= add
-        if open_kind is not None and spare >= 1.6 and (li > 0 or spare > avail - sum(caps) - 1e-6 or not flex):
+        if li > 0 and open_kind is not None and spare >= 3.0 and flex and \
+                any(p.type in (T.MASTER_BEDROOM, T.BEDROOM, T.FAMILY, T.CHILDREN_BEDROOM, T.GUEST_BEDROOM, T.STAIRCASE, T.LOBBY)
+                    for c in row for p in c.pieces()):
+            # Upstairs, width the rooms cannot use is a room before it is roof:
+            # a lounge if the floor has none yet, else a study.
+            lounge = getattr(self, "_has_lounge", False)
+            kind, label = (T.STUDY, "Study") if lounge else (T.FAMILY, "Upper lounge")
+            self._has_lounge = True
+            w = min(spare, 4.2 if kind is T.FAMILY else 3.2)
+            t = Cell([[P(kind, 0.0, name=label, filler=True)]], fixed_w=w)
+            fixed[id(t)] = w
+            # At the end of the band, on the house's side wall, so it has a window;
+            # the end away from the stair, which stays where it is on every floor.
+            stair_i = next((i for i, c in enumerate(row) if c.slots[0][0].type is T.STAIRCASE), None)
+            row.insert(0 if stair_i is not None and stair_i >= len(row) / 2 else len(row), t)
+            spare -= w
+            avail -= w
+        if open_kind is not None and spare >= (2.6 if li > 0 else 1.6) and (li > 0 or spare > avail - sum(caps) - 1e-6 or not flex):
             name = "Terrace" if li > 0 else "Sit-out"
-            if li == 0:
-                spare = min(spare, 3.2)
+            if li == 0 or flex:
+                spare = min(spare, 3.2)   # one balcony-deep strip; the rooms take the rest
             t = Cell([[P(open_kind, 0.0, name=name, filler=True)]], fixed_w=spare)
             fixed[id(t)] = spare
             at_low = a < 0.05
@@ -1307,7 +1330,18 @@ class PartiPlanner:
         if any(max(abs(a - b) for a, b in zip(s_, stairs[0])) > 0.3 for s_ in stairs[1:]):
             hit(150, "stair_stack")
             notes.append("stair does not stack")
+        ground_area = sum((u1 - u0) * (v1 - v0) for _, u0, v0, u1, v1 in floors[0]) if floors else 0.0
         for li, placed in enumerate(floors):
+            if li > 0 and ground_area > 0:
+                # An upper floor is rooms, with a balcony or a terrace: not a
+                # floor of open roof, nor a plate smaller than the house below.
+                built = sum((u1 - u0) * (v1 - v0) for p, u0, v0, u1, v1 in placed if p.type not in OUTDOOR)
+                open_ = sum((u1 - u0) * (v1 - v0) for p, u0, v0, u1, v1 in placed if p.type in OUTDOOR)
+                spare = max(0.0, open_ - 0.15 * ground_area) + max(0.0, 0.85 * ground_area - built - open_)
+                if spare > 0:
+                    hit(4.0 * spare, "upper_open")
+                    if spare > 8:
+                        notes.append(f"L{li} {spare:.0f}m2 of the floor is open roof")
             n = len(placed)
             adj = [[0.0] * n for _ in range(n)]
             for i in range(n):
@@ -1379,9 +1413,13 @@ class PartiPlanner:
                 if p.area > 0 and not p.filler:
                     a = w * d
                     asked = getattr(p.req, "asked_area", None) or p.area
-                    if self.boost > 1.0:
+                    if self.boost > 1.0 or li > 0:
+                        # Upstairs rooms are grown on purpose to fill the floor (see
+                        # `_fill_floors`): judged against that, not the first ask.
                         asked = max(asked, p.area)
                     dev = (a - p.area) / p.area
+                    if li > 0 and dev > 0:
+                        dev = max(0.0, dev - 0.2)         # and a little larger still is no fault
                     wt = WEIGHT.get(p.type, 0.6) * (2.0 if "Requested" in (getattr(p.req, "notes", "") or "") else 1.0)
                     if a < MIN_AREA.get(p.type, 0.0) - 0.2:
                         hit(30, "too_small")

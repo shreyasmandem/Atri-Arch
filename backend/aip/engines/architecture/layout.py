@@ -102,6 +102,9 @@ _COMPACT_ROOMS = {RoomType.LIVING, RoomType.DINING, RoomType.KITCHEN, RoomType.F
 #: Marks the terrace the generator adds to fill a light upper floor, so the
 #: feasibility arithmetic can tell it from a room the client asked for.
 FILL_NOTE = "Terrace over the floor below; fills the footprint."
+#: Upstairs rooms that grow to fill a light floor before any of it is left as terrace.
+_UPSTAIRS_GROW = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM,
+                  RoomType.FAMILY, RoomType.STUDY, RoomType.HOME_OFFICE, RoomType.LIBRARY}
 
 MIN_ROOM_DIMENSION = 1.5          # m - below this nothing is buildable
 
@@ -2737,16 +2740,40 @@ class LayoutGenerator:
             slack = 0.12 if self._footprint_area else 1.0 - COMFORT_FRACTION
             if gap < slack * footprint or gap < 8.0:
                 continue
-            # A floor with hardly anything on it gets its terrace in three pieces,
-            # so the cells beside the stair have something outdoor to hold.
-            shares = (0.2, 0.2, 0.6) if needs[level_index] < 0.5 * footprint and gap > 30 else (1.0,)
-            for share in shares:
+            bucket = buckets[level_index]
+            # An Indian house fills its upper floor with rooms: a family lounge
+            # the bedrooms open off, and bedrooms and a study at their full
+            # comfortable size. Only what is left is the terrace or balcony over
+            # the floor below - one, not a floor of open roof.
+            if not self._spread and gap > 14.0 and not any(r.type is RoomType.FAMILY for r in reqs):
+                cap = self._cap(RoomType.FAMILY) or 22.0
+                area = round(min(cap, max(12.0, gap * 0.55)), 1)
                 reqs.append(RoomRequirement(
-                    type=RoomType.TERRACE, preferred_area=round(gap * share, 1),
-                    needs_daylight=False, needs_external_wall=True, priority=0.3,
-                    notes=FILL_NOTE,
+                    type=RoomType.FAMILY, preferred_area=area, level=level_index, priority=0.7,
+                    needs_daylight=True, needs_external_wall=True,
+                    notes="Family lounge upstairs, so the floor is lived in rather than left as roof.",
                 ))
-                buckets[level_index].append(len(reqs) - 1)
+                bucket.append(len(reqs) - 1)
+                gap -= area
+            growable = [i for i in bucket if reqs[i].type in _UPSTAIRS_GROW and reqs[i].notes != FILL_NOTE]
+            base_area = sum(reqs[i].target_area for i in growable)
+            if gap > 4.0 and base_area > 0:
+                share = gap / base_area
+                for i in growable:
+                    r = reqs[i]
+                    ceiling = self._cap_for(r) or r.target_area * 1.3
+                    grown = min(r.target_area * (1 + share), max(r.target_area, CAP_HEADROOM * ceiling))
+                    gap -= grown - r.target_area
+                    r.preferred_area = round(grown, 2)
+            terrace = min(gap, max(9.0, 0.15 * footprint))
+            if terrace < 6.0:
+                continue
+            reqs.append(RoomRequirement(
+                type=RoomType.TERRACE, preferred_area=round(terrace, 1),
+                needs_daylight=False, needs_external_wall=True, priority=0.3,
+                notes=FILL_NOTE,
+            ))
+            bucket.append(len(reqs) - 1)
 
     # ----------------------------------------------------- feasibility gate --
 

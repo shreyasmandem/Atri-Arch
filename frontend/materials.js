@@ -198,6 +198,44 @@ const PATTERNS = {
       return 0.52 + (n(u, v) - 0.5) * 0.36 + (f(u, v * 0.2) - 0.5) * 0.18 + (r(u, v) - 0.5) * 0.1 + seam;
     };
   } },
+  // Athangudi: hand-made Chettinad cement tiles, a four-petal flower in each square.
+  athangudi: { size: 1.2, fn: () => {
+    const n = noise(34, 90);
+    return (u, v) => {
+      const x = u * 6, y = v * 6, fu = x - Math.floor(x) - 0.5, fv = y - Math.floor(y) - 0.5;
+      if (Math.abs(fu) > 0.48 || Math.abs(fv) > 0.48) return 0.3;
+      const r = Math.hypot(fu, fv), a = Math.atan2(fv, fu);
+      const petal = r < 0.18 + 0.14 * Math.abs(Math.cos(2 * a)) ? 0.75 : 0.45;
+      const ring = Math.abs(r - 0.4) < 0.025 ? 0.7 : 0;
+      return Math.max(petal, ring) + (n(u, v) - 0.5) * 0.06;
+    };
+  } },
+  // A woven ikat-style chevron for rugs and cushions.
+  weave: { size: 0.6, fn: () => {
+    const n = noise(35, 200);
+    return (u, v) => {
+      const zig = Math.abs(((u * 6) % 1) - 0.5);
+      const band = (v * 8 + zig * 1.2) % 1;
+      const thread = Math.sin(u * 400) * 0.03 + Math.sin(v * 400) * 0.03;
+      return (band < 0.5 ? 0.66 : 0.38) + thread + (n(u, v) - 0.5) * 0.12;
+    };
+  } },
+  // Real surfaces, photographed (Poly Haven, CC0), kept as brightness only so the chosen colour stays true.
+  oak: { size: 2.0, url: "assets/tex/oak_planks.jpg" },
+  slabs: { size: 2.0, url: "assets/tex/stone_slabs.jpg" },
+  terrazzo: { size: 2.4, url: "assets/tex/terrazzo.jpg" },
+  granite: { size: 2.0, url: "assets/tex/granite.jpg" },
+  squares: { size: 3.0, url: "assets/tex/square_tiles.jpg" },
+  oxide: { size: 3.0, url: "assets/tex/oxide.jpg" },
+  sandstone: { size: 2.4, url: "assets/tex/sandstone.jpg" },
+  pavers: { size: 3.0, url: "assets/tex/pavers.jpg" },
+  grain: { size: 1.0, url: "assets/tex/wood_grain.jpg" },
+  rosewood: { size: 1.2, url: "assets/tex/rosewood.jpg" },
+  linen: { size: 0.35, url: "assets/tex/linen.jpg" },
+  velvet: { size: 0.5, url: "assets/tex/velvet.jpg" },
+  leather: { size: 0.8, url: "assets/tex/leather.jpg" },
+  plasterIn: { size: 3.0, url: "assets/tex/plaster_in.jpg" },
+  subway: { size: 1.2, url: "assets/tex/subway.jpg" },
   // Lawn: patchy, with a fine blade grain.
   lawn: { size: 3.0, fn: () => {
     const n = noise(16, 8), f = noise(17, 120), g = noise(18, 400);
@@ -207,6 +245,24 @@ const PATTERNS = {
 
 // Material name (as the model names it) -> pattern and how strongly it shows.
 const RULES = [
+  // Inside the house: floors, furniture, cloth, walls and tiles.
+  [/^floor_(timber|wood)/, "oak", 0.7],
+  [/^floor_kota/, "slabs", 0.6],
+  [/^floor_marble/, "slabs", 0.3],
+  [/^floor_terrazzo/, "terrazzo", 0.8],
+  [/^floor_granite/, "granite", 0.5],
+  [/^floor_(vitrified|tile_matt|stone)/, "squares", 0.45],
+  [/^floor_redoxide/, "oxide", 0.5],
+  [/^floor_jaisalmer/, "sandstone", 0.7],
+  [/^floor_athangudi/, "athangudi", 0.8],
+  [/^floor_outdoor/, "pavers", 0.6],
+  [/^door_timber/, "rosewood", 0.7],
+  [/^joinery/, "grain", 0.75],
+  [/^(upholstery|linen|curtain_fabric)/, "linen", 0.6],
+  [/^accent$|^accent_[0-9a-f]{6}$/, "weave", 0.7],
+  [/^(interior_paint|paint_|accent_wall)/, "plasterIn", 0.25],
+  [/wall_tile_bath|backsplash/, "subway", 0.8],
+  [/counter_stone/, "granite", 0.45],
   [/terracotta_tile/, "tiles", 0.9],
   [/acp_panel/, "acpanel", 0.7],
   [/curtain_glass/, "curtain", 0.55],
@@ -230,7 +286,14 @@ const RULES = [
 
 const baked = {};
 function texture(kind) {
-  return (baked[kind] ||= bake(PATTERNS[kind].fn()));
+  const p = PATTERNS[kind];
+  if (baked[kind]) return baked[kind];
+  if (!p.url) return (baked[kind] = bake(p.fn()));
+  const t = new THREE.TextureLoader().load(p.url);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.NoColorSpace;
+  t.anisotropy = 8;
+  return (baked[kind] = t);
 }
 
 /** Give a model's material its real surface, if it is one we know. Idempotent. */
@@ -274,7 +337,7 @@ export function swatch(kind, hex, size = 72) {
   const c = document.createElement("canvas");
   c.width = c.height = size;
   const g = c.getContext("2d");
-  const k = PATTERNS[kind] ? kind : "plaster";
+  const k = PATTERNS[kind] && (!PATTERNS[kind].url || texture(kind).image?.complete) ? kind : "plaster";
   // Show about a metre of the finish, tinted the way the shader tints it.
   const m = Math.min(PX, PX / PATTERNS[k].size);
   g.drawImage(texture(k).image, 0, 0, m, m, 0, 0, size, size);
