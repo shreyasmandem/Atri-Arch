@@ -1694,6 +1694,7 @@ class LayoutGenerator:
         # How far past their comfortable size rooms may grow (toward the luxury
         # ceiling) when a large plot would otherwise be left mostly lawn.
         self._cap_boost = 1.0
+        self._hall_plate = 0.0          # the plate a generous plot is filled to (see `_grow_programme`)
         self._stair_scale = 1.0
         self._compact_stair = False
         self._spread = False            # set when a two-storey brief is drawn on one floor (see `_resolve_programme`)
@@ -1949,6 +1950,17 @@ class LayoutGenerator:
         # A narrow plot also gets the row house: no hall, a short passage between two bands.
         tries = [(p, None) for p in partis] + [(p, v) for p in planners for v in variants()] \
             + [(r, v) for r in rows if r.fits() for v in row_variants()]
+        # A plot far larger than the rooms asked for is filled with house: rooms
+        # round a hall, no passage, placed for Vastu (see `hall.py`).
+        from aip.engines.architecture.hall import HallPlanner
+
+        if self._hall_plate > 0 and outer is not None:
+            halls = [HallPlanner(outer, road, len(levels) > 1, plate=self._hall_plate, cap=self._cap,
+                                 far=site.max_built_area or 0.0, centre=(site.centre.x, site.centre.y),
+                                 north_angle=site.north_angle, elders=elders, seed=(self.config.seed or 0) + 13 * k,
+                                 side=k)
+                     for k in sides]
+            tries = [(h, None) for h in halls] + tries
         def build(who, rooms) -> FloorPlan | None:
             if not rooms:
                 return None
@@ -1996,7 +2008,8 @@ class LayoutGenerator:
             finally:
                 self._envelope = envelope
                 self._open_outline = False
-            plan.metadata["planner"] = ("parti" if isinstance(who, PartiPlanner)
+            plan.metadata["planner"] = ("hall" if type(who).__name__ == "HallPlanner"
+                                        else "parti" if isinstance(who, PartiPlanner)
                                         else "row" if isinstance(who, RowHousePlanner)
                                         else "corridor" if isinstance(who, CorridorPlanner) else "spine")
             _doors_to_hosts(plan)
@@ -2039,7 +2052,11 @@ class LayoutGenerator:
         parti_started = None
         for who, v in tries:
             try:
-                if isinstance(who, PartiPlanner):
+                if isinstance(who, HallPlanner):
+                    judged = [p for p in (build(who, rooms) for rooms in who.plans(levels)) if p is not None]
+                    judged.sort(key=lambda p: _weight(p))
+                    batch = [p for p in judged if not p.metadata["guardrail"]][:6] or judged[:3]
+                elif isinstance(who, PartiPlanner):
                     # Another run of the parti only while it is needed: three
                     # different sound plans without a passage are enough, and
                     # the runs share a few seconds between them.
@@ -2465,8 +2482,10 @@ class LayoutGenerator:
                 if room.type.is_habitable and room.id not in lit:
                     problems.append(f"{tag}: {room.display_name()} has no window")
             for room in rooms:
+                # A courtyard the rooms open onto is the house's hall (a nalukettu's is
+                # entered from every side), not a room with too many doors.
                 if (not room.type.is_circulation and room.type not in _BEDROOMS
-                        and room.type is not RoomType.TERRACE and count[room.id] > 3):
+                        and room.type not in (RoomType.TERRACE, RoomType.COURTYARD) and count[room.id] > 3):
                     problems.append(f"{tag}: {room.display_name()} has {count[room.id]} doors")
             plate = sum(r.area for r in rooms) or 1.0
             for room in rooms:
@@ -3148,6 +3167,15 @@ class LayoutGenerator:
         too_much_lawn = plot_area > 0 and left_open > lawn + 0.04
         if too_much_lawn:
             self._cap_boost = max(1.0, min(2.2, want / (max(cur.target) * 1.08)))
+            # Everything but the lawn is house: the hall planner draws the ground floor
+            # to the coverage the byelaw allows (its upper floors stand over part of
+            # it, so the FAR, which counts every floor, is checked on the plan itself),
+            # less the lawn, the pool and a drive and path.
+            ground_cap = self._footprint_cap() or footprint
+            open_ground = plot_area * (1.0 - lawn - 0.04) if plot_area else ground_cap
+            if self.brief.site.pool in POOLS:
+                open_ground -= (pw + margin) * (pl + margin)
+            self._hall_plate = 0.97 * max(0.0, min(ground_cap, open_ground))
         original = {id(r): r.target_area for r in base}
         fixed: set[int] = set()            # rooms added below keep the size they were added at
         goal = footprint / 1.08
