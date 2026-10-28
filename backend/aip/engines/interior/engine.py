@@ -101,7 +101,7 @@ class RoomInterior(BaseModel):
     render_prompt: str = ""
 
     edited: bool = False           # the client has arranged this room themselves
-    finishes: dict[str, str] = Field(default_factory=dict)   # wall / accent / floor overrides
+    finishes: dict[str, Any] = Field(default_factory=dict)   # wall, accent, floor, per-wall, cove, light
 
 
 class InteriorScheme(BaseModel):

@@ -250,7 +250,8 @@ def test_a_large_plot_is_not_left_mostly_lawn():
     assert big >= 0.37, f"the house covers only {big:.0%} of a plot meant to keep 25% as lawn"
     assert big <= 0.62                                  # and never past the byelaw's coverage
     town = share(12.19, 18.29, 0.0)
-    assert 0.40 <= town <= 0.60
+    # With no lawn asked for, everything the byelaw lets the house cover is house (65% here).
+    assert 0.40 <= town <= 0.66
 
 
 @pytest.mark.parametrize("w,d,lawn", [(16.76, 25.91, 0.25), (12.19, 18.29, 0.25), (20.0, 30.0, 0.4)])

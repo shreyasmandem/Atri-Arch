@@ -9,7 +9,7 @@
 
 import { atelier, person, avatar } from "./atelier.js?v=s3";
 import { mountEditor } from "./editor.js?v=e5";
-import { icon } from "./icons.js?v=i2";
+import { icon } from "./icons.js?v=i3";
 import { autoSetbacks } from "./setbacks.js";
 
 const API = (() => {
@@ -1636,7 +1636,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p15");
+    const { Viewer3D } = await import("./viewer3d.js?v=p17");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2216,7 +2216,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p15");
+  const { Viewer3D } = await import("./viewer3d.js?v=p17");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2356,6 +2356,7 @@ async function renderInterior() {
     current = { box, lv: item.lv, item };
     fromAbove = false;
     stand(item, box);
+    viewer.setRoomLight(roomOf(item)?.finishes?.kelvin);
     drawBar(item);
     cap.textContent = WALK_HINT;
     S.exitRoom = () => leave();
@@ -2366,6 +2367,8 @@ async function renderInterior() {
     current = null;
     wrap.querySelector(".inx__ed")?.remove();
     wrap.classList.remove("has-ed", "ed-hidden");
+    viewer.mark(null);
+    viewer.interact = null;
     list.querySelectorAll("li").forEach((x) => x.classList.remove("is-on"));
     walkBar.hidden = true;
     viewer.leaveWalk();
@@ -2437,6 +2440,7 @@ async function renderInterior() {
       d.x = Math.min(Math.max(d.x, bx.x0 + w / 2), Math.max(bx.x0 + w / 2, bx.x1 - w / 2));
       d.y = Math.min(Math.max(d.y, bx.y0 + h / 2), Math.max(bx.y0 + h / 2, bx.y1 - h / 2));
     };
+    const ftin = (m) => { const t = Math.round(m / 0.0254); return `${Math.floor(t / 12)} ft ${t % 12} in`; };
     const sizeName = (d) => {
       const [w, dd] = size(d);
       const z = (byId.get(d.item_id)?.sizes || []).find((x) => Math.abs(x.w - w) < 0.1 && Math.abs(x.d - dd) < 0.1);
@@ -2465,6 +2469,8 @@ async function renderInterior() {
         await viewer.load(url(), { keepView: true });
         await furnish();
         if (fromAbove && current) viewer.focusRoom(current.box, item.lv, true);
+        markSel();
+        viewer.setRoomLight(draft.finishes.kelvin);
         status.textContent = "Saved";
       } catch (e) {
         status.textContent = "Not saved";
@@ -2481,7 +2487,7 @@ async function renderInterior() {
         sc2.rev = out.rev;
       }
     };
-    const changed = () => { drawPlan(); drawTab(); commit(); };
+    const changed = () => { drawPlan(); drawTab(); markSel?.(); commit(); };
 
     // Tabs.
     const tabs = el("div", "inx__ed-tabs"); tabs.setAttribute("role", "tablist");
@@ -2608,6 +2614,23 @@ async function renderInterior() {
     const turn = (d) => { d.rotation = (d.rotation + 90) % 360; keepIn(d); changed(); };
     const remove = (d) => { draft.items = draft.items.filter((x) => x !== d); sel = draft.items[0]?.uid || null; changed(); };
     const nudge = (d, dx, dy) => { d.x = snap(d.x + dx); d.y = snap(d.y + dy); keepIn(d); changed(); };
+    // Left, right, away and closer as the view looks, kept to the room's own axes.
+    const nudgeView = (d, k) => {
+      const { fwd, right } = viewer.viewAxes();
+      const v = { away: fwd, closer: [-fwd[0], -fwd[1]], right, left: [-right[0], -right[1]] }[k];
+      const [dx, dy] = Math.abs(v[0]) > Math.abs(v[1]) ? [Math.sign(v[0]) * 0.1, 0] : [0, Math.sign(v[1]) * 0.1];
+      nudge(d, dx, dy);
+    };
+    const snapTo = (d, w) => {
+      if (w === "C") { d.x = (bx.x0 + bx.x1) / 2; d.y = (bx.y0 + bx.y1) / 2; keepIn(d); changed(); return; }
+      d.rotation = { S: 0, N: 180, E: 90, W: 270 }[w];
+      const [, dd] = size(d);
+      if (w === "S") d.y = bx.y0 + dd / 2;
+      if (w === "N") d.y = bx.y1 - dd / 2;
+      if (w === "W") d.x = bx.x0 + dd / 2;
+      if (w === "E") d.x = bx.x1 - dd / 2;
+      keepIn(d); changed();
+    };
     const newUid = () => `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
 
     // The room from above, for the Layout tab.
@@ -2684,7 +2707,9 @@ async function renderInterior() {
       const it = byId.get(d.item_id);
       const box = el("div", "inx__detail");
       const top = el("div", "inx__detail-top");
-      top.append(el("b", null, it.name), el("span", null, sizeName(d)));
+      const [sw0, sd0] = size(d);
+      top.append(el("b", null, it.name), el("span", null, sizeName(d)),
+        el("span", "inx__dims", `${sw0.toFixed(2)} m × ${sd0.toFixed(2)} m  /  ${ftin(sw0)} × ${ftin(sd0)}`));
       box.append(top);
       const kinds = cat.groups.find((g) => g.name === groupOf.get(d.item_id))?.items || [];
       if (kinds.length > 1) {
@@ -2721,23 +2746,65 @@ async function renderInterior() {
         box.append(label(it.colour_group === "fabric" ? "Fabric colour" : it.colour_group === "metal" ? "Metal finish" : "Wood finish"));
         box.append(swatches(cat.colours[it.colour_group], d.colour, (h) => { d.colour = h; }, "Colour"));
       }
-      box.append(label("Place it"));
+      box.append(label("Put it against"));
+      const snaps = el("div", "inx__snaps");
+      for (const [t, w] of [["Top wall", "N"], ["Bottom wall", "S"], ["Left wall", "W"], ["Right wall", "E"], ["Centre", "C"]]) {
+        const b = el("button", "inx__chip", t); b.type = "button";
+        b.title = w === "C" ? "Move it to the middle of the room" : `Back against the ${t.toLowerCase()} as the Layout tab shows it`;
+        b.addEventListener("click", () => snapTo(d, w));
+        snaps.append(b);
+      }
+      box.append(snaps);
+      box.append(label("Move it 10 cm, as you are looking"));
       const acts = el("div", "inx__acts");
-      const pad4 = el("div", "inx__nudge"); pad4.setAttribute("role", "group"); pad4.setAttribute("aria-label", "Move by 10 cm");
-      for (const [t, dx, dy, a] of [["←", -0.1, 0, "Move west"], ["↑", 0, 0.1, "Move north"], ["↓", 0, -0.1, "Move south"], ["→", 0.1, 0, "Move east"]]) {
-        const b = el("button", "ghost-btn ghost-btn--ico", t); b.type = "button"; b.setAttribute("aria-label", `${a} by 10 cm`);
-        b.addEventListener("click", () => nudge(d, dx, dy));
+      const pad4 = el("div", "inx__nudge"); pad4.setAttribute("role", "group"); pad4.setAttribute("aria-label", "Move by 10 cm as seen in the view");
+      for (const [t, k, a] of [["prev", "left", "Move left"], ["up", "away", "Move away from you"], ["down", "closer", "Move closer to you"], ["next", "right", "Move right"]]) {
+        const b = el("button", "ghost-btn ghost-btn--ico"); b.type = "button"; b.append(icon(t)); b.setAttribute("aria-label", `${a} by 10 cm`);
+        b.title = a;
+        b.addEventListener("click", () => nudgeView(d, k));
         pad4.append(b);
       }
-      const tb = el("button", "ghost-btn", "Turn"); tb.type = "button"; tb.addEventListener("click", () => turn(d));
-      const db = el("button", "ghost-btn", "Duplicate"); db.type = "button";
+      const tb = el("button", "ghost-btn inx__act"); tb.type = "button"; tb.append(icon("turn"), document.createTextNode("Turn"));
+      tb.addEventListener("click", () => turn(d));
+      const db = el("button", "ghost-btn inx__act"); db.type = "button"; db.append(icon("copy"), document.createTextNode("Duplicate"));
       db.addEventListener("click", () => { const c = { ...d, uid: newUid(), x: d.x + 0.3, y: d.y - 0.3 }; keepIn(c); draft.items.push(c); sel = c.uid; changed(); });
-      const rb = el("button", "ghost-btn inx__del", "Remove"); rb.type = "button"; rb.addEventListener("click", () => remove(d));
+      const rb = el("button", "ghost-btn inx__act inx__del"); rb.type = "button"; rb.append(icon("trash"), document.createTextNode("Remove"));
+      rb.addEventListener("click", () => remove(d));
       acts.append(pad4, tb, db, rb);
       box.append(acts);
       return box;
     };
 
+    let addQuery = "", addGroup = "All";
+    const symbol = (w, d, hex) => {
+      const NS2 = "http://www.w3.org/2000/svg", k = 30 / Math.max(w, d, 0.3);
+      const sw = Math.max(3, w * k), sh = Math.max(3, d * k);
+      const svgEl = document.createElementNS(NS2, "svg");
+      svgEl.setAttribute("viewBox", "0 0 36 36"); svgEl.setAttribute("class", "inx__sym"); svgEl.setAttribute("aria-hidden", "true");
+      const r = document.createElementNS(NS2, "rect");
+      r.setAttribute("x", 18 - sw / 2); r.setAttribute("y", 18 - sh / 2); r.setAttribute("width", sw); r.setAttribute("height", sh);
+      r.setAttribute("rx", 0.6); r.style.fill = hex;
+      const f = document.createElementNS(NS2, "line");
+      f.setAttribute("x1", 18 - sw / 2); f.setAttribute("x2", 18 + sw / 2); f.setAttribute("y1", 18 + sh / 2); f.setAttribute("y2", 18 + sh / 2);
+      svgEl.append(r, f);
+      return svgEl;
+    };
+    const addButton = (o) => {
+      const std = `${ft(o.width)} × ${ft(o.depth)}${o.sizes?.length > 1 ? ` · ${o.sizes.length} sizes` : ""}`;
+      const b = el("button", "inx__row"); b.type = "button";
+      b.setAttribute("aria-label", `Add ${o.name}, ${std}`);
+      const txt = el("span", "inx__row-txt");
+      txt.append(el("b", null, o.name), el("small", null, std));
+      const add = el("span", "inx__row-add"); add.append(icon("plus"));
+      b.append(symbol(o.width, o.depth, swatchHex[o.colour_group] || "#8a6a4c"), txt, add);
+      b.addEventListener("click", () => {
+        const c = placeNew(o);
+        draft.items.push(c); sel = c.uid; tab = "pieces";
+        toast(`${o.name} added. Drag it in the view, or use Furniture to place it.`);
+        changed();
+      });
+      return b;
+    };
     const drawTab = () => {
       tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
       body.innerHTML = "";
@@ -2775,38 +2842,102 @@ async function renderInterior() {
           for (const x of draft.items) {
             const it = byId.get(x.item_id);
             if (!it) continue;
-            const li2 = el("li"); const b = el("button", x.uid === sel ? "is-on" : null); b.type = "button";
-            const dot = el("i"); dot.style.background = x.colour || swatchHex[it.colour_group] || "#8a6a4c";
-            b.append(dot, el("span", null, it.name), el("small", null, sizeName(x)));
+            const li2 = el("li"); const b = el("button", `inx__row${x.uid === sel ? " is-on" : ""}`); b.type = "button";
+            const [xw, xd] = size(x);
+            const txt = el("span", "inx__row-txt"); txt.append(el("b", null, it.name), el("small", null, sizeName(x)));
+            b.append(symbol(xw, xd, x.colour || swatchHex[it.colour_group] || "#8a6a4c"), txt);
             b.addEventListener("click", () => { sel = x.uid; drawPlan(); drawTab(); });
             li2.append(b); ul.append(li2);
           }
           body.append(ul);
         }
       } else if (tab === "add") {
-        body.append(el("p", "inx__note", "A piece is placed in the middle of the room. Move it from Furniture or Layout."));
-        for (const g of cat.groups) {
-          body.append(label(g.name));
-          const grid = el("div", "inx__add");
-          for (const o of g.items) {
-            const std = `${ft(o.width)} × ${ft(o.depth)}${o.sizes?.length > 1 ? `, ${o.sizes.length} standard sizes` : ""}`;
-            const b = el("button", "inx__add-btn"); b.type = "button";
-            b.append(el("b", null, o.name), el("small", null, std));
-            b.addEventListener("click", () => {
-              const c = placeNew(o);
-              draft.items.push(c); sel = c.uid; tab = "pieces";
-              toast(`${o.name} added. Move it from Furniture or Layout.`);
-              changed();
-            });
-            grid.append(b);
-          }
-          body.append(grid);
+        const findWrap = el("label", "inx__find"); findWrap.append(icon("search"));
+        const find = el("input", "inx__search"); find.type = "search"; find.placeholder = "Search furniture, appliances, decor";
+        find.value = addQuery; find.setAttribute("aria-label", "Search what to add");
+        findWrap.append(find);
+        const chips = el("div", "inx__chips"); chips.setAttribute("role", "group"); chips.setAttribute("aria-label", "Show one kind");
+        const total = cat.groups.reduce((n, g) => n + g.items.length, 0);
+        for (const name of ["All", ...cat.groups.map((g) => g.name)]) {
+          const on = addGroup === name;
+          const n = name === "All" ? total : cat.groups.find((g) => g.name === name).items.length;
+          const c = el("button", `inx__chip${on ? " is-on" : ""}`); c.type = "button"; c.setAttribute("aria-pressed", String(on));
+          c.append(document.createTextNode(name), el("small", null, String(n)));
+          c.addEventListener("click", () => { addGroup = name; drawTab(); });
+          chips.append(c);
         }
+        const results = el("div", "inx__results");
+        body.append(findWrap, chips, results);
+        const drawResults = () => {
+          results.innerHTML = "";
+          const q = addQuery.trim().toLowerCase();
+          let shown = 0;
+          for (const g of cat.groups) {
+            if (addGroup !== "All" && g.name !== addGroup) continue;
+            const items = g.items.filter((o) => !q || o.name.toLowerCase().includes(q) || g.name.toLowerCase().includes(q));
+            if (!items.length) continue;
+            const head = el("h4", "inx__grp"); head.append(document.createTextNode(g.name), el("small", null, String(items.length)));
+            results.append(head);
+            const list2 = el("div", "inx__rows");
+            for (const o of items) { shown++; list2.append(addButton(o)); }
+            results.append(list2);
+          }
+          if (!shown) results.append(el("p", "inx__ed-empty", `Nothing called “${addQuery}” fits this room. Try another word, or All.`));
+        };
+        find.addEventListener("input", () => { addQuery = find.value; drawResults(); });
+        drawResults();
       } else if (tab === "room") {
         const fin = draft.finishes;
         const unlook = () => { delete fin.look; };
         body.append(label("Walls"), swatches(cat.paints, fin.wall, (h) => { fin.wall = h; unlook(); }, "Wall paint"));
         body.append(label("Accent wall"), swatches(cat.paints, fin.accent, (h) => { fin.accent = h; unlook(); }, "Accent wall paint"));
+        // Each wall on its own: any colour at all, with its code to write down or type in.
+        const lvl = (cur().plan?.levels || []).find((l) => l.index === item.lv);
+        const pt = (q) => ({ x: q.x ?? q[0], y: q.y ?? q[1] });
+        const cx = (bx.x0 + bx.x1) / 2, cy = (bx.y0 + bx.y1) / 2;
+        const seen = {};
+        const myWalls = (lvl?.walls || []).filter((w) => (w.rooms || []).includes(item.r.id)).map((w) => {
+          const a2 = pt(w.start), b2 = pt(w.end), mx = (a2.x + b2.x) / 2 - cx, my = (a2.y + b2.y) / 2 - cy;
+          const side = Math.abs(mx) > Math.abs(my) ? (mx > 0 ? "East" : "West") : (my > 0 ? "North" : "South");
+          seen[side] = (seen[side] || 0) + 1;
+          return { id: w.id, side, n: seen[side], len: Math.hypot(b2.x - a2.x, b2.y - a2.y) };
+        });
+        if (myWalls.length) {
+          body.append(label("Each wall"), el("p", "inx__note", "Pick any colour for a single wall, or type its code (like #C27B5C)."));
+          fin.walls ||= {};
+          for (const w of myWalls) {
+            const row = el("div", `inx__wall${pickedWall === w.id ? " is-on" : ""}`);
+            row.dataset.wall = w.id;
+            const val = fin.walls[w.id] || "";
+            const isTreat = (cat.treatments || []).some((t) => t.id === val);
+            const cur2 = isTreat ? "" : (val || fin.wall || "");
+            const name = el("span", "inx__wall-name", `${w.side} wall${seen[w.side] > 1 ? ` ${w.n}` : ""}, ${w.len.toFixed(1)} m`);
+            const pick = el("input"); pick.type = "color"; pick.value = /^#[0-9a-f]{6}$/i.test(cur2) ? cur2 : "#efe9dc";
+            pick.setAttribute("aria-label", `${name.textContent}: colour`);
+            const code = el("input", "inx__hex"); code.type = "text"; code.value = (fin.walls[w.id] || "").toUpperCase();
+            code.placeholder = cur2 ? cur2.toUpperCase() : "#RRGGBB"; code.maxLength = 7; code.spellcheck = false;
+            code.setAttribute("aria-label", `${name.textContent}: colour code`);
+            const set = (h) => { fin.walls[w.id] = h.toLowerCase(); unlook(); changed(); };
+            pick.addEventListener("change", () => set(pick.value));
+            code.addEventListener("change", () => {
+              const v = code.value.trim().replace(/^([0-9a-f]{6})$/i, "#$1");
+              if (/^#[0-9a-f]{6}$/i.test(v)) set(v); else { code.value = (fin.walls[w.id] || "").toUpperCase(); toast("A colour code is # and six letters or digits, like #C27B5C."); }
+            });
+            const clear = el("button", "link", "Reset"); clear.type = "button";
+            clear.addEventListener("click", () => { delete fin.walls[w.id]; changed(); });
+            const kind = el("select", "inx__treat"); kind.setAttribute("aria-label", `${name.textContent}: finish`);
+            for (const [v, t] of [["", "Paint"], ...(cat.treatments || []).map((x) => [x.id, x.name])]) {
+              const op = el("option", null, t); op.value = v; op.selected = (isTreat ? val : "") === v; kind.append(op);
+            }
+            kind.addEventListener("change", () => {
+              if (kind.value) fin.walls[w.id] = kind.value; else delete fin.walls[w.id];
+              unlook(); changed();
+            });
+            if (isTreat) { pick.disabled = true; code.disabled = true; code.value = ""; code.placeholder = "—"; }
+            row.append(name, pick, code, kind, ...(val ? [clear] : []));
+            body.append(row);
+          }
+        }
         body.append(label("Floor"));
         const fl = el("div", "inx__floors");
         for (const f of cat.floors) {
@@ -2818,6 +2949,22 @@ async function renderInterior() {
           fl.append(b);
         }
         body.append(fl);
+        // The ceiling: a false-ceiling tray with a hidden light, and the colour of the light.
+        body.append(label("Ceiling and lights"));
+        const cove = el("label", "inx__toggle");
+        const box2 = el("input"); box2.type = "checkbox"; box2.checked = !!fin.cove;
+        box2.addEventListener("change", () => { if (box2.checked) fin.cove = true; else delete fin.cove; changed(); });
+        cove.append(box2, el("span", null, "False-ceiling cove with a hidden light strip"));
+        body.append(cove);
+        const temps = el("div", "inx__chips");
+        for (const lt of cat.lights || []) {
+          const on = fin.kelvin === lt.k;
+          const c = el("button", `inx__chip inx__chip--k${lt.k}${on ? " is-on" : ""}`, lt.name); c.type = "button";
+          c.setAttribute("aria-pressed", String(on));
+          c.addEventListener("click", () => { if (on) delete fin.kelvin; else fin.kelvin = lt.k; viewer.setRoomLight(fin.kelvin); changed(); });
+          temps.append(c);
+        }
+        body.append(temps);
         if (cat.art?.length) body.append(label("Painting over the bed or sofa"), artPicker(fin.art, (a) => { fin.art = a; }, true));
         const clr = el("button", "ghost-btn", "Use the house colours"); clr.type = "button";
         clr.addEventListener("click", () => { draft.finishes = {}; changed(); });
@@ -2827,9 +2974,79 @@ async function renderInterior() {
         body.append(svg);
         drawPlan();
       }
+      markSel();
     };
+    // In the view: grab a piece to move it, click it to change it, click a wall to paint it.
+    let pickedWall = null, grabbed = null, moved = false;
+    const LIFT = { tv_wall: 0.95, ac_split: 2.15, wall_clock: 1.95, mirror_round: 1.2, mirror_cabinet: 1.2, chimney: 1.55,
+                   purifier: 1.15, geyser: 1.75, wall_art: 1.0, wall_shelf: 1.4, mandir_wall: 0.9, blinds_venetian: 0.9,
+                   microwave: 0.9, chandelier: 2.2, pendant_light: 2.1 };
+    const markSel = () => {
+      const d = draft.items.find((x) => x.uid === sel), it = d && byId.get(d.item_id);
+      if (!d || !it) { viewer.mark(null); return; }
+      const [w, dd] = size(d);
+      viewer.mark({ x: d.x, y: d.y, w, d: dd, h: it.height, rotation: d.rotation, lift: LIFT[d.item_id] || 0 }, item.lv);
+    };
+    const pieceAt = (p) => {
+      const elev = p.h - viewer._floorY(item.lv);
+      const hits = draft.items.filter((d) => {
+        const it = byId.get(d.item_id), lift = LIFT[d.item_id] || 0;
+        if (elev < lift - 0.15 || elev > lift + (it?.height || 0.5) + 0.15) return false;
+        const [w, dd] = size(d), r = (-d.rotation * Math.PI) / 180;
+        const lx = (p.x - d.x) * Math.cos(r) - (p.y - d.y) * Math.sin(r), ly = (p.x - d.x) * Math.sin(r) + (p.y - d.y) * Math.cos(r);
+        return Math.abs(lx) <= w / 2 + 0.05 && Math.abs(ly) <= dd / 2 + 0.05;
+      });
+      const flat = (d) => (byId.get(d.item_id)?.height || 0) < 0.05;
+      hits.sort((a, b) => flat(a) - flat(b) || size(a)[0] * size(a)[1] - size(b)[0] * size(b)[1]);
+      return hits[0] || null;
+    };
+    const inRoom = (p) => p.x > bx.x0 - 0.3 && p.x < bx.x1 + 0.3 && p.y > bx.y0 - 0.3 && p.y < bx.y1 + 0.3;
+    let off = [0, 0];
+    viewer.enableEditing({
+      level: item.lv,
+      grab: (hit) => {
+        if (!win.isConnected || !inRoom(hit)) return false;
+        const d = pieceAt(hit);
+        if (!d) return false;
+        grabbed = d; moved = false; off = [d.x - hit.x, d.y - hit.y];
+        sel = d.uid; markSel();
+        return true;
+      },
+      drag: (p) => {
+        if (!grabbed) return;
+        grabbed.x = snap(p.x + off[0]); grabbed.y = snap(p.y + off[1]); keepIn(grabbed); moved = true;
+        markSel();
+      },
+      drop: () => {
+        if (!grabbed) return;
+        grabbed = null;
+        tab = "pieces";
+        if (moved) changed(); else { drawPlan(); drawTab(); }
+      },
+      click: (hit) => {
+        if (!win.isConnected || !hit || !inRoom(hit)) return;
+        if (hit.wall) {
+          // The nearest wall of this room to where the click landed.
+          const lvl = (cur().plan?.levels || []).find((l) => l.index === item.lv);
+          const pt = (q) => ({ x: q.x ?? q[0], y: q.y ?? q[1] });
+          let best = null, bd = 0.45;
+          for (const w of lvl?.walls || []) {
+            if (!(w.rooms || []).includes(item.r.id)) continue;
+            const a = pt(w.start), b2 = pt(w.end), vx = b2.x - a.x, vy = b2.y - a.y, L = vx * vx + vy * vy || 1;
+            const t = Math.max(0, Math.min(1, ((hit.x - a.x) * vx + (hit.y - a.y) * vy) / L));
+            const dist = Math.hypot(hit.x - (a.x + t * vx), hit.y - (a.y + t * vy));
+            if (dist < bd) { bd = dist; best = w.id; }
+          }
+          if (best) {
+            pickedWall = best; tab = "room"; drawTab();
+            body.querySelector(`[data-wall="${best}"]`)?.scrollIntoView({ block: "center" });
+          }
+        }
+      },
+    });
     drawPlan();
     drawTab();
+    markSel();
   };
 
   const lis = new Map();
@@ -2890,7 +3107,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p15");
+    const { Viewer3D } = await import("./viewer3d.js?v=p17");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3009,7 +3226,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p15");
+    const { Viewer3D } = await import("./viewer3d.js?v=p17");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3094,7 +3311,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m3")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m4")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };

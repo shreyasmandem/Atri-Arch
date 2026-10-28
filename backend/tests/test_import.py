@@ -234,7 +234,7 @@ def test_walls_dxf_is_read_from_linework(original):
     """Wall faces as LINEs with door gaps, MTEXT labels, a dimension layer: no closed outline anywhere."""
     result = _import(walls_dxf(original).encode(), "walls.dxf")
     s = score(original, result.plan)
-    assert s["matched"] >= 11 and s["iou"] >= 0.8 and s["named"] >= 10, s
+    assert s["matched"] >= s["rooms"] - 1 and s["iou"] >= 0.8 and s["named"] >= s["rooms"] - 1, s
     assert "millimetres" in result.scale_note
     assert any("wall linework" in w for w in result.warnings)
     # The dimension line and its text sit outside every room and name none.
@@ -246,7 +246,8 @@ def test_walls_dxf_is_read_from_linework(original):
 def test_walls_dxf_labels_lose_their_mtext_codes(original):
     rooms, _ = parse_dxf(walls_dxf(original))
     labels = {r.label for r in rooms}
-    assert "MASTER BEDROOM" in labels and "LIVING" in labels
+    # An open living-dining reads as one region carrying both names.
+    assert "MASTER BEDROOM" in labels and any("LIVING" in label for label in labels)
     assert not any("\\" in label or "Arial" in label or "SQ" in label for label in labels)
 
 
@@ -293,7 +294,7 @@ def test_walls_svg_is_read_from_stroked_lines(original):
     """<line>s with stroke widths inside a translated group, <text> labels."""
     result = _import(walls_svg(original).encode(), "walls.svg")
     s = score(original, result.plan)
-    assert s["matched"] >= 11 and s["iou"] >= 0.8 and s["named"] >= 10, s
+    assert s["matched"] >= s["rooms"] - 1 and s["iou"] >= 0.8 and s["named"] >= s["rooms"] - 1, s
     assert not any("transform" in w for w in result.warnings)
 
 
@@ -405,7 +406,7 @@ def test_scan_png_is_read_locally(original, tmp_path, no_network):
     raster(original, path=path)
     result = _import(path.read_bytes(), "scan.png")
     s = score(original, result.plan)
-    assert s["matched"] >= 10 and s["iou"] >= 0.75 and s["named"] >= 9, s
+    assert s["matched"] >= s["rooms"] - 2 and s["iou"] >= 0.75 and s["named"] >= s["rooms"] - 2, s
     # The scale came from the drawing's own writing, so the plan is its real size without a plot.
     assert "dimension strings" in result.scale_note
     assert _footprint(result.plan) == pytest.approx(_footprint(original), rel=0.15)

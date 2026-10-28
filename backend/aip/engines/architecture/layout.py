@@ -2694,6 +2694,8 @@ class LayoutGenerator:
                 # Upper: a passage across the bedrooms, or with a single
                 # bedroom just a landing - a bedroom door straight off a
                 # flight of stairs is not a door anyone would draw.
+                # (The plan without corridors never draws this; it guides the
+                # fallback planners, which draw longer passages from a "hall".)
                 if level_index == 0:
                     kind, area, needed = RoomType.CORRIDOR, passage * 0.9, True
                 elif private_count(bucket) >= 2:
@@ -3119,6 +3121,7 @@ class LayoutGenerator:
         into a hall. Plots the programme already fills are left exactly alone.
         """
         footprint = self._design_footprint(levels)
+        footprint = self._design_footprint(levels)
         if footprint is None or max(cur.target) * 1.08 >= 0.97 * footprint:
             return cur
         # How much of the plot the brief leaves open: the lawn asked for, and the
@@ -3130,7 +3133,7 @@ class LayoutGenerator:
         # house that size holds.
         plot_area = self.brief.site.plot_area or 0.0
         lawn = float(getattr(self.brief.site, "garden_share", 0.0) or 0.0)
-        want = min(footprint, plot_area * (1.0 - lawn - 0.08)) if plot_area else footprint
+        want = min(footprint, plot_area * (1.0 - lawn)) if plot_area else footprint
         # A pool asked for keeps its ground: the water, its deck and the path to the house.
         from aip.engines.experience.landscape import POOL_DECK, POOLS
 
@@ -3139,13 +3142,21 @@ class LayoutGenerator:
             margin = 2 * (POOL_DECK + 0.9)
             want = max(0.0, want - (pw + margin) * (pl + margin))
         left_open = 1.0 - max(cur.target) * 1.08 / plot_area if plot_area else 0.0
-        too_much_lawn = plot_area >= 300.0 and left_open > lawn + 0.08 + 0.15
+        # The lawn the client fixed is kept, and the drive and paths; every other
+        # square metre the byelaws let the house stand on is house. So a house
+        # that leaves more open than that grows into it, on any size of plot.
+        too_much_lawn = plot_area > 0 and left_open > lawn + 0.04
         if too_much_lawn:
             self._cap_boost = max(1.0, min(2.2, want / (max(cur.target) * 1.08)))
         original = {id(r): r.target_area for r in base}
         fixed: set[int] = set()            # rooms added below keep the size they were added at
         goal = footprint / 1.08
-        if self.brief.site.plot_area < 300.0:
+        if too_much_lawn:
+            # Everything but the lawn is house - up to 1.45 times the rooms asked for.
+            # Past that a small programme on a huge plot is stretched into halls
+            # and corridors; the rest of such a plot stays garden.
+            goal = min(goal, want / 1.08, max(cur.target) * 1.45)
+        elif self.brief.site.plot_area < 300.0:
             # On a town plot the rooms are not stretched to the coverage the byelaw
             # allows: a 135 m2 plot does not get a 48 m2 master bedroom. The rest is garden.
             goal = min(goal, max(cur.target) * 1.45)
@@ -3165,15 +3176,25 @@ class LayoutGenerator:
                 r.preferred_area = round(max(original[id(r)], scaled), 2)
             return self._assess(levels, base)
 
+        def drawn(a: _Assessment, level: int | None = None) -> float:
+            """What a floor's rooms cover as the house is drawn: passages a plan
+            without corridors never draws are not counted as house."""
+            def one(bucket):
+                return sum(a.reqs[i].target_area for i in bucket
+                           if a.reqs[i].type not in (RoomType.CORRIDOR, RoomType.LOBBY) and a.reqs[i].notes != FILL_NOTE)
+            if level is not None:
+                return one(a.buckets[level]) if level < len(a.buckets) else 0.0
+            return max((one(b) for b in a.buckets), default=0.0)
+
         def solve() -> tuple[float, _Assessment, bool]:
             """The scale that fills the footprint; True when the caps allowed it."""
             top = apply(10.0)
-            if max(top.target) < goal:
+            if drawn(top) < goal:
                 return 10.0, top, False
             lo, hi = 1.0, 10.0
             for _ in range(24):
                 mid = (lo + hi) / 2
-                if max(apply(mid).target) > goal:
+                if drawn(apply(mid)) > goal:
                     hi = mid
                 else:
                     lo = mid
@@ -3238,7 +3259,7 @@ class LayoutGenerator:
         # and the family lounge with them, as the room the bedrooms open off.
         home_level = {RoomType.STUDY: 1, RoomType.HOME_THEATRE: 1, RoomType.FAMILY: 1}
         fill_to = 0.92 * want if too_much_lawn else FILL_TARGET * footprint
-        while not filled and max(grown.target) * 1.08 < fill_to and pending:
+        while not filled and drawn(grown) * 1.08 < fill_to and pending:
             kind, area, label, why = pending.pop(0)
             if any(r.type is kind for r in base):
                 continue
@@ -3270,8 +3291,8 @@ class LayoutGenerator:
         goal_fill = min(0.95 * coverage, 0.97 * footprint, 0.97 * want)
         # Both are ground-floor rooms, so it is the ground floor's shortfall they
         # make up; the floors above fill with terrace.
-        gap = goal_fill / 1.08 - grown.target[0]
-        if gap > 8.0 and auto:
+        gap = goal_fill / 1.08 - drawn(grown, 0)
+        if gap > 6.0 and auto:
             pin = 0 if levels > 1 else None
             plate = goal_fill
             for kind, share, label in ((RoomType.COURTYARD, 0.6, "courtyard"), (RoomType.VERANDAH, 0.4, "verandah")):
@@ -3378,13 +3399,21 @@ class LayoutGenerator:
         per_level_target = max(
             sum(self.requirements[i].target_area for i in bucket) for bucket in self.level_buckets
         )
+        # The plate the rooms ask for; `_grow_programme` grows it (and sets
+        # `_footprint_area`) when the plot leaves more open than the lawn.
         target = min(box.area, max_footprint if max_footprint > 0 else box.area, per_level_target * 1.08)
         if self._footprint_area:
             target = self._footprint_area          # the gate grew the house to the plot
         if target > 0 and box.area > target:
-            scale = math.sqrt(target / box.area)
-            new_w = box.width * scale
-            new_h = box.height * scale
+            # The house keeps the whole buildable frontage between the side
+            # setbacks; the depth takes up the difference, leaving a front yard
+            # and a rear garden rather than gaps down the sides.
+            roads = [getattr(d, "value", d) for d in (getattr(site, "road_directions", None) or ["N"])]
+            along_x = (roads[0] if roads else "N") in ("N", "S", "NE", "NW", "SE", "SW")
+            if along_x:
+                new_w, new_h = box.width, target / max(box.width, 0.1)
+            else:
+                new_w, new_h = target / max(box.height, 0.1), box.height
             centre = box.centre
             box = BoundingBox(
                 centre.x - new_w / 2, centre.y - new_h / 2,

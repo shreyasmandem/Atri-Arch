@@ -10,6 +10,12 @@ const PATHS = {
   collapse: "M12 6l-6 6 6 6M18.5 6l-6 6 6 6",
   dash: "M7 12h10",
   download: "M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14",
+  up: "M6 14.5l6-6 6 6",
+  down: "M6 9.5l6 6 6-6",
+  search: "M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5 20 20",
+  turn: "M18.5 12a6.5 6.5 0 1 1-2-4.7M18.5 4.5v3.5H15",
+  copy: "M9 9h10v10H9zM5 15V5h10",
+  trash: "M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12",
 };
 
 export function icon(name, cls = "ico") {

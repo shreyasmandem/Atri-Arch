@@ -671,6 +671,11 @@ class PartiPlanner:
         want - a ground floor with a light back band does not draw a 26 m2
         bedroom because the floor above needed a deep one."""
         caps = (5.6, 5.0, 5.6)
+        # A house that has to fill a deep plot (everything but the lawn is house)
+        # has deeper bands: up to 40% deeper, and never deeper than the plot.
+        k = getattr(self, "_area_need", 0.0) / max(1.0, Wh * sum(caps))
+        k = max(1.0, min(1.4, k, self.D / sum(caps)))
+        caps = tuple(c * k for c in caps)
         need = [[0.0] * 3 for _ in house]
         mins = [[0.0] * 3 for _ in house]
         for li, fl in enumerate(house):
@@ -691,6 +696,7 @@ class PartiPlanner:
                 mins[li][sr] = max(mins[li][sr], self.st_rot_d if g["stair_rot"] else self.st_run)
         front = max(max(need[li][0], mins[li][0]) for li in range(len(house)))
         rest = max(max(need[li][1], mins[li][1]) + max(need[li][2], mins[li][2]) for li in range(len(house)))
+
         out = []
         for li in range(len(house)):
             c = max(need[li][1], mins[li][1])
@@ -1612,6 +1618,7 @@ class PartiPlanner:
         inf = float("inf")
         area_need = max(sum(min(r.target_area, OPEN_MAX.get(r.type, r.target_area)) for r in l if r.type not in DRAWN
                             and "fills the footprint" not in (r.notes or "")) for l in levels)
+        self._area_need = area_need
 
         def evaluate(genes: dict, scale: float) -> tuple[float, dict]:
             G = self.genes = Genes(self.rng, genes)
@@ -1639,8 +1646,12 @@ class PartiPlanner:
             want = min(self.W, math.sqrt(area_need * scale * 1.2 * self.W / max(self.D, 1.0)))
             # The house takes most of a narrow frontage; on a large plot it keeps
             # the plot's own proportions.
+            # On a town plot the house spans the frontage between its side
+            # setbacks (90% of it) and the depth takes up the rest; a wide plot
+            # keeps the plot's own proportions, or a shallow house that wide
+            # needs a hall across it.
             if self.W <= 14:
-                want = max(want, 0.85 * self.W)
+                want = max(want, 0.9 * self.W)
             a, b = max(lo, min(hi, 0.85 * want)), min(hi, max(lo, 1.2 * want))
             # On a shallow plot a narrow house would have to be deeper than the
             # plot: the house is at least as wide as its area needs the depth for.
@@ -1734,7 +1745,7 @@ class PartiPlanner:
             self._suites(ps)
             # A floor with much less on it than the ground keeps its rooms
             # together at the back and leaves the front as one terrace.
-            g["light"] = li > 0 and sum(p.area for p in ps) < 0.62 * ground_area
+            g["light"] = li > 0 and sum(p.area for p in ps) < 0.35 * ground_area
             fl = self._compose(li, ps, g)
             if not any(fl):
                 return None

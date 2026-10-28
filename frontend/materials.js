@@ -220,6 +220,43 @@ const PATTERNS = {
       return (band < 0.5 ? 0.66 : 0.38) + thread + (n(u, v) - 0.5) * 0.12;
     };
   } },
+  // Herringbone parquet: short oak blocks laid in a zigzag.
+  herringbone: { size: 1.2, fn: () => {
+    const n = noise(36, 120);
+    return (u, v) => {
+      const x = u * 8, y = v * 8, band = Math.floor(x), fx = x - band;
+      const shift = band % 2 ? fx : 1 - fx, row = y + shift, k = Math.floor(row * 2), f = row * 2 - k;
+      if (f < 0.04 || fx < 0.03) return 0.25;
+      return 0.45 + hash(band, k) * 0.2 + Math.sin((fx + y) * 60) * 0.03 + (n(u, v) - 0.5) * 0.1;
+    };
+  } },
+  // Moroccan cement tiles: a quatrefoil in each square.
+  moroccan: { size: 0.8, fn: () => (u, v) => {
+    const x = u * 4, y = v * 4, fu = x - Math.floor(x) - 0.5, fv = y - Math.floor(y) - 0.5;
+    if (Math.abs(fu) > 0.48 || Math.abs(fv) > 0.48) return 0.3;
+    const r = Math.min(Math.hypot(fu - 0.25, fv), Math.hypot(fu + 0.25, fv), Math.hypot(fu, fv - 0.25), Math.hypot(fu, fv + 0.25));
+    return r < 0.22 ? 0.78 : 0.4 + (Math.abs(fu) + Math.abs(fv) < 0.18 ? 0.25 : 0);
+  } },
+  // Fluted timber: half-round slats 6 cm apart, a little grain down each.
+  flutes: { size: 0.6, fn: () => {
+    const g = noise(37, 300);
+    return (u) => { const f = (u * 10) % 1; return 0.25 + Math.sin(f * Math.PI) * 0.45 + (g(u, 0.3) - 0.5) * 0.08; };
+  } },
+  // Acoustic panels: felt slats on black, grooves every 3 cm.
+  acoustic: { size: 0.6, fn: () => {
+    const n = noise(38, 220);
+    return (u, v) => ((u * 20) % 1 < 0.35 ? 0.12 : 0.55 + (n(u, v) - 0.5) * 0.12);
+  } },
+  // A botanical Pichwai wallpaper: lotus leaves and stems in a repeat.
+  pichwai: { size: 0.9, fn: () => (u, v) => {
+    let d = 9;
+    for (const [cx, cy, r] of [[0.25, 0.3, 0.16], [0.72, 0.68, 0.14], [0.7, 0.18, 0.09], [0.2, 0.8, 0.1]]) {
+      const dx = ((u - cx + 1.5) % 1) - 0.5, dy = ((v - cy + 1.5) % 1) - 0.5;
+      d = Math.min(d, Math.hypot(dx, dy * 1.4) / r);
+    }
+    const stem = Math.abs(((u * 3 + v * 0.6) % 1) - 0.5) < 0.012;
+    return d < 1 ? (d < 0.12 ? 0.3 : 0.75) : stem ? 0.65 : 0.3;
+  } },
   // Real surfaces, photographed (Poly Haven, CC0), kept as brightness only so the chosen colour stays true.
   oak: { size: 2.0, url: "assets/tex/oak_planks.jpg" },
   slabs: { size: 2.0, url: "assets/tex/stone_slabs.jpg" },
@@ -255,6 +292,17 @@ const RULES = [
   [/^floor_redoxide/, "oxide", 0.5],
   [/^floor_jaisalmer/, "sandstone", 0.7],
   [/^floor_athangudi/, "athangudi", 0.8],
+  [/^floor_statuario/, "slabs", 0.25],
+  [/^floor_herringbone/, "herringbone", 0.8],
+  [/^floor_microcement/, "plasterIn", 0.45],
+  [/^floor_moroccan/, "moroccan", 0.85],
+  [/^floor_slate/, "squares", 0.6],
+  [/^wall_fluted/, "flutes", 0.8],
+  [/^wall_acoustic/, "acoustic", 0.85],
+  [/^wall_brick/, "brick", 0.95],
+  [/^wall_travertine/, "slabs", 0.5],
+  [/^wall_pichwai/, "pichwai", 0.85],
+  [/^wall_linenpaper/, "linen", 0.6],
   [/^floor_outdoor/, "pavers", 0.6],
   [/^door_timber/, "rosewood", 0.7],
   [/^joinery/, "grain", 0.75],

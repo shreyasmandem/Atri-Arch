@@ -257,8 +257,14 @@ class Palette:
         "terrazzo": ((0.81, 0.78, 0.71), 0.35), "athangudi": ((0.66, 0.35, 0.24), 0.3),
         "granite": ((0.18, 0.18, 0.19), 0.15), "vitrified": ((0.85, 0.83, 0.79), 0.25),
         "wood": ((0.58, 0.40, 0.25), 0.55), "redoxide": ((0.56, 0.23, 0.16), 0.35),
-        "jaisalmer": ((0.85, 0.72, 0.47), 0.6),
+        "jaisalmer": ((0.85, 0.72, 0.47), 0.6), "statuario": ((0.93, 0.92, 0.90), 0.12),
+        "herringbone": ((0.65, 0.48, 0.31), 0.5), "microcement": ((0.72, 0.71, 0.68), 0.35),
+        "moroccan": ((0.25, 0.44, 0.56), 0.3), "slate": ((0.23, 0.24, 0.25), 0.6),
     }
+    #: Wall treatments: material name prefix (the viewer lays its texture by name) and colour.
+    TREATMENTS = {"fluted": ((0.54, 0.36, 0.23), 0.6), "acoustic": ((0.23, 0.23, 0.24), 0.95),
+                  "brick": ((0.64, 0.33, 0.23), 0.9), "travertine": ((0.85, 0.78, 0.68), 0.55),
+                  "pichwai": ((0.18, 0.36, 0.31), 0.8), "linenpaper": ((0.85, 0.81, 0.75), 0.9)}
 
     def custom(self, hex_: str | None, base: str) -> str:
         """A material like `base` in the client's chosen colour; `base` itself if none was chosen."""
@@ -269,6 +275,16 @@ class Palette:
             m = self.m[base]
             self.m[key] = Material(f"{m.name}_{hex_.lstrip('#').lower()}", _hex(hex_, m.rgb), m.roughness,
                                    m.metallic, m.alpha, m.emissive)
+        return key
+
+    def lamp(self, kelvin: int | None) -> str:
+        """The light material in a colour temperature: warm 2700K to task-white 5500K."""
+        if kelvin not in (2700, 4000, 5500):
+            return "light"
+        key = f"light_{kelvin}"
+        if key not in self.m:
+            glow = {2700: (1.0, 0.78, 0.52), 4000: (1.0, 0.93, 0.82), 5500: (0.95, 0.97, 1.0)}[kelvin]
+            self.m[key] = Material(key, (1.0, 0.97, 0.92), 0.5, 0.0, 1.0, glow)
         return key
 
     def floor_for(self, room: Room, default: str) -> str:
@@ -282,16 +298,25 @@ class Palette:
             self.m[key] = Material(key, rgb, rough)
         return key
 
-    def side_finish(self, room: Room | None, accent: bool = False) -> list[tuple[float, str]]:
+    def side_finish(self, room: Room | None, accent: bool = False, wall_id: str | None = None) -> list[tuple[float, str]]:
         """A wall face's finish as bands from the floor up: (top of band, material)."""
         bands = self._side_finish(room, accent)
         mine = self.room_finishes.get(room.id) if room is not None else None
         if not mine:
             return bands
-        chosen = mine.get("accent") if accent else None
+        # A colour the client gave this very wall wins over the room's.
+        chosen = (mine.get("walls") or {}).get(wall_id) if wall_id else None
+        chosen = chosen or (mine.get("accent") if accent else None)
         chosen = chosen or mine.get("wall")
         if not chosen:
             return bands
+        if chosen in self.TREATMENTS:
+            key = f"wall_{chosen}"
+            if key not in self.m:
+                rgb, rough = self.TREATMENTS[chosen]
+                self.m[key] = Material(key, rgb, rough)
+            tiles = ("tile_bath", "tile_kitchen")
+            return [(top, mat if mat in tiles else key) for top, mat in bands]
         paint = self.custom(chosen, "wall_accent" if accent and mine.get("accent") else "wall_in")
         tiles = ("tile_bath", "tile_kitchen")
         return [(top, mat if mat in tiles else paint) for top, mat in bands]
@@ -483,6 +508,23 @@ def _room_floor_material(room: Room) -> str:
     return "f_stone"
 
 
+def _cove(b: Builder, room: Room, ceil_y: float, node: str, lamp: str) -> None:
+    """A false-ceiling tray round the room, 0.6 m wide and 0.15 m deep, with a
+    concealed light strip along its inner edge."""
+    box = room.bbox
+    t, drop = 0.6, 0.15
+    if box.width < 2 * t + 0.8 or box.height < 2 * t + 0.8:
+        return
+    y = ceil_y - drop / 2
+    cx, cy = box.centre.x, box.centre.y
+    for (x, z, sx, sz) in ((cx, box.min_y + t / 2, box.width, t), (cx, box.max_y - t / 2, box.width, t),
+                           (box.min_x + t / 2, cy, t, box.height - 2 * t), (box.max_x - t / 2, cy, t, box.height - 2 * t)):
+        b.box(node, "paint_ceiling" if "paint_ceiling" in b.p.m else "slab", (x, y, -z), (sx, drop, sz))
+    for (x, z, sx, sz) in ((cx, box.min_y + t + 0.02, box.width - 2 * t, 0.03), (cx, box.max_y - t - 0.02, box.width - 2 * t, 0.03),
+                           (box.min_x + t + 0.02, cy, 0.03, box.height - 2 * t), (box.max_x - t - 0.02, cy, 0.03, box.height - 2 * t)):
+        b.box(node, lamp, (x, ceil_y - drop - 0.02, -z), (sx, 0.03, sz))
+
+
 _OPEN_TO_SKY = {RoomType.COURTYARD}
 _RAILED = {RoomType.BALCONY, RoomType.TERRACE}
 
@@ -645,7 +687,7 @@ def _walls(b: Builder, plan: FloorPlan, level: Level, base: float, node: str, ro
             sides[sgn_out] = None
         finishes = {
             sgn: ([(99.0, mat)] if exterior and sgn == (1 if out.dot(n) >= 0 else -1)
-                  else b.p.side_finish(sides[sgn], accent=wall.id in accents))
+                  else b.p.side_finish(sides[sgn], accent=wall.id in accents, wall_id=wall.id))
             for sgn in (1, -1)
         }
         two_sided = b.p.scheme is not None
@@ -1760,6 +1802,63 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         part("brass", 0, d / 2 - 0.1, 0.0, 0.2, 0.2, 0.03)
         part("brass", 0, d / 2 - 0.015, 0.03, 0.03, 0.03, 0.2)
         part("brass", 0, d / 2 - 0.07, 0.22, 0.14, 0.14, 0.12)
+    elif iid == "tv_floating":
+        part("joinery", 0, 0, 0.0, w, 0.05, h)                        # the backdrop
+        for k in range(int(w / 0.06)):
+            part("joinery", -w / 2 + 0.03 + k * 0.06, 0.05, 0.0, 0.035, 0.025, h)   # its flutes
+        part("light", 0, 0.07, h - 0.08, w - 0.1, 0.02, 0.02)         # the LED strip
+        part("joinery", 0, 0.05, 0.35, w * 0.8, d - 0.05, 0.3)        # the floating console
+        part("screen", 0, 0.08, 1.05, min(1.45, w * 0.6), 0.04, 0.82)
+    elif iid == "standing_desk":
+        part("joinery", 0, 0, 1.02, w, d, 0.04)
+        for su in (-1, 1):
+            part("metal", su * (w / 2 - 0.12), d / 2 - 0.03, 0.0, 0.07, 0.07, 1.02)
+            part("metal", su * (w / 2 - 0.12), d / 2 - 0.3, 0.0, 0.07, 0.6, 0.03)
+            part("screen", su * 0.33, 0.12, 1.2, 0.6, 0.03, 0.36)
+            part("metal", su * 0.33, 0.14, 1.06, 0.05, 0.05, 0.14)
+    elif iid == "wardrobe_glass":
+        part("joinery", 0, 0, 0.0, w, d, h)
+        n = 3 if w > 1.8 else 2
+        for k in range(n):
+            part("glass", -w / 2 + w * (k + 0.5) / n, d - 0.01, 0.05, w / n - 0.02, 0.012, h - 0.1)
+            part("metal", -w / 2 + w * k / n + 0.01, d - 0.005, 0.0, 0.02, 0.015, h)
+        part("light", 0, d - 0.04, h - 0.06, w - 0.1, 0.02, 0.02)
+    elif iid == "shower_glass":
+        part("f_tile", 0, 0, 0.0, w, d, 0.04)
+        part("glass", 0, d - 0.01, 0.04, w, 0.01, 2.0)
+        part("glass", w / 2 - 0.005, 0.0, 0.04, 0.01, d, 2.0)
+        part("ex_metal", 0, d - 0.01, 2.04, w, 0.02, 0.03)
+        part("ex_metal", w / 2 - 0.005, 0.0, 2.04, 0.02, d, 0.03)
+        part("metal", -w / 2 + 0.15, 0.03, 1.9, 0.18, 0.18, 0.02)
+    elif iid == "puja_corian":
+        part("ceramic", 0, 0, 0.0, w, d, 0.8)
+        part("ceramic", 0, 0, 0.8, w, 0.06, h - 0.8)                  # the carved back
+        for k in range(5):
+            part("light", 0, 0.065, 1.0 + k * 0.2, w * (0.7 - k * 0.1), 0.01, 0.015)
+        part("brass", 0, d * 0.5, 0.8, w * 0.4, d * 0.4, 0.35)
+        for su in (-1, 1):
+            part("brass", su * w * 0.35, d * 0.5, h - 0.45, 0.1, 0.1, 0.12)   # bells
+        part("ceramic", 0, 0, h - 0.06, w + 0.04, d + 0.04, 0.06)
+    elif iid == "deck_turf":
+        part("ex_timber", 0, 0, 0.0, w, d, 0.03)
+        part("lawn", 0, d * 0.2, 0.03, w * 0.5, d * 0.6, 0.01)
+    elif iid == "robot_vacuum":
+        part("appliance", 0, 0, 0.0, 0.3, 0.2, 0.4)                   # the dock
+        part("appliance", 0, 0.2, 0.0, 0.33, 0.33, 0.09)
+    elif iid == "air_purifier":
+        part("ceramic", 0, 0, 0.0, w, d, h)
+        part("ex_metal", 0, 0, h - 0.01, w * 0.8, d * 0.8, 0.01)
+    elif iid == "drapes_sheer":
+        drop = 2.75
+        part("brass", 0, 0, drop + 0.02, w + 0.2, 0.025, 0.025)
+        for k in range(int(w / 0.08)):
+            u = -w / 2 + 0.04 + k * 0.08
+            part("linen", u, 0.03 + (0.03 if k % 2 else 0.0), 0.02, 0.085, 0.012, drop)
+    elif iid == "blinds_venetian":
+        y0 = 0.9
+        for k in range(int(h / 0.05)):
+            part("joinery", 0, 0.01, y0 + k * 0.05, w, 0.05, 0.008)
+        part("joinery", 0, 0, y0 + h, w + 0.04, 0.06, 0.05)
     elif iid == "rangoli":
         part("accent", 0, 0, 0.0, w, d, 0.004)
         part("flower_pink", 0, d * 0.2, 0.004, w * 0.6, d * 0.6, 0.002)
@@ -1960,8 +2059,12 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
             b.slab(f"{node}/floors", b.p.floor_for(room, _room_floor_material(room)), room.polygon, y, y + 0.02)
             if room.type not in _OPEN_TO_SKY and room.type not in _RAILED and room.area > 2.0:
                 c = room.centre
-                b.cylinder(f"{node}/lights", "light", (c.x, y + level.floor_to_floor - SLAB - 0.06, -c.y),
-                           0.22, 0.04, 16)
+                mine = b.p.room_finishes.get(room.id, {})
+                lamp = b.p.lamp(mine.get("kelvin"))
+                ceil_y = y + level.floor_to_floor - SLAB
+                b.cylinder(f"{node}/lights", lamp, (c.x, ceil_y - 0.06, -c.y), 0.22, 0.04, 16)
+                if mine.get("cove"):
+                    _cove(b, room, ceil_y, f"{node}/ceiling", lamp)
         _walls(b, plan, level, y, f"{node}/structure", road)
         for room in level.rooms:
             if room.type is RoomType.STAIRCASE and level.index < len(plan.levels) - 1:

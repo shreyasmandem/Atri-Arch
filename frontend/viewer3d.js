@@ -8,8 +8,8 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { dress, skyTexture } from "./materials.js?v=m3";
-import { iconHTML } from "./icons.js?v=i2";
+import { dress, skyTexture } from "./materials.js?v=m4";
+import { iconHTML } from "./icons.js?v=i3";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // A neutral "photo studio" environment, generated in code so nothing extra
@@ -922,6 +922,99 @@ export class Viewer3D {
     mv.multiplyScalar(len);
     this.camera.position.add(mv);
     this.controls.target.add(mv);
+  }
+
+  // ── editing in the view: pick, drag, see what is selected ───────────
+  // The page says what a click or a drag means (`interact`); the viewer turns
+  // pointer positions into plan coordinates on the floor being edited.
+  enableEditing(interact) {
+    this.interact = interact;
+    if (this._editBound) return;
+    this._editBound = true;
+    const host = this.host;
+    let down = null;
+    host.addEventListener("pointerdown", (e) => {
+      if (!this.interact || e.button !== 0 || e.target !== this.renderer.domElement) return;
+      const hit = this.pickPlan(e.clientX, e.clientY);
+      down = { x: e.clientX, y: e.clientY, t: performance.now(), hit, drag: false };
+      if (hit && this.interact.grab?.(hit)) {
+        // Dragging a piece: the view holds still while it moves.
+        down.drag = true;
+        this.controls.enabled = false;
+        this.renderer.domElement.setPointerCapture(e.pointerId);
+      }
+    }, { capture: true });
+    host.addEventListener("pointermove", (e) => {
+      if (!down?.drag) return;
+      const p = this.floorPoint(e.clientX, e.clientY, this.interact.level ?? 0);
+      if (p) this.interact.drag?.(p);
+    });
+    const up = (e) => {
+      if (!down) return;
+      const d = down; down = null;
+      if (d.drag) { this.controls.enabled = true; this.interact?.drop?.(); return; }
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 5 && performance.now() - d.t < 450) this.interact?.click?.(d.hit);
+    };
+    host.addEventListener("pointerup", up);
+    host.addEventListener("pointercancel", up);
+  }
+
+  // Where a pointer lands, in plan coordinates: x, y (plan north up), the
+  // height above the model's origin, and whether the face is a floor or a wall.
+  pickPlan(clientX, clientY) {
+    if (!this.model) return null;
+    const hit = this._pick(clientX, clientY);
+    if (!hit) return null;
+    const p = this.model.worldToLocal(hit.point.clone());
+    const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+    return { x: p.x, y: -p.z, h: p.y, up: n.y > 0.6, wall: Math.abs(n.y) < 0.3 };
+  }
+
+  // Where a pointer meets the floor of a level, in plan coordinates.
+  floorPoint(clientX, clientY, level) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    const ray = (this._ray ||= new THREE.Raycaster());
+    ray.setFromCamera(ndc, this.camera);
+    const fy = this.model.localToWorld(new THREE.Vector3(0, this._floorY(level), 0)).y;
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -fy);
+    const out = new THREE.Vector3();
+    if (!ray.ray.intersectPlane(plane, out)) return null;
+    const p = this.model.worldToLocal(out);
+    return { x: p.x, y: -p.z };
+  }
+
+  // A cream outline round the selected piece, at its true size and turn.
+  mark(piece, level) {
+    if (!this.model) return;
+    if (this._mark) { this._mark.parent?.remove(this._mark); this._mark.geometry.dispose(); this._mark = null; }
+    if (!piece) return;
+    const h = Math.max(0.05, piece.h || 0.6);
+    const g = new THREE.EdgesGeometry(new THREE.BoxGeometry(piece.w + 0.04, h + 0.02, piece.d + 0.04));
+    const m = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xf2e6cf, depthTest: false, transparent: true, opacity: 0.95 }));
+    m.renderOrder = 10;
+    m.position.set(piece.x, this._floorY(level) + (piece.lift || 0) + h / 2, -piece.y);
+    m.rotation.y = (piece.rotation * Math.PI) / 180;
+    this.model.add(m);
+    this._mark = m;
+  }
+
+  // The way the view looks, as a plan direction: for moving things "away" and "to the right".
+  viewAxes() {
+    const d = new THREE.Vector3();
+    this.camera.getWorldDirection(d);
+    const inv = new THREE.Quaternion();
+    this.model?.getWorldQuaternion(inv);
+    d.applyQuaternion(inv.invert());
+    const fx = d.x, fy = -d.z, len = Math.hypot(fx, fy) || 1;
+    return { fwd: [fx / len, fy / len], right: [fy / len, -fx / len] };
+  }
+
+  // The colour of a room's lights while standing in it: warm, natural or task white.
+  setRoomLight(kelvin) {
+    if (this.mode !== "walk") return;
+    this.hemi.color.setHex({ 2700: 0xffd9b0, 4000: 0xfff2e2, 5500: 0xf3f6ff }[kelvin] || 0xf4ead8);
+    for (const m of this.lamps) m.emissiveIntensity = kelvin ? 1.4 : 0;
   }
 
   // ── VR: the same walk, in a headset ──────────────────────────────────

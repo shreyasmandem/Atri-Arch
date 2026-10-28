@@ -140,6 +140,30 @@ EXTRAS: list[tuple[str, frozenset[RoomType], FurnitureItem]] = [
         cost=55_000)),
     ("Appliances", frozenset(_WET | {T.UTILITY}), _i("geyser", "Water heater (geyser)", 0.4, 0.35, 0.6,
                                                      Placement.AGAINST_WALL, front_clearance=0.0, cost=11_000)),
+    # Everyday pieces of a modern Indian home
+    ("Storage", frozenset(_SITTING | {T.HOME_THEATRE}), _i("tv_floating", "Floating TV unit, fluted backdrop and LED strip",
+                                                           2.4, 0.4, 2.4, Placement.AGAINST_WALL, front_clearance=2.4,
+                                                           cost=85_000)),
+    ("Tables", frozenset({T.STUDY, T.HOME_OFFICE} | _BEDS | {T.FAMILY}),
+     _i("standing_desk", "Standing desk with two monitors (work from home)", 1.4, 0.7, 1.1, Placement.AGAINST_WALL,
+        front_clearance=0.9, cost=48_000)),
+    ("Storage", frozenset(_BEDS), _i("wardrobe_glass", "Tinted glass sliding wardrobe with sensor lights", 2.4, 0.65,
+                                     2.4, Placement.AGAINST_WALL, front_clearance=0.3, cost=165_000)),
+    ("Bath", frozenset({T.BATHROOM}), _i("shower_glass", "Glass shower cubicle, matte black frame", 1.0, 1.0, 2.1,
+                                         Placement.CORNER, front_clearance=0.6, cost=38_000)),
+    ("Puja", frozenset({T.PUJA} | _SITTING | {T.DINING, T.FOYER}), _i("puja_corian", "CNC-carved Corian puja unit with bells",
+                                                                     1.0, 0.45, 2.1, Placement.AGAINST_WALL,
+                                                                     front_clearance=0.9, cost=72_000)),
+    ("Decor", frozenset(_OUTSIDE), _i("deck_turf", "Deck tiles with a turf patch", 2.0, 1.5, 0.03, Placement.FLOATING,
+                                      front_clearance=0.0, cost=16_000)),
+    ("Appliances", frozenset(_ANY_DRY), _i("robot_vacuum", "Robot vacuum with auto-empty dock", 0.35, 0.45, 0.4,
+                                           Placement.AGAINST_WALL, front_clearance=0.3, cost=45_000)),
+    ("Appliances", frozenset(_ANY_DRY), _i("air_purifier", "HEPA air purifier", 0.3, 0.3, 0.65, Placement.CORNER,
+                                           front_clearance=0.3, cost=18_000)),
+    ("Lighting", frozenset(_ANY_DRY), _i("drapes_sheer", "Floor-to-ceiling sheer linen drapes", 2.4, 0.12, 2.8,
+                                         Placement.AGAINST_WALL, front_clearance=0.0, cost=14_000)),
+    ("Lighting", frozenset(_ANY_DRY | {T.KITCHEN}), _i("blinds_venetian", "Wooden venetian blinds", 1.5, 0.06, 1.5,
+                                                        Placement.AGAINST_WALL, front_clearance=0.0, cost=9_000)),
     # More furniture
     ("Storage", frozenset(_BEDS | {T.STUDY}),
      _i("chest_drawers", "Chest of drawers", 0.9, 0.45, 1.0, Placement.AGAINST_WALL, front_clearance=0.6, cost=24_000)),
@@ -159,7 +183,7 @@ EXTRAS: list[tuple[str, frozenset[RoomType], FurnitureItem]] = [
     ("Seating", frozenset(_SITTING | _BEDS), _i("recliner_single", "Recliner", 0.9, 0.95, 1.0, Placement.CORNER,
                                                 front_clearance=0.8, cost=36_000)),
     ("Seating", frozenset(_SITTING | _BEDS | {T.BALCONY, T.VERANDAH, T.TERRACE}),
-     _i("swing_chair", "Hanging cane swing chair", 0.9, 0.9, 1.9, Placement.CORNER, front_clearance=0.4, cost=16_000)),
+     _i("swing_chair", "Egg swing chair (cane)", 0.9, 0.9, 1.9, Placement.CORNER, front_clearance=0.4, cost=16_000)),
     ("Seating", frozenset(_BEDS | _SITTING), _i("ottoman_storage", "Storage ottoman", 0.8, 0.45, 0.45,
                                                 Placement.FLOATING, front_clearance=0.3, cost=9_000)),
     ("Seating", frozenset({T.STUDY, T.HOME_OFFICE} | _BEDS), _i("office_chair", "Office chair", 0.6, 0.6, 1.1,
@@ -258,7 +282,7 @@ COLOURS: dict[str, list[dict[str, str]]] = {
 
 #: Pieces fixed to a wall above the floor, and pieces hung from the ceiling: they
 #: may sit over furniture, and are placed on a wall or over a table, not on the floor.
-WALL_MOUNTED = {"tv_wall", "ac_split", "wall_clock", "mirror_round", "mirror_cabinet", "chimney", "purifier",
+WALL_MOUNTED = {"drapes_sheer", "blinds_venetian", "tv_wall", "ac_split", "wall_clock", "mirror_round", "mirror_cabinet", "chimney", "purifier",
                 "geyser", "wall_art", "wall_shelf", "mandir_wall"}
 CEILING_HUNG = {"chandelier", "pendant_light"}
 
@@ -283,6 +307,12 @@ SIZES: list[tuple[tuple[str, ...], list[tuple[str, float, float]]]] = [
                      ("Sliding, 8 ft", 8.0, 2.15)]),
     (("coffee_table", "centre_table"), [("Small, 3 x 1.5 ft", 3.0, 1.5), ("Standard, 4 x 2 ft", 4.0, 2.0),
                                         ("Large, 4.5 x 2.5 ft", 4.5, 2.5)]),
+    (("tv_floating",), [("6 ft", 6.0, 1.3), ("7 ft", 7.0, 1.3), ("8 ft", 8.0, 1.3), ("10 ft", 10.0, 1.3)]),
+    (("standing_desk",), [("4 ft", 4.0, 2.25), ("5 ft", 5.0, 2.5), ("6 ft", 6.0, 2.5)]),
+    (("wardrobe_glass",), [("6 ft", 6.0, 2.15), ("8 ft", 8.0, 2.15), ("10 ft", 10.0, 2.15)]),
+    (("shower_glass",), [("3 x 3 ft", 3.0, 3.0), ("3 x 4 ft", 4.0, 3.0), ("4 x 4 ft", 4.0, 4.0)]),
+    (("drapes_sheer",), [("4 ft window", 5.0, 0.4), ("6 ft window", 7.0, 0.4), ("8 ft window", 9.0, 0.4)]),
+    (("blinds_venetian",), [("3 ft", 3.0, 0.2), ("4 ft", 4.0, 0.2), ("5 ft", 5.0, 0.2)]),
     (("tv_wall",), [("43 inch", 3.18, 0.26), ("55 inch", 4.04, 0.26), ("65 inch", 4.77, 0.26), ("75 inch", 5.5, 0.3)]),
     (("ac_split",), [("1 ton", 2.62, 0.72), ("1.5 ton", 3.12, 0.72), ("2 ton", 3.51, 0.8)]),
     (("bathtub",), [("5 ft", 5.0, 2.5), ("5.5 ft", 5.5, 2.5), ("6 ft", 6.0, 2.75)]),
@@ -363,12 +393,30 @@ FLOORS: list[dict[str, str]] = [
     {"id": "vitrified", "name": "Vitrified tile", "hex": "#d8d3ca"},
     {"id": "wood", "name": "Engineered wood", "hex": "#93673f"},
     {"id": "redoxide", "name": "Red oxide", "hex": "#8e3b2a"},
-    {"id": "jaisalmer", "name": "Jaisalmer stone", "hex": "#d8b878"},
+    {"id": "jaisalmer", "name": "Jaisalmer yellow stone", "hex": "#d8b878"},
+    {"id": "statuario", "name": "Italian Statuario marble", "hex": "#eeece8"},
+    {"id": "herringbone", "name": "Herringbone oak parquet", "hex": "#a77b4f"},
+    {"id": "microcement", "name": "Polished micro-cement", "hex": "#b9b6af"},
+    {"id": "moroccan", "name": "Moroccan accent tiles", "hex": "#3f6f8f"},
+    {"id": "slate", "name": "Charcoal slate stone", "hex": "#3b3d40"},
 ]
+
+#: Treatments a wall can take instead of paint, each with its usual colour.
+WALL_TREATMENTS: list[dict[str, str]] = [
+    {"id": "fluted", "name": "Fluted timber slats", "hex": "#8a5d3b"},
+    {"id": "acoustic", "name": "Charcoal acoustic panels", "hex": "#3a3a3c"},
+    {"id": "brick", "name": "Exposed wirecut brick", "hex": "#a4553a"},
+    {"id": "travertine", "name": "Honed travertine cladding", "hex": "#d8c8ad"},
+    {"id": "pichwai", "name": "Botanical Pichwai wallpaper", "hex": "#2f5d50"},
+    {"id": "linenpaper", "name": "Textured linen wallpaper", "hex": "#d9cfbf"},
+]
+TREATMENT_IDS = {t["id"] for t in WALL_TREATMENTS}
+LIGHT_PRESETS = [{"k": 2700, "name": "Warm and cosy, 2700K"}, {"k": 4000, "name": "Natural day, 4000K"},
+                 {"k": 5500, "name": "Task white, 5500K"}]
 FLOOR_IDS = {f["id"] for f in FLOORS}
 
 #: What part of an item takes its colour: its frame and boards, or its cloth.
-_FABRIC = ("sofa", "sectional", "recliner", "accent_chair", "wing_chair", "armchair", "reading_chair", "diwan",
+_FABRIC = ("drapes", "sofa", "sectional", "recliner", "accent_chair", "wing_chair", "armchair", "reading_chair", "diwan",
            "baithak", "bean_bag", "pouffe", "bench", "rug", "sofa_bed", "ottoman", "office_chair")
 _METAL = ("brass_lamp", "diya_stand", "urli", "floor_lamp", "mirror_full", "towel_ladder", "filing_cabinet",
           "drying_rack", "chandelier", "candles", "floor_vase", "brass_pot", "puja_bell")
@@ -378,7 +426,8 @@ def colour_group(item_id: str) -> str:
     """What takes the client's colour: boards ("wood"), cloth ("fabric"), metal, or nothing (sanitaryware)."""
     if item_id.startswith(("wc", "shower", "washer", "fridge", "microwave", "chimney", "purifier", "dishwasher",
                            "ac_split", "tv_wall", "geyser", "bathtub", "aquarium", "rangoli", "wall_clock", "books",
-                           "succulent", "pendant_light", "plant", "tulsi", "aquarium")):
+                           "succulent", "pendant_light", "plant", "tulsi", "aquarium", "robot_vacuum", "air_purifier",
+                           "standing_desk", "deck_turf")):
         return "none"
     if item_id.startswith(_FABRIC):
         return "fabric"
@@ -456,6 +505,8 @@ def catalogue_for(room_type: RoomType) -> dict[str, Any]:
         "groups": [{"name": g, "items": items} for g, items in groups.items()],
         "colours": COLOURS,
         "looks": LOOKS,
+        "treatments": WALL_TREATMENTS,
+        "lights": LIGHT_PRESETS,
         "floors": FLOORS,
         "paints": [{"name": n, "hex": h} for n, h in PAINTS["wall"]],
         "art": [{"id": a["id"], "title": a["title"], "artist": a["artist"], "aspect": a.get("aspect", 0.8)}
@@ -515,6 +566,17 @@ def clean_room_edit(plan: FloorPlan, room: Room, items: list[dict[str, Any]],
     floor = (finishes or {}).get("floor")
     if floor in FLOOR_IDS:
         fin["floor"] = floor
+    # One colour per wall, for the walls of this room only.
+    own_walls = {w.id for lv in plan.levels for w in lv.walls if room.id in w.rooms}
+    per_wall = {wid: h for wid, h in (((finishes or {}).get("walls") or {}).items()) if wid in own_walls}
+    per_wall = {wid: (h if h in TREATMENT_IDS else _hex(h)) for wid, h in per_wall.items() if h in TREATMENT_IDS or _hex(h)}
+    if per_wall:
+        fin["walls"] = per_wall
+    if (finishes or {}).get("cove"):
+        fin["cove"] = True
+    kelvin = (finishes or {}).get("kelvin")
+    if kelvin in (2700, 4000, 5500):
+        fin["kelvin"] = kelvin
     look = (finishes or {}).get("look")
     if any(lk["id"] == look for lk in LOOKS):
         fin["look"] = look

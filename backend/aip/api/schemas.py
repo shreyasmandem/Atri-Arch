@@ -212,7 +212,9 @@ class SimpleBriefRequest(BaseModel):
         garden = self._garden_share()
         if (garden or pool) and area:
             # Never below a quarter of the plot: a house still has to stand.
-            cap = min(cap, max(0.25, 1.0 - garden - pool / area - 0.08))
+            # The lawn asked for is kept exactly; a pool keeps its deck too. No
+            # other ground is held back: the rest of the plot is house.
+            cap = min(cap, max(0.25, 1.0 - garden - pool / area - (0.08 if pool else 0.0)))
         return math.floor(cap * 1000) / 1000          # rounded down: the lawn is never shaved
 
     def to_brief(self) -> ClientBrief:
