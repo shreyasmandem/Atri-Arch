@@ -399,7 +399,27 @@ FLOORS: list[dict[str, str]] = [
     {"id": "microcement", "name": "Polished micro-cement", "hex": "#b9b6af"},
     {"id": "moroccan", "name": "Moroccan accent tiles", "hex": "#3f6f8f"},
     {"id": "slate", "name": "Charcoal slate stone", "hex": "#3b3d40"},
+    {"id": "checker", "name": "Checkerboard marble", "hex": "#d9d6cf"},
+    {"id": "chevron", "name": "Chevron oak", "hex": "#9c7148"},
+    {"id": "hexagon", "name": "Hexagon cement tiles", "hex": "#b7b1a6"},
+    {"id": "mosaic", "name": "Glass mosaic", "hex": "#5e8c95"},
+    {"id": "walnut", "name": "Wide walnut planks", "hex": "#5b3e2b"},
+    {"id": "cotto", "name": "Terracotta cotto tiles", "hex": "#b0623f"},
+    {"id": "greykota", "name": "Grey Kota stone", "hex": "#8f938c"},
+    {"id": "whiteterrazzo", "name": "White terrazzo", "hex": "#e8e3da"},
 ]
+
+#: Ceiling designs: the false ceiling a room may have.
+CEILINGS: list[dict[str, str]] = [
+    {"id": "plain", "name": "Plain plastered"},
+    {"id": "cove", "name": "Cove with hidden light"},
+    {"id": "tray", "name": "Stepped double tray"},
+    {"id": "coffered", "name": "Coffered grid"},
+    {"id": "beams", "name": "Wooden beams"},
+    {"id": "pop", "name": "POP moulding border"},
+    {"id": "slats", "name": "Wooden slat ceiling"},
+]
+CEILING_IDS = {c["id"] for c in CEILINGS}
 
 #: Treatments a wall can take instead of paint, each with its usual colour.
 WALL_TREATMENTS: list[dict[str, str]] = [
@@ -507,6 +527,7 @@ def catalogue_for(room_type: RoomType) -> dict[str, Any]:
         "looks": LOOKS,
         "treatments": WALL_TREATMENTS,
         "lights": LIGHT_PRESETS,
+        "ceilings": CEILINGS,
         "floors": FLOORS,
         "paints": [{"name": n, "hex": h} for n, h in PAINTS["wall"]],
         "art": [{"id": a["id"], "title": a["title"], "artist": a["artist"], "aspect": a.get("aspect", 0.8)}
@@ -572,8 +593,19 @@ def clean_room_edit(plan: FloorPlan, room: Room, items: list[dict[str, Any]],
     per_wall = {wid: (h if h in TREATMENT_IDS else _hex(h)) for wid, h in per_wall.items() if h in TREATMENT_IDS or _hex(h)}
     if per_wall:
         fin["walls"] = per_wall
-    if (finishes or {}).get("cove"):
-        fin["cove"] = True
+    ceiling = (finishes or {}).get("ceiling")
+    if ceiling in CEILING_IDS and ceiling != "plain":
+        fin["ceiling"] = ceiling
+    elif (finishes or {}).get("cove") and not ceiling:
+        fin["ceiling"] = "cove"
+    # The edges of the walls: skirting at the floor, a cornice at the ceiling,
+    # wainscot panelling to dado height in a colour.
+    for key in ("skirting", "cornice"):
+        if (finishes or {}).get(key):
+            fin[key] = True
+    dado = _hex((finishes or {}).get("dado"))
+    if dado:
+        fin["dado"] = dado
     kelvin = (finishes or {}).get("kelvin")
     if kelvin in (2700, 4000, 5500):
         fin["kelvin"] = kelvin

@@ -9,7 +9,7 @@
    touched stays as drawn. Undo walks back.
    ═══════════════════════════════════════════════════════════════════════ */
 
-import { icon } from "./icons.js?v=i3";
+import { icon } from "./icons.js?v=i4";
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);

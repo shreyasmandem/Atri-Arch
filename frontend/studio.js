@@ -9,7 +9,7 @@
 
 import { atelier, person, avatar } from "./atelier.js?v=s3";
 import { mountEditor } from "./editor.js?v=e5";
-import { icon } from "./icons.js?v=i3";
+import { icon } from "./icons.js?v=i4";
 import { autoSetbacks } from "./setbacks.js";
 
 const API = (() => {
@@ -1636,7 +1636,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p17");
+    const { Viewer3D } = await import("./viewer3d.js?v=p18");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2216,7 +2216,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p17");
+  const { Viewer3D } = await import("./viewer3d.js?v=p18");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2342,9 +2342,19 @@ async function renderInterior() {
       });
       walkBar.append(vrB);
     }
-    walkBar.append(out);
+    const fs = el("button", "ghost-btn ghost-btn--ico"); fs.type = "button";
+    const full = document.fullscreenElement === wrap;
+    fs.append(icon(full ? "collapse" : "expand"));
+    fs.setAttribute("aria-label", full ? "Leave full screen" : "Full screen: the room and its editor fill the screen");
+    fs.title = fs.getAttribute("aria-label");
+    fs.addEventListener("click", async () => {
+      try { if (document.fullscreenElement) await document.exitFullscreen(); else await wrap.requestFullscreen(); }
+      catch { toast("This browser would not go full screen."); }
+    });
+    walkBar.append(out, fs);
     walkBar.hidden = false;
   };
+  document.addEventListener("fullscreenchange", () => { if (current) drawBar(current.item); });
   const WALK_HINT = "Drag to look round · double-click the floor to walk · WASD to move";
 
   const enter = async (item) => {
@@ -2422,6 +2432,8 @@ async function renderInterior() {
     loading.remove();
     if (!cat) { win.append(el("p", "inx__ed-empty", "The furniture list could not be loaded. Pick the room again to retry.")); return; }
 
+    const { swatchFor } = await import("./materials.js?v=m5");
+    if (!win.isConnected) return;
     const byId = new Map(), groupOf = new Map();
     for (const g of cat.groups) for (const it of g.items) { byId.set(it.id, it); groupOf.set(it.id, g.name); }
     const swatchHex = { wood: "#8a6a4c", fabric: "#b9ab90", metal: "#b08a3e", none: "#d9d6cf" };
@@ -2499,7 +2511,50 @@ async function renderInterior() {
       b.addEventListener("click", () => { tab = k; drawTab(); });
       tabs.append(b);
     }
-    win.append(tabs, body);
+    // Ask: say what to change; "this" is whatever is selected in the view.
+    const ask = el("form", "inx__ask");
+    const selChip = el("div", "inx__sel");
+    const askRow = el("div", "inx__ask-row");
+    const askIn = el("input", "inx__ask-in"); askIn.type = "text"; askIn.maxLength = 600;
+    askIn.placeholder = "Ask: “paint this wall sage”, “add a jhoola”, “coffered ceiling”…";
+    askIn.setAttribute("aria-label", "Describe a change to this room");
+    const askGo = el("button", "inx__ask-go"); askGo.type = "submit"; askGo.setAttribute("aria-label", "Make the change"); askGo.append(icon("next"));
+    askRow.append(askIn, askGo);
+    const askSay = el("p", "inx__ask-say"); askSay.setAttribute("aria-live", "polite");
+    ask.append(selChip, askRow, askSay);
+    const chat = [];
+    ask.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const msg = askIn.value.trim();
+      if (!msg) return;
+      askGo.disabled = true; askSay.textContent = "Thinking…";
+      const selected = focusKind === "wall" && pickedWall ? { kind: "wall", id: pickedWall }
+        : sel ? { kind: "piece", id: sel, item: draft.items.find((x) => x.uid === sel)?.item_id } : {};
+      try {
+        const res = await fetch(`${API}/plans/${id}/interior/rooms/${encodeURIComponent(item.r.id)}/ask`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg, draft, selected, history: chat.slice(-6) }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const out = await res.json();
+        const n = applyOps(out.ops);
+        chat.push({ role: "user", text: msg }, { role: "assistant", text: out.reply || "" });
+        askSay.textContent = n ? out.reply : (out.reply || "Nothing to change there.");
+        if (n) { askIn.value = ""; changed(); }
+      } catch (err) {
+        askSay.textContent = `The assistant could not be reached (${err.message}). Try again, or use the tabs below.`;
+      } finally { askGo.disabled = false; }
+    });
+    let focusKind = "piece";
+    const drawSel = () => {
+      selChip.innerHTML = "";
+      const d = draft.items.find((x) => x.uid === sel);
+      const wallName = pickedWall && body.querySelector(`[data-wall="${pickedWall}"] .inx__wall-name`)?.textContent;
+      const what = focusKind === "wall" && pickedWall ? `Wall: ${wallName || "selected wall"}` : d ? `Piece: ${byId.get(d.item_id)?.name || d.item_id}` : "";
+      if (!what) { selChip.append(el("span", null, "Click a piece or a wall in the view to select it")); return; }
+      selChip.append(el("span", "inx__sel-dot"), el("b", null, what));
+    };
+    win.append(ask, tabs, body);
     const foot = el("footer", "inx__ed-foot");
     const reset = el("button", "link", "Undo all changes"); reset.type = "button";
     reset.title = "Go back to the designer's layout for this room";
@@ -2611,6 +2666,80 @@ async function renderInterior() {
       }
       return c;
     };
+    // A plan of each ceiling design, drawn the way a reflected ceiling plan is.
+    const ceilingDiagram = (id) => {
+      const NS2 = "http://www.w3.org/2000/svg";
+      const g = document.createElementNS(NS2, "svg"); g.setAttribute("viewBox", "0 0 48 36"); g.setAttribute("class", "inx__tile-img inx__ceil");
+      const add = (tag, at) => { const e = document.createElementNS(NS2, tag); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); g.append(e); return e; };
+      add("rect", { x: 3, y: 3, width: 42, height: 30, class: "room" });
+      if (id === "cove") { add("rect", { x: 9, y: 9, width: 30, height: 18, class: "line" }); add("rect", { x: 10.5, y: 10.5, width: 27, height: 15, class: "glow" }); }
+      if (id === "tray") { add("rect", { x: 8, y: 8, width: 32, height: 20, class: "line" }); add("rect", { x: 13, y: 13, width: 22, height: 10, class: "line" }); }
+      if (id === "coffered") for (let i = 1; i < 4; i++) { add("line", { x1: 3 + i * 10.5, y1: 3, x2: 3 + i * 10.5, y2: 33, class: "line" }); if (i < 3) add("line", { x1: 3, y1: 3 + i * 10, x2: 45, y2: 3 + i * 10, class: "line" }); }
+      if (id === "beams") for (let i = 1; i < 6; i++) add("rect", { x: 3 + i * 7 - 1.2, y: 3, width: 2.4, height: 30, class: "fill" });
+      if (id === "pop") { add("rect", { x: 9, y: 9, width: 30, height: 18, class: "line" }); add("rect", { x: 11, y: 11, width: 26, height: 14, class: "line" }); add("circle", { cx: 24, cy: 18, r: 3.5, class: "line" }); }
+      if (id === "slats") for (let i = 0; i < 13; i++) add("line", { x1: 6 + i * 3, y1: 3, x2: 6 + i * 3, y2: 33, class: "line" });
+      return g;
+    };
+    const myWallIds = () => {
+      const lvl = (cur().plan?.levels || []).find((l) => l.index === item.lv);
+      return (lvl?.walls || []).filter((w) => (w.rooms || []).includes(item.r.id)).map((w) => w.id);
+    };
+    const applyLook = (lk) => {
+      draft.finishes = { ...draft.finishes, wall: lk.wall, accent: lk.accent, floor: lk.floor, look: lk.id };
+      for (const d of draft.items) {
+        const g = byId.get(d.item_id)?.colour_group;
+        d.colour = g === "wood" ? lk.wood : g === "fabric" ? lk.fabric : g === "metal" ? lk.metal : null;
+      }
+    };
+    // What the assistant asked for, done as if clicked: the same checks, the same save.
+    const applyOps = (ops) => {
+      const fin = draft.finishes;
+      const target = (u) => draft.items.find((x) => x.uid === (u === "selected" || !u ? sel : u));
+      let n = 0;
+      for (const o of ops || []) {
+        try {
+          if (o.op === "add") {
+            const it = byId.get(o.item) || [...byId.values()].find((x) => x.name.toLowerCase() === String(o.item || "").toLowerCase());
+            if (!it) continue;
+            const c = placeNew(it);
+            const z = (it.sizes || []).find((x) => o.size && x.name.toLowerCase().includes(String(o.size).toLowerCase()));
+            if (z) { c.w = z.w; c.d = z.d; keepIn(c); }
+            if (/^#[0-9a-f]{6}$/i.test(o.colour || "")) c.colour = o.colour;
+            draft.items.push(c); sel = c.uid; n++;
+          } else if (o.op === "remove") {
+            const before = draft.items.length;
+            draft.items = o.item ? draft.items.filter((x) => x.item_id !== o.item) : draft.items.filter((x) => x !== target(o.uid));
+            n += before - draft.items.length;
+          } else if (o.op === "colour") {
+            const d = target(o.uid); if (d && /^#[0-9a-f]{6}$/i.test(o.hex || "")) { d.colour = o.hex; n++; }
+          } else if (o.op === "size") {
+            const d = target(o.uid), it = d && byId.get(d.item_id);
+            const z = it && (it.sizes || []).find((x) => x.name.toLowerCase().includes(String(o.size || "").toLowerCase()));
+            if (z) { d.w = z.w; d.d = z.d; keepIn(d); n++; }
+          } else if (o.op === "turn") {
+            const d = target(o.uid); if (d) { d.rotation = (d.rotation + 90) % 360; keepIn(d); n++; }
+          } else if (o.op === "move") {
+            const d = target(o.uid); if (d && "NSEWC".includes(o.to)) { snapToQuiet(d, o.to); n++; }
+          } else if (o.op === "wall") {
+            const v = String(o.value || ""), isT = (cat.treatments || []).some((t) => t.id === v), isH = /^#[0-9a-f]{6}$/i.test(v);
+            if (!isT && !isH) continue;
+            fin.walls ||= {};
+            if (o.wall === "accent" && isH) fin.accent = v;
+            else if (o.wall === "all" && isH && !isT) { fin.wall = v; fin.walls = {}; }
+            else for (const w of (o.wall === "selected" ? [pickedWall] : o.wall === "all" ? myWallIds() : [o.wall]).filter(Boolean)) fin.walls[w] = isH ? v.toLowerCase() : v;
+            delete fin.look; n++;
+          } else if (o.op === "floor") { if (cat.floors.some((f) => f.id === o.id)) { fin.floor = o.id; delete fin.look; n++; } }
+          else if (o.op === "ceiling") { if ((cat.ceilings || []).some((c) => c.id === o.id)) { delete fin.cove; if (o.id === "plain") delete fin.ceiling; else fin.ceiling = o.id; n++; } }
+          else if (o.op === "light") { if ([2700, 4000, 5500].includes(+o.kelvin)) { fin.kelvin = +o.kelvin; viewer.setRoomLight(fin.kelvin); n++; } }
+          else if (o.op === "look") { const lk = (cat.looks || []).find((x) => x.id === o.id); if (lk) { applyLook(lk); n++; } }
+          else if (o.op === "edge") {
+            for (const k of ["skirting", "cornice"]) if (k in o) { if (o[k]) fin[k] = true; else delete fin[k]; n++; }
+            if ("dado" in o) { if (/^#[0-9a-f]{6}$/i.test(o.dado || "")) fin.dado = o.dado; else delete fin.dado; n++; }
+          }
+        } catch { /* one odd op must not stop the rest */ }
+      }
+      return n;
+    };
     const turn = (d) => { d.rotation = (d.rotation + 90) % 360; keepIn(d); changed(); };
     const remove = (d) => { draft.items = draft.items.filter((x) => x !== d); sel = draft.items[0]?.uid || null; changed(); };
     const nudge = (d, dx, dy) => { d.x = snap(d.x + dx); d.y = snap(d.y + dy); keepIn(d); changed(); };
@@ -2620,6 +2749,16 @@ async function renderInterior() {
       const v = { away: fwd, closer: [-fwd[0], -fwd[1]], right, left: [-right[0], -right[1]] }[k];
       const [dx, dy] = Math.abs(v[0]) > Math.abs(v[1]) ? [Math.sign(v[0]) * 0.1, 0] : [0, Math.sign(v[1]) * 0.1];
       nudge(d, dx, dy);
+    };
+    const snapToQuiet = (d, w) => {
+      if (w === "C") { d.x = (bx.x0 + bx.x1) / 2; d.y = (bx.y0 + bx.y1) / 2; keepIn(d); return; }
+      d.rotation = { S: 0, N: 180, E: 90, W: 270 }[w];
+      const [, dd] = size(d);
+      if (w === "S") d.y = bx.y0 + dd / 2;
+      if (w === "N") d.y = bx.y1 - dd / 2;
+      if (w === "W") d.x = bx.x0 + dd / 2;
+      if (w === "E") d.x = bx.x1 - dd / 2;
+      keepIn(d);
     };
     const snapTo = (d, w) => {
       if (w === "C") { d.x = (bx.x0 + bx.x1) / 2; d.y = (bx.y0 + bx.y1) / 2; keepIn(d); changed(); return; }
@@ -2821,14 +2960,7 @@ async function renderInterior() {
             const c = el("i"); c.style.background = hex; c.title = part; strip.append(c);
           }
           b.append(strip, el("b", null, lk.name), el("small", null, lk.story));
-          b.addEventListener("click", () => {
-            draft.finishes = { ...draft.finishes, wall: lk.wall, accent: lk.accent, floor: lk.floor, look: lk.id };
-            for (const d of draft.items) {
-              const g = byId.get(d.item_id)?.colour_group;
-              d.colour = g === "wood" ? lk.wood : g === "fabric" ? lk.fabric : g === "metal" ? lk.metal : null;
-            }
-            changed();
-          });
+          b.addEventListener("click", () => { applyLook(lk); changed(); });
           grid.append(b);
         }
         body.append(grid);
@@ -2846,7 +2978,7 @@ async function renderInterior() {
             const [xw, xd] = size(x);
             const txt = el("span", "inx__row-txt"); txt.append(el("b", null, it.name), el("small", null, sizeName(x)));
             b.append(symbol(xw, xd, x.colour || swatchHex[it.colour_group] || "#8a6a4c"), txt);
-            b.addEventListener("click", () => { sel = x.uid; drawPlan(); drawTab(); });
+            b.addEventListener("click", () => { sel = x.uid; focusKind = "piece"; drawPlan(); drawTab(); });
             li2.append(b); ul.append(li2);
           }
           body.append(ul);
@@ -2889,8 +3021,61 @@ async function renderInterior() {
       } else if (tab === "room") {
         const fin = draft.finishes;
         const unlook = () => { delete fin.look; };
-        body.append(label("Walls"), swatches(cat.paints, fin.wall, (h) => { fin.wall = h; unlook(); }, "Wall paint"));
-        body.append(label("Accent wall"), swatches(cat.paints, fin.accent, (h) => { fin.accent = h; unlook(); }, "Accent wall paint"));
+        body.append(label(`Floor (${cat.floors.length} designs)`));
+        const fl = el("div", "inx__tiles");
+        for (const f of cat.floors) {
+          const on = fin.floor === f.id;
+          const b = el("button", `inx__tile${on ? " is-on" : ""}`); b.type = "button"; b.setAttribute("aria-pressed", String(on));
+          b.title = f.name;
+          const sw = swatchFor(`floor_${f.id}`, f.hex, 72); sw.className = "inx__tile-img";
+          b.append(sw, el("span", null, f.name));
+          b.addEventListener("click", () => { fin.floor = f.id; unlook(); changed(); });
+          fl.append(b);
+        }
+        body.append(fl);
+        // Wall treatments shown the same way, for the selected wall or every wall.
+        body.append(label(pickedWall ? "Finish for the selected wall" : "Finish for every wall"));
+        const tw = el("div", "inx__tiles");
+        for (const t of [{ id: "", name: "Paint", hex: fin.wall || "#efe9dc" }, ...(cat.treatments || [])]) {
+          const curv = pickedWall ? (fin.walls?.[pickedWall] || "") : (Object.values(fin.walls || {})[0] || "");
+          const on = t.id ? curv === t.id : !(cat.treatments || []).some((x) => x.id === curv);
+          const b = el("button", `inx__tile${on ? " is-on" : ""}`); b.type = "button"; b.setAttribute("aria-pressed", String(on));
+          const sw = swatchFor(t.id ? `wall_${t.id}` : "interior_paint", t.hex, 72); sw.className = "inx__tile-img";
+          b.append(sw, el("span", null, t.name));
+          b.addEventListener("click", () => {
+            fin.walls ||= {};
+            const ids = pickedWall ? [pickedWall] : myWallIds();
+            for (const w of ids) { if (t.id) fin.walls[w] = t.id; else delete fin.walls[w]; }
+            unlook(); changed();
+          });
+          tw.append(b);
+        }
+        body.append(tw);
+        body.append(label("Ceiling design"));
+        const cg = el("div", "inx__tiles inx__tiles--ceil");
+        const curCeil = fin.ceiling || (fin.cove ? "cove" : "plain");
+        for (const c of cat.ceilings || []) {
+          const on = curCeil === c.id;
+          const b = el("button", `inx__tile${on ? " is-on" : ""}`); b.type = "button"; b.setAttribute("aria-pressed", String(on));
+          b.append(ceilingDiagram(c.id), el("span", null, c.name));
+          b.addEventListener("click", () => { delete fin.cove; if (c.id === "plain") delete fin.ceiling; else fin.ceiling = c.id; changed(); });
+          cg.append(b);
+        }
+        body.append(cg);
+        body.append(label("Wall edges"));
+        const edges = el("div", "inx__chips inx__chips--wrap");
+        for (const [k, t] of [["skirting", "Skirting at the floor"], ["cornice", "Cornice at the ceiling"]]) {
+          const on = !!fin[k];
+          const c = el("button", `inx__chip${on ? " is-on" : ""}`, t); c.type = "button"; c.setAttribute("aria-pressed", String(on));
+          c.addEventListener("click", () => { if (on) delete fin[k]; else fin[k] = true; changed(); });
+          edges.append(c);
+        }
+        body.append(edges);
+        body.append(label("Wainscot panelling to dado height"));
+        body.append(swatches([{ name: "None", hex: "#00000000", id: "none" }, ...cat.colours.wood], fin.dado || "none",
+          (h) => { if (h === "#00000000") delete fin.dado; else fin.dado = h; }, "Wainscot colour", { custom: true }));
+        body.append(label("Wall paint"), swatches(cat.paints, fin.wall, (h) => { fin.wall = h; unlook(); }, "Wall paint"));
+        body.append(label("Accent wall paint"), swatches(cat.paints, fin.accent, (h) => { fin.accent = h; unlook(); }, "Accent wall paint"));
         // Each wall on its own: any colour at all, with its code to write down or type in.
         const lvl = (cur().plan?.levels || []).find((l) => l.index === item.lv);
         const pt = (q) => ({ x: q.x ?? q[0], y: q.y ?? q[1] });
@@ -2911,7 +3096,9 @@ async function renderInterior() {
             const val = fin.walls[w.id] || "";
             const isTreat = (cat.treatments || []).some((t) => t.id === val);
             const cur2 = isTreat ? "" : (val || fin.wall || "");
-            const name = el("span", "inx__wall-name", `${w.side} wall${seen[w.side] > 1 ? ` ${w.n}` : ""}, ${w.len.toFixed(1)} m`);
+            const name = el("button", "inx__wall-name", `${w.side} wall${seen[w.side] > 1 ? ` ${w.n}` : ""}, ${w.len.toFixed(1)} m`);
+            name.type = "button"; name.title = "Select this wall";
+            name.addEventListener("click", () => { pickedWall = w.id; focusKind = "wall"; drawTab(); });
             const pick = el("input"); pick.type = "color"; pick.value = /^#[0-9a-f]{6}$/i.test(cur2) ? cur2 : "#efe9dc";
             pick.setAttribute("aria-label", `${name.textContent}: colour`);
             const code = el("input", "inx__hex"); code.type = "text"; code.value = (fin.walls[w.id] || "").toUpperCase();
@@ -2938,24 +3125,7 @@ async function renderInterior() {
             body.append(row);
           }
         }
-        body.append(label("Floor"));
-        const fl = el("div", "inx__floors");
-        for (const f of cat.floors) {
-          const on = fin.floor === f.id;
-          const b = el("button", `inx__floor${on ? " is-on" : ""}`); b.type = "button"; b.setAttribute("aria-pressed", String(on));
-          const chip = el("i"); chip.style.background = f.hex;
-          b.append(chip, el("span", null, f.name));
-          b.addEventListener("click", () => { fin.floor = f.id; unlook(); changed(); });
-          fl.append(b);
-        }
-        body.append(fl);
         // The ceiling: a false-ceiling tray with a hidden light, and the colour of the light.
-        body.append(label("Ceiling and lights"));
-        const cove = el("label", "inx__toggle");
-        const box2 = el("input"); box2.type = "checkbox"; box2.checked = !!fin.cove;
-        box2.addEventListener("change", () => { if (box2.checked) fin.cove = true; else delete fin.cove; changed(); });
-        cove.append(box2, el("span", null, "False-ceiling cove with a hidden light strip"));
-        body.append(cove);
         const temps = el("div", "inx__chips");
         for (const lt of cat.lights || []) {
           const on = fin.kelvin === lt.k;
@@ -2975,6 +3145,7 @@ async function renderInterior() {
         drawPlan();
       }
       markSel();
+      drawSel();
     };
     // In the view: grab a piece to move it, click it to change it, click a wall to paint it.
     let pickedWall = null, grabbed = null, moved = false;
@@ -3009,7 +3180,7 @@ async function renderInterior() {
         const d = pieceAt(hit);
         if (!d) return false;
         grabbed = d; moved = false; off = [d.x - hit.x, d.y - hit.y];
-        sel = d.uid; markSel();
+        sel = d.uid; focusKind = "piece"; markSel(); drawSel();
         return true;
       },
       drag: (p) => {
@@ -3038,7 +3209,7 @@ async function renderInterior() {
             if (dist < bd) { bd = dist; best = w.id; }
           }
           if (best) {
-            pickedWall = best; tab = "room"; drawTab();
+            pickedWall = best; focusKind = "wall"; tab = "room"; drawTab();
             body.querySelector(`[data-wall="${best}"]`)?.scrollIntoView({ block: "center" });
           }
         }
@@ -3107,7 +3278,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p17");
+    const { Viewer3D } = await import("./viewer3d.js?v=p18");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3226,7 +3397,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p17");
+    const { Viewer3D } = await import("./viewer3d.js?v=p18");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3311,7 +3482,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m4")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m5")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };

@@ -257,6 +257,37 @@ const PATTERNS = {
     const stem = Math.abs(((u * 3 + v * 0.6) % 1) - 0.5) < 0.012;
     return d < 1 ? (d < 0.12 ? 0.3 : 0.75) : stem ? 0.65 : 0.3;
   } },
+  // Checkerboard marble: 60 cm squares, alternate ones darker, a faint vein.
+  checker: { size: 1.2, fn: () => {
+    const n = noise(39, 40);
+    return (u, v) => {
+      const x = Math.floor(u * 2), y = Math.floor(v * 2), f = (u * 2) % 1, g = (v * 2) % 1;
+      if (f < 0.006 || g < 0.006) return 0.3;
+      return ((x + y) % 2 ? 0.28 : 0.72) + (n(u, v) - 0.5) * 0.08;
+    };
+  } },
+  // Chevron oak: planks meeting at a point down each row.
+  chevron: { size: 1.0, fn: () => {
+    const n = noise(40, 150);
+    return (u, v) => {
+      const col = Math.floor(u * 6), fx = u * 6 - col, y = v * 10 + Math.abs(fx - 0.5) * 2.4, k = Math.floor(y), f = y - k;
+      if (f < 0.05 || Math.abs(fx - 0.5) < 0.012) return 0.25;
+      return 0.45 + hash(col, k) * 0.2 + (n(u, v) - 0.5) * 0.1;
+    };
+  } },
+  // Hexagon cement tiles.
+  hexagon: { size: 0.8, fn: () => (u, v) => {
+    const s3 = Math.sqrt(3), x = u * 6, y = v * 6 * s3 / 2 * 1.155;
+    const r = Math.round(y / (s3 / 2)), q = Math.round(x - (r % 2) * 0.5);
+    const dx = x - (q + (r % 2) * 0.5), dy = (y - r * s3 / 2) / (s3 / 2) * 0.5;
+    const d = Math.max(Math.abs(dx) * 1.0, Math.abs(dx) * 0.5 + Math.abs(dy) * 0.866 * 2);
+    return d > 0.47 ? 0.3 : 0.55 + hash(q, r) * 0.15;
+  } },
+  // Glass mosaic: 2 cm chips, each its own shade.
+  mosaic: { size: 0.4, fn: () => (u, v) => {
+    const x = u * 20, y = v * 20, fx = x % 1, fy = y % 1;
+    return fx < 0.1 || fy < 0.1 ? 0.75 : 0.3 + hash(Math.floor(x), Math.floor(y)) * 0.5;
+  } },
   // Real surfaces, photographed (Poly Haven, CC0), kept as brightness only so the chosen colour stays true.
   oak: { size: 2.0, url: "assets/tex/oak_planks.jpg" },
   slabs: { size: 2.0, url: "assets/tex/stone_slabs.jpg" },
@@ -293,6 +324,14 @@ const RULES = [
   [/^floor_jaisalmer/, "sandstone", 0.7],
   [/^floor_athangudi/, "athangudi", 0.8],
   [/^floor_statuario/, "slabs", 0.25],
+  [/^floor_checker/, "checker", 0.9],
+  [/^floor_chevron/, "chevron", 0.8],
+  [/^floor_hexagon/, "hexagon", 0.8],
+  [/^floor_mosaic/, "mosaic", 0.8],
+  [/^floor_walnut/, "oak", 0.75],
+  [/^floor_cotto/, "squares", 0.6],
+  [/^floor_greykota/, "slabs", 0.6],
+  [/^floor_whiteterrazzo/, "terrazzo", 0.6],
   [/^floor_herringbone/, "herringbone", 0.8],
   [/^floor_microcement/, "plasterIn", 0.45],
   [/^floor_moroccan/, "moroccan", 0.85],
@@ -378,6 +417,19 @@ export function dress(mat) {
   };
   mat.customProgramCacheKey = () => `tri-${kind}`;
   mat.needsUpdate = true;
+}
+
+/** A swatch for whatever finish a material of this name gets in the model:
+ * "floor_herringbone" in its colour, as the viewer will lay it. */
+export function swatchFor(materialName, hex, size = 64) {
+  const rule = RULES.find(([re]) => re.test(materialName));
+  if (rule && (!PATTERNS[rule[1]].url || texture(rule[1]).image?.complete)) return swatch(rule[1], hex, size);
+  if (rule && PATTERNS[rule[1]].url) texture(rule[1]);           // start loading for next time
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+  g.fillStyle = hex; g.fillRect(0, 0, size, size);
+  return c;
 }
 
 /** A small swatch of a finish in a colour, for the customise controls. */

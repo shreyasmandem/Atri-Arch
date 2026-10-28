@@ -687,6 +687,48 @@ async def edit_interior_room(
     return {"room": json.loads(interior.model_dump_json()), "notes": notes, "rev": meta["interior_rev"]}
 
 
+class RoomAskRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=600)
+    draft: dict[str, Any] = Field(default_factory=dict)
+    selected: dict[str, Any] = Field(default_factory=dict)
+    history: list[dict[str, str]] = Field(default_factory=list, max_length=12)
+
+
+@router.post("/{plan_id}/interior/rooms/{room_id}/ask")
+async def ask_interior_room(
+    plan_id: str, room_id: str, req: RoomAskRequest, principal: Principal = Depends(get_principal),
+) -> dict[str, Any]:
+    """Change a room by saying so: the edits to make, which the editor applies and saves."""
+    from aip.agents.interior_chat import edit_interior
+    from aip.engines.interior.editing import catalogue_for
+
+    plan = _load(plan_id, principal)
+    room = _room_of(plan, room_id)
+    cat = catalogue_for(room.type)
+    walls = []
+    for lv in plan.levels:
+        for w in lv.walls:
+            if room.id in w.rooms:
+                mid = w.midpoint - room.centre
+                side = ("east" if mid.x > 0 else "west") if abs(mid.x) > abs(mid.y) else ("north" if mid.y > 0 else "south")
+                walls.append({"id": w.id, "side": side, "length": round(w.length, 2)})
+    items = (req.draft or {}).get("items") or []
+    ctx = {
+        "room": {"name": room.display_name(), "type": room.type.value, "area_m2": round(room.area, 1)},
+        "pieces": [{"uid": i.get("uid"), "item": i.get("item_id"), "colour": i.get("colour")} for i in items][:60],
+        "finishes": (req.draft or {}).get("finishes") or {},
+        "selected": req.selected or {},
+        "walls": walls,
+        "catalogue": cat["groups"],
+        "floors": [{"id": f["id"], "name": f["name"]} for f in cat["floors"]],
+        "treatments": [{"id": t["id"], "name": t["name"]} for t in cat["treatments"]],
+        "ceilings": cat["ceilings"],
+        "looks": [{"id": lk["id"], "name": lk["name"]} for lk in cat["looks"]],
+        "lights": [lt["k"] for lt in cat["lights"]],
+    }
+    return await edit_interior(ctx, req.message, req.history)
+
+
 @router.delete("/{plan_id}/interior/rooms/{room_id}")
 async def reset_interior_room(
     plan_id: str, room_id: str, principal: Principal = Depends(get_principal),

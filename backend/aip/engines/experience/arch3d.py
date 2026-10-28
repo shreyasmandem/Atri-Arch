@@ -260,6 +260,10 @@ class Palette:
         "jaisalmer": ((0.85, 0.72, 0.47), 0.6), "statuario": ((0.93, 0.92, 0.90), 0.12),
         "herringbone": ((0.65, 0.48, 0.31), 0.5), "microcement": ((0.72, 0.71, 0.68), 0.35),
         "moroccan": ((0.25, 0.44, 0.56), 0.3), "slate": ((0.23, 0.24, 0.25), 0.6),
+        "checker": ((0.85, 0.84, 0.81), 0.15), "chevron": ((0.61, 0.44, 0.28), 0.5),
+        "hexagon": ((0.72, 0.69, 0.65), 0.45), "mosaic": ((0.37, 0.55, 0.58), 0.2),
+        "walnut": ((0.36, 0.24, 0.17), 0.5), "cotto": ((0.69, 0.38, 0.25), 0.7),
+        "greykota": ((0.56, 0.58, 0.55), 0.55), "whiteterrazzo": ((0.91, 0.89, 0.85), 0.35),
     }
     #: Wall treatments: material name prefix (the viewer lays its texture by name) and colour.
     TREATMENTS = {"fluted": ((0.54, 0.36, 0.23), 0.6), "acoustic": ((0.23, 0.23, 0.24), 0.95),
@@ -523,6 +527,94 @@ def _cove(b: Builder, room: Room, ceil_y: float, node: str, lamp: str) -> None:
     for (x, z, sx, sz) in ((cx, box.min_y + t + 0.02, box.width - 2 * t, 0.03), (cx, box.max_y - t - 0.02, box.width - 2 * t, 0.03),
                            (box.min_x + t + 0.02, cy, 0.03, box.height - 2 * t), (box.max_x - t - 0.02, cy, 0.03, box.height - 2 * t)):
         b.box(node, lamp, (x, ceil_y - drop - 0.02, -z), (sx, 0.03, sz))
+
+
+def _inner(room: Room, t: float = 0.12):
+    """The room's inside faces: its outline drawn to the wall centres, less half a wall."""
+    box = room.bbox
+    return box.min_x + t, box.min_y + t, box.max_x - t, box.max_y - t
+
+
+def _ring(b: Builder, node: str, mat: str, x0: float, y0: float, x1: float, y1: float,
+          width: float, y: float, h: float) -> None:
+    """A band of `width` round the inside of a rectangle, `h` tall, centred at height `y`."""
+    cx, cy, w, d = (x0 + x1) / 2, (y0 + y1) / 2, x1 - x0, y1 - y0
+    for (x, z, sx, sz) in ((cx, y0 + width / 2, w, width), (cx, y1 - width / 2, w, width),
+                           (x0 + width / 2, cy, width, d - 2 * width), (x1 - width / 2, cy, width, d - 2 * width)):
+        if sx > 0.01 and sz > 0.01:
+            b.box(node, mat, (x, y, -z), (sx, h, sz))
+
+
+def _ceiling_design(b: Builder, room: Room, ceil_y: float, node: str, lamp: str, kind: str) -> None:
+    """The false ceiling a client chose for a room."""
+    if kind == "cove":
+        _cove(b, room, ceil_y, node, lamp)
+        return
+    x0, y0, x1, y1 = _inner(room)
+    w, d = x1 - x0, y1 - y0
+    if w < 1.2 or d < 1.2:
+        return
+    plaster = "paint_ceiling" if "paint_ceiling" in b.p.m else "slab"
+    if kind == "tray":
+        _ring(b, node, plaster, x0, y0, x1, y1, min(0.45, w / 5), ceil_y - 0.06, 0.12)
+        i = min(0.45, w / 5)
+        _ring(b, node, plaster, x0 + i, y0 + i, x1 - i, y1 - i, min(0.3, w / 7), ceil_y - 0.12, 0.24)
+        j = i + min(0.3, w / 7)
+        _ring(b, node, lamp, x0 + j, y0 + j, x1 - j, y1 - j, 0.03, ceil_y - 0.235, 0.02)
+    elif kind == "coffered":
+        _ring(b, node, plaster, x0, y0, x1, y1, 0.15, ceil_y - 0.09, 0.18)
+        nx, ny = max(1, round(w / 1.2)), max(1, round(d / 1.2))
+        for k in range(1, nx):
+            x = x0 + w * k / nx
+            b.box(node, plaster, (x, ceil_y - 0.09, -(y0 + y1) / 2), (0.12, 0.18, d))
+        for k in range(1, ny):
+            z = y0 + d * k / ny
+            b.box(node, plaster, ((x0 + x1) / 2, ceil_y - 0.09, -z), (w, 0.18, 0.12))
+    elif kind == "beams":
+        along_x = w <= d                               # beams span the short way
+        n = max(2, int((d if along_x else w) / 0.9))
+        for k in range(1, n):
+            if along_x:
+                b.box(node, "joinery", ((x0 + x1) / 2, ceil_y - 0.09, -(y0 + d * k / n)), (w, 0.18, 0.15))
+            else:
+                b.box(node, "joinery", (x0 + w * k / n, ceil_y - 0.09, -(y0 + y1) / 2), (0.15, 0.18, d))
+    elif kind == "pop":
+        band = min(0.5, w / 4)
+        _ring(b, node, plaster, x0, y0, x1, y1, band, ceil_y - 0.05, 0.1)
+        _ring(b, node, plaster, x0 + band, y0 + band, x1 - band, y1 - band, 0.05, ceil_y - 0.12, 0.04)
+        _ring(b, node, plaster, x0 + band + 0.12, y0 + band + 0.12, x1 - band - 0.12, y1 - band - 0.12, 0.03, ceil_y - 0.01, 0.02)
+        c = room.centre
+        b.cylinder(node, plaster, (c.x, ceil_y - 0.03, -c.y), 0.35, 0.03, 24)
+    elif kind == "slats":
+        n = int(w / 0.12)
+        for k in range(n):
+            b.box(node, "joinery", (x0 + 0.06 + k * 0.12, ceil_y - 0.05, -(y0 + y1) / 2), (0.05, 0.04, d))
+
+
+def _edges(b: Builder, room: Room, floor_y: float, ceil_y: float, node: str, fin: dict) -> None:
+    """The edges of the walls: a skirting, a cornice, wainscot panelling to dado height."""
+    x0, y0, x1, y1 = _inner(room, 0.115)
+    if x1 - x0 < 0.6 or y1 - y0 < 0.6:
+        return
+    if fin.get("skirting"):
+        _ring(b, node, "joinery", x0, y0, x1, y1, 0.015, floor_y + 0.05, 0.1)
+    if fin.get("cornice"):
+        plaster = "paint_ceiling" if "paint_ceiling" in b.p.m else "slab"
+        _ring(b, node, plaster, x0, y0, x1, y1, 0.08, ceil_y - 0.04, 0.08)
+        _ring(b, node, plaster, x0 + 0.08, y0 + 0.08, x1 - 0.08, y1 - 0.08, 0.03, ceil_y - 0.06, 0.04)
+    if fin.get("dado"):
+        mat = b.p.custom(fin["dado"], "joinery")
+        top = 0.9
+        _ring(b, node, mat, x0, y0, x1, y1, 0.018, floor_y + top / 2, top)
+        _ring(b, node, mat, x0, y0, x1, y1, 0.04, floor_y + top + 0.015, 0.03)       # the dado rail
+        for (ax, ay, bx_, by_) in ((x0, y0, x1, y0), (x0, y1, x1, y1), (x0, y0, x0, y1), (x1, y0, x1, y1)):
+            length = max(abs(bx_ - ax), abs(by_ - ay))
+            for k in range(1, int(length / 0.6)):
+                t = k * 0.6 / length
+                px, py = ax + (bx_ - ax) * t, ay + (by_ - ay) * t
+                inward = (0.0, 0.03) if ay == by_ == y0 else (0.0, -0.03) if ay == by_ == y1 else \
+                    (0.03, 0.0) if ax == bx_ == x0 else (-0.03, 0.0)
+                b.box(node, mat, (px + inward[0], floor_y + top / 2, -(py + inward[1])), (0.04, top - 0.1, 0.04))
 
 
 _OPEN_TO_SKY = {RoomType.COURTYARD}
@@ -2063,8 +2155,11 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
                 lamp = b.p.lamp(mine.get("kelvin"))
                 ceil_y = y + level.floor_to_floor - SLAB
                 b.cylinder(f"{node}/lights", lamp, (c.x, ceil_y - 0.06, -c.y), 0.22, 0.04, 16)
-                if mine.get("cove"):
-                    _cove(b, room, ceil_y, f"{node}/ceiling", lamp)
+                kind = mine.get("ceiling") or ("cove" if mine.get("cove") else None)
+                if kind:
+                    _ceiling_design(b, room, ceil_y, f"{node}/ceiling", lamp, kind)
+                if mine.get("skirting") or mine.get("cornice") or mine.get("dado"):
+                    _edges(b, room, y + 0.02, ceil_y, f"{node}/ceiling", mine)
         _walls(b, plan, level, y, f"{node}/structure", road)
         for room in level.rooms:
             if room.type is RoomType.STAIRCASE and level.index < len(plan.levels) - 1:

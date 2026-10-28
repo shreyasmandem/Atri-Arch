@@ -16,6 +16,7 @@ const PATHS = {
   turn: "M18.5 12a6.5 6.5 0 1 1-2-4.7M18.5 4.5v3.5H15",
   copy: "M9 9h10v10H9zM5 15V5h10",
   trash: "M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12",
+  expand: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5",
 };
 
 export function icon(name, cls = "ico") {

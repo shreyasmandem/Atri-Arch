@@ -8,8 +8,8 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { dress, skyTexture } from "./materials.js?v=m4";
-import { iconHTML } from "./icons.js?v=i3";
+import { dress, skyTexture } from "./materials.js?v=m5";
+import { iconHTML } from "./icons.js?v=i4";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // A neutral "photo studio" environment, generated in code so nothing extra
