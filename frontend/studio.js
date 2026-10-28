@@ -622,7 +622,7 @@ function readBrief() {
     levels: Math.max(1, Math.min(6, n("levels", 2) || 2)),
     bedrooms: Math.max(1, n("bedrooms", 3) || 3),
     bathrooms: Math.max(1, n("bathrooms", 3) || 3),
-    styles: [String(d.get("styles") || "tropical_modern")],
+    styles: [String(d.get("styles") || "modern_indian")],
     // Left blank, there is no budget to be over: the cost axis then judges efficiency, not a number nobody gave.
     budget: n("budget", 0) > 0 ? Math.max(500000, n("budget", 0)) : 0,
     currency: "INR",

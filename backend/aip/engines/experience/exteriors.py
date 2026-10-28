@@ -161,6 +161,15 @@ WALL_TONES = {"lime": ("#efe9dc", ("#a8553a", "#3d3f42", "#8c8a84")), "sand": ("
 
 #: What each style tends towards; a design outside it is still allowed, only less likely.
 STYLE_BIAS: dict[str, dict[str, tuple[str, ...]]] = {
+    # The house most Indian clients are building now: modernism's clean lines
+    # and flat roofs, made in the country's own way - a jaali against the hard
+    # sun, exposed brick, Kota or sandstone and terracotta, deep chajjas over
+    # the windows, a verandah, a roof terrace and teak (no vaults, butterflies
+    # or gables borrowed from elsewhere).
+    "modern_indian": {"roof": ("flat", "slab"), "base": ("brick", "stone", "terracotta", "plaster"),
+                      "upper": ("plaster", "brick", "terracotta", "timber"), "screen": ("jaali", "perforated", "louvres", "fins"),
+                      "feature": ("brickcurtain", "breeze", "pergolaframe", "colonnade", "planterbands", "balcony", "greenwall"),
+                      "accent": ("teak", "terracotta", "ochre", "bronze")},
     "contemporary": {"roof": ("flat", "slab", "mono", "sawtooth"), "screen": ("fins", "frame", "louvres", "perforated", "slats"),
                      "feature": ("none", "cornice", "breeze", "greenwall", "bay", "portico", "floatbox", "featurewall", "cornerglass", "brickcurtain", "cantilever", "flutedbands", "rooftopframe", "moongate"), "accent": ("bronze", "charcoal", "slate", "teak")},
     "modern_minimal": {"roof": ("slab", "flat"), "screen": ("none", "frame"), "upper": ("plaster", "metal", "glass"),
@@ -255,6 +264,10 @@ EXTERIOR_SCHEMES: tuple[dict[str, str], ...] = (
 #: STYLE_BIAS this is the whole of a style; a design drawn from it reads as
 #: that style from the street to the gate.
 STYLE_DNA: dict[str, dict[str, Any]] = {
+    "modern_indian": {"windows": ("punched", "band"), "shade": ("deep", "box", "slim"), "canopy": ("slab", "pergola"),
+                      "railing": ("metal", "solid"), "boundary": ("stone", "plaster", "brick"), "gate": ("sliding", "timber"),
+                      "paving": ("stone",), "garden": ("standard", "lush"), "planters": 0.6, "solar": 0.35,
+                      "schemes": ("lime_teak", "terracotta", "sandstone", "kutch_mud", "ochre_kerala", "cream_brown", "clay_copper")},
     "contemporary": {"windows": ("band", "punched"), "shade": ("slim", "box", "deep"), "canopy": ("slab", "glass"),
                      "railing": ("glass", "metal"), "boundary": ("plaster", "grille", "stone"), "gate": ("sliding",),
                      "paving": ("stone", "concrete"), "garden": ("standard", "minimal"), "planters": 0.35, "solar": 0.3,
@@ -304,7 +317,8 @@ STYLE_DNA: dict[str, dict[str, Any]] = {
                            "schemes": ("warm_minimal", "clay_copper", "kutch_mud", "goa_villa", "mustard_clay", "olive_cream")},
 }
 
-for _k, _y in {"contemporary": ("sitout", "waterwall", "rockgarden", "lounge", "firepit", "fountain"),
+for _k, _y in {"modern_indian": ("tulsi", "jhoola", "sitout", "flowerbeds", "waterwall"),
+               "contemporary": ("sitout", "waterwall", "rockgarden", "lounge", "firepit", "fountain"),
                "modern_minimal": ("rockgarden", "waterwall", "lounge", "none"),
                "tropical_modern": ("koipond", "jhoola", "gazebo", "lounge", "flowerbeds"),
                "kerala_vernacular": ("tulsi", "jhoola", "koipond", "flowerbeds"),
@@ -316,6 +330,8 @@ for _k, _y in {"contemporary": ("sitout", "waterwall", "rockgarden", "lounge", "
     STYLE_DNA[_k]["yard"] = _y
 
 for _k, _v in {
+    "modern_indian": {"panel": ("stone", "terracotta", "brick", "timber"), "parapet": ("screen", "plain", "grooved"),
+                      "deck": ("pergola", "garden"), "lights": ("washers",)},
     "contemporary": {"panel": ("stone", "acp", "timber", "slate"), "parapet": ("glass", "grooved", "plain"), "deck": ("pergola", "none"), "lights": ("strips", "washers")},
     "modern_minimal": {"panel": ("none", "acp", "slate"), "parapet": ("plain", "glass"), "deck": ("none",), "lights": ("strips", "none")},
     "tropical_modern": {"panel": ("timber", "stone", "terracotta"), "parapet": ("screen", "plain"), "deck": ("garden", "pergola"), "lights": ("washers",)},
@@ -430,7 +446,8 @@ def prefer_from_text(text: str | None) -> dict[str, Any]:
 
 
 #: What each style tends towards for wall wash (fresh batches only).
-TONE_BIAS = {"contemporary": ("lime", "mist", "charcoal", "ivory"), "modern_minimal": ("ivory", "lime", "charcoal"),
+TONE_BIAS = {"modern_indian": ("lime", "clay", "ivory", "ochre", "terracotta"),
+             "contemporary": ("lime", "mist", "charcoal", "ivory"), "modern_minimal": ("ivory", "lime", "charcoal"),
              "tropical_modern": ("lime", "sage", "clay"), "kerala_vernacular": ("lime", "ivory", "ochre"),
              "traditional_indian": ("ochre", "haveli", "terracotta", "pink"), "chettinad": ("ochre", "indigo", "pink"),
              "rajasthani_haveli": ("haveli", "pink", "sand"), "indo_saracenic": ("sand", "terracotta", "haveli"),
@@ -689,7 +706,7 @@ def grammar() -> dict[str, Any]:
                         "schemes": list(STYLE_DNA.get(k, {}).get("schemes", ()))} for k in STYLE_BIAS]}
 
 
-STYLE_NAMES = {"contemporary": "Contemporary", "modern_minimal": "Minimal", "tropical_modern": "Tropical", "kerala_vernacular": "Kerala",
+STYLE_NAMES = {"modern_indian": "Modern Indian", "contemporary": "Contemporary", "modern_minimal": "Minimal", "tropical_modern": "Tropical", "kerala_vernacular": "Kerala",
                "traditional_indian": "Traditional", "chettinad": "Chettinad", "rajasthani_haveli": "Haveli",
                "indo_saracenic": "Indo-Saracenic", "scandinavian": "Scandinavian", "japandi": "Japandi", "industrial": "Industrial",
                "biophilic": "Biophilic", "mid_century_modern": "Mid-century"}

@@ -101,7 +101,7 @@ class SimpleBriefRequest(BaseModel):
     #: a courtyard) to fill a generous plot? Off: only what was asked is drawn.
     auto_extras: bool = False
 
-    styles: list[DesignStyle] = Field(default_factory=lambda: [DesignStyle.CONTEMPORARY])
+    styles: list[DesignStyle] = Field(default_factory=lambda: [DesignStyle.MODERN_INDIAN])
     materials_liked: list[str] = Field(default_factory=list)
     budget: float = Field(default=0.0, ge=0)
     currency: str = Field(default="INR", max_length=8)

@@ -65,6 +65,7 @@ class DesignStyle(str, Enum):
     LUXURY_CLASSICAL = "luxury_classical"
     BIOPHILIC = "biophilic"
     TROPICAL_MODERN = "tropical_modern"
+    MODERN_INDIAN = "modern_indian"
     TRANSITIONAL = "transitional"
 
     @property

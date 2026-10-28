@@ -91,6 +91,7 @@ def _hex(value: str, fallback: tuple[float, float, float]) -> tuple[float, float
 
 #: Exterior character per style: plaster, cladding, roof form and roof tone.
 _EXTERIOR: dict[str, dict[str, Any]] = {
+    "modern_indian": {"plaster": (0.93, 0.88, 0.80), "clad": (0.62, 0.38, 0.27), "roof": "flat", "pergola": True},
     "tropical_modern": {"plaster": (0.93, 0.91, 0.87), "clad": (0.55, 0.50, 0.44), "roof": "flat", "pergola": True},
     "contemporary": {"plaster": (0.95, 0.95, 0.93), "clad": (0.42, 0.42, 0.42), "roof": "flat"},
     "modern_minimal": {"plaster": (0.96, 0.96, 0.95), "clad": (0.30, 0.30, 0.31), "roof": "flat"},

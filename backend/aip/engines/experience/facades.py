@@ -22,15 +22,15 @@ from aip.domain.plan import FloorPlan
 
 DESIGNS: dict[str, dict[str, Any]] = {
     "fins": {"name": "Timber Fins", "story": "Vertical timber fins screen the street face of the upper floor; a dark band caps it.",
-             "styles": {"tropical_modern", "contemporary", "biophilic", "japandi", "modern_minimal"}},
+             "styles": {"tropical_modern", "contemporary", "biophilic", "japandi", "modern_minimal", "modern_indian"}},
     "frame": {"name": "Deep Frame", "story": "A bold projecting frame wraps the upper floor's street face, shading its glass.",
               "styles": {"contemporary", "modern_minimal", "industrial", "mid_century_modern"}},
     "jaali": {"name": "Jaali Screen", "story": "Lattice screens filter the hard west and south sun, as a haveli would.",
-              "styles": {"traditional_indian", "rajasthani_haveli", "indo_saracenic", "chettinad", "contemporary"}},
+              "styles": {"traditional_indian", "rajasthani_haveli", "indo_saracenic", "chettinad", "contemporary", "modern_indian"}},
     "pitch": {"name": "Mono-pitch", "story": "A single sloping roof rises to a clerestory band that lets light deep inside.",
               "styles": {"scandinavian", "contemporary", "modern_minimal", "japandi"}},
     "twotone": {"name": "Stone Base", "story": "A stone-clad ground floor, a light plaster top and a deep cornice at each floor.",
-                "styles": {"contemporary", "indo_saracenic", "mid_century_modern", "industrial", "chettinad"}},
+                "styles": {"contemporary", "indo_saracenic", "mid_century_modern", "industrial", "chettinad", "modern_indian"}},
     "vernacular": {"name": "Vernacular", "story": "A tiled hip roof on wide eaves and timber posts along a front verandah.",
                    "styles": {"kerala_vernacular", "traditional_indian", "chettinad"}},
 }

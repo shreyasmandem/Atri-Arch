@@ -123,7 +123,8 @@ def named_room(text: str) -> dict[str, Any] | None:
 DIRS = {"north east": "NE", "north-east": "NE", "northeast": "NE", "north west": "NW", "north-west": "NW",
         "northwest": "NW", "south east": "SE", "south-east": "SE", "southeast": "SE", "south west": "SW",
         "south-west": "SW", "southwest": "SW", "north": "N", "south": "S", "east": "E", "west": "W"}
-STYLES = {"modern": "modern_minimal", "minimal": "modern_minimal", "contemporary": "contemporary",
+STYLES = {"modern indian": "modern_indian", "indian modern": "modern_indian", "contemporary indian": "modern_indian",
+          "modern": "modern_minimal", "minimal": "modern_minimal", "contemporary": "contemporary",
           "kerala": "kerala_vernacular", "chettinad": "chettinad", "traditional": "traditional_indian",
           "scandinavian": "scandinavian", "japandi": "japandi", "industrial": "industrial",
           "tropical": "tropical_modern", "biophilic": "biophilic", "mid century": "mid_century_modern",
@@ -307,6 +308,9 @@ def parse(text: str) -> dict[str, Any]:
     for word, style in STYLES.items():
         if re.search(rf"\b{word}\b", t):
             out.setdefault("styles", []).append(style)
+    if "modern_indian" in out.get("styles", []):
+        # "Modern Indian" is one style, not modern and contemporary as well.
+        out["styles"] = ["modern_indian"] + [s for s in out["styles"] if s not in ("modern_indian", "modern_minimal", "contemporary")]
     if m := re.search(r"(?:budget|cost)[^\d₹]{0,12}(?:₹|rs\.?|inr)?\s*(\d+(?:\.\d+)?)\s*(lakh|lakhs|lac|l\b|crore|cr)", t):
         n = _num(m.group(1))
         out["budget"] = n * (1e7 if m.group(2).startswith("cr") else 1e5)
@@ -554,7 +558,7 @@ Return only JSON:
    "plot_width": metres, "plot_depth": metres, "plot_unit": "ft" or "m" (as the client gave it),
    "road_direction": "N"|"NE"|"E"|"SE"|"S"|"SW"|"W"|"NW", "levels": 1-6, "bedrooms": int, "bathrooms": int,
    "locality": "city, state", "vastu": "ignore"|"advisory"|"balanced"|"strict",
-   "styles": [from contemporary, modern_minimal, tropical_modern, kerala_vernacular, traditional_indian, chettinad, scandinavian, japandi, industrial, biophilic, mid_century_modern, rajasthani_haveli, indo_saracenic],
+   "styles": [from modern_indian, contemporary, modern_minimal, tropical_modern, kerala_vernacular, traditional_indian, chettinad, scandinavian, japandi, industrial, biophilic, mid_century_modern, rajasthani_haveli, indo_saracenic],
    "budget": rupees, "occupant_elders": int, "occupant_children": int,
    "amenities": [from pooja, parking, study, utility, balcony, courtyard, verandah, gym, home theatre, terrace, store, family lounge, library, servant room],
    "rooms": [{"type": a room type such as master_bedroom, bedroom, guest_bedroom, children_bedroom, kitchen, living, dining, puja, study, balcony, terrace, courtyard, verandah, garage, gym, home_theatre, store, utility, bathroom,

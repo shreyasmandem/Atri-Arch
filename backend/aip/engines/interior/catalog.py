@@ -271,6 +271,17 @@ class StylePalette:
 
 
 PALETTES: dict[DesignStyle, StylePalette] = {
+    DesignStyle.MODERN_INDIAN: StylePalette(
+        DesignStyle.MODERN_INDIAN,
+        wall="#F3EEE4", wall_accent="#B5654A", ceiling="#FBF8F2",
+        floor="#9C9686", floor_material="Kota stone and terrazzo, honed",
+        joinery="#7A4B2A", joinery_material="Solid teak with cane panels",
+        upholstery="#D8C7A8", metal="#8A6A3C", accent="#B5654A",
+        lighting_kelvin=2900, lighting_strategy="Warm cove and pendant light; daylight through jaali and courtyard",
+        materials=("kota stone", "terrazzo", "teak", "cane", "lime plaster", "exposed brick", "brass"),
+        avoid=("high-gloss laminate", "faux marble", "glass partitions"),
+        character="Clean modern lines in the country's own materials: cool stone underfoot, teak and cane, light through a jaali.",
+    ),
     DesignStyle.TROPICAL_MODERN: StylePalette(
         DesignStyle.TROPICAL_MODERN,
         wall="#F4F1EA", wall_accent="#8C9A8E", ceiling="#FBFAF7",
