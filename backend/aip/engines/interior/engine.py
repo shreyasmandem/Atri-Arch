@@ -39,7 +39,7 @@ from aip.engines.interior.catalog import (
     items_for,
     palette_for,
 )
-from aip.engines.interior.editing import FLOORS, room_edit
+from aip.engines.interior.editing import FLOORS, default_finishes, default_look, look_colour, room_edit
 from aip.engines.interior.editing import item as catalogue_item
 
 logger = get_logger("aip.interior")
@@ -267,6 +267,24 @@ def _rotation_for(normal: Vec2) -> float:
 # ---------------------------------------------------------------------------
 
 
+#: Smaller pieces of the same kind, tried in turn when the usual one will not fit.
+_SMALLER = {
+    "dining_6": ((1.5, 0.85, "Four-seat dining table"), (1.2, 0.75, "Compact four-seat table"),
+                 (0.9, 0.9, "Two-seat square table")),
+    "sectional": ((2.1, 0.9, "Three-seat sofa"), (1.5, 0.85, "Two-seat sofa")),
+    "sofa_formal": ((1.5, 0.85, "Two-seat sofa"),),
+    "sofa_3": ((1.8, 0.85, "Compact three-seat sofa"), (1.5, 0.85, "Two-seat sofa")),
+    "shoe_unit": ((0.6, 0.3, "Slim shoe cabinet"),),
+    "shower": ((0.8, 0.8, "Shower area"), (0.75, 0.75, "Compact shower area")),
+    "family_tv": ((1.2, 0.4, "Compact media unit"),),
+    "tv_unit": ((1.2, 0.4, "Compact TV unit"),),
+}
+
+#: Pieces made to measure for the wall they stand on, and the shortest each is still worth having.
+_FITTED = ("counter_run", "counter_parallel", "wardrobe", "shower", "bookwall", "shoe_unit", "crockery")
+_FITTED_MIN = {"counter": 1.5, "wardrobe": 1.0, "shower": 0.75, "bookwall": 1.2, "shoe": 0.6, "crockery": 0.8}
+
+
 def _place_room(
     plan: FloorPlan,
     room: Room,
@@ -325,6 +343,35 @@ def _place_room(
                     f"{item.name} fits only with reduced clearance. Consider a "
                     f"smaller size or a wider room."
                 )
+
+        if result is None and item.essential and item.id.startswith(_FITTED):
+            # A fitted piece is built to the wall it stands on: a counter run, a
+            # wardrobe, a shower is made shorter before a room goes without it.
+            from dataclasses import replace
+
+            for scale in (0.9, 0.8, 0.7, 0.6, 0.5):
+                w_ = round(item.width * scale, 2)
+                if w_ < _FITTED_MIN.get(item.id.split("_")[0], 0.75):
+                    break
+                d_ = item.depth if not item.id.startswith("shower") else round(max(0.75, item.depth * scale), 2)
+                shorter = replace(item, width=w_, depth=d_, side_clearance=item.side_clearance * 0.35,
+                                  front_clearance=max(0.6, item.front_clearance * 0.8))
+                result = _try_place(shorter, room, box, windows, placed, collides, brief)
+                if result is not None:
+                    notes.append(f"The {item.name.lower()} is built {w_:.2f} m long to fit the room.")
+                    break
+
+        if result is None and item.essential and item.id in _SMALLER:
+            # A smaller piece of the same kind, as a family buys for a smaller room.
+            from dataclasses import replace
+
+            for w_, d_, name in _SMALLER[item.id]:
+                smaller = replace(item, width=w_, depth=d_, name=name, side_clearance=min(item.side_clearance, 0.6),
+                                  front_clearance=min(item.front_clearance, 0.75))
+                result = _try_place(smaller, room, box, windows, placed, collides, brief)
+                if result is not None:
+                    notes.append(f"A {item.name.lower()} does not fit with its clearances; a {name.lower()} is shown.")
+                    break
 
         if result is None and item.essential and item.id.startswith("bed"):
             # Still no bed: a smaller one, as a family would buy for a small room,
@@ -613,9 +660,13 @@ def design_room(
         placed, unplaced, utilisation, notes = _edited_room(room, edit)
     else:
         placed, unplaced, utilisation, notes = _place_room(plan, room, brief)
+        placed += _fixtures(room, placed)
+        # The room starts in a look of the house's style: every piece in its colours.
+        look = default_look(room.type, plan.style)
         for n, p in enumerate(placed):
             p.uid = f"{room.id}-{n}"
-    finishes = dict((edit or {}).get("finishes") or {})
+            p.colour = look_colour(look, p.item_id)
+    finishes = dict((edit or {}).get("finishes") or {}) if edit is not None else default_finishes(room.type, plan.style)
 
     furniture_cost = sum(p.cost for p in placed)
     finishes_cost = _finishes_cost(room)
@@ -692,6 +743,99 @@ def _edited_room(
 
 #: The way an item faces for each rotation (its back to the wall it stands on).
 _FACING = {0: Vec2(0, 1), 90: Vec2(-1, 0), 180: Vec2(0, -1), 270: Vec2(1, 0)}
+
+_SLEEP = {RoomType.MASTER_BEDROOM, RoomType.BEDROOM, RoomType.GUEST_BEDROOM, RoomType.CHILDREN_BEDROOM}
+_SIT = {RoomType.LIVING, RoomType.FAMILY, RoomType.DRAWING}
+_WORK = {RoomType.STUDY, RoomType.HOME_OFFICE, RoomType.LIBRARY, RoomType.HOME_THEATRE}
+
+
+def _fixtures(room: Room, placed: list[PlacedFurniture]) -> list[PlacedFurniture]:
+    """The fittings every Indian room has before anyone chooses a sofa, set where they go:
+    the chimney over the hob, a microwave on the counter and a water purifier by the sink;
+    a geyser in the bathroom; an AC on the wall facing the bed or over the television; a
+    mirror over the shoe cabinet; a dhurrie under the coffee table. They hang on walls or
+    lie flat, so they never take floor from the furniture."""
+    box = room.bbox
+    out: list[PlacedFurniture] = []
+
+    def first(*prefixes: str) -> PlacedFurniture | None:
+        return next((p for p in placed if p.item_id.startswith(prefixes)), None)
+
+    def on_wall(item_id: str, anchor: PlacedFurniture, along: float = 0.0, rotation: float | None = None,
+                at: Vec2 | None = None) -> None:
+        """`item_id` on the wall `anchor` stands against (or the one `rotation` names), `along`
+        metres to the anchor's right; kept inside the room."""
+        it = catalogue_item(item_id)
+        if it is None:
+            return
+        rot = int(anchor.rotation if rotation is None else rotation) % 360
+        face = _FACING.get(rot, Vec2(0, 1))
+        right = Vec2(face.y, -face.x)
+        if at is None:
+            back = Vec2(anchor.x - face.x * anchor.depth / 2, anchor.y - face.y * anchor.depth / 2)
+        else:
+            back = at
+        cx = back.x + face.x * it.depth / 2 + right.x * along
+        cy = back.y + face.y * it.depth / 2 + right.y * along
+        half_w = it.width / 2
+        # Along the wall, inside the room's corners.
+        if abs(right.x) > 0.5:
+            cx = min(max(cx, box.min_x + half_w + 0.05), box.max_x - half_w - 0.05)
+        else:
+            cy = min(max(cy, box.min_y + half_w + 0.05), box.max_y - half_w - 0.05)
+        if box.width < it.width + 0.1 and abs(right.x) > 0.5 or box.height < it.width + 0.1 and abs(right.y) > 0.5:
+            return
+        out.append(PlacedFurniture(
+            item_id=it.id, name=it.name, x=round(cx, 3), y=round(cy, 3), rotation=float(rot),
+            width=it.width, depth=it.depth, height=it.height, cost=it.cost, facing=_facing_label(face),
+        ))
+
+    def facing_wall(anchor: PlacedFurniture) -> tuple[float, Vec2]:
+        """The rotation and wall point of the wall `anchor` faces."""
+        rot = int(anchor.rotation) % 360
+        face = _FACING.get(rot, Vec2(0, 1))
+        if abs(face.y) > 0.5:
+            y = box.max_y if face.y > 0 else box.min_y
+            return float((rot + 180) % 360), Vec2(anchor.x, y)
+        x = box.max_x if face.x > 0 else box.min_x
+        return float((rot + 180) % 360), Vec2(x, anchor.y)
+
+    t = room.type
+    if t is RoomType.KITCHEN:
+        run = first("counter_run", "counter_parallel", "counter_l")
+        if run is not None:
+            on_wall("chimney", run, along=run.width / 4)              # over the hob
+            on_wall("microwave", run, along=run.width / 2 - 0.3)       # on the counter, past the hob
+            on_wall("purifier", run, along=-run.width / 2 + 0.2)       # by the sink
+    elif t in (RoomType.BATHROOM, RoomType.TOILET):
+        wet = first("shower", "wc", "basin")
+        if wet is not None and t is RoomType.BATHROOM:
+            on_wall("geyser", wet)
+    elif t in _SLEEP:
+        bed = first("bed")
+        if bed is not None and room.area >= 9.0:
+            rot, at = facing_wall(bed)
+            on_wall("ac_split", bed, rotation=rot, at=at)
+    elif t in _SIT:
+        tv = first("tv_unit", "family_tv", "tv_wall", "tv_floating")
+        if tv is not None:
+            on_wall("ac_split", tv)                                     # over the television
+        table = first("coffee_table", "family_table", "centre_table")
+        rug = catalogue_item("rug_dhurrie")
+        if table is not None and rug is not None and room.area >= 12.0:
+            out.append(PlacedFurniture(item_id=rug.id, name=rug.name, x=table.x, y=table.y,
+                                       rotation=table.rotation, width=rug.width, depth=rug.depth,
+                                       height=rug.height, cost=rug.cost))
+    elif t in _WORK:
+        desk = first("desk", "study_desk", "bookwall", "screen_wall", "shelving")
+        if desk is not None and room.area >= 9.0:
+            rot, at = facing_wall(desk)
+            on_wall("ac_split", desk, rotation=rot, at=at)
+    elif t is RoomType.FOYER:
+        shoe = first("shoe_unit", "shoe_bench")
+        if shoe is not None:
+            on_wall("mirror_round", shoe)
+    return out
 
 
 def _floor_name(floor_id: str | None) -> str | None:

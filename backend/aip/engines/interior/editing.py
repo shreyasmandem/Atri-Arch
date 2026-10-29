@@ -278,11 +278,16 @@ COLOURS: dict[str, list[dict[str, str]]] = {
     "metal": [{"name": n, "hex": h} for n, h in (
         ("Brass", "#b08a3e"), ("Copper", "#b0683c"), ("Black", "#1f1e1d"), ("Antique bronze", "#6e5434"),
         ("Brushed steel", "#a9abad"))],
+    # The kitchen's and the utility's machines: steel, black glass, or a colour of the room.
+    "appliance": [{"name": n, "hex": h} for n, h in (
+        ("Stainless steel", "#a9abad"), ("Black glass", "#232323"), ("Champagne", "#cfc3a8"), ("Ivory", "#e8dccb"),
+        ("White", "#efe6dc"), ("Sage", "#9aa58f"), ("Powder blue", "#c9d9e6"), ("Navy", "#2b3550"),
+        ("Pastel mint", "#cfe3d4"), ("Retro red", "#a8352e"))],
 }
 
 #: Pieces fixed to a wall above the floor, and pieces hung from the ceiling: they
 #: may sit over furniture, and are placed on a wall or over a table, not on the floor.
-WALL_MOUNTED = {"drapes_sheer", "blinds_venetian", "tv_wall", "ac_split", "wall_clock", "mirror_round", "mirror_cabinet", "chimney", "purifier",
+WALL_MOUNTED = {"drapes_sheer", "blinds_venetian", "tv_wall", "ac_split", "microwave", "wall_clock", "mirror_round", "mirror_cabinet", "chimney", "purifier",
                 "geyser", "wall_art", "wall_shelf", "mandir_wall"}
 CEILING_HUNG = {"chandelier", "pendant_light"}
 
@@ -354,33 +359,33 @@ def sizes_for(item_id: str) -> list[dict[str, Any]]:
 #: metal of every piece, chosen to go together.
 LOOKS: list[dict[str, str]] = [
     {"id": "kerala_teak", "name": "Kerala teak", "story": "Lime-washed walls, ochre accent, dark teak and ivory cotton.",
-     "wall": "#efe9dc", "accent": "#d9a95b", "floor": "kota", "wood": "#7a4b2a", "fabric": "#ece4d4", "metal": "#b08a3e"},
+     "wall": "#efe9dc", "accent": "#d9a95b", "floor": "kota", "wood": "#7a4b2a", "fabric": "#ece4d4", "metal": "#b08a3e", "appliance": "#cfc3a8"},
     {"id": "jaipur_pink", "name": "Jaipur pink", "story": "Pink-city plaster, terracotta, sheesham and mustard.",
-     "wall": "#e2b8a6", "accent": "#c27b5c", "floor": "marble", "wood": "#6b3f22", "fabric": "#c9952e", "metal": "#b08a3e"},
+     "wall": "#e2b8a6", "accent": "#c27b5c", "floor": "marble", "wood": "#6b3f22", "fabric": "#c9952e", "metal": "#b08a3e", "appliance": "#e8dccb"},
     {"id": "chettinad", "name": "Chettinad indigo", "story": "Cream walls, Chettinad blue, Athangudi tiles, rosewood.",
-     "wall": "#efe3c8", "accent": "#7f8fb0", "floor": "athangudi", "wood": "#4a2a20", "fabric": "#34406e", "metal": "#b08a3e"},
+     "wall": "#efe3c8", "accent": "#7f8fb0", "floor": "athangudi", "wood": "#4a2a20", "fabric": "#34406e", "metal": "#b08a3e", "appliance": "#34406e"},
     {"id": "monsoon_sage", "name": "Monsoon sage", "story": "Sage and forest green, light oak, olive linen.",
-     "wall": "#c9cfb7", "accent": "#3f4a3c", "floor": "wood", "wood": "#b08a62", "fabric": "#6b6b3a", "metal": "#6e5434"},
+     "wall": "#c9cfb7", "accent": "#3f4a3c", "floor": "wood", "wood": "#b08a62", "fabric": "#6b6b3a", "metal": "#6e5434", "appliance": "#9aa58f"},
     {"id": "mumbai_modern", "name": "Mumbai modern", "story": "Gallery white, charcoal accent, white lacquer and grey.",
-     "wall": "#f6f4f0", "accent": "#4a4846", "floor": "vitrified", "wood": "#efece6", "fabric": "#8a8a88", "metal": "#1f1e1d"},
+     "wall": "#f6f4f0", "accent": "#4a4846", "floor": "vitrified", "wood": "#efece6", "fabric": "#8a8a88", "metal": "#1f1e1d", "appliance": "#232323"},
     {"id": "haveli_gold", "name": "Haveli gold", "story": "Warm gold walls, Jaisalmer stone, walnut and maroon.",
-     "wall": "#e7c48d", "accent": "#b98a6e", "floor": "jaisalmer", "wood": "#5a3d2a", "fabric": "#6e2430", "metal": "#b08a3e"},
+     "wall": "#e7c48d", "accent": "#b98a6e", "floor": "jaisalmer", "wood": "#5a3d2a", "fabric": "#6e2430", "metal": "#b08a3e", "appliance": "#cfc3a8"},
     {"id": "goa_coastal", "name": "Goa coastal", "story": "Sea-washed walls, powder blue, cane and peacock teal.",
-     "wall": "#e8eef0", "accent": "#c9d9e6", "floor": "terrazzo", "wood": "#c9a46a", "fabric": "#1f5a5e", "metal": "#a9abad"},
+     "wall": "#e8eef0", "accent": "#c9d9e6", "floor": "terrazzo", "wood": "#c9a46a", "fabric": "#1f5a5e", "metal": "#a9abad", "appliance": "#c9d9e6"},
     {"id": "peacock_royal", "name": "Peacock royal", "story": "Ivory with indigo, white marble, rosewood and teal.",
-     "wall": "#f4efe4", "accent": "#5f6f96", "floor": "marble", "wood": "#4a2a20", "fabric": "#1f5a5e", "metal": "#b08a3e"},
+     "wall": "#f4efe4", "accent": "#5f6f96", "floor": "marble", "wood": "#4a2a20", "fabric": "#1f5a5e", "metal": "#b08a3e", "appliance": "#2b3550"},
     {"id": "terracotta_earth", "name": "Terracotta earth", "story": "Sand and terracotta, red oxide floor, rust and copper.",
-     "wall": "#e3cfa8", "accent": "#c27b5c", "floor": "redoxide", "wood": "#6b3f22", "fabric": "#a8552e", "metal": "#b0683c"},
+     "wall": "#e3cfa8", "accent": "#c27b5c", "floor": "redoxide", "wood": "#6b3f22", "fabric": "#a8552e", "metal": "#b0683c", "appliance": "#a9abad"},
     {"id": "nordic_calm", "name": "Calm greige", "story": "Greige and taupe, oak floor, light oak and beige.",
-     "wall": "#cfc8bd", "accent": "#a39686", "floor": "wood", "wood": "#b08a62", "fabric": "#d6c7a8", "metal": "#1f1e1d"},
+     "wall": "#cfc8bd", "accent": "#a39686", "floor": "wood", "wood": "#b08a62", "fabric": "#d6c7a8", "metal": "#1f1e1d", "appliance": "#e9e5dd"},
     {"id": "charcoal_luxe", "name": "Charcoal luxe", "story": "Greige with a charcoal wall, black granite, walnut and brass.",
-     "wall": "#cfc8bd", "accent": "#4a4846", "floor": "granite", "wood": "#5a3d2a", "fabric": "#3a3a3a", "metal": "#b08a3e"},
+     "wall": "#cfc8bd", "accent": "#4a4846", "floor": "granite", "wood": "#5a3d2a", "fabric": "#3a3a3a", "metal": "#b08a3e", "appliance": "#232323"},
     {"id": "blush_brass", "name": "Blush and brass", "story": "Blush walls, desert rose, white marble and lacquer.",
-     "wall": "#ecd2cc", "accent": "#d9b2a0", "floor": "marble", "wood": "#efece6", "fabric": "#d9a8a0", "metal": "#b08a3e"},
+     "wall": "#ecd2cc", "accent": "#d9b2a0", "floor": "marble", "wood": "#efece6", "fabric": "#d9a8a0", "metal": "#b08a3e", "appliance": "#efe6dc"},
     {"id": "mint_fresh", "name": "Mint and mustard", "story": "A child's room: mint, mustard, light oak and emerald.",
-     "wall": "#cfe3d4", "accent": "#d9a93f", "floor": "wood", "wood": "#b08a62", "fabric": "#2f6b4f", "metal": "#a9abad"},
+     "wall": "#cfe3d4", "accent": "#d9a93f", "floor": "wood", "wood": "#b08a62", "fabric": "#2f6b4f", "metal": "#a9abad", "appliance": "#cfe3d4"},
     {"id": "indigo_night", "name": "Indigo night", "story": "A bedroom: powder blue, indigo wall, walnut and indigo.",
-     "wall": "#c9d9e6", "accent": "#5f6f96", "floor": "wood", "wood": "#5a3d2a", "fabric": "#34406e", "metal": "#6e5434"},
+     "wall": "#c9d9e6", "accent": "#5f6f96", "floor": "wood", "wood": "#5a3d2a", "fabric": "#34406e", "metal": "#6e5434", "appliance": "#a9abad"},
 ]
 
 #: Floors a room may be finished in.
@@ -442,9 +447,69 @@ _METAL = ("brass_lamp", "diya_stand", "urli", "floor_lamp", "mirror_full", "towe
           "drying_rack", "chandelier", "candles", "floor_vase", "brass_pot", "puja_bell")
 
 
+#: The look each room starts in, by the house's style: (public rooms, bedrooms, the master
+#: bedroom, a child's room, the kitchen and service rooms). A house reads as designed when
+#: its rooms are related but not the same; the client changes any of them in one click.
+STYLE_LOOKS: dict[str, tuple[str, str, str, str, str]] = {
+    "modern_indian": ("kerala_teak", "monsoon_sage", "charcoal_luxe", "mint_fresh", "nordic_calm"),
+    "kerala_vernacular": ("kerala_teak", "monsoon_sage", "haveli_gold", "mint_fresh", "kerala_teak"),
+    "traditional_indian": ("haveli_gold", "jaipur_pink", "peacock_royal", "mint_fresh", "terracotta_earth"),
+    "rajasthani_haveli": ("haveli_gold", "jaipur_pink", "peacock_royal", "mint_fresh", "terracotta_earth"),
+    "indo_saracenic": ("peacock_royal", "jaipur_pink", "haveli_gold", "mint_fresh", "nordic_calm"),
+    "chettinad": ("chettinad", "peacock_royal", "haveli_gold", "mint_fresh", "chettinad"),
+    "tropical_modern": ("monsoon_sage", "goa_coastal", "charcoal_luxe", "mint_fresh", "nordic_calm"),
+    "biophilic": ("monsoon_sage", "goa_coastal", "kerala_teak", "mint_fresh", "monsoon_sage"),
+    "industrial": ("charcoal_luxe", "nordic_calm", "charcoal_luxe", "mint_fresh", "mumbai_modern"),
+    "brutalist": ("charcoal_luxe", "nordic_calm", "charcoal_luxe", "mint_fresh", "mumbai_modern"),
+}
+_DEFAULT_LOOKS = ("nordic_calm", "indigo_night", "charcoal_luxe", "mint_fresh", "mumbai_modern")
+#: Floors a kitchen, utility or puja room keeps whatever the look: stone, tile and terrazzo, not wood.
+_HARD_FLOORS = {"kota", "marble", "terrazzo", "athangudi", "granite", "vitrified", "redoxide", "jaisalmer",
+                "statuario", "microcement", "slate", "checker", "hexagon", "greykota", "whiteterrazzo", "cotto"}
+
+
+def default_look(room_type: RoomType, style: str | None) -> dict[str, str] | None:
+    """The look a room is first shown in, before the client chooses one; None for wet rooms."""
+    if room_type in (T.BATHROOM, T.TOILET, T.POWDER, T.STAIRCASE, T.CORRIDOR, T.LOBBY, T.SHAFT) or room_type.is_outdoor:
+        return None
+    looks = STYLE_LOOKS.get(style or "", _DEFAULT_LOOKS)
+    if room_type is T.MASTER_BEDROOM:
+        pick = looks[2]
+    elif room_type is T.CHILDREN_BEDROOM:
+        pick = looks[3]
+    elif room_type in (T.BEDROOM, T.GUEST_BEDROOM):
+        pick = looks[1]
+    elif room_type in (T.KITCHEN, T.UTILITY, T.PANTRY, T.LAUNDRY, T.STORE, T.GYM):
+        pick = looks[4]
+    else:
+        pick = looks[0]
+    return next((lk for lk in LOOKS if lk["id"] == pick), None)
+
+
+def default_finishes(room_type: RoomType, style: str | None) -> dict[str, str]:
+    """The walls, accent and floor of a room's first look (see `default_look`)."""
+    lk = default_look(room_type, style)
+    if lk is None:
+        return {}
+    out = {"wall": lk["wall"], "accent": lk["accent"], "look": lk["id"]}
+    if room_type not in (T.KITCHEN, T.UTILITY, T.PANTRY, T.LAUNDRY, T.PUJA, T.STORE) or lk["floor"] in _HARD_FLOORS:
+        out["floor"] = lk["floor"]
+    return out
+
+
+def look_colour(lk: dict[str, str] | None, item_id: str) -> str | None:
+    """The colour a piece takes in a look: its wood, its fabric, its metal or its machines."""
+    if not lk:
+        return None
+    return {"wood": lk.get("wood"), "fabric": lk.get("fabric"), "metal": lk.get("metal"),
+            "appliance": lk.get("appliance")}.get(colour_group(item_id))
+
+
 def colour_group(item_id: str) -> str:
     """What takes the client's colour: boards ("wood"), cloth ("fabric"), metal, or nothing (sanitaryware)."""
-    if item_id.startswith(("wc", "shower", "washer", "fridge", "microwave", "chimney", "purifier", "dishwasher",
+    if item_id.startswith(("fridge", "microwave", "chimney", "dishwasher", "washer")):
+        return "appliance"
+    if item_id.startswith(("wc", "shower", "purifier",
                            "ac_split", "tv_wall", "geyser", "bathtub", "aquarium", "rangoli", "wall_clock", "books",
                            "succulent", "pendant_light", "plant", "tulsi", "aquarium", "robot_vacuum", "air_purifier",
                            "standing_desk", "deck_turf")):

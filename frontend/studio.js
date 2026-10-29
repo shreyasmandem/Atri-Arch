@@ -1636,7 +1636,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p18");
+    const { Viewer3D } = await import("./viewer3d.js?v=p20");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2216,7 +2216,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p18");
+  const { Viewer3D } = await import("./viewer3d.js?v=p20");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2297,11 +2297,23 @@ async function renderInterior() {
       const r = (anchor.rotation * Math.PI) / 180, fx = -Math.sin(r), fy = Math.cos(r);
       const back = Math.min(3.2, Math.max(1.6, ((Math.abs(fy) > 0.5 ? box.y1 - box.y0 : box.x1 - box.x0) - anchor.depth) * 0.85));
       const m = 0.35;
-      pose = {
-        from: { x: Math.min(box.x1 - m, Math.max(box.x0 + m, anchor.x + fx * (anchor.depth / 2 + back))),
-                y: Math.min(box.y1 - m, Math.max(box.y0 + m, anchor.y + fy * (anchor.depth / 2 + back))) },
-        look: { x: anchor.x, y: anchor.y },
-      };
+      let from = { x: Math.min(box.x1 - m, Math.max(box.x0 + m, anchor.x + fx * (anchor.depth / 2 + back))),
+                   y: Math.min(box.y1 - m, Math.max(box.y0 + m, anchor.y + fy * (anchor.depth / 2 + back))) };
+      // Never inside a fridge or a wardrobe: the nearest spot of clear floor to that one.
+      const solid = fur.filter((f) => f.height > 0.05 && f.height < 2.6 && !/^(ac_split|chimney|geyser|purifier|mirror|wall_|tv_wall|pendant|chandelier|drapes|blinds)/.test(f.item_id))
+        .map((f) => {
+          const sw = Math.abs(Math.sin((f.rotation * Math.PI) / 180)) > 0.5;
+          const hw = (sw ? f.depth : f.width) / 2 + 0.3, hd = (sw ? f.width : f.depth) / 2 + 0.3;
+          return [f.x - hw, f.y - hd, f.x + hw, f.y + hd];
+        });
+      const clear = (q) => !solid.some(([a, b, c, d]) => q.x > a && q.x < c && q.y > b && q.y < d);
+      if (!clear(from)) {
+        const pts = [];
+        for (let x = box.x0 + 0.4; x <= box.x1 - 0.4; x += 0.2) for (let y = box.y0 + 0.4; y <= box.y1 - 0.4; y += 0.2) pts.push({ x, y });
+        const best = pts.filter(clear).sort((a, b) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(b.x - from.x, b.y - from.y))[0];
+        if (best) from = best;
+      }
+      pose = { from, look: { x: anchor.x, y: anchor.y } };
     }
     viewer.walkInto(box, item.lv, pose);
   };
@@ -2688,7 +2700,8 @@ async function renderInterior() {
       draft.finishes = { ...draft.finishes, wall: lk.wall, accent: lk.accent, floor: lk.floor, look: lk.id };
       for (const d of draft.items) {
         const g = byId.get(d.item_id)?.colour_group;
-        d.colour = g === "wood" ? lk.wood : g === "fabric" ? lk.fabric : g === "metal" ? lk.metal : null;
+        d.colour = g === "wood" ? lk.wood : g === "fabric" ? lk.fabric : g === "metal" ? lk.metal
+          : g === "appliance" ? (lk.appliance || null) : null;
       }
     };
     // What the assistant asked for, done as if clicked: the same checks, the same save.
@@ -3278,7 +3291,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p18");
+    const { Viewer3D } = await import("./viewer3d.js?v=p20");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3397,7 +3410,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p18");
+    const { Viewer3D } = await import("./viewer3d.js?v=p20");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];

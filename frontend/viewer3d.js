@@ -402,12 +402,20 @@ export class Viewer3D {
     this.hemi.color.setHex(day ? 0xdde6ee : 0xf4ead8);
     this.hemi.groundColor.setHex(day ? 0x6b5f4f : 0x221c16);
     if (day) this.hemi.intensity = 0.95;
+    // Inside, colours are judged: a buyer picks a paint from them. The neutral tone
+    // mapping shows a paint, a fabric or a floor as its own colour (filmic curves
+    // bleach pale ones to white), and a low, warm fill leaves the shading that
+    // makes a room read as a room; the light comes from the windows and the lamp.
+    this.renderer.toneMapping = mode === "walk" ? THREE.NeutralToneMapping : THREE.ACESFilmicToneMapping;
     if (mode === "walk") {
-      this.hemi.intensity = 1.6;
-      this.hemi.groundColor.setHex(0xcdbfa8);     // daylight off a pale floor lights the ceiling
-      this.scene.environmentIntensity = 1.3;
-      this.renderer.toneMappingExposure = 1.1;
+      this.hemi.intensity = 0.55;
+      this.hemi.color.setHex(0xfff1e0);
+      this.hemi.groundColor.setHex(0x8a7a66);     // daylight off the floor, warm and dim
+      this.scene.environmentIntensity = 0.55;
+      this.renderer.toneMappingExposure = 0.95;
+      this.sun.intensity = 2.6;                   // the sun through the windows, with its shadows
     }
+    if (this.roomLamp) this.roomLamp.visible = mode === "walk";
     this.mode = mode;
     this.modeLevel = level;
     return { levels: top + 1 };
@@ -806,6 +814,32 @@ export class Viewer3D {
     c.rotateSpeed = -0.5;
     this.camera.fov = 62; this.camera.near = 0.05; this.camera.updateProjectionMatrix();
     this.camera.position.copy(eye);
+    // The room's own lamp: a warm light at the ceiling's centre, and a softer one by
+    // the walls so corners are not black.
+    if (!this.roomLamp) {
+      this.roomLamp = new THREE.Group();
+      const main = new THREE.PointLight(0xffe2bf, 9, 0, 2);
+      // Soft shadows under the furniture, so a sofa sits on the floor rather than floating.
+      main.castShadow = true;
+      main.shadow.mapSize.set(1024, 1024);
+      main.shadow.bias = -0.002;
+      main.shadow.normalBias = 0.02;
+      main.shadow.radius = 6;
+      main.shadow.camera.near = 0.1;
+      main.shadow.camera.far = 14;
+      const spill = new THREE.PointLight(0xfff0dc, 3.5, 0, 2);
+      main.name = "main"; spill.name = "spill";
+      this.roomLamp.add(main, spill);
+      this.scene.add(this.roomLamp);
+    }
+    const area = Math.max(6, (box.x1 - box.x0) * (box.y1 - box.y0));
+    const lampAt = this.model.localToWorld(new THREE.Vector3(cx, floorY + 2.55, -cy));
+    const main = this.roomLamp.getObjectByName("main"), spill = this.roomLamp.getObjectByName("spill");
+    main.position.copy(lampAt);
+    main.intensity = 4 + area * 0.45;
+    spill.position.copy(this.model.localToWorld(new THREE.Vector3(sx, floorY + 2.2, -sy)));
+    spill.intensity = 1.5 + area * 0.15;
+    this.roomLamp.visible = true;
     c.target.copy(eye.clone().add(at.clone().sub(eye).normalize().multiplyScalar(0.1)));
     c.update();
     this._bindWalk();
@@ -1013,7 +1047,9 @@ export class Viewer3D {
   // The colour of a room's lights while standing in it: warm, natural or task white.
   setRoomLight(kelvin) {
     if (this.mode !== "walk") return;
-    this.hemi.color.setHex({ 2700: 0xffd9b0, 4000: 0xfff2e2, 5500: 0xf3f6ff }[kelvin] || 0xf4ead8);
+    const hex = { 2700: 0xffd2a0, 4000: 0xfff0dc, 5500: 0xf1f5ff }[kelvin] || 0xffe2bf;
+    this.hemi.color.setHex(hex === 0xffe2bf ? 0xfff1e0 : hex);
+    this.roomLamp?.getObjectByName("main")?.color.setHex(hex);
     for (const m of this.lamps) m.emissiveIntensity = kelvin ? 1.4 : 0;
   }
 

@@ -107,6 +107,17 @@ _EXTERIOR: dict[str, dict[str, Any]] = {
 }
 
 
+#: The kitchen's machines in each style's own finish: steel in a modern house, black glass in a
+#: minimal one, champagne or ivory where the joinery is teak.
+_APPLIANCE = {
+    "modern_indian": "#cfc3a8", "kerala_vernacular": "#cfc3a8", "traditional_indian": "#e8dccb",
+    "chettinad": "#2b3550", "rajasthani_haveli": "#cfc3a8", "indo_saracenic": "#e8dccb", "mid_century_modern": "#9aa58f",
+    "wabi_sabi": "#e9e5dd", "bohemian": "#cfc3a8", "brutalist": "#232323",
+    "contemporary": "#a9abad", "modern_minimal": "#232323", "industrial": "#232323", "japandi": "#e9e5dd",
+    "scandinavian": "#efe6dc", "tropical_modern": "#a9abad", "biophilic": "#9aa58f", "art_deco": "#232323",
+}
+
+
 class Palette:
     """Every material the model uses, resolved once for the plan's style."""
 
@@ -191,7 +202,7 @@ class Palette:
             "linen": Material("linen", (0.93, 0.92, 0.89), 0.95),
             "ceramic": Material("ceramic", (0.96, 0.96, 0.95), 0.2),
             "counter": Material("counter_stone", (0.20, 0.20, 0.21), 0.3),
-            "appliance": Material("appliance", (0.82, 0.83, 0.84), 0.3, 0.6),
+            "appliance": Material("appliance", _hex(_APPLIANCE.get(style, "#a9abad"), (0.82, 0.83, 0.84)), 0.3, 0.6),
             "screen": Material("screen", (0.05, 0.05, 0.06), 0.2),
             "brass": Material("brass", (0.78, 0.60, 0.28), 0.3, 0.9),
             "curtain": Material("curtain_fabric", (0.82, 0.70, 0.52), 1.0),      # handloom cotton, sand
@@ -1630,7 +1641,8 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         from aip.engines.interior.editing import colour_group
 
         group = colour_group(iid)
-        bases = {"wood": ("joinery",), "fabric": ("uph",), "metal": ("metal", "brass")}.get(group, ())
+        bases = {"wood": ("joinery",), "fabric": ("uph",), "metal": ("metal", "brass"),
+                 "appliance": ("appliance",)}.get(group, ())
         remap = {m: b.p.custom(colour, m) for m in bases}
 
     def at(u: float, v: float) -> tuple[float, float]:
@@ -2006,9 +2018,26 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
     elif iid.startswith(("counter_run", "counter_parallel")):
         part("joinery", 0, 0, 0.0, w, d, 0.86)
         part("counter", 0, 0, 0.86, w + 0.02, d + 0.02, 0.04)
-        part("joinery", 0, 0, 1.45, w, 0.35, 0.7)
-        part("metal", -w / 4, 0.15, 0.9, 0.6, 0.45, 0.02)
-        part("appliance", w / 4, 0.12, 0.9, 0.5, 0.4, 0.02)
+        # Wall cabinets either side of the hob, the chimney between them.
+        hob, gap = w / 4, 0.45
+        left, right = (-w / 2, hob - gap), (hob + gap, w / 2)
+        for a0, a1 in (left, right):
+            if a1 - a0 > 0.3:
+                part("joinery", (a0 + a1) / 2, 0, 1.45, a1 - a0, 0.35, 0.7)
+        # The hob: black glass, four burners with their pan supports.
+        part("screen", hob, 0.1, 0.9, 0.62, 0.48, 0.012)
+        for du, dv in ((-0.15, 0.17), (0.15, 0.17), (-0.15, 0.38), (0.15, 0.38)):
+            part("metal", hob + du, dv - 0.06, 0.912, 0.14, 0.14, 0.018)
+            part("metal", hob + du, dv - 0.075, 0.93, 0.17, 0.02, 0.012)
+            part("metal", hob + du, dv - 0.075 + 0.15, 0.93, 0.17, 0.02, 0.012)
+        for k in range(4):
+            part("metal", hob - 0.24 + k * 0.16, 0.5, 0.88, 0.035, 0.03, 0.035)     # knobs on the fascia
+        # The sink: a steel bowl set in the stone, a drainboard and a tap.
+        sink = -w / 4
+        part("metal", sink, 0.12, 0.895, 0.78, 0.46, 0.012)
+        part("screen", sink - 0.1, 0.16, 0.9, 0.42, 0.36, 0.006)
+        part("metal", sink - 0.1, 0.08, 0.9, 0.035, 0.035, 0.32)
+        part("metal", sink - 0.1, 0.08, 1.2, 0.035, 0.22, 0.035)
     elif iid.startswith("fridge"):
         part("appliance", 0, 0, 0.0, w, d, h)
     elif iid.startswith(("desk", "study_desk", "console", "mirror_console", "dresser", "dressing")):
@@ -2104,8 +2133,16 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
     except Exception:  # noqa: BLE001 - colour must never stop the model being built
         scheme = None
     palette = Palette(plan.style or "contemporary", scheme)
+    from aip.engines.interior.editing import default_finishes
+
+    edits = (plan.metadata or {}).get("interior_edits") or {}
+    # A room the client has not touched is drawn in the look it starts in (see
+    # interior.editing.default_look) - unless they chose the house's colours themselves.
+    chosen = bool(palette_id or colour_text or design_id)
     palette.room_finishes = {
-        rid: dict(e.get("finishes") or {}) for rid, e in ((plan.metadata or {}).get("interior_edits") or {}).items()
+        r.id: (dict((edits.get(r.id) or {}).get("finishes") or {}) if r.id in edits
+               else {} if chosen else default_finishes(r.type, plan.style))
+        for lv in plan.levels for r in lv.rooms
     }
     b = Builder(palette)
     road = _road(plan)

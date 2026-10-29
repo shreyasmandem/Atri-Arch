@@ -376,11 +376,15 @@ def test_cash_flow_is_monotonic_and_completes(plan, brief):
 def test_interior_places_furniture_without_collisions(plan, brief):
     from aip.engines.interior.engine import design_interior
 
+    from aip.engines.interior.editing import CEILING_HUNG, WALL_MOUNTED
+
     scheme = design_interior(plan, brief)
     assert scheme.rooms
 
     for room in scheme.rooms:
-        boxes = [f.footprint for f in room.furniture]
+        # What hangs on a wall or from the ceiling, and a rug, lie over furniture by design.
+        boxes = [f.footprint for f in room.furniture
+                 if f.item_id not in WALL_MOUNTED | CEILING_HUNG and f.height > 0.05]
         for i, a in enumerate(boxes):
             for b in boxes[i + 1 :]:
                 overlap_x = min(a.max_x, b.max_x) - max(a.min_x, b.min_x)
