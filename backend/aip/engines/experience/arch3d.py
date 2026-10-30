@@ -2203,6 +2203,41 @@ def build_scene(plan: FloorPlan, *, include_furniture: bool = True, include_grou
                 _stair(b, room, y, level.floor_to_floor, f"{node}/structure")
         y += level.floor_to_floor
 
+    # A floor with less built over it - a single-storey wing, rooms round a courtyard
+    # with the upper floors over one side - is roofed where nothing stands above it:
+    # a flat terrace roof with a parapet. Courtyards stay open to the sky, and
+    # terraces and balconies are open roofs already.
+    from shapely.geometry import Polygon as _Poly
+    from shapely.ops import unary_union as _union
+
+    from aip.engines.experience.landscape import simple_parts
+
+    def _built(level: Level):
+        polys = [_Poly([(p.x, p.y) for p in r.polygon]).buffer(0) for r in level.rooms
+                 if len(r.polygon) >= 3 and r.type not in _OPEN_TO_SKY and r.type not in _RAILED]
+        return _union(polys).buffer(0.12, join_style=2) if polys else None
+
+    for i, (level, base, _fp) in enumerate(dressed[:-1]):
+        mine = _built(level)
+        if mine is None:
+            continue
+        above = [f for f in (_footprint(lv) for lv, _b, _f in dressed[i + 1:]) if f is not None]
+        open_roof = mine.difference(_union(above)) if above else mine
+        top_y = base + level.floor_to_floor
+        for part in simple_parts(open_roof.buffer(-0.02, join_style=2).buffer(0.02, join_style=2)):
+            if part.area < 1.0:
+                continue
+            node = f"level_{level.index}/terrace_roof"
+            b.slab(node, "roof_flat", [Vec2(x, y_) for x, y_ in list(part.exterior.coords)[:-1]], top_y - SLAB, top_y)
+            # A parapet on the edges that are the house's outside, not against the floor above.
+            edge = part.difference(part.buffer(-0.15, join_style=2))
+            if above:
+                edge = edge.difference(_union(above).buffer(0.05, join_style=2))
+            for ring in simple_parts(edge):
+                if ring.area < 0.05:
+                    continue
+                b.slab(node, "plaster", [Vec2(x, y_) for x, y_ in list(ring.exterior.coords)[:-1]], top_y, top_y + 0.9)
+
     # The facade: the exterior grammar's design, or a named legacy language.
 
     try:

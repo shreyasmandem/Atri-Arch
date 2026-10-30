@@ -379,6 +379,8 @@ export class Viewer3D {
     const roof = this.model.getObjectByName("roof");
     if (roof) roof.visible = mode !== "interior";
     this.model.traverse((o) => { if (o.isMesh && /__lights__/.test(o.name)) o.visible = mode !== "interior"; });
+    // A lower floor's own roof (where nothing stands over it) lifts off with the main roof to look inside.
+    this.model.traverse((o) => { if (/terrace_roof/.test(o.name)) o.visible = mode !== "interior"; });
     const night = mode === "night";
     this.hemi.intensity = night ? 0.05 : 0.7;
     this.sun.intensity = night ? 0.08 : 2.1;
