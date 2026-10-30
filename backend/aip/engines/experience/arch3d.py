@@ -390,6 +390,51 @@ class Builder:
         f = np.array([[i, i + 1, i + 2] for i in range(0, 24, 4)] + [[i, i + 2, i + 3] for i in range(0, 24, 4)])
         self.add(node, mat, v, f)
 
+    def rbox(self, node: str, mat: str, centre: tuple[float, float, float],
+             size: tuple[float, float, float], yaw: float = 0.0, radius: float = 0.04,
+             steps: int = 2) -> None:
+        """A box with its edges and corners rounded, as a cushion or a mattress is:
+        a grid over each face, its outer rows pulled round onto quarter circles."""
+        half = np.array([s / 2 for s in size], dtype=np.float64)
+        r = min(radius, float(half.min()) * 0.95)
+        if r < 0.004:
+            self.box(node, mat, centre, size, yaw)
+            return
+        inner = half - r
+
+        def ticks(h: float) -> list[float]:
+            arc = [-(h - r) - r * math.cos(math.pi / 2 * k / steps) for k in range(steps)]
+            return arc + [-(h - r), h - r] + [-t for t in reversed(arc)]
+
+        verts: list[np.ndarray] = []
+        faces: list[list[int]] = []
+        # Each face: the axis it faces along, its sign, and the two axes across it
+        # (ordered so the triangles wind counter-clockwise seen from outside).
+        for axis, sign, ua, va in ((2, 1, 0, 1), (2, -1, 1, 0), (0, 1, 1, 2), (0, -1, 2, 1),
+                                   (1, 1, 2, 0), (1, -1, 0, 2)):
+            us, vs = ticks(half[ua]), ticks(half[va])
+            start = len(verts)
+            for v in vs:
+                for u in us:
+                    p = np.zeros(3)
+                    p[axis] = sign * half[axis]
+                    p[ua], p[va] = u, v
+                    q = np.clip(p, -inner, inner)
+                    dv = p - q
+                    n = np.linalg.norm(dv)
+                    verts.append(q + dv / n * r if n > 1e-9 else p)
+            nu = len(us)
+            for j in range(len(vs) - 1):
+                for i in range(nu - 1):
+                    a = start + j * nu + i
+                    faces += [[a, a + 1, a + nu + 1], [a, a + nu + 1, a + nu]]
+        v = np.array(verts)
+        if yaw:
+            c, s_ = math.cos(yaw), math.sin(yaw)
+            v = v @ np.array([[c, 0, -s_], [0, 1, 0], [s_, 0, c]]).T
+        v += np.array(centre)
+        self.add(node, mat, v, np.array(faces))
+
     def quad_strip(self, node: str, mat: str, a: tuple, b: tuple, c: tuple, d: tuple) -> None:
         """One planar quad (a, b, c, d counter-clockwise from its front), both sides."""
         v = np.array([a, b, c, d], dtype=np.float64)
@@ -1649,15 +1694,20 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         lx, lz = u, -(d / 2 - v)
         return (cx + lx * math.cos(rot) - lz * math.sin(rot), cz - (lx * math.sin(rot) + lz * math.cos(rot)))
 
-    def part(m: str, u: float, v: float, y0: float, sw: float, sd: float, sh: float) -> None:
-        """A box at (u across, v front-to-back from the back edge) in the item's frame."""
+    def part(m: str, u: float, v: float, y0: float, sw: float, sd: float, sh: float,
+             r: float = 0.0) -> None:
+        """A box at (u across, v front-to-back from the back edge) in the item's frame;
+        `r` rounds its edges, for what is padded or stuffed."""
         # The engine puts an item's back on its local -y (rotation 0 is against a
         # south wall, facing north), so the back edge is at lz = -d/2.
         m = remap.get(m, m)
         lx, lz = u, -(d / 2 - v - sd / 2)
         x = cx + lx * math.cos(rot) - lz * math.sin(rot)
         z = cz - (lx * math.sin(rot) + lz * math.cos(rot))
-        b.box(node, m, (x, base + y0 + sh / 2, z), (sw, sh, sd), -rot)
+        if r > 0:
+            b.rbox(node, m, (x, base + y0 + sh / 2, z), (sw, sh, sd), -rot, r)
+        else:
+            b.box(node, m, (x, base + y0 + sh / 2, z), (sw, sh, sd), -rot)
 
     def leaves(u: float, v: float, y: float, r: float) -> None:
         x, z = at(u, v)
@@ -1690,14 +1740,14 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         panels = 3 if w > 1.4 else 2
         for k in range(panels):
             u = -w / 2 + w * (k + 0.5) / panels
-            part("uph", u, 0.08, 0.42, w / panels - 0.03, 0.06, max(h, 1.1) - 0.5)
-        part("linen", 0, 0.12, 0.3, w - 0.06, d - 0.16, 0.2)
-        part("accent", 0, 0.62, 0.5, w + 0.02, d - 0.66, 0.06)
-        part("linen", 0, 0.55, 0.5, w + 0.02, 0.1, 0.075)
+            part("uph", u, 0.08, 0.42, w / panels - 0.03, 0.07, max(h, 1.1) - 0.5, r=0.03)
+        part("linen", 0, 0.12, 0.3, w - 0.06, d - 0.16, 0.2, r=0.06)
+        part("accent", 0, 0.62, 0.5, w + 0.02, d - 0.66, 0.06, r=0.03)
+        part("linen", 0, 0.55, 0.5, w + 0.02, 0.1, 0.075, r=0.035)
         pillows = 2 if w > 1.2 else 1
         for k in range(pillows):
             u = (k - (pillows - 1) / 2) * (w / pillows)
-            part("ceramic", u, 0.16, 0.5, w / pillows - 0.14, 0.38, 0.14)
+            part("ceramic", u, 0.16, 0.5, w / pillows - 0.14, 0.38, 0.14, r=0.065)
         part("uph", 0, d - 0.55, 0.56, w + 0.04, 0.35, 0.015)
     elif iid == "sofa_l":
         part("uph", 0, 0.15, 0.0, w, 0.75, 0.42)
@@ -1977,20 +2027,19 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         for su in (-1, 1):
             for sv in (0.06, d - 0.08):
                 part("metal", su * (w / 2 - 0.08), sv, 0.0, 0.04, 0.04, 0.12)
-        part("uph", 0, 0, 0.12, w, d, 0.2)
-        part("uph", 0, 0, 0.32, w, 0.2, 0.5)
+        part("uph", 0, 0, 0.12, w, d, 0.2, r=0.03)
+        part("uph", 0, 0, 0.32, w, 0.2, 0.5, r=0.05)
         for su in (-1, 1):
-            part("uph", su * (w / 2 - arm / 2), 0.0, 0.12, arm, d, 0.52)
-            part("uph", su * (w / 2 - arm / 2), 0.02, 0.64, arm + 0.02, d - 0.04, 0.04)
+            part("uph", su * (w / 2 - arm / 2), 0.0, 0.12, arm, d, 0.56, r=0.06)
         seats = max(1, round((w - 2 * arm) / 0.65))
         sw = (w - 2 * arm) / seats
         for k in range(seats):
             u = -w / 2 + arm + sw * (k + 0.5)
-            part("uph", u, 0.22, 0.32, sw - 0.02, d - 0.26, 0.14)
-            part("uph", u, 0.19, 0.46, sw - 0.03, 0.18, 0.42)
+            part("uph", u, 0.22, 0.32, sw - 0.02, d - 0.26, 0.15, r=0.06)
+            part("uph", u, 0.19, 0.46, sw - 0.03, 0.2, 0.42, r=0.08)
     elif iid.startswith(("accent_chair", "wing_chair", "armchair", "reading_chair")):
-        part("uph", 0, 0.1, 0.0, w, d - 0.1, 0.42)
-        part("uph", 0, 0, 0.0, w, 0.12, 0.9)
+        part("uph", 0, 0.1, 0.0, w, d - 0.1, 0.42, r=0.06)
+        part("uph", 0, 0, 0.0, w, 0.14, 0.9, r=0.06)
     elif iid.startswith(("coffee", "centre_table", "family_table")):
         part("joinery", 0, 0, 0.36, w, d, 0.05)
         for su in (-1, 1):
@@ -2005,7 +2054,7 @@ def _furniture(b: Builder, item, base: float, node: str) -> None:
         for k in range(seats):
             u = -w / 2 + w * (k + 0.5) / seats
             for v in (-0.5, d + 0.05):
-                part("uph", u, v, 0.0, 0.45, 0.45, 0.46)
+                part("uph", u, v, 0.0, 0.45, 0.45, 0.46, r=0.04)
     elif iid.startswith(("wardrobe", "tall_unit", "crockery", "storage", "shoe", "bookshelf",
                          "bookwall", "shelving", "sideboard", "bar_cabinet")):
         part("joinery", 0, 0, 0.0, w, d, h)

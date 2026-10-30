@@ -8,7 +8,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { dress, skyTexture } from "./materials.js?v=m5";
+import { dress, skyTexture } from "./materials.js?v=m6";
 import { iconHTML } from "./icons.js?v=i4";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -73,6 +73,8 @@ export class Viewer3D {
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.setClearColor(0x0b0a09, 1);
     r.domElement.className = "v3-canvas";
+    // A render too heavy for the graphics card loses the page's GPU; the photo ends cleanly.
+    r.domElement.addEventListener("webglcontextlost", () => this.endPhoto("lost"));
     host.append(r.domElement);
 
     const scene = (this.scene = new THREE.Scene());
@@ -100,7 +102,7 @@ export class Viewer3D {
     c.maxPolarAngle = Math.PI * 0.49;
     c.autoRotate = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     c.autoRotateSpeed = 0.5;
-    c.addEventListener("start", () => { c.autoRotate = false; });
+    c.addEventListener("start", () => { c.autoRotate = false; this.endPhoto("moved"); });
 
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
@@ -115,6 +117,10 @@ export class Viewer3D {
     const w = this.host.clientWidth, h = this.host.clientHeight;
     if (!w || !h) return;
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     if (this.orthoKind) this.setOrtho(this.orthoKind, { cut: this.cut });
@@ -123,6 +129,7 @@ export class Viewer3D {
   async load(url, { keepView = false, front = null, zoom = 1, lift = 0.3 } = {}) {
     // Live edits fire loads back to back: only the latest may land, or a slow
     // earlier model could replace a newer one.
+    this.endPhoto("changed");
     const seq = (this.loadSeq = (this.loadSeq || 0) + 1);
     const gltf = await new GLTFLoader().loadAsync(url);
     if (seq !== this.loadSeq) return null;
@@ -370,6 +377,9 @@ export class Viewer3D {
 
   setMode(mode, level = 0) {
     if (!this.model) return;
+    this.endPhoto("changed");
+    // Soft contact shadows where things meet, for the views of the rooms.
+    if ((mode === "walk" || mode === "interior") && !this._aoP) this._aoP = this._initAO();
     const levels = [];
     this.model.traverse((o) => { const m = /^level_(\d+)$/.exec(o.name); if (m) levels.push([+m[1], o]); });
     const top = levels.length ? Math.max(...levels.map(([i]) => i)) : 0;
@@ -705,8 +715,17 @@ export class Viewer3D {
       for (const o of this.hung) o.visible = this.walking || this.renderer.xr.isPresenting || cy < o.userData.top;
     }
     if (this.renderer.xr.isPresenting) { this.renderer.render(this.scene, this.camera); return; }
+    if (this.photo?.state === "running" || this.photo?.state === "done") {
+      this.photo.tick();
+      this._pinsTick(now || performance.now());
+      return;
+    }
     this.controls.update();
-    this.renderer.render(this.scene, this.orthoKind ? this.ortho : this.camera);
+    const cam = this.orthoKind ? this.ortho : this.camera;
+    if (this.composer && !this.orthoKind && (this.mode === "walk" || this.mode === "interior")) {
+      this.aoPass.camera = cam;
+      this.composer.render();
+    } else this.renderer.render(this.scene, cam);
     this._pinsTick(now || performance.now());
     this._datumTick();
   }
@@ -806,7 +825,7 @@ export class Viewer3D {
     const at = look
       ? this.model.localToWorld(new THREE.Vector3(look.x, floorY + 1.0, -look.y))
       : this.model.localToWorld(new THREE.Vector3(cx + (cx - sx) * 0.5, floorY + 1.35, -(cy + (cy - sy) * 0.5)));
-    this.walking = { level, floorY, keys: new Set(), last: performance.now() };
+    this.walking = { level, floorY, box, keys: new Set(), last: performance.now() };
     const c = this.controls;
     this._orbit ||= { min: c.minDistance, max: c.maxDistance, pol: c.maxPolarAngle, zoom: c.enableZoom, pan: c.enablePan, speed: c.rotateSpeed };
     c.autoRotate = false;
@@ -880,12 +899,14 @@ export class Viewer3D {
     el.addEventListener("keydown", (e) => {
       if (!this.walking) return;
       const k = e.key.toLowerCase();
+      if (this.photo && ["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d"].includes(k)) this.endPhoto("moved");
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", "w", "a", "s", "d"].includes(k)) { e.preventDefault(); this.walking.keys.add(k); }
     });
     el.addEventListener("keyup", (e) => this.walking?.keys.delete(e.key.toLowerCase()));
     el.addEventListener("blur", () => this.walking?.keys.clear());
     el.addEventListener("dblclick", (e) => {
       if (!this.walking) return;
+      this.endPhoto("moved");
       const hit = this._pick(e.clientX, e.clientY);
       if (!hit) return;
       const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
@@ -1055,6 +1076,59 @@ export class Viewer3D {
     for (const m of this.lamps) m.emissiveIntensity = kelvin ? 1.4 : 0;
   }
 
+  // ── ambient occlusion: the soft dark where things meet ───────────────
+  // Under a sofa, along a skirting, in a room's corners: the shading a real
+  // room has and a plain render lacks. Loaded only when a room is in view.
+  async _initAO() {
+    try {
+      const [{ EffectComposer }, { OutputPass }, { N8AOPass }] = await Promise.all([
+        import("three/addons/postprocessing/EffectComposer.js"),
+        import("three/addons/postprocessing/OutputPass.js"),
+        import("n8ao"),
+      ]);
+      const r = this.renderer, w = this.host.clientWidth || 2, h = this.host.clientHeight || 2;
+      const composer = new EffectComposer(r, new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType }));
+      composer.setPixelRatio(r.getPixelRatio());
+      composer.setSize(w, h);
+      const ao = new N8AOPass(this.scene, this.camera, w, h);
+      Object.assign(ao.configuration, {
+        aoRadius: 0.9, distanceFalloff: 0.35, intensity: 2.2, aoSamples: 16, denoiseSamples: 8, denoiseRadius: 8,
+        halfRes: true, depthAwareUpsampling: true, gammaCorrection: false, color: new THREE.Color(0x0a0806),
+      });
+      composer.addPass(ao);
+      composer.addPass(new OutputPass());
+      this.aoPass = ao;
+      this.composer = composer;
+    } catch (e) {
+      console.warn("Ambient occlusion is off:", e);
+    }
+  }
+
+  // ── photo: the view as an architect's render ─────────────────────────
+  // The path tracer takes the view as it stands; touching the view ends it.
+  async takePhoto({ mood = "day", samples = 128, onProgress = null, onEnd = null } = {}) {
+    this.endPhoto("replaced");
+    const { Photo } = await import("./photo.js?v=f12");
+    if (!this.model) return null;
+    this.controls.autoRotate = false;
+    const p = new Photo(this, { mood, samples, onProgress });
+    p.onEnd = onEnd;
+    this.photo = p;
+    // A frame for the "preparing" note to show before the scene is gathered.
+    await new Promise((res) => requestAnimationFrame(() => res()));
+    if (this.photo !== p) return null;
+    try { p.start(); } catch (e) { this.photo = null; p.stop(); throw e; }
+    return p;
+  }
+
+  endPhoto(why = "closed") {
+    const p = this.photo;
+    if (!p) return;
+    this.photo = null;
+    p.stop();
+    p.onEnd?.(why);
+  }
+
   // ── VR: the same walk, in a headset ──────────────────────────────────
   // The headset gives the eye height and where you look; the trigger
   // teleports to the spot on the floor you point at, the grip button goes
@@ -1122,6 +1196,7 @@ export class Viewer3D {
   }
 
   dispose() {
+    this.endPhoto("closed");
     this.clearVastu();
     this.renderer.setAnimationLoop(null);
     this.renderer.xr.getSession?.()?.end().catch(() => {});

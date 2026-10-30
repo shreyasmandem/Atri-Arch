@@ -1636,7 +1636,7 @@ async function loadOrthoSheet(key) {
     cut.append(cutIn);
     tools.append(sun, cut);
     plate.append(host, tools);
-    const { Viewer3D } = await import("./viewer3d.js?v=p21");
+    const { Viewer3D } = await import("./viewer3d.js?v=p24");
     if (S.sheet !== key) return;
     S.sheetViewer = new Viewer3D(host);
     S.sheetViewerPlan = id;
@@ -2216,7 +2216,7 @@ async function renderInterior() {
 
   const cap = el("p", "model-cap", "Loading the interiors…");
   stage.append(cap, info);
-  const { Viewer3D } = await import("./viewer3d.js?v=p21");
+  const { Viewer3D } = await import("./viewer3d.js?v=p24");
   if (S.view !== "interior" || S.activeId !== id) return;
   S.viewer?.dispose();
   const viewer = (S.viewer = new Viewer3D(stage));
@@ -2369,6 +2369,81 @@ async function renderInterior() {
   document.addEventListener("fullscreenchange", () => { if (current) drawBar(current.item); });
   const WALK_HINT = "Drag to look round · double-click the floor to walk · WASD to move";
 
+  // ── Photo: the view in front of you, rendered like an architect's visual ──
+  // Light traced as it travels: through the glass, off the floor, from the
+  // lamps. It builds over a few seconds; moving the view ends it.
+  const shot = el("div", "inx__photo");
+  stage.append(shot);
+  let mood = "day";
+  const roomName = () => (current?.item.r.name || current?.item.r.type || "house").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const drawShot = (st = null) => {
+    shot.innerHTML = "";
+    shot.classList.toggle("is-on", !!st);
+    if (!st) {
+      const moods = el("div", "inx__photo-moods");
+      moods.setAttribute("role", "radiogroup");
+      moods.setAttribute("aria-label", "Light");
+      for (const [k, label] of [["day", "Day"], ["evening", "Evening"]]) {
+        const b = el("button", k === mood ? "is-on" : null, label); b.type = "button";
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", String(k === mood));
+        b.addEventListener("click", () => { mood = k; drawShot(); });
+        moods.append(b);
+      }
+      const go = el("button", "inx__photo-go", "Render photo"); go.type = "button";
+      go.title = "Render this view with real light: soft shadows, light off the walls, glass you see through";
+      go.addEventListener("click", startShot);
+      shot.append(moods, go);
+      return;
+    }
+    const pct = st.compiling || !st.samples ? 0 : Math.min(100, Math.round((st.samples / st.target) * 100));
+    const note = el("span", "inx__photo-note",
+      st.done ? "Photo ready" : st.compiling || !st.samples ? "Preparing the light…" : `Rendering ${pct}%`);
+    note.setAttribute("aria-live", "polite");
+    const save = el("button", "inx__photo-go", "Save image"); save.type = "button";
+    save.disabled = !st.samples;
+    save.addEventListener("click", () => {
+      const p = viewer.photo;
+      if (!p) return;
+      const a = document.createElement("a");
+      a.href = p.capture();
+      a.download = `atriarch-${roomName()}-${mood}.png`;
+      a.click();
+    });
+    const close = el("button", "ghost-btn ghost-btn--ico"); close.type = "button";
+    close.setAttribute("aria-label", "Back to the live view");
+    close.title = "Back to the live view";
+    close.append(icon("close"));
+    close.addEventListener("click", () => viewer.endPhoto("closed"));
+    const bar = el("i", "inx__photo-bar");
+    bar.style.setProperty("--p", `${st.done ? 100 : pct}%`);
+    shot.append(note, save, close, bar);
+  };
+  let lastPct = -3;
+  const startShot = async () => {
+    lastPct = -3;
+    drawShot({ samples: 0, target: 1, compiling: true });
+    try {
+      await viewer.takePhoto({
+        mood,
+        onProgress: (st) => {
+          // Redrawn as the note changes: preparing, each whole percent, ready.
+          const key = st.done ? -2 : !st.samples ? -1 : Math.floor((st.samples / st.target) * 100);
+          if (key !== lastPct) { lastPct = key; drawShot(st); }
+        },
+        onEnd: (why) => {
+          drawShot();
+          if (why === "moved") cap.textContent = "Photo closed when the view moved. Render again from here.";
+          if (why === "lost") toast("This computer's graphics could not finish the photo. Close other 3D tabs and try again.");
+        },
+      });
+    } catch (e) {
+      drawShot();
+      toast(`The photo could not be rendered (${e.message}).`);
+    }
+  };
+  drawShot();
+
   const enter = async (item) => {
     walkIdx = rooms.indexOf(item);
     list.querySelectorAll("li").forEach((x) => x.classList.toggle("is-on", x === lis.get(item)));
@@ -2444,7 +2519,7 @@ async function renderInterior() {
     loading.remove();
     if (!cat) { win.append(el("p", "inx__ed-empty", "The furniture list could not be loaded. Pick the room again to retry.")); return; }
 
-    const { swatchFor } = await import("./materials.js?v=m5");
+    const { swatchFor } = await import("./materials.js?v=m6");
     if (!win.isConnected) return;
     const byId = new Map(), groupOf = new Map();
     for (const g of cat.groups) for (const it of g.items) { byId.set(it.id, it); groupOf.set(it.id, g.name); }
@@ -3291,7 +3366,7 @@ async function renderModel() {
     return `${API}/plans/${id}/model.glb${q.size ? `?${q}` : ""}`;
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p21");
+    const { Viewer3D } = await import("./viewer3d.js?v=p24");
     if (S.view !== "model" || S.activeId !== id) return;
     S.viewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3410,7 +3485,7 @@ async function renderExterior() {
     });
   };
   try {
-    const { Viewer3D } = await import("./viewer3d.js?v=p21");
+    const { Viewer3D } = await import("./viewer3d.js?v=p24");
     if (S.view !== "exterior" || S.activeId !== id) return;
     S.exViewer = new Viewer3D(stage, { daylight: true });
     const road = { N: [0, 1], NE: [0.7, 0.7], E: [1, 0], SE: [0.7, -0.7], S: [0, -1], SW: [-0.7, -0.7], W: [-1, 0], NW: [-0.7, 0.7] }[(cur().plan?.site?.road_directions || ["N"])[0]];
@@ -3495,7 +3570,7 @@ function exId(d) {
 // each rebuild (the Exterior tab redraws its elevations).
 async function paletteCard(card, id, modelUrl, { viewer = () => S.viewer, page = false, onModel = null } = {}) {
   const pal = S.palette;
-  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m5")]);
+  const [{ thumb }, { swatch: texSwatch }] = await Promise.all([import("./thumbs.js?v=p4"), import("./materials.js?v=m6")]);
   const swatch = (hex, label) => {
     const sw = el("span", "pal__sw"); sw.style.background = hex; sw.title = `${label} ${hex}`; return sw;
   };

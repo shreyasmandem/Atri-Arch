@@ -390,6 +390,7 @@ export function dress(mat) {
   mat.userData.dressed = true;
   if (!rule) return;
   const [, kind, k] = rule;
+  mat.userData.tri = { kind, k };
   const tex = texture(kind);
   const scale = 1 / PATTERNS[kind].size;
   mat.onBeforeCompile = (sh) => {
@@ -417,6 +418,18 @@ export function dress(mat) {
   };
   mat.customProgramCacheKey = () => `tri-${kind}`;
   mat.needsUpdate = true;
+}
+
+/** The finish a dressed material wears, for renderers that cannot run the
+ * shader above (the photo path tracer): its grey pattern, how many metres
+ * one tile spans and how strongly it shows. Null if it has none or the
+ * pattern's image has not loaded yet. */
+export function finishOf(mat) {
+  const t = mat?.userData?.tri;
+  if (!t) return null;
+  const img = texture(t.kind).image;
+  if (!img || (img.complete === false) || !(img.width || img.naturalWidth)) return null;
+  return { kind: t.kind, image: img, size: PATTERNS[t.kind].size, k: t.k };
 }
 
 /** A swatch for whatever finish a material of this name gets in the model:
